@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/deposist/s-ui-x/config"
-	"github.com/deposist/s-ui-x/logger"
+	"github.com/deposist/s-ui-x-extended/config"
+	"github.com/deposist/s-ui-x-extended/logger"
 )
 
 const initialAdminPasswordFile = "initial-admin.txt"

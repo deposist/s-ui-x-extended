@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/deposist/s-ui-x/database"
-	"github.com/deposist/s-ui-x/database/model"
+	"github.com/deposist/s-ui-x-extended/database"
+	"github.com/deposist/s-ui-x-extended/database/model"
 
 	"github.com/gin-gonic/gin"
 )

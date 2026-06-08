@@ -3,9 +3,9 @@ package sub
 import (
 	"testing"
 
-	"github.com/deposist/s-ui-x/database"
-	"github.com/deposist/s-ui-x/database/model"
-	"github.com/deposist/s-ui-x/service"
+	"github.com/deposist/s-ui-x-extended/database"
+	"github.com/deposist/s-ui-x-extended/database/model"
+	"github.com/deposist/s-ui-x-extended/service"
 )
 
 func TestJsonServiceAddFragmentToSupportedOutbounds(t *testing.T) {

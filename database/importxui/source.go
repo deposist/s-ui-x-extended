@@ -13,7 +13,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/deposist/s-ui-x/database"
+	"github.com/deposist/s-ui-x-extended/database"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"

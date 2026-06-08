@@ -16,10 +16,10 @@ import (
 	stdatomic "sync/atomic"
 	"time"
 
-	"github.com/deposist/s-ui-x/database"
-	"github.com/deposist/s-ui-x/realtime"
-	"github.com/deposist/s-ui-x/service"
-	"github.com/deposist/s-ui-x/util/common"
+	"github.com/deposist/s-ui-x-extended/database"
+	"github.com/deposist/s-ui-x-extended/realtime"
+	"github.com/deposist/s-ui-x-extended/service"
+	"github.com/deposist/s-ui-x-extended/util/common"
 
 	"github.com/coder/websocket"
 	"github.com/gin-gonic/gin"

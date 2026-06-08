@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/deposist/s-ui-x/database"
-	"github.com/deposist/s-ui-x/database/model"
+	"github.com/deposist/s-ui-x-extended/database"
+	"github.com/deposist/s-ui-x-extended/database/model"
 	"gorm.io/gorm"
 )
 

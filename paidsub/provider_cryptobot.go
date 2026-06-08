@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/deposist/s-ui-x/database/model"
-	"github.com/deposist/s-ui-x/service"
+	"github.com/deposist/s-ui-x-extended/database/model"
+	"github.com/deposist/s-ui-x-extended/service"
 )
 
 // cryptoBotBase is pinned (never configurable) to prevent token exfiltration.

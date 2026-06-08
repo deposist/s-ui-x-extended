@@ -3,7 +3,7 @@ package service
 import (
 	"testing"
 
-	"github.com/deposist/s-ui-x/ipmonitor"
+	"github.com/deposist/s-ui-x-extended/ipmonitor"
 )
 
 func TestIntegrationStatsPipelineNilCoreSmoke(t *testing.T) {

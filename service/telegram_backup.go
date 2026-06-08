@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/deposist/s-ui-x/database"
-	"github.com/deposist/s-ui-x/logger"
-	"github.com/deposist/s-ui-x/util/redact"
+	"github.com/deposist/s-ui-x-extended/database"
+	"github.com/deposist/s-ui-x-extended/logger"
+	"github.com/deposist/s-ui-x-extended/util/redact"
 )
 
 const (

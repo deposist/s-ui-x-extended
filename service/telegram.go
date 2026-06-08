@@ -15,12 +15,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/deposist/s-ui-x/database"
-	"github.com/deposist/s-ui-x/logger"
-	"github.com/deposist/s-ui-x/util"
-	"github.com/deposist/s-ui-x/util/common"
-	"github.com/deposist/s-ui-x/util/redact"
-	"github.com/deposist/s-ui-x/util/ssrf"
+	"github.com/deposist/s-ui-x-extended/database"
+	"github.com/deposist/s-ui-x-extended/logger"
+	"github.com/deposist/s-ui-x-extended/util"
+	"github.com/deposist/s-ui-x-extended/util/common"
+	"github.com/deposist/s-ui-x-extended/util/redact"
+	"github.com/deposist/s-ui-x-extended/util/ssrf"
 	"golang.org/x/net/proxy"
 )
 

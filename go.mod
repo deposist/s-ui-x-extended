@@ -1,4 +1,4 @@
-module github.com/deposist/s-ui-x
+module github.com/deposist/s-ui-x-extended
 
 go 1.26.4
 

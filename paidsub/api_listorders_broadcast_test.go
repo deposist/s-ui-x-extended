@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/deposist/s-ui-x/database/model"
+	"github.com/deposist/s-ui-x-extended/database/model"
 )
 
 // TestListOrdersHandler closes the T3 gap for listOrders: it must succeed on an

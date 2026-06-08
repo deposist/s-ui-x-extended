@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/deposist/s-ui-x/database/model"
-	"github.com/deposist/s-ui-x/util/common"
+	"github.com/deposist/s-ui-x-extended/database/model"
+	"github.com/deposist/s-ui-x-extended/util/common"
 )
 
 var InboundTypeWithLink = []string{"socks", "http", "mixed", "shadowsocks", "naive", "hysteria", "hysteria2", "anytls", "tuic", "vless", "trojan", "vmess"}

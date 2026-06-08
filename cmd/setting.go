@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/deposist/s-ui-x/config"
-	"github.com/deposist/s-ui-x/database"
-	"github.com/deposist/s-ui-x/service"
+	"github.com/deposist/s-ui-x-extended/config"
+	"github.com/deposist/s-ui-x-extended/database"
+	"github.com/deposist/s-ui-x-extended/service"
 
 	"github.com/shirou/gopsutil/v4/net"
 )

@@ -3,7 +3,7 @@
 package core
 
 import (
-	"github.com/deposist/s-ui-x/logger"
+	"github.com/deposist/s-ui-x-extended/logger"
 	"github.com/sagernet/sing-box/adapter/outbound"
 )
 

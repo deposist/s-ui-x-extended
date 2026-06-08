@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/deposist/s-ui-x/database"
-	"github.com/deposist/s-ui-x/database/model"
+	"github.com/deposist/s-ui-x-extended/database"
+	"github.com/deposist/s-ui-x-extended/database/model"
 )
 
 func localLinkRemarks(t *testing.T, raw json.RawMessage) []string {

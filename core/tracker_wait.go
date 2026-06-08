@@ -5,7 +5,7 @@ import (
 	stdatomic "sync/atomic"
 	"time"
 
-	"github.com/deposist/s-ui-x/logger"
+	"github.com/deposist/s-ui-x-extended/logger"
 )
 
 const trackerResetWaitTimeout = 5 * time.Second

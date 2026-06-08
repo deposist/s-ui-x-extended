@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/deposist/s-ui-x/logger"
+	"github.com/deposist/s-ui-x-extended/logger"
 
 	sb "github.com/sagernet/sing-box"
 	"github.com/sagernet/sing-box/adapter"

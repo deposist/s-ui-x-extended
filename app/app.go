@@ -5,17 +5,17 @@ import (
 	"log"
 	"time"
 
-	"github.com/deposist/s-ui-x/cmd/migration"
-	"github.com/deposist/s-ui-x/config"
-	"github.com/deposist/s-ui-x/core"
-	"github.com/deposist/s-ui-x/cronjob"
-	"github.com/deposist/s-ui-x/database"
-	"github.com/deposist/s-ui-x/ipmonitor"
-	"github.com/deposist/s-ui-x/logger"
-	"github.com/deposist/s-ui-x/paidsub"
-	"github.com/deposist/s-ui-x/service"
-	"github.com/deposist/s-ui-x/sub"
-	"github.com/deposist/s-ui-x/web"
+	"github.com/deposist/s-ui-x-extended/cmd/migration"
+	"github.com/deposist/s-ui-x-extended/config"
+	"github.com/deposist/s-ui-x-extended/core"
+	"github.com/deposist/s-ui-x-extended/cronjob"
+	"github.com/deposist/s-ui-x-extended/database"
+	"github.com/deposist/s-ui-x-extended/ipmonitor"
+	"github.com/deposist/s-ui-x-extended/logger"
+	"github.com/deposist/s-ui-x-extended/paidsub"
+	"github.com/deposist/s-ui-x-extended/service"
+	"github.com/deposist/s-ui-x-extended/sub"
+	"github.com/deposist/s-ui-x-extended/web"
 )
 
 type APP struct {

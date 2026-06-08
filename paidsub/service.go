@@ -3,10 +3,10 @@ package paidsub
 import (
 	"time"
 
-	"github.com/deposist/s-ui-x/database"
-	"github.com/deposist/s-ui-x/database/model"
-	"github.com/deposist/s-ui-x/service"
-	"github.com/deposist/s-ui-x/sub"
+	"github.com/deposist/s-ui-x-extended/database"
+	"github.com/deposist/s-ui-x-extended/database/model"
+	"github.com/deposist/s-ui-x-extended/service"
+	"github.com/deposist/s-ui-x-extended/sub"
 
 	"gorm.io/gorm"
 )

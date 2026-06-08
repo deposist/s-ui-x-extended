@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/deposist/s-ui-x/database/model"
+	"github.com/deposist/s-ui-x-extended/database/model"
 )
 
 // recordingTransport is a fake Telegram Bot API transport. It records each call

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/deposist/s-ui-x/database/model"
+	"github.com/deposist/s-ui-x-extended/database/model"
 )
 
 // xrayOutbound is a single entry of the source Xray config's outbounds array.

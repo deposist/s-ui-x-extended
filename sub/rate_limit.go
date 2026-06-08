@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/deposist/s-ui-x/service"
+	"github.com/deposist/s-ui-x-extended/service"
 
 	"github.com/gin-gonic/gin"
 )

@@ -3,9 +3,9 @@ package util
 import (
 	"encoding/json"
 
-	"github.com/deposist/s-ui-x/util/common"
+	"github.com/deposist/s-ui-x-extended/util/common"
 
-	"github.com/deposist/s-ui-x/database/model"
+	"github.com/deposist/s-ui-x-extended/database/model"
 )
 
 // Fill Inbound's out_json

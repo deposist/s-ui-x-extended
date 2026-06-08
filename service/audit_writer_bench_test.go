@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/deposist/s-ui-x/database/model"
+	"github.com/deposist/s-ui-x-extended/database/model"
 )
 
 func BenchmarkAuditWriter_Push(b *testing.B) {

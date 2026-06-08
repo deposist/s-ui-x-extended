@@ -1,8 +1,8 @@
 package core
 
 import (
-	"github.com/deposist/s-ui-x/logger"
-	"github.com/deposist/s-ui-x/util/common"
+	"github.com/deposist/s-ui-x-extended/logger"
+	"github.com/deposist/s-ui-x-extended/util/common"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/option"

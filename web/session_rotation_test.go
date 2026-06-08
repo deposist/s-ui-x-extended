@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/deposist/s-ui-x/service"
+	"github.com/deposist/s-ui-x-extended/service"
 	ginsessions "github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )

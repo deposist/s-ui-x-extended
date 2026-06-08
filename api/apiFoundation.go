@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/deposist/s-ui-x/service"
-	"github.com/deposist/s-ui-x/util/common"
-	"github.com/deposist/s-ui-x/util/ssrf"
+	"github.com/deposist/s-ui-x-extended/service"
+	"github.com/deposist/s-ui-x-extended/util/common"
+	"github.com/deposist/s-ui-x-extended/util/ssrf"
 
 	"github.com/gin-gonic/gin"
 )

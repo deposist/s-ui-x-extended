@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/deposist/s-ui-x/logger"
-	"github.com/deposist/s-ui-x/service"
-	"github.com/deposist/s-ui-x/util"
+	"github.com/deposist/s-ui-x-extended/logger"
+	"github.com/deposist/s-ui-x-extended/service"
+	"github.com/deposist/s-ui-x-extended/util"
 )
 
 type Link struct {

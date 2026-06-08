@@ -3,7 +3,7 @@ package paidsub
 import (
 	"encoding/json"
 
-	"github.com/deposist/s-ui-x/database"
+	"github.com/deposist/s-ui-x-extended/database"
 
 	"gorm.io/gorm"
 )

@@ -3,7 +3,7 @@ package cronjob
 import (
 	"fmt"
 
-	"github.com/deposist/s-ui-x/logger"
+	"github.com/deposist/s-ui-x-extended/logger"
 )
 
 // cronLogger adapts the panel logger to robfig/cron's Logger interface.

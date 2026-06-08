@@ -3,9 +3,9 @@ package api
 import (
 	"encoding/gob"
 
-	"github.com/deposist/s-ui-x/database/model"
-	"github.com/deposist/s-ui-x/logger"
-	"github.com/deposist/s-ui-x/service"
+	"github.com/deposist/s-ui-x-extended/database/model"
+	"github.com/deposist/s-ui-x-extended/logger"
+	"github.com/deposist/s-ui-x-extended/service"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"

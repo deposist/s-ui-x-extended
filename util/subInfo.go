@@ -3,7 +3,7 @@ package util
 import (
 	"fmt"
 
-	"github.com/deposist/s-ui-x/database/model"
+	"github.com/deposist/s-ui-x-extended/database/model"
 )
 
 func GetHeaders(client *model.Client, updateInterval int) []string {

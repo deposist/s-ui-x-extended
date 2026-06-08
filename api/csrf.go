@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/deposist/s-ui-x/util/common"
+	"github.com/deposist/s-ui-x-extended/util/common"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"

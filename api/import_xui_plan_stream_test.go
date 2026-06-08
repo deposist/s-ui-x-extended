@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/deposist/s-ui-x/database/importxui"
+	"github.com/deposist/s-ui-x-extended/database/importxui"
 
 	"github.com/gin-gonic/gin"
 )

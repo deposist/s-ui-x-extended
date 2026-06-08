@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/deposist/s-ui-x/database"
+	"github.com/deposist/s-ui-x-extended/database"
 	"gorm.io/gorm"
 )
 

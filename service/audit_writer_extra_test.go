@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/deposist/s-ui-x/database/model"
+	"github.com/deposist/s-ui-x-extended/database/model"
 )
 
 func TestAuditWriterExtraOverflowIncrementsDroppedTotal(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/deposist/s-ui-x/database"
-	"github.com/deposist/s-ui-x/service"
+	"github.com/deposist/s-ui-x-extended/database"
+	"github.com/deposist/s-ui-x-extended/service"
 	ginsessions "github.com/gin-contrib/sessions"
 	"github.com/gorilla/securecookie"
 	gsessions "github.com/gorilla/sessions"
