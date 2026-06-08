@@ -308,7 +308,7 @@ const defaultValues: Record<InType, Inbound> = {
   naive: <Naive>{ type: InTypes.Naive, tls_id: 0 },
   hysteria: <Hysteria>{ type: InTypes.Hysteria, up_mbps: 100, down_mbps: 100, tls_id: 0 },
   shadowtls: <ShadowTLS>{ type: InTypes.ShadowTLS, version: 3, handshake: {}, handshake_for_server_name: {} },
-  tuic: <TUIC>{ type: InTypes.TUIC, congestion_control: "cubic", tls_id: 0 },
+  tuic: <TUIC>{ type: InTypes.TUIC, congestion_control: "bbr", tls_id: 0 },
   hysteria2: <Hysteria2>{ type: InTypes.Hysteria2, tls_id: 0 },
   vless: <VLESS>{ type: InTypes.VLESS, tls_id: 0, transport: {} },
   anytls: <AnyTls>{ type: InTypes.AnyTls, tls_id: 0, padding_scheme: [
@@ -323,8 +323,8 @@ const defaultValues: Record<InType, Inbound> = {
     "7=500-1000"
   ]},
   mieru: <Mieru>{ type: InTypes.Mieru, transport: 'TCP' },
-  sudoku: <Sudoku>{ type: InTypes.Sudoku, key: '' },
-  trusttunnel: <TrustTunnel>{ type: InTypes.TrustTunnel, tls_id: 0, network: ['tcp', 'udp'] },
+  sudoku: <Sudoku>{ type: InTypes.Sudoku, key: '', aead_method: 'chacha20-poly1305', padding_min: 10, padding_max: 30, handshake_timeout: 5, enable_pure_downlink: true },
+  trusttunnel: <TrustTunnel>{ type: InTypes.TrustTunnel, tls_id: 0, network: ['tcp', 'udp'], congestion_controller: 'bbr' },
   ssh: <SSH>{ type: InTypes.SSH },
   mtproxy: <MTProxy>{ type: InTypes.MTProxy, prefer_ip: 'prefer-ipv4' },
   tun: <Tun>{ type: InTypes.Tun, mtu: 9000, stack: 'system', udp_timeout: '5m', auto_route: false },

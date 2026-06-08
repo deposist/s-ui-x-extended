@@ -8,11 +8,12 @@
       </v-text-field>
     </v-col>
     <v-col cols="12" sm="6" md="4">
-      <v-text-field
+      <v-combobox
       :label="$t('transport.host')"
       hide-details
+      :items="sniFrontHosts"
       v-model="host">
-      </v-text-field>
+      </v-combobox>
     </v-col>
   </v-row>
   <v-row>
@@ -38,11 +39,13 @@
 
 <script lang="ts">
 import { WebSocket } from '../../types/transport'
+import { sniFrontHosts } from '@/types/recommended'
 import Headers from '../Headers.vue'
 export default {
   props: ['transport'],
   data() {
     return {
+      sniFrontHosts,
     }
   },
   computed: {

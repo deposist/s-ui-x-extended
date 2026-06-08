@@ -43,12 +43,12 @@
             ></v-select>
           </v-col>
           <v-col cols="12" sm="6" md="4" v-if="logical">
-            <v-combobox
+            <v-select
               v-model="ruleData.mode"
               :items="['and', 'or']"
               :label="$t('rule.mode')"
               hide-details
-            ></v-combobox>
+            ></v-select>
           </v-col>
           <v-col cols="12" sm="6" md="4">
             <v-switch color="primary" v-model="ruleData.invert" :label="$t('rule.invert')" hide-details></v-switch>

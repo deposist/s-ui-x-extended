@@ -11,11 +11,12 @@
     </v-row>
     <v-row>
       <v-col cols="12" sm="6" md="4">
-        <v-text-field
+        <v-combobox
           hide-details
           :label="$t('types.provider.userAgent')"
+          :items="providerUserAgents"
           v-model="data.user_agent">
-        </v-text-field>
+        </v-combobox>
       </v-col>
       <v-col cols="12" sm="6" md="4">
         <v-combobox
@@ -27,11 +28,12 @@
         </v-combobox>
       </v-col>
       <v-col cols="12" sm="6" md="4">
-        <v-text-field
+        <v-combobox
           hide-details
           :label="$t('types.provider.updateInterval')"
+          :items="durationPresets"
           v-model="data.update_interval">
-        </v-text-field>
+        </v-combobox>
       </v-col>
     </v-row>
     <v-row>
@@ -66,9 +68,16 @@
 
 <script lang="ts">
 import HealthCheck from './HealthCheck.vue'
+import { providerUserAgents, durationPresets } from '@/types/recommended'
 
 export default {
   props: ['data', 'tags'],
   components: { HealthCheck },
+  data() {
+    return {
+      providerUserAgents,
+      durationPresets,
+    }
+  },
 }
 </script>

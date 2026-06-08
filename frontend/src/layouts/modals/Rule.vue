@@ -92,7 +92,7 @@
               <v-switch v-model="ruleData.udp_connect" :label="$t('rule.udpConnect')" hide-details></v-switch>
             </v-col>
             <v-col cols="12" sm="6" md="4">
-              <v-text-field v-model="ruleData.udp_timeout" :label="$t('rule.udpTimeout')" hide-details></v-text-field>
+              <v-combobox v-model="ruleData.udp_timeout" :items="durationPresets" :label="$t('rule.udpTimeout')" hide-details></v-combobox>
             </v-col>
             <v-col cols="12" sm="6" md="4">
               <v-select
@@ -121,12 +121,13 @@
               <v-switch v-model="tlsFragment" :label="$t('singbox.tlsFragment')" hide-details></v-switch>
             </v-col>
             <v-col cols="12" sm="6" md="4" v-if="ruleData.tls_fragment">
-              <v-text-field
+              <v-combobox
                 v-model="ruleData.tls_fragment_fallback_delay"
+                :items="durationPresets"
                 :label="$t('singbox.tlsFragmentFallbackDelay')"
                 placeholder="500ms"
                 hide-details>
-              </v-text-field>
+              </v-combobox>
             </v-col>
           </v-row>
         </v-card>
@@ -160,7 +161,7 @@
               </v-select>
             </v-col>
             <v-col cols="12" sm="6" md="4">
-              <v-text-field v-model="ruleData.timeout" :label="$t('rule.timeout')" hide-details></v-text-field>
+              <v-combobox v-model="ruleData.timeout" :items="durationPresets" :label="$t('rule.timeout')" hide-details></v-combobox>
             </v-col>
           </v-row>
         </v-card>
@@ -206,12 +207,14 @@
 
 <script lang="ts">
 import { logicalRule, rule, actionKeys } from '@/types/rules'
+import { durationPresets } from '@/types/recommended'
 import RuleOptions from '@/components/Rule.vue'
 export default {
   props: ['visible', 'data', 'index', 'clients', 'inTags', 'outTags', 'rsTags'],
   emits: ['close', 'save'],
   data() {
     return {
+      durationPresets,
       title: 'add',
       loading: false,
       ruleData: <any>{

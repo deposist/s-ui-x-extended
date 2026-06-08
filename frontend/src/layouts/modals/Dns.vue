@@ -22,7 +22,7 @@
         </v-row>
         <v-row v-if="HasServer.includes(dnsServer.type)">
           <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="dnsServer.server" :label="$t('in.addr')" hide-details />
+            <v-combobox v-model="dnsServer.server" :items="dnsResolvers" :label="$t('in.addr')" hide-details />
           </v-col>
           <v-col cols="12" sm="6" md="4">
             <v-text-field v-model.number="dnsServer.server_port" type="number" min="0" :label="$t('in.port')" hide-details />
@@ -30,7 +30,7 @@
         </v-row>
         <v-row v-if="HasHeaders.includes(dnsServer.type)">
           <v-col cols="12" sm="8">
-            <v-text-field v-model="dnsServer.path" :label="$t('transport.path')" hide-details />
+            <v-combobox v-model="dnsServer.path" :items="dohPaths" :label="$t('transport.path')" hide-details />
           </v-col>
         </v-row>
         <DialVue :dial="dnsServer" v-if="!WithoutDial.includes(dnsServer.type)" />
@@ -137,6 +137,7 @@ import oTlsVue from '@/components/tls/OutTLS.vue'
 import Headers from '@/components/Headers.vue'
 import RandomUtil from '@/plugins/randomUtil'
 import { DnsTypes, createDnsServer } from '@/types/dns'
+import { dnsResolvers, dohPaths } from '@/types/recommended'
 export default {
   props: ['visible', 'data', 'index', 'tsTags', 'rslvdTags'],
   emits: ['close', 'save'],
@@ -149,6 +150,8 @@ export default {
       HasHeaders: [DnsTypes.HTTPS, DnsTypes.HTTP3],
       HasTls: [DnsTypes.TLS, DnsTypes.QUIC, DnsTypes.HTTPS, DnsTypes.HTTP3],
       WithoutDial: [DnsTypes.Hosts, DnsTypes.Tailscale, DnsTypes.FakeIP, DnsTypes.Resolved, DnsTypes.Fallback, DnsTypes.SDNS, DnsTypes.DHCP],
+      dnsResolvers,
+      dohPaths,
     }
   },
   methods: {

@@ -2,7 +2,7 @@
   <v-card subtitle="SSH">
     <v-row>
       <v-col cols="12" sm="6">
-        <v-text-field hide-details :label="$t('types.ssh.serverVersion')" v-model="data.server_version"></v-text-field>
+        <v-combobox hide-details :label="$t('types.ssh.serverVersion')" :items="sshVersions" v-model="data.server_version"></v-combobox>
       </v-col>
       <v-col cols="12" sm="6">
         <v-text-field type="number" hide-details :label="$t('types.ssh.maxAuthTries')" v-model.number="data.max_auth_tries"></v-text-field>
@@ -20,8 +20,15 @@
 </template>
 
 <script lang="ts">
+import { sshVersions } from '@/types/recommended'
+
 export default {
   props: ['data'],
+  data() {
+    return {
+      sshVersions,
+    }
+  },
   methods: {
     setList(key: string, v: string[]) {
       if (v && v.length > 0) {

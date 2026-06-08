@@ -73,6 +73,8 @@
 </template>
 
 <script lang="ts">
+import { RECOMMENDED } from '@/types/recommended'
+
 export default {
   props: {
     direction: { type: String },
@@ -85,6 +87,9 @@ export default {
   },
   created() {
     if (!this.$props.data.multiplex) this.$props.data.multiplex = {}
+  },
+  mounted() {
+    this.$props.data.congestion_controller ??= RECOMMENDED.trustTunnelCongestion
   },
   computed: {
     mux(): any {

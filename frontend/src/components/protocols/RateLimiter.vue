@@ -28,12 +28,13 @@
         </v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4" v-if="!isUsers && !isManager">
-        <v-text-field
+        <v-combobox
           hide-details
           :label="$t('types.limiter.interval')"
           :placeholder="'1s'"
+          :items="durationPresets"
           v-model="data.interval">
-        </v-text-field>
+        </v-combobox>
       </v-col>
     </v-row>
 
@@ -62,7 +63,7 @@
                     <v-text-field type="number" min="0" hide-details :label="$t('types.limiter.count')" v-model.number="u.count"></v-text-field>
                   </v-col>
                   <v-col cols="12" sm="6" md="4">
-                    <v-text-field hide-details :label="$t('types.limiter.interval')" :placeholder="'1s'" v-model="u.interval"></v-text-field>
+                    <v-combobox hide-details :label="$t('types.limiter.interval')" :placeholder="'1s'" :items="durationPresets" v-model="u.interval"></v-combobox>
                   </v-col>
                   <v-col cols="12" align="end">
                     <v-btn color="error" variant="tonal" @click="delUser(index)">{{ $t('actions.del') }}</v-btn>
@@ -82,6 +83,7 @@
 <script lang="ts">
 import LimiterRoute from '@/components/protocols/LimiterRoute.vue'
 import type { RateLimiterUser } from '@/types/outbounds'
+import { durationPresets } from '@/types/recommended'
 
 export default {
   props: {
@@ -91,6 +93,7 @@ export default {
   components: { LimiterRoute },
   data() {
     return {
+      durationPresets,
       algoOptions: ['leaky-bucket', 'token-bucket', 'sliding-window', 'fixed-window'],
       connectionTypeOptions: ['hwid', 'mux', 'source_ip'],
     }

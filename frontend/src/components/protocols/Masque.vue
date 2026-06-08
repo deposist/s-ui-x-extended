@@ -29,16 +29,16 @@
     </v-row>
     <v-row>
       <v-col cols="12" sm="6" md="4">
-        <v-text-field hide-details :label="$t('types.masque.udpTimeout')" v-model="data.udp_timeout"></v-text-field>
+        <v-combobox hide-details :label="$t('types.masque.udpTimeout')" :items="durationPresets" v-model="data.udp_timeout"></v-combobox>
       </v-col>
       <v-col cols="12" sm="6" md="4">
-        <v-text-field hide-details :label="$t('types.masque.udpKeepalive')" v-model="data.udp_keepalive_period"></v-text-field>
+        <v-combobox hide-details :label="$t('types.masque.udpKeepalive')" :items="durationPresets" v-model="data.udp_keepalive_period"></v-combobox>
       </v-col>
       <v-col cols="12" sm="6" md="4">
         <v-text-field type="number" hide-details :label="$t('types.masque.udpInitialPacketSize')" v-model.number="data.udp_initial_packet_size"></v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4">
-        <v-text-field hide-details :label="$t('types.masque.reconnectDelay')" v-model="data.reconnect_delay"></v-text-field>
+        <v-combobox hide-details :label="$t('types.masque.reconnectDelay')" :items="durationPresets" v-model="data.reconnect_delay"></v-combobox>
       </v-col>
     </v-row>
 
@@ -78,7 +78,7 @@
             <v-switch color="primary" hide-details :label="$t('tls.recordFragment')" v-model="tls.record_fragment"></v-switch>
           </v-col>
           <v-col cols="12" sm="6" md="4" v-if="tls.fragment">
-            <v-text-field hide-details :label="$t('tls.fragmentDelay')" v-model="tls.fragment_fallback_delay"></v-text-field>
+            <v-combobox hide-details :label="$t('tls.fragmentDelay')" :items="durationPresets" v-model="tls.fragment_fallback_delay"></v-combobox>
           </v-col>
         </v-row>
         <v-row>
@@ -89,7 +89,7 @@
         </v-row>
         <v-row>
           <v-col cols="12" md="8">
-            <v-combobox chips multiple clearable hide-details :label="$t('tls.curves')"
+            <v-combobox chips multiple clearable hide-details :label="$t('tls.curves')" :items="tlsCurvePreferences"
               :model-value="tls.curve_preferences" @update:model-value="setCurvePreferences"></v-combobox>
           </v-col>
         </v-row>
@@ -107,9 +107,17 @@
 </template>
 
 <script lang="ts">
+import { durationPresets, tlsCurvePreferences } from '@/types/recommended'
+
 export default {
   props: {
     data: { type: Object, required: true },
+  },
+  data() {
+    return {
+      durationPresets,
+      tlsCurvePreferences,
+    }
   },
   created() {
     if (!this.$props.data.profile) this.$props.data.profile = {}

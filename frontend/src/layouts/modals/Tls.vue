@@ -30,11 +30,12 @@
           </v-row>
           <v-row>
             <v-col cols="12" sm="6" md="4" v-if="inTls.server_name != undefined">
-              <v-text-field
+              <v-combobox
                 label="SNI"
                 hide-details
+                :items="sniFrontHosts"
                 v-model="inTls.server_name">
-              </v-text-field>
+              </v-combobox>
             </v-col>
             <template v-if="tlsType == 0">
               <v-col cols="12" sm="6" md="4" v-if="inTls.min_version">
@@ -196,11 +197,12 @@
           <template v-if="outTls.reality && inTls.reality">
             <v-row>
               <v-col cols="12" sm="6" md="4">
-                <v-text-field
+                <v-combobox
                 :label="$t('types.shdwTls.hs')"
                 hide-details
+                :items="sniFrontHosts"
                 v-model="inTls.reality.handshake.server">
-                </v-text-field>
+                </v-combobox>
               </v-col>
               <v-col cols="12" sm="6" md="4">
                 <v-text-field
@@ -373,6 +375,7 @@ import HttpUtils from '@/plugins/httputil'
 import { push } from 'notivue'
 import { i18n } from '@/locales'
 import RandomUtil from '@/plugins/randomUtil'
+import { sniFrontHosts } from '@/types/recommended'
 export default {
   props: ['visible', 'data', 'id'],
   emits: ['close', 'save'],
@@ -384,6 +387,7 @@ export default {
       menu: false,
       tlsType: 0,
       usePath: 0,
+      sniFrontHosts,
       alpn: [
         { title: "H3", value: 'h3' },
         { title: "H2", value: 'h2' },

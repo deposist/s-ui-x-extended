@@ -88,7 +88,7 @@ const defaultValues: Record<SrvType, Srv> = {
   'ssm-api': <SSMAPI>{ type: 'ssm-api', tls_id: 0, servers: {} },
   ocm: { type: 'ocm', id: 0, tag: '', listen: '::', listen_port: 8080, tls_id: 0, users: [] } as OCM,
   ccm: { type: 'ccm', id: 0, tag: '', listen: '::', listen_port: 8080, tls_id: 0, users: [] } as CCM,
-  'oom-killer': { type: 'oom-killer', id: 0, tag: '', checks_before_limit: 3 } as OOMKiller,
+  'oom-killer': { type: 'oom-killer', id: 0, tag: '', checks_before_limit: 3, min_interval: '30s', max_interval: '5m' } as OOMKiller,
   profiler: { type: 'profiler', id: 0, tag: '', listen: '127.0.0.1:8964' } as Profiler,
 }
 

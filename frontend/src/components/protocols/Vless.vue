@@ -43,6 +43,7 @@
 
 <script lang="ts">
 import Network from '@/components/Network.vue'
+import { RECOMMENDED } from '@/types/recommended'
 
 export default {
   props: ['data'],
@@ -51,7 +52,7 @@ export default {
   },
   computed: {
     packet_encoding: {
-      get() { return this.$props.data.packet_encoding != undefined ? this.$props.data.packet_encoding : 'none' },
+      get() { return this.$props.data.packet_encoding != undefined ? this.$props.data.packet_encoding : RECOMMENDED.vlessPacketEncoding },
       set(newValue:string) { this.$props.data.packet_encoding = newValue != "none" ? newValue : undefined }
     },
   },

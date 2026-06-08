@@ -26,12 +26,13 @@
         </v-select>
       </v-col>
       <v-col cols="12" sm="6" md="4" v-if="data.strategy != 'users' && data.strategy != 'manager'">
-        <v-text-field
+        <v-combobox
           hide-details
           :label="$t('types.limiter.speed')"
           :placeholder="'2MB'"
+          :items="speedPresets"
           v-model="data.speed">
-        </v-text-field>
+        </v-combobox>
       </v-col>
     </v-row>
     <v-row>
@@ -74,7 +75,7 @@
                     <v-select hide-details :label="$t('types.limiter.connectionType')" :items="connectionTypeOptions" v-model="u.connection_type"></v-select>
                   </v-col>
                   <v-col cols="12" sm="6" md="4">
-                    <v-text-field hide-details :label="$t('types.limiter.speed')" :placeholder="'5MB'" v-model="u.speed"></v-text-field>
+                    <v-combobox hide-details :label="$t('types.limiter.speed')" :placeholder="'5MB'" :items="speedPresets" v-model="u.speed"></v-combobox>
                   </v-col>
                   <v-col cols="12" align="end">
                     <v-btn color="error" variant="tonal" @click="delUser(index)">{{ $t('actions.del') }}</v-btn>
@@ -94,6 +95,7 @@
 <script lang="ts">
 import LimiterRoute from '@/components/protocols/LimiterRoute.vue'
 import type { BandwidthLimiterUser } from '@/types/outbounds'
+import { speedPresets } from '@/types/recommended'
 
 export default {
   props: {
@@ -103,6 +105,7 @@ export default {
   components: { LimiterRoute },
   data() {
     return {
+      speedPresets,
       strategyOptions: ['global', 'connection', 'users', 'manager'],
       userStrategyOptions: ['global', 'connection'],
       modeOptions: ['bidirectional', 'download', 'upload'],

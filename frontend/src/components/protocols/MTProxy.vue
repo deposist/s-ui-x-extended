@@ -2,12 +2,12 @@
   <v-card subtitle="MTProxy">
     <v-row>
       <v-col cols="12" sm="6" md="4">
-        <v-select
+        <v-combobox
           hide-details
           :label="$t('types.mtproxy.preferIp')"
-          :items="['prefer-ipv4', 'prefer-ipv6', 'only-ipv4', 'only-ipv6']"
+          :items="mtproxyPreferIp"
           v-model="data.prefer_ip">
-        </v-select>
+        </v-combobox>
       </v-col>
       <v-col cols="12" sm="6" md="4">
         <v-text-field type="number" hide-details :label="$t('types.mtproxy.concurrency')" v-model.number="data.concurrency"></v-text-field>
@@ -25,7 +25,7 @@
             <v-text-field type="number" hide-details :label="$t('out.port')" v-model.number="data.domain_fronting_port"></v-text-field>
           </v-col>
           <v-col cols="12" sm="5">
-            <v-text-field hide-details :label="$t('types.mtproxy.frontingHost')" v-model="data.domain_fronting_host"></v-text-field>
+            <v-combobox hide-details :label="$t('types.mtproxy.frontingHost')" :items="sniFrontHosts" v-model="data.domain_fronting_host"></v-combobox>
           </v-col>
           <v-col cols="12" sm="3">
             <v-switch color="primary" hide-details :label="$t('types.mtproxy.proxyProtocol')" v-model="data.domain_fronting_proxy_protocol"></v-switch>
@@ -36,19 +36,19 @@
 
     <v-row style="margin-top: 4px;">
       <v-col cols="6" sm="4">
-        <v-text-field hide-details :label="$t('types.mtproxy.idleTimeout')" v-model="data.idle_timeout"></v-text-field>
+        <v-combobox hide-details :label="$t('types.mtproxy.idleTimeout')" :items="durationPresets" v-model="data.idle_timeout"></v-combobox>
       </v-col>
       <v-col cols="6" sm="4">
-        <v-text-field hide-details :label="$t('types.mtproxy.handshakeTimeout')" v-model="data.handshake_timeout"></v-text-field>
+        <v-combobox hide-details :label="$t('types.mtproxy.handshakeTimeout')" :items="durationPresets" v-model="data.handshake_timeout"></v-combobox>
       </v-col>
       <v-col cols="6" sm="4">
-        <v-text-field hide-details :label="$t('types.mtproxy.timeSkew')" v-model="data.tolerate_time_skewness"></v-text-field>
+        <v-combobox hide-details :label="$t('types.mtproxy.timeSkew')" :items="durationPresets" v-model="data.tolerate_time_skewness"></v-combobox>
       </v-col>
       <v-col cols="6" sm="4">
         <v-text-field type="number" hide-details :label="$t('types.mtproxy.throttleMax')" v-model.number="data.throttle_max_connections"></v-text-field>
       </v-col>
       <v-col cols="6" sm="4">
-        <v-text-field hide-details :label="$t('types.mtproxy.throttleInterval')" v-model="data.throttle_check_interval"></v-text-field>
+        <v-combobox hide-details :label="$t('types.mtproxy.throttleInterval')" :items="durationPresets" v-model="data.throttle_check_interval"></v-combobox>
       </v-col>
       <v-col cols="6" sm="4">
         <v-switch color="primary" hide-details :label="$t('types.mtproxy.fallbackUnknownDc')" v-model="data.allow_fallback_on_unknown_dc"></v-switch>
@@ -67,7 +67,7 @@
             <v-text-field type="number" hide-details :label="$t('types.mtproxy.doppelPerRaid')" v-model.number="data.doppelganger_per_raid"></v-text-field>
           </v-col>
           <v-col cols="6" sm="4">
-            <v-text-field hide-details :label="$t('types.mtproxy.doppelEach')" v-model="data.doppelganger_each"></v-text-field>
+            <v-combobox hide-details :label="$t('types.mtproxy.doppelEach')" :items="durationPresets" v-model="data.doppelganger_each"></v-combobox>
           </v-col>
           <v-col cols="6" sm="4">
             <v-switch color="primary" hide-details :label="$t('types.mtproxy.drs')" v-model="data.doppelganger_drs"></v-switch>
@@ -79,8 +79,13 @@
 </template>
 
 <script lang="ts">
+import { mtproxyPreferIp, sniFrontHosts, durationPresets } from '@/types/recommended'
+
 export default {
   props: { data: { type: Object, required: true } },
+  data() {
+    return { mtproxyPreferIp, sniFrontHosts, durationPresets }
+  },
   methods: {
     setUrls(v: string[]) {
       if (v && v.length > 0) {

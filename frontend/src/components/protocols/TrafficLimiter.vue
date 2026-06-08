@@ -18,12 +18,13 @@
         </v-select>
       </v-col>
       <v-col cols="12" sm="6" md="4" v-if="data.strategy != 'users' && data.strategy != 'manager'">
-        <v-text-field
+        <v-combobox
           hide-details
           :label="$t('types.limiter.total')"
           :placeholder="'10GB'"
+          :items="sizePresets"
           v-model="data.total">
-        </v-text-field>
+        </v-combobox>
       </v-col>
     </v-row>
 
@@ -49,7 +50,7 @@
                     <v-select hide-details :label="$t('types.limiter.mode')" :items="modeOptions" v-model="u.mode"></v-select>
                   </v-col>
                   <v-col cols="12" sm="6" md="4">
-                    <v-text-field hide-details :label="$t('types.limiter.total')" :placeholder="'100GB'" v-model="u.total"></v-text-field>
+                    <v-combobox hide-details :label="$t('types.limiter.total')" :placeholder="'100GB'" :items="sizePresets" v-model="u.total"></v-combobox>
                   </v-col>
                   <v-col cols="12" align="end">
                     <v-btn color="error" variant="tonal" @click="delUser(index)">{{ $t('actions.del') }}</v-btn>
@@ -69,6 +70,7 @@
 <script lang="ts">
 import LimiterRoute from '@/components/protocols/LimiterRoute.vue'
 import type { TrafficLimiterUser } from '@/types/outbounds'
+import { sizePresets } from '@/types/recommended'
 
 export default {
   props: {
@@ -81,6 +83,7 @@ export default {
       strategyOptions: ['global', 'users', 'manager'],
       userStrategyOptions: ['global'],
       modeOptions: ['bidirectional', 'download', 'upload'],
+      sizePresets,
     }
   },
   created() {

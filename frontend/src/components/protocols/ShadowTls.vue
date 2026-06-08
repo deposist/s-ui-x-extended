@@ -31,11 +31,12 @@
     </v-row>
     <v-row>
       <v-col cols="12" sm="6" md="4">
-        <v-text-field
+        <v-combobox
         :label="$t('types.shdwTls.hs')"
+        :items="sniFrontHosts"
         hide-details
         v-model="Inbound.handshake.server">
-        </v-text-field>
+        </v-combobox>
       </v-col>
       <v-col cols="12" sm="6" md="4">
         <v-text-field
@@ -50,12 +51,13 @@
     <Dial :dial="Inbound.handshake" />
     <v-row v-if="Inbound.handshake_for_server_name != undefined">
       <v-col cols="12" sm="6" md="4">
-        <v-text-field
+        <v-combobox
         :label="$t('types.shdwTls.addHS')"
+        :items="sniFrontHosts"
         hide-details
         v-model="handshake_server">
         <template v-slot:append>
-          <v-chip 
+          <v-chip
             color="primary"
             density="compact"
             variant="elevated"
@@ -64,7 +66,7 @@
             <v-icon icon="mdi-plus" />
           </v-chip>
         </template>
-        </v-text-field>
+        </v-combobox>
       </v-col>
     </v-row>
     <v-card
@@ -83,11 +85,12 @@
       </v-card-title>
       <v-row>
         <v-col cols="12" sm="6" md="4">
-          <v-text-field
+          <v-combobox
           :label="$t('types.shdwTls.hs')"
+          :items="sniFrontHosts"
           hide-details
           v-model="value.server">
-          </v-text-field>
+          </v-combobox>
         </v-col>
         <v-col cols="12" sm="6" md="4">
           <v-text-field
@@ -106,13 +109,15 @@
 
 <script lang="ts">
 import { ShadowTLS } from '@/types/inbounds'
+import { sniFrontHosts } from '@/types/recommended'
 import Dial from '../Dial.vue'
 
 export default {
   props: ['direction', 'data'],
   data() {
     return {
-      handshake_server: ''
+      handshake_server: '',
+      sniFrontHosts
     }
   },
   methods: {

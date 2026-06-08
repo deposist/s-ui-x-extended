@@ -5,7 +5,7 @@
         <v-select
           hide-details
           :label="$t('types.mieru.transport')"
-          :items="['TCP', 'UDP']"
+          :items="mieruTransport"
           v-model="data.transport">
         </v-select>
       </v-col>
@@ -13,7 +13,7 @@
         <v-select
           hide-details
           :label="$t('types.mieru.multiplexing')"
-          :items="multiplexingOptions"
+          :items="mieruMultiplexing"
           v-model="data.multiplexing">
         </v-select>
       </v-col>
@@ -58,17 +58,19 @@
 </template>
 
 <script lang="ts">
+import { mieruTransport, mieruMultiplexing } from '@/types/recommended'
+
 export default {
   props: ['direction', 'data'],
   data() {
     return {
-      multiplexingOptions: [
-        'MULTIPLEXING_DEFAULT',
-        'MULTIPLEXING_OFF',
-        'MULTIPLEXING_LOW',
-        'MULTIPLEXING_MIDDLE',
-        'MULTIPLEXING_HIGH',
-      ],
+      mieruTransport,
+      mieruMultiplexing,
+    }
+  },
+  mounted() {
+    if (this.$props.direction == 'out') {
+      this.$props.data.multiplexing ??= 'MULTIPLEXING_LOW'
     }
   },
   methods: {

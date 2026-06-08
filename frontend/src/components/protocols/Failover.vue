@@ -10,12 +10,13 @@
         </v-select>
       </v-col>
       <v-col cols="12" sm="6">
-        <v-text-field
+        <v-combobox
           :label="$t('types.group.delay')"
+          :items="durationPresets"
           hide-details
           placeholder="2s"
           v-model="data.delay">
-        </v-text-field>
+        </v-combobox>
       </v-col>
     </v-row>
     <v-row v-for="(item, index) in items" :key="index">
@@ -51,10 +52,13 @@
 </template>
 
 <script lang="ts">
+import { durationPresets } from '@/types/recommended'
+
 export default {
   props: ['data'],
   data() {
     return {
+      durationPresets,
       strategyOptions: [
         { title: this.$t('types.group.strategySequential'), value: 'sequential' },
         { title: this.$t('types.group.strategyCycle'), value: 'cycle' },

@@ -43,11 +43,12 @@
             <v-switch v-model="enableNtp" color="primary" :label="$t('enable')" hide-details></v-switch>
           </v-col>
           <v-col cols="12" sm="6" md="3" lg="2" v-if="appConfig.ntp?.enabled">
-            <v-text-field
+            <v-combobox
               v-model="appConfig.ntp.server"
               hide-details
+              :items="ntpServers"
               :label="$t('out.addr')"
-            ></v-text-field>
+            ></v-combobox>
           </v-col>
           <v-col cols="12" sm="6" md="3" lg="2" v-if="appConfig.ntp?.enabled">
             <v-text-field
@@ -151,12 +152,13 @@
               hide-details></v-switch>
           </v-col>
           <v-col cols="12" sm="6" md="3" lg="2" v-if="appConfig.experimental.cache_file?.store_rdrc">
-            <v-text-field
+            <v-combobox
               v-model="appConfig.experimental.cache_file.rdrc_timeout"
               hide-details
+              :items="durationPresets"
               placeholder="7d"
               :label="$t('singbox.rdrcTimeout')">
-            </v-text-field>
+            </v-combobox>
           </v-col>
         </v-row>
         <v-row>
@@ -337,6 +339,7 @@ import { computed, ref, onBeforeMount } from 'vue'
 import { i18n } from '@/locales'
 import { Config, Ntp } from '@/types/config'
 import { FindDiff } from '@/plugins/utils'
+import { ntpServers, durationPresets } from '@/types/recommended'
 
 const oldConfig = ref(<any>{})
 const loading = ref(false)

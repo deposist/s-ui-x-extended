@@ -1,11 +1,12 @@
 <template>
   <v-row>
     <v-col cols="12" sm="6" md="4">
-      <v-text-field
+      <v-combobox
       :label="$t('transport.grpcServiceName')"
       hide-details
+      :items="grpcServiceNames"
       v-model="transport.service_name">
-      </v-text-field>
+      </v-combobox>
     </v-col>
     <v-col cols="12" sm="6" md="4">
       <v-switch
@@ -42,10 +43,12 @@
 
 <script lang="ts">
 import { gRPC } from '../../types/transport'
+import { grpcServiceNames } from '@/types/recommended'
 export default {
   props: ['transport'],
   data() {
     return {
+      grpcServiceNames,
     }
   },
   computed: {

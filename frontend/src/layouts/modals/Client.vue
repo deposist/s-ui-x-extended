@@ -168,12 +168,13 @@
                     v-model="clientConfig[key].uuid"
                     hide-details>
                   </v-text-field>
-                  <v-text-field
+                  <v-select
                     v-if="key == 'vless'"
                     label="Flow"
+                    :items="vlessFlows"
                     v-model="clientConfig[key].flow"
                     hide-details>
-                  </v-text-field>
+                  </v-select>
                   <v-text-field
                     v-if="key == 'hysteria'"
                     label="Auth"
@@ -253,6 +254,7 @@ import DatePick from '@/components/DateTime.vue'
 import { HumanReadable } from '@/plugins/utils'
 import Data from '@/store/modules/data'
 import { locale } from '@/locales'
+import { vlessFlows } from '@/types/recommended'
 
 export default {
   props: ['visible', 'id', 'inboundTags', 'groups'],
@@ -268,6 +270,7 @@ export default {
       extLinks: <Link[]>[],
       subLinks: <Link[]>[],
       ipLimitModes: ['monitor', 'enforce'],
+      vlessFlows,
     }
   },
   methods: {

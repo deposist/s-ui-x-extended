@@ -34,7 +34,7 @@
           clearable
           hide-details
           :label="$t('types.openvpn.cipher')"
-          :items="cipherOptions"
+          :items="openvpnCiphers"
           v-model="data.cipher">
         </v-combobox>
       </v-col>
@@ -43,7 +43,7 @@
           clearable
           hide-details
           :label="$t('types.openvpn.auth')"
-          :items="['SHA1', 'SHA256', 'SHA384', 'SHA512']"
+          :items="openvpnAuthDigests"
           v-model="data.auth">
         </v-combobox>
       </v-col>
@@ -61,10 +61,10 @@
     </v-row>
     <v-row>
       <v-col cols="12" sm="6">
-        <v-text-field hide-details :label="$t('types.openvpn.pingInterval')" v-model="data.ping_interval"></v-text-field>
+        <v-combobox hide-details :label="$t('types.openvpn.pingInterval')" :items="durationPresets" v-model="data.ping_interval"></v-combobox>
       </v-col>
       <v-col cols="12" sm="6">
-        <v-text-field hide-details :label="$t('types.openvpn.reconnectDelay')" v-model="data.reconnect_delay"></v-text-field>
+        <v-combobox hide-details :label="$t('types.openvpn.reconnectDelay')" :items="durationPresets" v-model="data.reconnect_delay"></v-combobox>
       </v-col>
     </v-row>
 
@@ -127,8 +127,8 @@
         </v-row>
         <v-row>
           <v-col cols="12" md="8">
-            <v-combobox chips multiple clearable hide-details :label="$t('tls.cs')"
-              :model-value="tls.cipher_suites" @update:model-value="setCipherSuites"></v-combobox>
+            <v-select chips multiple clearable hide-details :label="$t('tls.cs')"
+              :items="tlsCipherSuites" :model-value="tls.cipher_suites" @update:model-value="setCipherSuites"></v-select>
           </v-col>
         </v-row>
         <v-row>
@@ -145,15 +145,16 @@
 </template>
 
 <script lang="ts">
+import { openvpnCiphers, openvpnAuthDigests, durationPresets, tlsCipherSuites } from '@/types/recommended'
+
 export default {
   props: { data: { type: Object, required: true } },
   data() {
     return {
-      cipherOptions: [
-        'AES-128-GCM', 'AES-192-GCM', 'AES-256-GCM',
-        'AES-128-CBC', 'AES-192-CBC', 'AES-256-CBC',
-        'CHACHA20-POLY1305',
-      ],
+      openvpnCiphers,
+      openvpnAuthDigests,
+      durationPresets,
+      tlsCipherSuites,
     }
   },
   created() {

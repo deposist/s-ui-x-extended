@@ -19,7 +19,7 @@
         <v-select
           hide-details
           :label="$t('types.vmess.security')"
-          :items="securities"
+          :items="vmessSecurity"
           v-model="data.security">
         </v-select>
       </v-col>
@@ -46,19 +46,13 @@
 
 <script lang="ts">
 import Network from '@/components/Network.vue'
+import { vmessSecurity } from '@/types/recommended'
 
 export default {
   props: ['data'],
   data() {
     return {
-      securities: [
-        "auto",
-        "none",
-        "zero",
-        "aes-128-gcm",
-        "aes-128-ctr",
-        "chacha20-poly1305",
-      ]
+      vmessSecurity,
     }
   },
   computed: {

@@ -11,7 +11,7 @@
           <v-select
             hide-details
             :label="$t('types.naive.quicCongestion')"
-            :items="inbCngs"
+            :items="naiveCongestion"
             v-model="data.quic_congestion_control"
             @click:clear="delete data.quic_congestion_control"
             clearable>
@@ -54,18 +54,20 @@
       </v-row>
       <v-row>
         <v-col cols="12" sm="6" md="4">
-          <v-text-field
+          <v-combobox
             :label="$t('types.naive.streamReceiveWindow')"
             hide-details
+            :items="sizePresets"
             v-model="data.stream_receive_window">
-          </v-text-field>
+          </v-combobox>
         </v-col>
         <v-col cols="12" sm="6" md="4">
-          <v-text-field
+          <v-combobox
             :label="$t('types.naive.quicSessionReceiveWindow')"
             hide-details
+            :items="sizePresets"
             v-model="data.quic_session_receive_window">
-          </v-text-field>
+          </v-combobox>
         </v-col>
       </v-row>
       <v-row v-if="direction === 'out'">
@@ -76,7 +78,7 @@
           <v-select
             hide-details
             :label="$t('types.naive.quicCongestion')"
-            :items="outCngs"
+            :items="naiveCongestion"
             @click:clear="delete data.quic_congestion_control"
             clearable
             v-model="data.quic_congestion_control">
@@ -92,26 +94,18 @@
 import Network from '@/components/Network.vue'
 import Headers from '@/components/Headers.vue'
 import UoT from '@/components/UoT.vue'
+import { naiveCongestion, sizePresets, RECOMMENDED } from '@/types/recommended'
 
 export default {
   props: ['data', 'direction'],
   data() {
     return {
-      inbCngs: [
-        { title: 'BBR', value: 'bbr'},
-        { title: 'BBR Standard', value: 'bbr_standard'},
-        { title: 'BBRv2', value: 'bbr2'},
-        { title: 'BBRv2 variant', value: 'bbr2_variant'},
-        { title: 'Cubic', value: 'cubic'},
-        { title: 'New Reno', value: 'reno'},
-      ],
-      outCngs: [
-        { title: 'BBR', value: 'bbr'},
-        { title: 'BBR2', value: 'bbr2'},
-        { title: 'Cubic', value: 'cubic'},
-        { title: 'Reno', value: 'reno'},
-      ],
+      naiveCongestion,
+      sizePresets,
     }
+  },
+  mounted() {
+    this.data.quic_congestion_control ??= RECOMMENDED.naiveCongestion
   },
   computed: {
     insecure_concurrency: {

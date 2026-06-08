@@ -35,7 +35,7 @@
           <v-select
             hide-details
             :label="$t('types.vmess.security')"
-            :items="vmessSecurities"
+            :items="vmessSecurity"
             v-model="inData.out_json.security">
           </v-select>
         </v-col>
@@ -96,6 +96,7 @@
 
 <script lang="ts">
 import { InTypes } from '@/types/inbounds'
+import { vmessSecurity, RECOMMENDED } from '@/types/recommended'
 import Network from './Network.vue'
 import UoT from './UoT.vue'
 import Headers from './Headers.vue'
@@ -107,14 +108,7 @@ export default {
   data() {
     return {
       inTypes: InTypes,
-      vmessSecurities: [
-        "auto",
-        "none",
-        "zero",
-        "aes-128-gcm",
-        "aes-128-ctr",
-        "chacha20-poly1305",
-      ],
+      vmessSecurity,
       haveNetwork: [
         InTypes.SOCKS,
         InTypes.Shadowsocks,
@@ -135,7 +129,7 @@ export default {
     needNetwork():boolean { return this.haveNetwork.includes(this.$props.type) },
     needUot():boolean { return this.havUoT.includes(this.$props.type) },
     packet_encoding: {
-      get() { return this.$props.inData.out_json.packet_encoding != undefined ? this.$props.inData.out_json.packet_encoding : 'none' },
+      get() { return this.$props.inData.out_json.packet_encoding != undefined ? this.$props.inData.out_json.packet_encoding : RECOMMENDED.vlessPacketEncoding },
       set(v:string) { this.$props.inData.out_json.packet_encoding = v != "none" ? v : undefined }
     },
     server_ports: {
@@ -146,6 +140,13 @@ export default {
       get() { return this.$props.inData.out_json.hop_interval? parseInt(this.$props.inData.out_json.hop_interval.replace('s','')) : 0 },
       set(v:number) { this.$props.inData.out_json.hop_interval = v>0 ? v + 's' : undefined }
     },
+  },
+  mounted() {
+    const o = this.$props.inData.out_json
+    if (this.$props.type == InTypes.SOCKS) o.version ??= '5'
+    if (this.$props.type == InTypes.HTTP) o.path ??= RECOMMENDED.wsPath
+    if (this.$props.type == InTypes.VMess) o.security ??= RECOMMENDED.vmessSecurity
+    if (this.$props.type == InTypes.TUIC) o.udp_relay_mode ??= RECOMMENDED.tuicUdpRelayMode
   },
   components: { Network, UoT, Headers, AnyTls, Naive }
 }

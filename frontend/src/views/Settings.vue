@@ -34,7 +34,7 @@
         </v-row>
         <v-row>
           <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.webListen" :label="$t('setting.addr')" hide-details></v-text-field>
+            <v-combobox v-model="settings.webListen" :items="listenAddresses" :label="$t('setting.addr')" hide-details></v-combobox>
           </v-col>
           <v-col cols="12" sm="6" md="4">
             <v-text-field v-model.number="webPort" min="1" type="number" :label="$t('setting.port')" hide-details></v-text-field>
@@ -75,7 +75,7 @@
               ></v-text-field>
           </v-col>
           <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.timeLocation" :label="$t('setting.timeLoc')" hide-details></v-text-field>
+            <v-combobox v-model="settings.timeLocation" :items="timeZones" :label="$t('setting.timeLoc')" hide-details></v-combobox>
           </v-col>
         </v-row>
       </v-window-item>
@@ -91,7 +91,7 @@
         </v-row>
         <v-row>
           <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="settings.subListen" :label="$t('setting.addr')" hide-details></v-text-field>
+            <v-combobox v-model="settings.subListen" :items="listenAddresses" :label="$t('setting.addr')" hide-details></v-combobox>
           </v-col>
           <v-col cols="12" sm="6" md="4">
             <v-text-field
@@ -177,6 +177,7 @@ import SubJsonExtVue from '@/components/SubJsonExt.vue'
 import SubClashExtVue from '@/components/SubClashExt.vue'
 import MaintenanceTab from '@/components/settings/MaintenanceTab.vue'
 import { normalizeSecretFields, stripSecretPlaceholders } from '@/components/settingsSecretField'
+import { listenAddresses, timeZones } from '@/types/recommended'
 import { push } from 'notivue'
 const tab = ref("t1")
 const showNexusControls = isNexusEnabled()
