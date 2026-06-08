@@ -86,11 +86,15 @@ func bumpVersionSetting(tx *gorm.DB) error {
 	if err != nil {
 		return err
 	}
-	cmp, ok := compareVersion(existing.Value, current)
-	if ok && cmp >= 0 {
+	if existing.Value == current {
 		return nil
 	}
-	if existing.Value == current {
+	// The running build is authoritative for the version stamp; only refuse to
+	// overwrite when the stored version is from a strictly higher MAJOR (a
+	// genuinely-future release we must not downgrade). Legacy/stale versions
+	// (e.g. upstream 1.x, or a final 1.0.0 vs a 1.0.0-betaN build) are stamped
+	// with the current build version.
+	if config.IsGenuinelyNewer(existing.Value, current) {
 		return nil
 	}
 	return tx.Model(model.Setting{}).Where("key = ?", "version").Update("value", current).Error

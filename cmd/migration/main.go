@@ -75,11 +75,14 @@ func MigrateDbWithOptions(options Options) error {
 		return nil
 	}
 	if dbVersion != "" {
-		cmp, ok := config.CompareVersions(dbVersion, currentVersion)
-		if !ok {
+		if _, ok := config.CompareVersions(dbVersion, currentVersion); !ok {
 			return fmt.Errorf("database version %q is not semver-compatible", dbVersion)
 		}
-		if cmp > 0 {
+		// The running build is authoritative for the version stamp; only refuse
+		// to migrate when the database comes from a strictly higher MAJOR (a
+		// genuinely-future release). Legacy upstream databases (1.x) semver-rank
+		// above the reset 1.0.0-betaN line but must still be migrated.
+		if config.IsGenuinelyNewer(dbVersion, currentVersion) {
 			fmt.Println("Database version is newer than current binary, no migration will run")
 			return nil
 		}
