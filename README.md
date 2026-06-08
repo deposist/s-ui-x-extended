@@ -25,13 +25,13 @@
 <p align="center"><b>English</b> · <a href="#русский">Русский</a></p>
 
 > [!NOTE]
-> **Public beta (`v1.0.0-beta1`).** Test it before relying on it in production.
+> **Public beta (`v1.0.0-beta2`).** Test it before relying on it in production.
 
 ## English
 
 **s-ui-x with sing-box-extended core support.** An advanced web panel for sing-box, running on the [`sing-box-extended`](https://github.com/shtorm-7/sing-box-extended) core (the shtorm-7 fork of `SagerNet/sing-box`).
 
-This project adds extended protocol and transport support on top of the s-ui-x panel, while inheriting the security and reliability hardening of the panel. It is based on `alireza0/s-ui` (current build: `v1.0.0-beta1`).
+This project adds extended protocol and transport support on top of the s-ui-x panel, while inheriting the security and reliability hardening of the panel. It is based on `alireza0/s-ui` (current build: `v1.0.0-beta2`).
 
 > **Disclaimer:** this project is intended only for personal learning and knowledge sharing. Do not use it for illegal purposes.
 
@@ -74,7 +74,7 @@ This project adds extended protocol and transport support on top of the s-ui-x p
 The full release history and current release notes live in:
 
 - [`CHANGELOG.md`](CHANGELOG.md)
-- Current release notes: [`docs/releases/v1.0.0-beta1.md`](docs/releases/v1.0.0-beta1.md)
+- Current release notes: [`docs/releases/v1.0.0-beta2.md`](docs/releases/v1.0.0-beta2.md)
 
 The README keeps installation and project overview short. For the full release history and breaking notes, open the changelog. Upgrade and rollback steps live in [Installer Behavior & Upgrading](#installer-behavior--upgrading).
 
@@ -186,13 +186,13 @@ bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/
 3. Run `install-windows.bat` as Administrator.
 4. Follow the installation wizard.
 
-## Install v1.0.0-beta1
+## Install v1.0.0-beta2
 
 This is the initial public beta of s-ui-x-extended — see [`CHANGELOG.md`](CHANGELOG.md)
-and [`docs/releases/v1.0.0-beta1.md`](docs/releases/v1.0.0-beta1.md). This is a beta — test first.
+and [`docs/releases/v1.0.0-beta2.md`](docs/releases/v1.0.0-beta2.md). This is a beta — test first.
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta1
+bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta2
 ```
 
 Or from a local clone:
@@ -200,7 +200,7 @@ Or from a local clone:
 ```sh
 git clone https://github.com/deposist/s-ui-x-extended.git
 cd s-ui-x-extended
-sudo bash install.sh v1.0.0-beta1
+sudo bash install.sh v1.0.0-beta2
 ```
 
 ## Install an Older Version
@@ -658,7 +658,7 @@ Released under the GNU General Public License v3.0 — see [`LICENSE`](LICENSE).
 
 **s-ui-x с поддержкой ядра sing-box-extended.** Продвинутая веб-панель для sing-box на ядре [`sing-box-extended`](https://github.com/shtorm-7/sing-box-extended) (форк SagerNet/sing-box от shtorm-7).
 
-Проект добавляет поддержку расширенных протоколов и транспортов поверх панели s-ui-x, наследуя при этом её усиление безопасности и надёжности. Основан на `alireza0/s-ui` (текущая сборка: `v1.0.0-beta1`).
+Проект добавляет поддержку расширенных протоколов и транспортов поверх панели s-ui-x, наследуя при этом её усиление безопасности и надёжности. Основан на `alireza0/s-ui` (текущая сборка: `v1.0.0-beta2`).
 
 > **Отказ от ответственности:** этот проект предназначен только для личного обучения и обмена опытом. Не используйте его в незаконных целях.
 
@@ -701,7 +701,7 @@ Released under the GNU General Public License v3.0 — see [`LICENSE`](LICENSE).
 Полная история релизов и текущие release notes находятся в:
 
 - [`CHANGELOG.md`](CHANGELOG.md)
-- Release notes текущего релиза: [`docs/releases/v1.0.0-beta1.md`](docs/releases/v1.0.0-beta1.md)
+- Release notes текущего релиза: [`docs/releases/v1.0.0-beta2.md`](docs/releases/v1.0.0-beta2.md)
 
 README оставляет только установку и общий обзор проекта. Полная история релизов и breaking-заметки — в changelog. Шаги обновления и отката описаны в разделе [Поведение установщика и обновление](#поведение-установщика-и-обновление).
 
@@ -813,14 +813,14 @@ bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/
 3. Запустите `install-windows.bat` от имени администратора.
 4. Следуйте инструкциям мастера установки.
 
-## Установка v1.0.0-beta1
+## Установка v1.0.0-beta2
 
 Это первая публичная бета s-ui-x-extended — см. [`CHANGELOG.md`](CHANGELOG.md)
-и [`docs/releases/v1.0.0-beta1.md`](docs/releases/v1.0.0-beta1.md). Это бета —
+и [`docs/releases/v1.0.0-beta2.md`](docs/releases/v1.0.0-beta2.md). Это бета —
 сначала протестируйте.
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta1
+bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta2
 ```
 
 Или из локального клона:
@@ -828,7 +828,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/
 ```sh
 git clone https://github.com/deposist/s-ui-x-extended.git
 cd s-ui-x-extended
-sudo bash install.sh v1.0.0-beta1
+sudo bash install.sh v1.0.0-beta2
 ```
 
 ## Установка старой версии
