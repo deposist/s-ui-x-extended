@@ -1,0 +1,58 @@
+html[data-ui-mode='nexus'],
+.v-theme--nexusDark {
+  --nexus-surface-0: #0a1226;
+  --nexus-surface-1: #0f1830;
+  --nexus-surface-2: #172041;
+  --nexus-elevated: #1d2752;
+  --nexus-border: rgb(148 163 184 / 16%);
+  --nexus-border-strong: rgb(148 163 184 / 32%);
+
+  --nexus-accent-primary: #22d3ee;
+  --nexus-accent-secondary: #a78bfa;
+  --nexus-accent-muted: #0e7490;
+  --nexus-status-success: #34d399;
+  --nexus-status-warn: #fbbf24;
+  --nexus-status-error: #fb7185;
+  --nexus-status-info: #38bdf8;
+
+  --nexus-chart-1: #22d3ee;
+  --nexus-chart-2: #a78bfa;
+  --nexus-chart-3: #34d399;
+  --nexus-chart-4: #fbbf24;
+  --nexus-chart-5: #fb7185;
+  --nexus-chart-6: #38bdf8;
+
+  --nexus-gap-1: 4px;
+  --nexus-gap-2: 8px;
+  --nexus-gap-3: 12px;
+  --nexus-gap-4: 16px;
+  --nexus-gap-5: 24px;
+  --nexus-gap-6: 32px;
+  --nexus-radius-sm: 4px;
+  --nexus-radius-md: 6px;
+  --nexus-radius-lg: 8px;
+}
+
+.v-theme--nexusLight {
+  --nexus-surface-0: #f4fafb;
+  --nexus-surface-1: #ffffff;
+  --nexus-surface-2: #eaf4f6;
+  --nexus-elevated: #d9e9ed;
+  --nexus-border: rgb(16 72 88 / 16%);
+  --nexus-border-strong: rgb(16 72 88 / 30%);
+
+  --nexus-accent-primary: #007d87;
+  --nexus-accent-secondary: #007d74;
+  --nexus-accent-muted: #45afb1;
+  --nexus-status-success: #087f50;
+  --nexus-status-warn: #a85700;
+  --nexus-status-error: #b92d4b;
+  --nexus-status-info: #0069a8;
+
+  --nexus-chart-1: #007d87;
+  --nexus-chart-2: #0069a8;
+  --nexus-chart-3: #6c4fd3;
+  --nexus-chart-4: #a85700;
+  --nexus-chart-5: #b92d4b;
+  --nexus-chart-6: #087f50;
+}

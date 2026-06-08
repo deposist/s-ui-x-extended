@@ -1,0 +1,59 @@
+.DS_Store
+dist/
+release/
+backup/
+bin/
+db/
+sui
+web/html
+main
+tmp
+.sync*
+*.tar.gz
+
+# local env files
+.env.local
+.env.*.local
+
+# Log files
+*.log*
+.cache
+
+# Windows build artifacts
+*.exe
+*.zip
+*.test.exe
+s-ui-windows/
+sui-*.exe
+sui-*.zip
+windows/sui-*.exe
+
+# Local audit/test scratch output
+test-results/
+verify-*.txt
+
+# Local Go build/cache/telemetry scratch dirs (workspace-local sandbox runs)
+.gocache/
+.gotmp/
+.appdata/
+.audit/
+
+# Internal development log (not needed by end users)
+docs/project-context.md
+dc42e16-files.txt
+docs/audit/
+tests/baseline/*
+!tests/baseline/run-command.ps1
+
+# Editor directories and files
+.idea
+.vscode
+
+# Kiro local specs (not for public repo)
+.kiro/
+
+# Local 3x-ui import fixtures with real production data
+test-db/
+
+# Local recovery snapshots (corrupt backups from rename-module incident)
+.tools-recovery/

@@ -1,0 +1,19 @@
+run:
+  timeout: 10m
+
+linters:
+  disable-all: true
+  enable:
+    - bodyclose
+    - errcheck
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - noctx
+    - unparam
+
+linters-settings:
+  govet:
+    enable:
+      - nilness

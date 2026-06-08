@@ -1,0 +1,12 @@
+services:
+  s-ui:
+    image: ghcr.io/deposist/s-ui-x-extended
+    container_name: s-ui
+    hostname: "s-ui"
+    network_mode: host
+    volumes:
+      - "./db:/app/db"
+      - "./cert:/app/cert"
+    tty: true
+    restart: unless-stopped
+    entrypoint: "./entrypoint.sh"

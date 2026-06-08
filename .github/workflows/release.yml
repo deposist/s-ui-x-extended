@@ -1,0 +1,244 @@
+name: Release S-UI
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag"
+        required: true
+        default: "v1.5.6-beta2"
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: "25"
+  CRONET_GO_VERSION: "2faf34666c2cc8234f10f2ab6d4c4d6104d34ae2"
+  CRONET_GO_REPO: https://github.com/sagernet/cronet-go.git
+  BOOTLIN_BASE_URL: https://toolchains.bootlin.com/downloads/releases/toolchains
+
+jobs:
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6.0.2
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      # Strict, fail-closed install: a desynced package-lock.json aborts the
+      # release here instead of silently shipping an unvalidated bundle.
+      # `npm install` (lenient) previously masked a lockfile desync and shipped
+      # an inconsistent dist with a dangling chunk -> 404 -> black screen
+      # (v1.5.7-beta6). Mirror the same gates CI runs so a release can never
+      # carry a frontend that CI would reject.
+      - name: Install frontend dependencies (strict)
+        working-directory: frontend
+        run: npm ci
+
+      - name: Frontend lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Frontend unit tests
+        working-directory: frontend
+        run: npm run test
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Upload frontend build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          retention-days: 1
+
+  build-linux:
+    name: Build-${{ matrix.platform }}
+    needs: build-frontend
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: amd64, arch: amd64, bootlin: x86-64, naive: true }
+          - { platform: arm64, arch: arm64, bootlin: aarch64, naive: true }
+          - { platform: armv7, arch: arm, goarm: "7", bootlin: armv7-eabihf, naive: true }
+          - { platform: armv6, arch: arm, goarm: "6", bootlin: armv6-eabihf, naive: true }
+          - { platform: armv5, arch: arm, goarm: "5", bootlin: armv5-eabi, naive: false }
+          - { platform: "386", arch: "386", bootlin: x86-i686, naive: true }
+          - { platform: s390x, arch: s390x, bootlin: s390x-z13, naive: false }
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Download frontend build artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend-dist
+          path: web/html
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          cache: false
+          go-version-file: go.mod
+
+      - name: Clone cronet-go (naive platforms)
+        if: matrix.naive
+        run: |
+          set -e
+          git init ~/cronet-go
+          git -C ~/cronet-go remote add origin ${{ env.CRONET_GO_REPO }}
+          git -C ~/cronet-go fetch --depth=1 origin "${{ env.CRONET_GO_VERSION }}"
+          git -C ~/cronet-go checkout FETCH_HEAD
+          git -C ~/cronet-go submodule update --init --recursive --depth=1
+
+      - name: Regenerate Debian keyring (cronet sysroot)
+        if: matrix.naive
+        run: |
+          set -e
+          rm -f ~/cronet-go/naiveproxy/src/build/linux/sysroot_scripts/keyring.gpg
+          cd ~/cronet-go
+          GPG_TTY=/dev/null ./naiveproxy/src/build/linux/sysroot_scripts/generate_keyring.sh
+
+      - name: Build cronet library and set toolchain environment
+        if: matrix.naive
+        run: |
+          set -e
+          cd ~/cronet-go
+          go run ./cmd/build-naive --target=linux/${{ matrix.arch }} --libc=musl download-toolchain
+          go run ./cmd/build-naive --target=linux/${{ matrix.arch }} --libc=musl env | while IFS= read -r line; do
+            line="${line#export }"
+            [[ -z "$line" ]] && continue
+            echo "$line" >> $GITHUB_ENV
+          done
+
+      - name: Set Go build environment
+        run: |
+          echo "CGO_ENABLED=1" >> $GITHUB_ENV
+          echo "GOOS=linux" >> $GITHUB_ENV
+          echo "GOARCH=${{ matrix.arch }}" >> $GITHUB_ENV
+          if [ -n "${{ matrix.goarm }}" ]; then echo "GOARM=${{ matrix.goarm }}" >> $GITHUB_ENV; fi
+
+      - name: Set up Bootlin musl (non-naive platforms)
+        if: ${{ matrix.naive != true }}
+        run: |
+          set -e
+          BOOTLIN_ARCH="${{ matrix.bootlin }}"
+          echo "Resolving Bootlin musl toolchain for arch=$BOOTLIN_ARCH (platform=${{ matrix.platform }})"
+          TARBALL_BASE="${{ env.BOOTLIN_BASE_URL }}/$BOOTLIN_ARCH/tarballs/"
+          TARBALL_URL=$(curl -fsSL "$TARBALL_BASE" | grep -oE "${BOOTLIN_ARCH}--musl--stable-[^\"]+\\.tar\\.xz" | sort -r | head -n1)
+          [ -z "$TARBALL_URL" ] && { echo "Bootlin musl toolchain not found for arch=$BOOTLIN_ARCH" >&2; exit 1; }
+          echo "Downloading: $TARBALL_URL"
+          cd /tmp
+          curl -fL -sS -o "$(basename "$TARBALL_URL")" "$TARBALL_BASE/$TARBALL_URL"
+          tar -xf "$(basename "$TARBALL_URL")"
+          TOOLCHAIN_DIR=$(find . -maxdepth 1 -type d -name "${BOOTLIN_ARCH}--musl--stable-*" | head -n1)
+          TOOLCHAIN_DIR="$(realpath "$TOOLCHAIN_DIR")"
+          BIN_DIR="$TOOLCHAIN_DIR/bin"
+          echo "PATH=$BIN_DIR:$PATH" >> $GITHUB_ENV
+          CC=$(find "$BIN_DIR" -maxdepth 1 \( -name '*-gcc.br_real' -o -name '*-gcc' \) -type f -executable 2>/dev/null | grep -v g++ | head -n1)
+          [ -z "$CC" ] && { echo "gcc not found in $BIN_DIR" >&2; exit 1; }
+          echo "CC=$(realpath "$CC")" >> $GITHUB_ENV
+          SYSROOT=""
+          F=$(find "$TOOLCHAIN_DIR" -name "libc-header-start.h" 2>/dev/null | head -1)
+          if [ -n "$F" ]; then SYSROOT=$(dirname "$(dirname "$(dirname "$(dirname "$F")")")"); fi
+          if [ -n "$SYSROOT" ] && [ -d "$SYSROOT" ]; then
+            echo "CGO_CFLAGS=--sysroot=$SYSROOT" >> $GITHUB_ENV
+            echo "CGO_LDFLAGS=--sysroot=$SYSROOT -static" >> $GITHUB_ENV
+          fi
+
+      - name: Build s-ui
+        run: |
+          set -e
+          BUILD_TAGS="with_quic,with_grpc,with_utls,with_acme,with_gvisor,badlinkname,tfogo_checklinkname0,with_tailscale"
+          [ "${{ matrix.naive }}" = "true" ] && BUILD_TAGS="${BUILD_TAGS},with_naive_outbound,with_musl"
+          go build -ldflags="-w -s -checklinkname=0 -linkmode external -extldflags '-static'" -tags "$BUILD_TAGS" -o sui main.go
+          file sui
+          ldd sui 2>/dev/null || echo "Static binary confirmed"
+
+          mkdir s-ui
+          cp sui s-ui/
+          cp s-ui.service s-ui/
+          cp s-ui.sh s-ui/
+
+      - name: Package
+        run: tar -zcvf s-ui-linux-${{ matrix.platform }}.tar.gz s-ui
+
+      - name: Generate SHA256 checksum
+        run: sha256sum s-ui-linux-${{ matrix.platform }}.tar.gz > s-ui-linux-${{ matrix.platform }}.tar.gz.sha256
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: s-ui-linux-${{ matrix.platform }}
+          path: |
+            ./s-ui-linux-${{ matrix.platform }}.tar.gz
+            ./s-ui-linux-${{ matrix.platform }}.tar.gz.sha256
+          retention-days: 1
+
+  publish-linux:
+    name: Publish Linux artifacts
+    needs: build-linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository (for release notes)
+        uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 1
+
+      - name: Normalize release tag
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          case "$TAG" in
+            v*) echo "tag=$TAG" >> "$GITHUB_OUTPUT" ;;
+            *) TAG="v$TAG"; echo "tag=$TAG" >> "$GITHUB_OUTPUT" ;;
+          esac
+          case "$TAG" in
+            *-alpha*|*-beta*|*-rc*|*-pre*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+          NOTES_FILE=".github/RELEASE_NOTES_${TAG}.md"
+          if [ -f "$NOTES_FILE" ]; then
+            echo "notes_path=$NOTES_FILE" >> "$GITHUB_OUTPUT"
+          else
+            echo "notes_path=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download Linux build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: s-ui-linux-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish to current repository Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: s-ui ${{ steps.vars.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ steps.vars.outputs.prerelease == 'true' }}
+          body_path: ${{ steps.vars.outputs.notes_path }}
+          fail_on_unmatched_files: true
+          files: release-assets/*

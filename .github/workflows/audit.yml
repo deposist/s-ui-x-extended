@@ -1,0 +1,37 @@
+name: Audit Dashboard
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "37 3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: audit-dashboard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dashboard:
+    name: dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Build audit dashboard
+        shell: bash
+        run: bash scripts/audit/aggregate.sh
+
+      - name: Upload dashboard
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: audit-dashboard
+          path: |
+            tests/baseline/phase8/summary.html
+            tests/baseline/phase8/summary.json
+            tests/baseline/phase8/aggregate.junit.xml
+          if-no-files-found: ignore
+          retention-days: 30

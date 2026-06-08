@@ -1,0 +1,109 @@
+name: Audit Perf
+
+on:
+  schedule:
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: audit-perf-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOFLAGS: -mod=readonly
+
+jobs:
+  bench-all:
+    name: bench-all
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 60
+    if: ${{ github.event_name != 'pull_request' || contains(join(github.event.pull_request.labels.*.name, ','), 'run-perf') }}
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+      - name: Install benchstat
+        run: |
+          go install golang.org/x/perf/cmd/benchstat@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Run benchmarks
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File tests/baseline/run-command.ps1 -Phase phase8 -Name bench-all -CommandLine "go test ./... -bench=. -benchmem -run=^$ -benchtime=2s" -ContinueOnError
+      - name: Compare with Phase 5 baseline
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File tests/baseline/run-command.ps1 -Phase phase8 -Name benchstat -CommandLine "benchstat tests/baseline/phase5/bench-all.txt tests/baseline/phase8/bench-all.txt" -ContinueOnError
+      - name: Detect >20 percent ns/op regressions
+        id: regression
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const parse = (file) => {
+            const rows = new Map();
+            if (!fs.existsSync(file)) return rows;
+            for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+              const m = line.match(/^(Benchmark\S+)\s+\d+\s+([\d.]+)\s+ns\/op/);
+              if (m) rows.set(m[1], Number(m[2]));
+            }
+            return rows;
+          };
+          const oldRows = parse('tests/baseline/phase5/bench-all.txt');
+          const newRows = parse('tests/baseline/phase8/bench-all.txt');
+          const regressions = [];
+          for (const [name, oldNs] of oldRows) {
+            const newNs = newRows.get(name);
+            if (oldNs > 0 && newNs > oldNs * 1.2) {
+              regressions.push({ name, oldNs, newNs, ratio: newNs / oldNs });
+            }
+          }
+          fs.writeFileSync('tests/baseline/phase8/perf-regressions.json', JSON.stringify(regressions, null, 2) + '\n');
+          if (regressions.length > 0) {
+            console.log(`regression=true`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'regression=true\n');
+            for (const row of regressions.slice(0, 20)) {
+              console.log(`::warning title=Perf regression::${row.name} ${row.oldNs} -> ${row.newNs} ns/op (${row.ratio.toFixed(2)}x)`);
+            }
+          } else {
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'regression=false\n');
+          }
+          NODE
+      - name: Comment perf warning on PR
+        if: ${{ github.event_name == 'pull_request' && steps.regression.outputs.regression == 'true' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const rows = JSON.parse(fs.readFileSync('tests/baseline/phase8/perf-regressions.json', 'utf8'));
+            const body = [
+              'Phase 8 perf warning: benchmark regressions above 20% were detected.',
+              '',
+              ...rows.slice(0, 20).map((row) => `- \`${row.name}\`: ${row.oldNs} -> ${row.newNs} ns/op (${row.ratio.toFixed(2)}x)`),
+              '',
+              'This is a SOFT check; inspect `benchstat.txt` before deciding whether it is noise or a real regression.'
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: audit-perf-bench
+          path: |
+            tests/baseline/phase8/bench-all.txt
+            tests/baseline/phase8/bench-all.junit.xml
+            tests/baseline/phase8/benchstat.txt
+            tests/baseline/phase8/benchstat.junit.xml
+            tests/baseline/phase8/perf-regressions.json
+          if-no-files-found: ignore
+          retention-days: 30

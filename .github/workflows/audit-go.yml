@@ -1,0 +1,380 @@
+name: Audit Go
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: audit-go-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOFLAGS: -mod=readonly
+  MAKE_PS: pwsh -NoProfile -ExecutionPolicy Bypass
+
+jobs:
+  build:
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+      - name: Ensure make on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command make -ErrorAction SilentlyContinue)) {
+            choco install make -y --no-progress
+          }
+      - name: make audit:build
+        shell: bash
+        run: make audit:build PS="${MAKE_PS}"
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: audit-go-build-${{ matrix.os }}
+          path: |
+            tests/baseline/phase*/*.txt
+            tests/baseline/phase*/*.junit.xml
+            tests/baseline/phase*/coverage/**
+            tests/baseline/phase*/coverage.out
+          if-no-files-found: ignore
+          retention-days: 7
+
+  vet:
+    name: vet (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+      - name: Ensure make on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command make -ErrorAction SilentlyContinue)) {
+            choco install make -y --no-progress
+          }
+      - name: make audit:vet
+        shell: bash
+        run: make audit:vet PS="${MAKE_PS}"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: audit-go-vet-${{ matrix.os }}
+          path: |
+            tests/baseline/phase*/*.txt
+            tests/baseline/phase*/*.junit.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  test-go:
+    name: test-go (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+      - name: Ensure make on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command make -ErrorAction SilentlyContinue)) {
+            choco install make -y --no-progress
+          }
+      - name: make audit:test-go
+        shell: bash
+        run: make audit:test-go PS="${MAKE_PS}"
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: audit-go-test-${{ matrix.os }}
+          path: |
+            tests/baseline/phase*/*.txt
+            tests/baseline/phase*/*.junit.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  test-go-race:
+    name: test-go-race (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+      - name: Ensure make on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command make -ErrorAction SilentlyContinue)) {
+            choco install make -y --no-progress
+          }
+      - name: make audit:test-go-race
+        shell: bash
+        run: make audit:test-go-race PS="${MAKE_PS}"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: audit-go-race-${{ matrix.os }}
+          path: |
+            tests/baseline/phase*/*.txt
+            tests/baseline/phase*/*.junit.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  coverage:
+    name: coverage (ubuntu-latest)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+      - name: make audit:cover
+        shell: bash
+        run: make audit:cover PS="${MAKE_PS}"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: audit-go-coverage
+          path: |
+            tests/baseline/phase*/*.txt
+            tests/baseline/phase*/*.junit.xml
+            tests/baseline/phase*/coverage/**
+            tests/baseline/phase*/coverage.out
+          if-no-files-found: ignore
+          retention-days: 7
+
+  lint-go:
+    name: lint-go (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+      - name: Ensure make on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command make -ErrorAction SilentlyContinue)) {
+            choco install make -y --no-progress
+          }
+      - name: Install Go lint tools
+        shell: bash
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: make audit:lint-go
+        shell: bash
+        run: make audit:lint-go PS="${MAKE_PS}"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: audit-go-lint-${{ matrix.os }}
+          path: |
+            tests/baseline/phase*/*.txt
+            tests/baseline/phase*/*.junit.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  staticcheck:
+    name: staticcheck (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+      - name: Install staticcheck
+        shell: bash
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: staticcheck
+        shell: bash
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File tests/baseline/run-command.ps1 -Phase phase8 -Name staticcheck -CommandLine "staticcheck ./..." -ContinueOnError
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: audit-go-staticcheck-${{ matrix.os }}
+          path: |
+            tests/baseline/phase8/staticcheck.txt
+            tests/baseline/phase8/staticcheck.junit.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  gosec:
+    name: gosec (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+      - name: Ensure make on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command make -ErrorAction SilentlyContinue)) {
+            choco install make -y --no-progress
+          }
+      - name: Install gosec
+        shell: bash
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: make audit:gosec
+        shell: bash
+        run: make audit:gosec PS="${MAKE_PS}"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: audit-go-gosec-${{ matrix.os }}
+          path: |
+            tests/baseline/phase*/*.txt
+            tests/baseline/phase*/*.junit.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  govulncheck:
+    name: govulncheck (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+      - name: Ensure make on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command make -ErrorAction SilentlyContinue)) {
+            choco install make -y --no-progress
+          }
+      - name: Install govulncheck
+        shell: bash
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: make audit:vuln
+        shell: bash
+        run: make audit:vuln PS="${MAKE_PS}"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: audit-go-govulncheck-${{ matrix.os }}
+          path: |
+            tests/baseline/phase*/*.txt
+            tests/baseline/phase*/*.junit.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  dashboard:
+    name: dashboard
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - build
+      - vet
+      - test-go
+      - test-go-race
+      - coverage
+      - lint-go
+      - staticcheck
+      - gosec
+      - govulncheck
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - name: Download audit job artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: audit-go-*
+          path: .
+          merge-multiple: true
+      - name: Build audit dashboard
+        shell: bash
+        run: bash scripts/audit/aggregate.sh
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: audit-go-dashboard
+          path: |
+            tests/baseline/phase8/summary.html
+            tests/baseline/phase8/summary.json
+            tests/baseline/phase8/aggregate.junit.xml
+          if-no-files-found: ignore
+          retention-days: 30
