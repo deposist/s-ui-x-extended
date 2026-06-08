@@ -360,7 +360,7 @@ func (a *ApiService) GetKeypairs(c *gin.Context) {
 }
 
 func (a *ApiService) GetDb(c *gin.Context) {
-	if !a.requireTokenScopeAny(c, "database", "admin") {
+	if !a.requireTokenScopeAny(c, "database", "database", "admin") {
 		return
 	}
 	exclude := c.Query("exclude")
@@ -782,7 +782,7 @@ func (a *ApiService) SubConvert(c *gin.Context) {
 }
 
 func (a *ApiService) ImportDb(c *gin.Context) {
-	if !a.requireTokenScopeAny(c, "database", "admin") {
+	if !a.requireTokenScopeAny(c, "database", "database", "admin") {
 		return
 	}
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxDatabaseImportBytes)

@@ -272,7 +272,7 @@ func (a *ApiService) ImportXuiApply(c *gin.Context) {
 }
 
 func (a *ApiService) ImportXuiRollback(c *gin.Context) {
-	if !a.requireTokenScopeAny(c, "database", "admin") {
+	if !a.requireTokenScopeAny(c, "database", "database", "admin") {
 		return
 	}
 	if !a.enforceXUIRateLimit(c) {
@@ -308,7 +308,7 @@ func (a *ApiService) ImportXuiRollback(c *gin.Context) {
 }
 
 func (a *ApiService) ImportXuiReports(c *gin.Context) {
-	if !a.requireTokenScopeAny(c, "database", "admin") {
+	if !a.requireTokenScopeAny(c, "database", "database", "admin") {
 		return
 	}
 	if !a.enforceXUIRateLimit(c) {
@@ -324,7 +324,7 @@ func (a *ApiService) ImportXuiReports(c *gin.Context) {
 }
 
 func (a *ApiService) beginXUIRequest(c *gin.Context) (context.Context, context.CancelFunc, bool) {
-	if !a.requireTokenScopeAny(c, "database", "admin") {
+	if !a.requireTokenScopeAny(c, "database", "database", "admin") {
 		return c.Request.Context(), func() {}, false
 	}
 	if !a.enforceXUIRateLimit(c) {
