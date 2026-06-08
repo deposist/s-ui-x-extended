@@ -96,7 +96,7 @@ if ($NoCGO) {
 }
 
 # Build command
-$buildCmd = "go build -ldflags `"-w -s`" -tags `"with_quic,with_grpc,with_utls,with_acme,with_gvisor,with_tailscale`" -o sui.exe main.go"
+$buildCmd = "go build -ldflags `"-w -s -checklinkname=0`" -tags `"with_quic,with_grpc,with_utls,with_acme,with_gvisor,with_naive_outbound,with_purego,badlinkname,tfogo_checklinkname0,with_tailscale,with_dhcp,with_wireguard,with_masque,with_mtproxy,with_openvpn,with_sudoku,with_trusttunnel,with_ccm,with_ocm,with_oomkiller`" -o sui.exe main.go"
 
 try {
     Invoke-Expression $buildCmd
@@ -133,6 +133,20 @@ if (Test-Path "sui.exe") {
     $fileInfo = Get-Item "sui.exe"
     Write-Host "File size: $([math]::Round($fileInfo.Length / 1MB, 2)) MB" -ForegroundColor Cyan
     Write-Host "Created: $($fileInfo.CreationTime)" -ForegroundColor Cyan
+}
+
+# The Naive outbound is linked via with_purego and loads cronet at runtime, so it
+# needs libcronet.dll next to sui.exe. cronet ships Windows amd64/arm64 builds only.
+if ($Architecture -eq "amd64" -or $Architecture -eq "arm64") {
+    Write-Host "Downloading libcronet.dll (required for the Naive outbound)..." -ForegroundColor Yellow
+    try {
+        Invoke-WebRequest -Uri "https://github.com/SagerNet/cronet-go/releases/latest/download/libcronet-windows-$Architecture.dll" -OutFile "libcronet.dll" -UseBasicParsing
+        Write-Host "libcronet.dll downloaded." -ForegroundColor Green
+    } catch {
+        Write-Host "Warning: failed to download libcronet.dll. Naive will not work until libcronet.dll is placed next to sui.exe." -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "Note: cronet has no Windows $Architecture build; the Naive outbound will be unavailable." -ForegroundColor Yellow
 }
 
 Read-Host "Press Enter to exit"
