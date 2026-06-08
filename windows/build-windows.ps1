@@ -72,9 +72,10 @@ Pop-Location
 
 # Create web/html directory
 Write-Host "Creating web/html directory..." -ForegroundColor Yellow
-if (!(Test-Path "web\html")) {
-    New-Item -ItemType Directory -Path "web\html" -Force | Out-Null
+if (Test-Path "web\html") {
+    Remove-Item -LiteralPath "web\html" -Recurse -Force
 }
+New-Item -ItemType Directory -Path "web\html" -Force | Out-Null
 
 # Copy frontend build files
 Write-Host "Copying frontend build files..." -ForegroundColor Yellow

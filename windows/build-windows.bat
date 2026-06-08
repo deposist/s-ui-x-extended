@@ -42,7 +42,8 @@ if errorlevel 1 (
 cd ..
 
 echo Creating web/html directory...
-if not exist "web\html" mkdir "web\html"
+if exist "web\html" rmdir /s /q "web\html"
+mkdir "web\html"
 
 echo Copying frontend build files...
 xcopy "frontend\dist\*" "web\html\" /E /Y /Q
