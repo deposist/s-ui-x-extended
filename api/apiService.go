@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deposist/s-ui-x-extended/core/capabilities"
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/logger"
 	"github.com/deposist/s-ui-x-extended/realtime"
@@ -325,6 +326,15 @@ func (a *ApiService) GetStatus(c *gin.Context) {
 func (a *ApiService) GetOnlines(c *gin.Context) {
 	onlines, err := a.StatsService.GetOnlines()
 	jsonObj(c, onlines, err)
+}
+
+// GetCapabilities returns the protocol capability view (per-inbound UI flags and
+// build-availability) plus the compiled build-tag booleans. Mounted on the
+// admin-authenticated /api group; the payload is bool flags only (no paths,
+// versions or secrets) so it cannot aid fingerprinting beyond the operator's own
+// feature set.
+func (a *ApiService) GetCapabilities(c *gin.Context) {
+	jsonObj(c, capabilities.BuildAPIView(), nil)
 }
 
 func (a *ApiService) GetLogs(c *gin.Context) {

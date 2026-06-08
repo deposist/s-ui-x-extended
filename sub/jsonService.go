@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deposist/s-ui-x-extended/core/capabilities"
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
 	"github.com/deposist/s-ui-x-extended/service"
@@ -185,11 +186,23 @@ func (j *JsonService) getOutbounds(clientConfig json.RawMessage, inbounds []*mod
 				}
 			}
 			config, _ := configs[protocol].(map[string]interface{})
-			for key, value := range config {
-				if key == "name" || key == "alterId" || (key == "flow" && (inData.TlsId == 0 || stripFlow)) {
-					continue
+			if credMap := capabilities.CredentialMap(protocol); credMap != nil {
+				// Field-scoped credential mapping (defense-in-depth): copy ONLY the
+				// known client credential fields, renamed to the outbound's field
+				// names (e.g. name->username for mieru/trusttunnel, name->user for
+				// ssh). Never copy arbitrary keys from client.config.
+				for srcKey, dstField := range credMap {
+					if v, ok := config[srcKey]; ok {
+						outbound[dstField] = v
+					}
 				}
-				outbound[key] = value
+			} else {
+				for key, value := range config {
+					if key == "name" || key == "alterId" || (key == "flow" && (inData.TlsId == 0 || stripFlow)) {
+						continue
+					}
+					outbound[key] = value
+				}
 			}
 		}
 

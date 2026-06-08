@@ -18,7 +18,8 @@
               <v-select
               hide-details
               :label="$t('type')"
-              :items="Object.keys(inTypes).map((key,index) => ({title: key, value: Object.values(inTypes)[index]}))"
+              :items="inTypeItems"
+              :item-props="itemProps"
               v-model="inbound.type"
               @update:modelValue="changeType">
               </v-select>
@@ -136,6 +137,8 @@
 
 <script lang="ts">
 import { InTypes, createInbound, Addr, ShadowTLS } from '@/types/inbounds'
+import { inboundWithUsers, HasInData, HasTls, MuxAvailable, OnlyTLS } from '@/types/capabilities'
+import HttpUtils from '@/plugins/httputil'
 import RandomUtil from '@/plugins/randomUtil'
 import Dial from '@/components/Dial.vue'
 import DomainResolver from '@/components/DomainResolver.vue'
@@ -174,48 +177,35 @@ export default {
       loading: false,
       side: "s",
       inTypes: InTypes,
-      inboundWithUsers: ['mixed', 'socks', 'http', 'shadowsocks', 'vmess', 'trojan', 'naive', 'hysteria', 'shadowtls', 'tuic', 'hysteria2', 'vless', 'anytls', 'mieru', 'trusttunnel', 'ssh', 'mtproxy'],
+      // Capability lists are generated from core/capabilities/protocols.json by
+      // scripts/gen-capabilities.cjs (shared source of truth with the Go backend).
+      inboundWithUsers,
       initUsers: {
         model: 'none',
         values: <any>[],
       },
-      HasInData: [
-        InTypes.SOCKS,
-        InTypes.HTTP,
-        InTypes.Mixed,
-        InTypes.Shadowsocks,
-        InTypes.VMess,
-        InTypes.ShadowTLS,
-        InTypes.Trojan,
-        InTypes.Hysteria,
-        InTypes.VLESS,
-        InTypes.AnyTls,
-        InTypes.TUIC,
-        InTypes.Hysteria2,
-        InTypes.Naive,
-      ],
-      HasTls: [
-        InTypes.HTTP,
-        InTypes.VMess,
-        InTypes.Trojan,
-        InTypes.Naive,
-        InTypes.Hysteria,
-        InTypes.TUIC,
-        InTypes.Hysteria2,
-        InTypes.VLESS,
-        InTypes.AnyTls,
-        InTypes.TrustTunnel,
-      ],
-      MuxAvailable: [
-        InTypes.VLESS,
-        InTypes.VMess,
-        InTypes.Trojan,
-        InTypes.Shadowsocks,
-      ],
-      OnlyTLS: [InTypes.Hysteria, InTypes.Hysteria2, InTypes.TUIC, InTypes.Naive, InTypes.AnyTls ],
+      HasInData,
+      HasTls,
+      MuxAvailable,
+      OnlyTLS,
+      // Inbound types whose build tag is not compiled into the running binary
+      // (from /api/capabilities). Such types are shown disabled in the picker.
+      unavailableTypes: <string[]>[],
+    }
+  },
+  async created() {
+    // Best-effort: gate inbound types not compiled into this build. Failure
+    // (e.g. older backend without the endpoint) leaves every type available.
+    const resp = await HttpUtils.get('api/capabilities')
+    const inbounds = resp?.obj?.inbounds
+    if (Array.isArray(inbounds)) {
+      this.unavailableTypes = inbounds.filter((i: any) => i.available === false).map((i: any) => i.type)
     }
   },
   methods: {
+    itemProps(item: any) {
+      return item.props ?? {}
+    },
     async loadData(id: number) {
       this.loading = true
       const inboundArray = await Data().loadInbounds([id])
@@ -312,6 +302,18 @@ export default {
     },
     clients() {
       return Data().clients?? []
+    },
+    inTypeItems() {
+      const values = Object.values(this.inTypes)
+      return Object.keys(this.inTypes).map((key, index) => {
+        const value = values[index]
+        const unavailable = this.unavailableTypes.includes(value)
+        return {
+          title: unavailable ? `${key} — not in this build` : key,
+          value,
+          props: { disabled: unavailable },
+        }
+      })
     },
     hasUser() {
       if (this.$props.id > 0) return false

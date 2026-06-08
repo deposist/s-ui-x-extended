@@ -76,6 +76,7 @@ func TestAPIHandlerRegistersLegacyActionRoutesExplicitly(t *testing.T) {
 			"/api/singbox-config",
 			"/api/checkOutbound",
 			"/api/version",
+			"/api/capabilities",
 			"/api/import-xui/reports",
 			"/api/security/audit",
 			"/api/realtime/ws-token",

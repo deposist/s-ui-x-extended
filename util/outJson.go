@@ -3,15 +3,51 @@ package util
 import (
 	"encoding/json"
 
+	"github.com/deposist/s-ui-x-extended/core/capabilities"
 	"github.com/deposist/s-ui-x-extended/util/common"
 
 	"github.com/deposist/s-ui-x-extended/database/model"
 )
 
-// Fill Inbound's out_json
+// outJSONBuilder mutates the client out_json from the marshalled inbound. Each
+// builder is an ALLOW-LIST: it copies only the fields it explicitly names, so no
+// server-side secret can leak by being copied wholesale.
+type outJSONBuilder func(out *map[string]interface{}, inbound map[string]interface{})
+
+// outJSONBuilders is the dispatch table keyed by the manifest's outJsonBuilder
+// value. "base" keeps only the common fields (type/tag/server/server_port[/tls]);
+// a protocol key runs its builder; any inbound type whose manifest builder key is
+// empty (or is otherwise absent here) falls through to a wipe — the legacy
+// default branch and safety net for not-yet-delivered / unknown types.
+var outJSONBuilders = map[string]outJSONBuilder{
+	"base":        func(*map[string]interface{}, map[string]interface{}) {},
+	"naive":       naiveOut,
+	"shadowsocks": shadowsocksOut,
+	"shadowtls":   shadowTlsOut,
+	"hysteria":    hysteriaOut,
+	"hysteria2":   hysteria2Out,
+	"tuic":        tuicOut,
+	"vless":       vlessOut,
+	"trojan":      trojanOut,
+	"vmess":       vmessOut,
+	// Phase 1: extended protocols now delivered as JSON outbounds.
+	"ssh":         sshOut,
+	"mieru":       mieruOut,
+	"trusttunnel": trustTunnelOut,
+	"sudoku":      sudokuOut,
+}
+
+// Derived once from the embedded capability manifest.
+var (
+	outJSONSkip          = capabilities.SkipOutJSONTypes()
+	outJSONBuilderByType = capabilities.OutJSONBuilders()
+)
+
+// FillOutJson fills an Inbound's out_json (the client-facing outbound template).
 func FillOutJson(i *model.Inbound, hostname string) error {
-	switch i.Type {
-	case "direct", "tun", "redirect", "tproxy":
+	if _, skip := outJSONSkip[i.Type]; skip {
+		// Transparent/local inbounds (direct/tun/redirect/tproxy) have no client
+		// outbound; leave out_json untouched.
 		return nil
 	}
 	var outJson map[string]interface{}
@@ -40,27 +76,12 @@ func FillOutJson(i *model.Inbound, hostname string) error {
 	outJson["server"] = hostname
 	outJson["server_port"] = (*inbound)["listen_port"]
 
-	switch i.Type {
-	case "http", "socks", "mixed", "anytls":
-	case "naive":
-		naiveOut(&outJson, *inbound)
-	case "shadowsocks":
-		shadowsocksOut(&outJson, *inbound)
-	case "shadowtls":
-		shadowTlsOut(&outJson, *inbound)
-	case "hysteria":
-		hysteriaOut(&outJson, *inbound)
-	case "hysteria2":
-		hysteria2Out(&outJson, *inbound)
-	case "tuic":
-		tuicOut(&outJson, *inbound)
-	case "vless":
-		vlessOut(&outJson, *inbound)
-	case "trojan":
-		trojanOut(&outJson, *inbound)
-	case "vmess":
-		vmessOut(&outJson, *inbound)
-	default:
+	if builder, ok := outJSONBuilders[outJSONBuilderByType[i.Type]]; ok {
+		builder(&outJson, *inbound)
+	} else {
+		// Empty/unknown builder key: wipe out_json (legacy default branch). Types
+		// not yet wired for client delivery (mieru/sudoku/trusttunnel/ssh/mtproxy)
+		// land here until their builder is registered.
 		for key := range outJson {
 			delete(outJson, key)
 		}
@@ -234,4 +255,80 @@ func vmessOut(out *map[string]interface{}, inbound map[string]interface{}) {
 	if transport, ok := inbound["transport"]; ok {
 		(*out)["transport"] = transport
 	}
+}
+
+// sshOut copies NOTHING from the inbound. host_key / host_key_path are the
+// server's PRIVATE host keys and must never reach a client; server_version /
+// max_auth_tries are server-only. The base fields (type/tag/server/server_port)
+// are enough; user/password are merged per-user in the subscription. This is an
+// allow-list of size zero, kept explicit so the intent (and the forbidden-keys
+// test) is unambiguous.
+func sshOut(out *map[string]interface{}, inbound map[string]interface{}) {
+	_ = out
+	_ = inbound
+}
+
+// mieruOut (EXTENDED) copies only the transport-shaping client fields and maps the
+// server's listen_ports to the client's server_ports. username/password are merged
+// per-user in the subscription.
+func mieruOut(out *map[string]interface{}, inbound map[string]interface{}) {
+	for _, k := range []string{"transport", "traffic_pattern", "server_ports"} {
+		delete(*out, k)
+	}
+	if v, ok := inbound["transport"]; ok {
+		(*out)["transport"] = v
+	}
+	if v, ok := inbound["traffic_pattern"]; ok {
+		(*out)["traffic_pattern"] = v
+	}
+	if v, ok := inbound["listen_ports"]; ok {
+		(*out)["server_ports"] = v
+	}
+}
+
+// trustTunnelOut (EXTENDED) copies only the transport client fields. It must NOT
+// copy health_check / multiplex / username / password (out-direction-only fields):
+// username/password are merged per-user; health_check/multiplex are client-local
+// preferences set by the operator on the outbound, not derivable from the inbound.
+func trustTunnelOut(out *map[string]interface{}, inbound map[string]interface{}) {
+	keys := []string{"network", "quic", "congestion_controller", "bbr_profile", "cwnd"}
+	for _, k := range keys {
+		delete(*out, k)
+	}
+	for _, k := range keys {
+		if v, ok := inbound[k]; ok {
+			(*out)[k] = v
+		}
+	}
+}
+
+// sudokuOut (EXTENDED, keyless) copies the shared client parameters including the
+// mandatory `key` (a client credential, not a server secret — there are no
+// per-user objects to merge it from). It must NOT copy the server-only `fallback`
+// / `handshake_timeout`. http_mask is a nested object on the outbound but flat on
+// the inbound: build it from the inbound's flat fields and MERGE onto any existing
+// out_json.http_mask so an operator's C-side host/multiplex survive.
+func sudokuOut(out *map[string]interface{}, inbound map[string]interface{}) {
+	for _, k := range []string{"key", "aead_method", "table_type", "padding_min", "padding_max", "enable_pure_downlink", "custom_table", "custom_tables"} {
+		delete(*out, k)
+		if v, ok := inbound[k]; ok {
+			(*out)[k] = v
+		}
+	}
+
+	httpMask, _ := (*out)["http_mask"].(map[string]interface{})
+	if httpMask == nil {
+		httpMask = map[string]interface{}{}
+	}
+	// enabled mirrors the server's disable switch; mode / path_root mirror the
+	// server. host / multiplex are C-side-only and are preserved (never set here).
+	disable, _ := inbound["disable_http_mask"].(bool)
+	httpMask["enabled"] = !disable
+	if v, ok := inbound["http_mask_mode"]; ok {
+		httpMask["mode"] = v
+	}
+	if v, ok := inbound["path_root"]; ok {
+		httpMask["path_root"] = v
+	}
+	(*out)["http_mask"] = httpMask
 }

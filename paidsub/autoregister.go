@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"strconv"
 	"strings"
@@ -156,6 +157,10 @@ func generateClientConfig(name string) (json.RawMessage, error) {
 		return nil, err
 	}
 	uuidStr := u.String()
+	mtSecret, err := randomMTProtoSecret()
+	if err != nil {
+		return nil, err
+	}
 	cfg := map[string]map[string]any{
 		"mixed":         {"username": name, "password": mixedPassword},
 		"socks":         {"username": name, "password": mixedPassword},
@@ -171,8 +176,34 @@ func generateClientConfig(name string) (json.RawMessage, error) {
 		"hysteria":      {"name": name, "auth_str": mixedPassword},
 		"tuic":          {"name": name, "uuid": uuidStr, "password": mixedPassword},
 		"hysteria2":     {"name": name, "password": mixedPassword},
+		"mieru":         {"name": name, "password": mixedPassword},
+		"trusttunnel":   {"name": name, "password": mixedPassword},
+		"ssh":           {"name": name, "password": mixedPassword},
+		// mtproxy secret is the sole authenticator and MUST be a valid faketls
+		// ('ee') secret or sing-box's mtglib rejects it at startup.
+		"mtproxy": {"name": name, "secret": mtSecret},
 	}
 	return json.Marshal(cfg)
+}
+
+// mtProtoFrontHosts mirrors the frontend sniFrontHosts presets: plausible TLS 1.3
+// hosts used as the faketls SNI embedded in an MTProto secret.
+var mtProtoFrontHosts = []string{
+	"www.microsoft.com", "www.apple.com", "www.cloudflare.com", "www.amazon.com",
+	"aws.amazon.com", "dl.google.com", "www.icloud.com", "www.bing.com", "www.tesla.com",
+}
+
+// randomMTProtoSecret builds a valid sing-box mtproxy user secret: a faketls
+// ('ee') secret = 0xee || 16 random key bytes || faketls SNI host, hex-encoded.
+// mtglib.Secret.Set rejects anything without the 0xee prefix and a non-empty host,
+// so a bare hex key (the panel's historical format) would fail at inbound start.
+func randomMTProtoSecret() (string, error) {
+	key := make([]byte, 16)
+	if _, err := rand.Read(key); err != nil {
+		return "", err
+	}
+	host := mtProtoFrontHosts[int(key[0])%len(mtProtoFrontHosts)]
+	return "ee" + hex.EncodeToString(key) + hex.EncodeToString([]byte(host)), nil
 }
 
 func randomSSPassword(n int) (string, error) {

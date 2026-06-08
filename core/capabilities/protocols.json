@@ -1,0 +1,288 @@
+{
+  "$comment": "SINGLE SOURCE OF TRUTH for protocol capabilities. Consumed by the Go backend (go:embed in capabilities.go) AND the Vue frontend (scripts/gen-capabilities.cjs -> src/types/capabilities.ts). Do NOT hand-edit the derived maps/lists in code; edit this file and regenerate. Snapshot/drift tests guard that the derived structures stay in sync. Phase semantics: 'clientDelivery' is a diagnostic label (none|json|uri|telegram|broken); it does NOT drive FillOutJson's early-return (that is 'skipOutJson'). 'outJsonBuilder' (JSON delivery), 'linkScheme' (URI/tg delivery) and 'hasInData' (frontend out_json editor) are the behaviour switches flipped per phase.",
+  "version": 1,
+  "inbounds": [
+    {
+      "type": "socks",
+      "hasUsers": true,
+      "userField": "socks",
+      "clientDelivery": "uri",
+      "linkScheme": "socks",
+      "outJsonBuilder": "base",
+      "hasInData": true,
+      "uiEditor": "Socks"
+    },
+    {
+      "type": "http",
+      "hasUsers": true,
+      "userField": "http",
+      "clientDelivery": "uri",
+      "linkScheme": "http",
+      "outJsonBuilder": "base",
+      "hasInData": true,
+      "hasTlsTemplate": true,
+      "uiEditor": "Http"
+    },
+    {
+      "type": "mixed",
+      "hasUsers": true,
+      "userField": "mixed",
+      "clientDelivery": "uri",
+      "linkScheme": "mixed",
+      "outJsonBuilder": "base",
+      "hasInData": true,
+      "uiEditor": "Mixed"
+    },
+    {
+      "type": "shadowsocks",
+      "hasUsers": true,
+      "userField": "shadowsocks",
+      "clientDelivery": "uri",
+      "linkScheme": "shadowsocks",
+      "outJsonBuilder": "shadowsocks",
+      "hasInData": true,
+      "muxAvailable": true,
+      "uiEditor": "Shadowsocks"
+    },
+    {
+      "type": "shadowsocks16",
+      "hasUsers": true,
+      "userField": "shadowsocks",
+      "alias": true,
+      "clientDelivery": "none",
+      "notes": "method alias of shadowsocks (2022-blake3-aes-128-gcm); backend user-field lookup only, never an independent inbound type"
+    },
+    {
+      "type": "vmess",
+      "hasUsers": true,
+      "userField": "vmess",
+      "clientDelivery": "uri",
+      "linkScheme": "vmess",
+      "outJsonBuilder": "vmess",
+      "hasInData": true,
+      "hasTlsTemplate": true,
+      "muxAvailable": true,
+      "uiEditor": "VMess"
+    },
+    {
+      "type": "vless",
+      "hasUsers": true,
+      "userField": "vless",
+      "clientDelivery": "uri",
+      "linkScheme": "vless",
+      "outJsonBuilder": "vless",
+      "hasInData": true,
+      "hasTlsTemplate": true,
+      "muxAvailable": true,
+      "uiEditor": "VlessInbound"
+    },
+    {
+      "type": "trojan",
+      "hasUsers": true,
+      "userField": "trojan",
+      "clientDelivery": "uri",
+      "linkScheme": "trojan",
+      "outJsonBuilder": "trojan",
+      "hasInData": true,
+      "hasTlsTemplate": true,
+      "muxAvailable": true,
+      "uiEditor": "Trojan"
+    },
+    {
+      "type": "naive",
+      "hasUsers": true,
+      "userField": "naive",
+      "clientDelivery": "uri",
+      "linkScheme": "naive",
+      "outJsonBuilder": "naive",
+      "hasInData": true,
+      "hasTlsTemplate": true,
+      "onlyTls": true,
+      "uiEditor": "Naive"
+    },
+    {
+      "type": "hysteria",
+      "hasUsers": true,
+      "userField": "hysteria",
+      "clientDelivery": "uri",
+      "linkScheme": "hysteria",
+      "outJsonBuilder": "hysteria",
+      "hasInData": true,
+      "hasTlsTemplate": true,
+      "onlyTls": true,
+      "buildTag": "with_quic",
+      "uiEditor": "Hysteria"
+    },
+    {
+      "type": "hysteria2",
+      "hasUsers": true,
+      "userField": "hysteria2",
+      "clientDelivery": "uri",
+      "linkScheme": "hysteria2",
+      "outJsonBuilder": "hysteria2",
+      "hasInData": true,
+      "hasTlsTemplate": true,
+      "onlyTls": true,
+      "buildTag": "with_quic",
+      "uiEditor": "Hysteria2"
+    },
+    {
+      "type": "tuic",
+      "hasUsers": true,
+      "userField": "tuic",
+      "clientDelivery": "uri",
+      "linkScheme": "tuic",
+      "outJsonBuilder": "tuic",
+      "hasInData": true,
+      "hasTlsTemplate": true,
+      "onlyTls": true,
+      "buildTag": "with_quic",
+      "uiEditor": "Tuic"
+    },
+    {
+      "type": "anytls",
+      "hasUsers": true,
+      "userField": "anytls",
+      "clientDelivery": "uri",
+      "linkScheme": "anytls",
+      "outJsonBuilder": "base",
+      "hasInData": true,
+      "hasTlsTemplate": true,
+      "onlyTls": true,
+      "uiEditor": "AnyTls"
+    },
+    {
+      "type": "shadowtls",
+      "hasUsers": true,
+      "userField": "shadowtls",
+      "clientDelivery": "broken",
+      "outJsonBuilder": "shadowtls",
+      "hasInData": true,
+      "uiEditor": "ShadowTls",
+      "notes": "BROKEN delivery: server backing-shadowsocks detour is never created and the client out_json is a lone shadowtls outbound with no paired shadowsocks. Also NOT fail-closed: a shadowtls inbound without listen.detour does not reject; the decrypted inner stream falls through to normal routing (see docs/project-context.md). Auto-pair design deferred."
+    },
+    {
+      "type": "mieru",
+      "hasUsers": true,
+      "userField": "mieru",
+      "clientDelivery": "json",
+      "outJsonBuilder": "mieru",
+      "hasInData": true,
+      "credentialMap": { "name": "username", "password": "password" },
+      "uiEditor": "Mieru",
+      "notes": "out_json copies transport/traffic_pattern and maps listen_ports->server_ports; username/password merged per-user"
+    },
+    {
+      "type": "sudoku",
+      "hasUsers": false,
+      "clientDelivery": "json",
+      "outJsonBuilder": "sudoku",
+      "hasInData": true,
+      "buildTag": "with_sudoku",
+      "uiEditor": "Sudoku",
+      "notes": "keyless (no per-user objects); single shared inbound-level 'key' is the credential carried in out_json. http_mask is built nested from flat inbound fields, merged with C-side host/multiplex"
+    },
+    {
+      "type": "trusttunnel",
+      "hasUsers": true,
+      "userField": "trusttunnel",
+      "clientDelivery": "json",
+      "outJsonBuilder": "trusttunnel",
+      "hasInData": true,
+      "hasTlsTemplate": true,
+      "credentialMap": { "name": "username", "password": "password" },
+      "buildTag": "with_trusttunnel",
+      "uiEditor": "TrustTunnel",
+      "notes": "out_json copies network/quic/congestion_controller/bbr_profile/cwnd; NOT health_check/multiplex/username/password; username/password merged per-user"
+    },
+    {
+      "type": "ssh",
+      "hasUsers": true,
+      "userField": "ssh",
+      "clientDelivery": "json",
+      "outJsonBuilder": "ssh",
+      "hasInData": true,
+      "credentialMap": { "name": "user", "password": "password" },
+      "uiEditor": "SshInbound",
+      "notes": "out_json copies NOTHING server-side (host_key* are PRIVATE server keys); user/password merged per-user"
+    },
+    {
+      "type": "mtproxy",
+      "hasUsers": true,
+      "userField": "mtproxy",
+      "clientDelivery": "telegram",
+      "linkScheme": "tg",
+      "outJsonBuilder": "",
+      "buildTag": "with_mtproxy",
+      "uiEditor": "MTProxy",
+      "notes": "no sing-box mtproxy outbound exists: delivered ONLY as a tg://proxy link (linkScheme tg) from the per-user secret. Excluded from JSON/Clash by design (outJsonBuilder empty -> out_json wiped -> subscription len<5 guard skips it)."
+    },
+    {
+      "type": "direct",
+      "hasUsers": false,
+      "clientDelivery": "none",
+      "skipOutJson": true,
+      "uiEditor": "Direct"
+    },
+    {
+      "type": "tun",
+      "hasUsers": false,
+      "clientDelivery": "none",
+      "skipOutJson": true,
+      "uiEditor": "Tun"
+    },
+    {
+      "type": "redirect",
+      "hasUsers": false,
+      "clientDelivery": "none",
+      "skipOutJson": true,
+      "uiEditor": "Redirect"
+    },
+    {
+      "type": "tproxy",
+      "hasUsers": false,
+      "clientDelivery": "none",
+      "skipOutJson": true,
+      "uiEditor": "TProxy"
+    }
+  ],
+  "outbounds": [
+    { "type": "direct" },
+    { "type": "block" },
+    { "type": "socks" },
+    { "type": "http" },
+    { "type": "shadowsocks" },
+    { "type": "vmess" },
+    { "type": "vless" },
+    { "type": "trojan" },
+    { "type": "naive", "buildTag": "with_naive_outbound" },
+    { "type": "tor" },
+    { "type": "ssh" },
+    { "type": "shadowtls" },
+    { "type": "anytls" },
+    { "type": "mieru" },
+    { "type": "trusttunnel", "buildTag": "with_trusttunnel" },
+    { "type": "sudoku", "buildTag": "with_sudoku" },
+    { "type": "masque", "buildTag": "with_masque" },
+    { "type": "openvpn", "buildTag": "with_openvpn" },
+    { "type": "hysteria", "buildTag": "with_quic" },
+    { "type": "hysteria2", "buildTag": "with_quic" },
+    { "type": "tuic", "buildTag": "with_quic" },
+    { "type": "bond", "notes": "inbound registered in core but absent from the UI InTypes (GAP)" },
+    { "type": "failover", "notes": "inbound registered in core but absent from the UI InTypes (GAP)" }
+  ],
+  "endpoints": [
+    { "type": "wireguard", "buildTag": "with_wireguard", "notes": "warp maps to a wireguard endpoint" },
+    { "type": "tailscale", "buildTag": "with_tailscale" },
+    { "type": "vpn", "notes": "warp/vpn client+server endpoint" }
+  ],
+  "services": [
+    { "type": "resolved" },
+    { "type": "ssm-api" },
+    { "type": "derp" },
+    { "type": "ccm", "buildTag": "with_ccm" },
+    { "type": "ocm", "buildTag": "with_ocm" },
+    { "type": "oom-killer", "buildTag": "with_oomkiller" },
+    { "type": "profiler", "buildTag": "with_profiler", "notes": "dev-only" }
+  ]
+}

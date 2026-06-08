@@ -71,6 +71,7 @@ func (a *APIHandler) registerGroupedRoutes(g *gin.RouterGroup) {
 	g.GET("/singbox-config", a.ApiService.GetSingboxConfig)
 	g.GET("/checkOutbound", a.ApiService.GetCheckOutbound)
 	g.GET("/version", a.ApiService.GetVersionInfo)
+	g.GET("/capabilities", a.ApiService.GetCapabilities)
 	g.POST("/checkOutbounds", a.ApiService.CheckOutbounds)
 	g.POST("/rotateSubSecret", a.ApiService.RotateSubSecret)
 

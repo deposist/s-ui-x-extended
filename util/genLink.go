@@ -7,11 +7,15 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/deposist/s-ui-x-extended/core/capabilities"
 	"github.com/deposist/s-ui-x-extended/database/model"
 	"github.com/deposist/s-ui-x-extended/util/common"
 )
 
-var InboundTypeWithLink = []string{"socks", "http", "mixed", "shadowsocks", "naive", "hysteria", "hysteria2", "anytls", "tuic", "vless", "trojan", "vmess"}
+// InboundTypeWithLink is the set of inbound types that produce an external link
+// (URI or Telegram). Derived from the embedded capability manifest; consumers use
+// it as a set (SQL IN / iteration), so order is not significant.
+var InboundTypeWithLink = capabilities.InboundTypesWithLink()
 
 type LinkParam struct {
 	Key   string
@@ -113,9 +117,33 @@ func LinkGenerator(clientConfig json.RawMessage, i *model.Inbound, hostname stri
 		return trojanLink(userConfig["trojan"], *inbound, Addrs)
 	case "vmess":
 		return vmessLink(userConfig["vmess"], *inbound, Addrs)
+	case "mtproxy":
+		return mtproxyLink(userConfig["mtproxy"], Addrs)
 	}
 
 	return []string{}
+}
+
+// mtproxyLink builds Telegram MTProto proxy deep links. There is no sing-box
+// mtproxy OUTBOUND, so this is the only client delivery path. The per-user
+// `secret` is already a self-contained faketls ('ee') secret (0xee || 16-byte key
+// || faketls SNI host), so it is emitted verbatim (URL-escaped). No server-side
+// material is read here.
+func mtproxyLink(userConfig map[string]interface{}, addrs []map[string]interface{}) []string {
+	secret, _ := userConfig["secret"].(string)
+	if secret == "" {
+		return []string{}
+	}
+	var links []string
+	for _, addr := range addrs {
+		port, _ := addr["server_port"].(float64)
+		q := url.Values{}
+		q.Set("server", mapString(addr, "server"))
+		q.Set("port", fmt.Sprintf("%d", uint(port)))
+		q.Set("secret", secret)
+		links = append(links, "tg://proxy?"+q.Encode())
+	}
+	return links
 }
 
 func prepareTls(t *model.Tls) map[string]interface{} {

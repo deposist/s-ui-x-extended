@@ -91,6 +91,9 @@
     <Headers :data="inData.out_json" v-if="type == inTypes.HTTP" />
     <AnyTls v-if="type == inTypes.AnyTls" :data="inData.out_json" direction="out_json" />
     <Naive v-if="type == inTypes.Naive" :data="inData.out_json" direction="out_json" />
+    <Mieru v-if="type == inTypes.Mieru" :data="inData.out_json" direction="out" />
+    <Sudoku v-if="type == inTypes.Sudoku" :data="inData.out_json" direction="out" />
+    <TrustTunnel v-if="type == inTypes.TrustTunnel" :data="inData.out_json" direction="out" />
   </v-card>
 </template>
 
@@ -102,6 +105,9 @@ import UoT from './UoT.vue'
 import Headers from './Headers.vue'
 import AnyTls from './protocols/AnyTls.vue'
 import Naive from './protocols/Naive.vue'
+import Mieru from './protocols/Mieru.vue'
+import Sudoku from './protocols/Sudoku.vue'
+import TrustTunnel from './protocols/TrustTunnel.vue'
 
 export default {
   props: ['inData', 'type'],
@@ -148,6 +154,6 @@ export default {
     if (this.$props.type == InTypes.VMess) o.security ??= RECOMMENDED.vmessSecurity
     if (this.$props.type == InTypes.TUIC) o.udp_relay_mode ??= RECOMMENDED.tuicUdpRelayMode
   },
-  components: { Network, UoT, Headers, AnyTls, Naive }
+  components: { Network, UoT, Headers, AnyTls, Naive, Mieru, Sudoku, TrustTunnel }
 }
 </script>

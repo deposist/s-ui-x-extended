@@ -1,4 +1,19 @@
 import RandomUtil from "@/plugins/randomUtil"
+import { sniFrontHosts } from "./recommended"
+
+// A sing-box mtproxy user secret must be a faketls ('ee') secret:
+// 0xee || 16-byte key || faketls SNI host (all hex-encoded). mtglib rejects a bare
+// hex key, so we always emit the full faketls form. The host is embedded in the
+// secret (mtg uses it as the faketls SNI), picked from the recommended fronts.
+function toHex(s: string): string {
+  return Array.from(s).map((c) => c.charCodeAt(0).toString(16).padStart(2, '0')).join('')
+}
+
+export function randomMtprotoSecret(): string {
+  const key = RandomUtil.randomUUID().replace(/-/g, '') // 16 crypto-random bytes, hex
+  const host = sniFrontHosts[RandomUtil.randomInt(sniFrontHosts.length - 1)]
+  return 'ee' + key + toHex(host)
+}
 
 export interface Link {
   type: "local" | "external" | "sub"
@@ -115,7 +130,7 @@ export function shuffleConfigs(configs: Config, key?: string) {
         configs[k].uuid = RandomUtil.randomUUID()
         break
       case "mtproxy":
-        configs[k].secret = RandomUtil.randomUUID().replace(/-/g, '')
+        configs[k].secret = randomMtprotoSecret()
         break
     }
   })
@@ -200,7 +215,7 @@ export function randomConfigs(user: string): Config {
     },
     mtproxy: {
       name: user,
-      secret: uuid.replace(/-/g, ''),
+      secret: randomMtprotoSecret(),
     },
   }
 }

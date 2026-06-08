@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/deposist/s-ui-x-extended/core/capabilities"
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
 	"github.com/deposist/s-ui-x-extended/util"
@@ -270,48 +271,18 @@ func (s *InboundService) hasUser(inboundType string) bool {
 }
 
 // userJSONField maps an inbound type to the JSON path used inside
-// clients.config to locate per-user data. Do not extend this map without a
-// positive list for both the inbound type and the JSON field value.
-var userJSONField = map[string]string{
-	"mixed":         "mixed",
-	"socks":         "socks",
-	"http":          "http",
-	"shadowsocks":   "shadowsocks",
-	"shadowsocks16": "shadowsocks",
-	"vmess":         "vmess",
-	"trojan":        "trojan",
-	"naive":         "naive",
-	"hysteria":      "hysteria",
-	"shadowtls":     "shadowtls",
-	"tuic":          "tuic",
-	"hysteria2":     "hysteria2",
-	"vless":         "vless",
-	"anytls":        "anytls",
-	"mieru":         "mieru",
-	"trusttunnel":   "trusttunnel",
-	"ssh":           "ssh",
-	"mtproxy":       "mtproxy",
-}
+// clients.config to locate per-user data. Derived from the embedded capability
+// manifest (core/capabilities/protocols.json) so it cannot drift from the
+// frontend / link / out_json lists. Do not extend by hand — edit the manifest.
+// It stays a package var (not a func call site) because tests mutate it to probe
+// the SQL-injection guard in fetchUsersByCondition.
+var userJSONField = capabilities.UserJSONFields()
 
-var allowedUserJSONFields = map[string]struct{}{
-	"mixed":       {},
-	"socks":       {},
-	"http":        {},
-	"shadowsocks": {},
-	"vmess":       {},
-	"trojan":      {},
-	"naive":       {},
-	"hysteria":    {},
-	"shadowtls":   {},
-	"tuic":        {},
-	"hysteria2":   {},
-	"vless":       {},
-	"anytls":      {},
-	"mieru":       {},
-	"trusttunnel": {},
-	"ssh":         {},
-	"mtproxy":     {},
-}
+// allowedUserJSONFields is the second-layer allow-list of JSON field values that
+// may be interpolated into the user-lookup SQL path. Derived independently from
+// the same embedded (build-time-constant) manifest; mutating userJSONField at
+// runtime can never widen it.
+var allowedUserJSONFields = capabilities.AllowedUserJSONFields()
 
 func (s *InboundService) addUsers(db *gorm.DB, inboundJson []byte, inboundId uint, inboundType string) ([]byte, error) {
 	if !s.hasUser(inboundType) {
