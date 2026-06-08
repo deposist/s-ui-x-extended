@@ -1,7 +1,7 @@
 FROM --platform=$BUILDPLATFORM node:alpine AS front-builder
 WORKDIR /app
 COPY frontend/ ./
-RUN npm install && npm run build
+RUN npm ci && npm run build
 
 FROM golang:1.26.4-alpine AS backend-builder
 WORKDIR /app
