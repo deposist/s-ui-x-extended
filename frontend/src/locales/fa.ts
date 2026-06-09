@@ -43,6 +43,7 @@ export default {
     outbounds: "خروجی‌ها",
     endpoints: "درگاه‌ها",
     services: "خدمات",
+    providers: "ارائه‌دهندگان",
     clients: "کاربران",
     rules: "قوانین",
     tls: "رمزنگاری‌ها",
@@ -52,6 +53,7 @@ export default {
     telegram: "تلگرام",
     audit: "حسابرسی",
     migrateXui: "مهاجرت 3x-ui",
+    paidSub: "اشتراک‌های پولی",
     settings: "پیکربندی",
   },
   telegram: {

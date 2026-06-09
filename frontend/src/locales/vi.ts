@@ -43,6 +43,7 @@ export default {
     outbounds: "Đầu ra",
     services: "Dịch vụ",
     endpoints: "Điểm cuối",
+    providers: "Nhà cung cấp",
     clients: "Khách hàng",
     rules: "Quy tắc",
     tls: "Cài đặt TLS",
@@ -52,6 +53,7 @@ export default {
     telegram: "Telegram",
     audit: "Kiểm toán",
     migrateXui: "Di chuyển 3x-ui",
+    paidSub: "Đăng ký trả phí",
     settings: "Cài đặt",
   },
   telegram: {

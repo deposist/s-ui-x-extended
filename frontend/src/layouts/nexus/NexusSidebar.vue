@@ -58,7 +58,7 @@
 
 <script lang="ts" setup>
 import { logout } from '@/plugins/httputil'
-import { nexusMenu as menu } from './nexusMenu'
+import { appMenu as menu } from '@/layouts/menu'
 
 defineProps<{
   open: boolean

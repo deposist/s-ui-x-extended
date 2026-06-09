@@ -43,6 +43,7 @@ export default {
     outbounds: "出站管理",
     services: "服务管理",
     endpoints: "节点管理",
+    providers: "提供商",
     clients: "用户管理",
     rules: "路由列表",
     tls: "TLS 设置",
@@ -52,6 +53,7 @@ export default {
     telegram: "Telegram",
     audit: "审计",
     migrateXui: "3x-ui 迁移",
+    paidSub: "付费订阅",
     settings: "设置",
   },
   telegram: {

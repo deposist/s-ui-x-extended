@@ -2,6 +2,64 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/) · Versioning: [SemVer](https://semver.org/).
 
+## [1.0.0-beta5] — 2026-06-09
+
+Unifies the navigation menu so the **Classic** and **Nexus** UI environments
+always show the same tabs. The two shells previously kept independent,
+hand-maintained menu lists that had drifted apart — *Providers* showed only in
+Classic, *Paid Subscriptions* only in Nexus. They now read a single shared
+source, so neither environment can silently lose a tab again.
+
+### English
+
+#### Changed
+
+- **Single source of truth for the sidebar menu.** New
+  `frontend/src/layouts/menu.ts` exports one `appMenu`; both the Classic drawer
+  (`layouts/default/Drawer.vue`) and the Nexus sidebar
+  (`layouts/nexus/NexusSidebar.vue`) consume it. `nexusMenu.ts` is now a thin
+  re-export kept for backward compatibility, and the nexus-only `singBoxSettings`
+  metadata lives in the shared list.
+
+#### Fixed
+
+- **Classic and Nexus tabs no longer diverge.** Both environments now expose the
+  same 16 tabs in the same order — Classic gains *Paid Subscriptions* and Nexus
+  gains *Providers* (previously each was missing one). `/migrate-xui` remains a
+  contextual page reached from the Backup dialog, not a top-level tab, as before.
+
+#### Added
+
+- **Menu localization parity.** `pages.providers` and `pages.paidSub` are now
+  translated in `zhcn`, `zhtw`, `fa` and `vi` (they fell back to English before).
+- **Drift-guard test** (`frontend/src/layouts/menu.test.ts`) pins the menu's path
+  set, order, uniqueness and the nexus sing-box surfaces.
+
+### Русский
+
+#### Изменено
+
+- **Единый источник правды для бокового меню.** Новый
+  `frontend/src/layouts/menu.ts` экспортирует один `appMenu`; его используют и
+  Classic-drawer (`layouts/default/Drawer.vue`), и Nexus-sidebar
+  (`layouts/nexus/NexusSidebar.vue`). `nexusMenu.ts` стал тонким ре-экспортом для
+  обратной совместимости, а nexus-only метаданные `singBoxSettings` теперь живут
+  в общем списке.
+
+#### Исправлено
+
+- **Вкладки Classic и Nexus больше не расходятся.** Оба окружения показывают
+  одинаковые 16 вкладок в одном порядке — Classic получил *Paid Subscriptions*,
+  Nexus получил *Providers* (раньше у каждого не хватало одной). `/migrate-xui`
+  по-прежнему контекстная страница из диалога Backup, а не вкладка верхнего уровня.
+
+#### Добавлено
+
+- **Паритет локализации меню.** `pages.providers` и `pages.paidSub` переведены в
+  `zhcn`, `zhtw`, `fa` и `vi` (раньше показывался английский fallback).
+- **Тест против дрейфа** (`frontend/src/layouts/menu.test.ts`) фиксирует набор
+  путей меню, порядок, уникальность и nexus sing-box-поверхности.
+
 ## [1.0.0-beta4] — 2026-06-09
 
 Makes the extended protocols actually usable end-to-end. The panel could already
@@ -103,7 +161,7 @@ single source of truth.
 ## [Unreleased] — planned 1.0.0 GA
 
 > Draft for the eventual 1.0.0 GA — not yet tagged or released. The latest
-> released build is `1.0.0-beta4` above.
+> released build is `1.0.0-beta5` above.
 
 First stable release — the s-ui-x web panel on the
 [`sing-box-extended`](https://github.com/shtorm-7/sing-box-extended) core
@@ -330,6 +388,7 @@ TrustTunnel, WireGuard/AmneziaWG, CCM/OCM, DHCP, QUIC, mKCP/XHTTP, провай�
 безопасности и надёжности. См. [`SECURITY.md`](SECURITY.md).
 
 [1.0.0]: https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0
+[1.0.0-beta5]: https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta5
 [1.0.0-beta4]: https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta4
 [1.0.0-beta3]: https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta3
 [1.0.0-beta2]: https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta2
