@@ -198,7 +198,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/
 Append any release tag to the install command — pick one from the [Releases page](https://github.com/deposist/s-ui-x-extended/releases) (stable **or** pre-release). For example:
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta3
+bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta5
 ```
 
 ## Installer Behavior & Upgrading
@@ -812,7 +812,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/
 Добавьте любой тег релиза в конец команды установки — выберите его на [странице релизов](https://github.com/deposist/s-ui-x-extended/releases) (стабильный **или** пре-релиз). Например:
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta3
+bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta5
 ```
 
 ## Поведение установщика и обновление
