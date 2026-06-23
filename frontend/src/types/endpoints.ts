@@ -4,6 +4,8 @@ export const EpTypes = {
   Wireguard: 'wireguard',
   Warp: 'warp',
   Tailscale: 'tailscale',
+  VpnServer: 'vpn-server',
+  VpnClient: 'vpn-client',
 }
 
 type EpType = typeof EpTypes[keyof typeof EpTypes]
@@ -24,6 +26,29 @@ export interface WgPeer {
   reserved?: number[]
 }
 
+export interface WireGuardAmnezia {
+  jc?: number
+  jmin?: number
+  jmax?: number
+  s1?: number
+  s2?: number
+  s3?: number
+  s4?: number
+  h1?: number | string
+  h2?: number | string
+  h3?: number | string
+  h4?: number | string
+  i1?: string
+  i2?: string
+  i3?: string
+  i4?: string
+  i5?: string
+  j1?: string
+  j2?: string
+  j3?: string
+  itime?: number
+}
+
 export interface WireGuard extends EndpointBasics, Dial {
   system?: boolean
   name?: string
@@ -34,6 +59,7 @@ export interface WireGuard extends EndpointBasics, Dial {
   peers: WgPeer[]
   udp_timeout?: string
   workers?: number
+  amnezia?: WireGuardAmnezia
   ext: any
 }
 
@@ -59,6 +85,24 @@ export interface Tailscale extends EndpointBasics, Dial {
   udp_timeout?: string
 }
 
+export interface VpnUser {
+  address: string
+  key: string
+}
+
+export interface VpnServer extends EndpointBasics {
+  address: string
+  users: VpnUser[]
+  inbounds: any[]
+  connect_timeout?: string
+}
+
+export interface VpnClient extends EndpointBasics {
+  address: string
+  key: string
+  outbound: any
+}
+
 // Create interfaces dynamically based on EpTypes keys
 type InterfaceMap = {
   [Key in keyof typeof EpTypes]: {
@@ -72,9 +116,11 @@ export type Endpoint = InterfaceMap[keyof InterfaceMap]
 
 // Create defaultValues object dynamically
 const defaultValues: Record<EpType, Endpoint> = {
-  wireguard: { type: EpTypes.Wireguard, address: ['10.0.0.2/32','fe80::2/128'], private_key: '', listen_port: 0, peers: [], ext: { keys: [] } },
+  wireguard: { type: EpTypes.Wireguard, address: ['10.0.0.2/32','fe80::2/128'], private_key: '', listen_port: 0 },
   warp: { type: EpTypes.Warp, address: [], private_key: '', listen_port: 0, mtu: 1420, peers: [{ address: '', port: 0, public_key: ''}] },
   tailscale: { type: EpTypes.Tailscale, domain_resolver: 'local' },
+  'vpn-server': { type: EpTypes.VpnServer, address: '10.0.0.1', users: [], inbounds: [] },
+  'vpn-client': { type: EpTypes.VpnClient, address: '10.0.0.2', key: '', outbound: {} },
 }
 
 export function createEndpoint<T extends Endpoint>(type: string,json?: Partial<T>): Endpoint {

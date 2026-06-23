@@ -80,7 +80,12 @@ interface Experimental {
   cache_file?: CacheFile
   clash_api?: ClashApi
   v2ray_api?: V2rayApi
+  unified_delay?: UnifiedDelay
   debug?: Debug
+}
+
+interface UnifiedDelay {
+  enabled?: boolean
 }
 
 interface CacheFile {
