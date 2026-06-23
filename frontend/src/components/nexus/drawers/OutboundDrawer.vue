@@ -49,6 +49,18 @@
       <Selector v-if="outbound.type == outTypes.Selector" :data="outbound" :tags="tags" />
       <UrlTest v-if="outbound.type == outTypes.URLTest" :data="outbound" :tags="tags" />
       <Failover v-if="outbound.type == outTypes.Failover" :data="outbound" :tags="tags" />
+      <Mieru v-if="outbound.type == outTypes.Mieru" direction="out" :data="outbound" />
+      <Sudoku v-if="outbound.type == outTypes.Sudoku" direction="out" :data="outbound" />
+      <TrustTunnel v-if="outbound.type == outTypes.TrustTunnel" direction="out" :data="outbound" />
+      <Masque v-if="outbound.type == outTypes.MASQUE" :data="outbound" />
+      <OpenVPN v-if="outbound.type == outTypes.OpenVPN" :data="outbound" />
+      <Bond v-if="outbound.type == outTypes.Bond" :data="outbound" :tags="tags" />
+      <Parser v-if="outbound.type == outTypes.Parser" :data="outbound" :tags="tags" />
+      <BandwidthLimiter v-if="outbound.type == outTypes.BandwidthLimiter" :data="outbound" :tags="tags" />
+      <ConnectionLimiter v-if="outbound.type == outTypes.ConnectionLimiter" :data="outbound" :tags="tags" />
+      <TrafficLimiter v-if="outbound.type == outTypes.TrafficLimiter" :data="outbound" :tags="tags" />
+      <RateLimiter v-if="outbound.type == outTypes.RateLimiter" :data="outbound" :tags="tags" />
+      <Fallback v-if="outbound.type == outTypes.Fallback" :data="outbound" :tags="tags" />
       <Transport v-if="Object.hasOwn(outbound,'transport')" :data="outbound" />
       <OutTLS v-if="Object.hasOwn(outbound,'tls')" :outbound="outbound" />
       <Multiplex v-if="Object.hasOwn(outbound,'multiplex')" direction="out" :data="outbound" />
@@ -93,6 +105,18 @@ import Ssh from '@/components/protocols/Ssh.vue'
 import Selector from '@/components/protocols/Selector.vue'
 import UrlTest from '@/components/protocols/UrlTest.vue'
 import Failover from '@/components/protocols/Failover.vue'
+import Mieru from '@/components/protocols/Mieru.vue'
+import Sudoku from '@/components/protocols/Sudoku.vue'
+import TrustTunnel from '@/components/protocols/TrustTunnel.vue'
+import Masque from '@/components/protocols/Masque.vue'
+import OpenVPN from '@/components/protocols/OpenVPN.vue'
+import Bond from '@/components/protocols/Bond.vue'
+import Parser from '@/components/protocols/Parser.vue'
+import BandwidthLimiter from '@/components/protocols/BandwidthLimiter.vue'
+import ConnectionLimiter from '@/components/protocols/ConnectionLimiter.vue'
+import TrafficLimiter from '@/components/protocols/TrafficLimiter.vue'
+import RateLimiter from '@/components/protocols/RateLimiter.vue'
+import Fallback from '@/components/protocols/Fallback.vue'
 import HttpUtils from '@/plugins/httputil'
 import AnyTls from '@/components/protocols/AnyTls.vue'
 import Data from '@/store/modules/data'
@@ -110,8 +134,8 @@ export default {
       loading: false,
       snapshot: "",
       outTypes: OutTypes,
-      NoDial: [OutTypes.Selector, OutTypes.URLTest, OutTypes.Failover],
-      NoServer: [OutTypes.Direct, OutTypes.Selector, OutTypes.URLTest, OutTypes.Tor, OutTypes.Failover],
+      NoDial: [OutTypes.Selector, OutTypes.URLTest, OutTypes.Failover, OutTypes.Bond, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter, OutTypes.Parser, OutTypes.Fallback],
+      NoServer: [OutTypes.Direct, OutTypes.Selector, OutTypes.URLTest, OutTypes.Tor, OutTypes.Failover, OutTypes.Bond, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter, OutTypes.Parser, OutTypes.Fallback],
     }
   },
   methods: {
@@ -182,6 +206,8 @@ export default {
   components: { EntityDrawer, FormSection, Dial, Multiplex, Transport, OutTLS,
     Direct, Socks, Http, Shadowsocks, Vmess, Trojan,
     Wireguard, Hysteria, Naive, ShadowTls, Vless, Tuic,
-    Hysteria2, AnyTls, Tor, Ssh, Selector, UrlTest, Failover }
+    Hysteria2, AnyTls, Tor, Ssh, Selector, UrlTest, Failover,
+    Mieru, Sudoku, TrustTunnel, Masque, OpenVPN, Bond, Parser,
+    BandwidthLimiter, ConnectionLimiter, TrafficLimiter, RateLimiter, Fallback }
 }
 </script>

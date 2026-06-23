@@ -1,11 +1,17 @@
 <template>
-  <form-shell
-    :dirty="dirty"
-    :loading="loading"
-    :title="$t('actions.' + title) + ' ' + $t('objects.client')"
-    @close="closeModal"
-    @save="saveChanges"
-  >
+  <v-dialog transition="dialog-bottom-transition" width="800">
+    <v-card class="rounded-lg" :loading="loading">
+      <v-card-title>
+        {{ $t('actions.' + title) + " " + $t('objects.client') }}
+      </v-card-title>
+      <v-divider></v-divider>
+      <v-skeleton-loader
+          class="mx-auto border"
+          width="95%"
+          type="card, text, divider, list-item-two-line"
+          v-if="loading"
+        ></v-skeleton-loader>
+      <v-card-text style="padding: 0 16px; overflow-y: scroll;">
         <v-container style="padding: 0;" :hidden="loading">
           <v-tabs
             v-model="tab"
@@ -162,12 +168,13 @@
                     v-model="clientConfig[key].uuid"
                     hide-details>
                   </v-text-field>
-                  <v-text-field
+                  <v-select
                     v-if="key == 'vless'"
                     label="Flow"
+                    :items="vlessFlows"
                     v-model="clientConfig[key].flow"
                     hide-details>
-                  </v-text-field>
+                  </v-select>
                   <v-text-field
                     v-if="key == 'hysteria'"
                     label="Auth"
@@ -217,18 +224,37 @@
             </v-window-item>
           </v-window>
         </v-container>
-  </form-shell>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn
+          color="primary"
+          variant="outlined"
+          @click="closeModal"
+        >
+          {{ $t('actions.close') }}
+        </v-btn>
+        <v-btn
+          color="primary"
+          variant="tonal"
+          :loading="loading"
+          :disabled="loading"
+          @click="saveChanges"
+        >
+          {{ $t('actions.save') }}
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <script lang="ts">
-import { defineAsyncComponent } from 'vue'
 import { createClient, randomConfigs, updateConfigs, Link, shuffleConfigs } from '@/types/clients'
+import DatePick from '@/components/DateTime.vue'
 import { HumanReadable } from '@/plugins/utils'
 import Data from '@/store/modules/data'
 import { locale } from '@/locales'
-import FormShell from '@/components/nexus/drawers/FormShell.vue'
-
-const DatePick = defineAsyncComponent(() => import('@/components/DateTime.vue'))
+import { vlessFlows } from '@/types/recommended'
 
 export default {
   props: ['visible', 'id', 'inboundTags', 'groups'],
@@ -244,7 +270,7 @@ export default {
       extLinks: <Link[]>[],
       subLinks: <Link[]>[],
       ipLimitModes: ['monitor', 'enforce'],
-      snapshot: '',
+      vlessFlows,
     }
   },
   methods: {
@@ -267,7 +293,6 @@ export default {
       this.subLinks = this.client.links?.filter(l => l.type == 'sub')?? []
       this.tab = "t1"
       this.loading = false
-      this.snapshot = JSON.stringify([this.client, this.clientConfig, this.links, this.extLinks, this.subLinks])
     },
     closeModal() {
       this.updateData(0) // reset
@@ -314,10 +339,6 @@ export default {
     }
   },
   computed: {
-    dirty(): boolean {
-      return this.snapshot !== '' &&
-        JSON.stringify([this.client, this.clientConfig, this.links, this.extLinks, this.subLinks]) !== this.snapshot
-    },
     clientInbounds: {
       get() { return this.client.inbounds.length>0 ? this.client.inbounds.sort() : [] },
       set(v:number[]) { this.client.inbounds = v.length == 0 ?  [] : v.sort() }
@@ -377,7 +398,7 @@ export default {
       }
     },
   },
-  components: { FormShell, DatePick },
+  components: { DatePick },
 }
 
 </script>

@@ -1,11 +1,11 @@
 <template>
-  <form-shell
-    :dirty="dirty"
-    :loading="loading"
-    :title="$t('actions.' + title) + ' ' + $t('objects.dnsrule')"
-    @close="closeModal"
-    @save="saveChanges"
-  >
+  <v-dialog transition="dialog-bottom-transition" width="800">
+    <v-card class="rounded-lg">
+      <v-card-title>
+        {{ $t('actions.' + title) + " " + $t('objects.dnsrule') }}
+      </v-card-title>
+      <v-divider></v-divider>
+      <v-card-text style="padding: 0 16px;">
         <v-row>
           <v-col cols="12" sm="6" md="4">
             <v-switch color="primary" v-model="logical" :label="$t('rule.logical')" hide-details></v-switch>
@@ -15,7 +15,7 @@
             <v-btn color="primary" @click="ruleData.rules.push(<dnsRule>{})" hide-details>{{ $t('actions.add') + " " + $t('objects.rule') }}</v-btn>
           </v-col>
         </v-row>
-        <v-card style="background-color: inherit; margin-bottom: 5px;" v-for="(r, index) in ruleData.rules" :key="ruleObjectKey(r)" v-if="ruleData.type == 'logical'">
+        <v-card style="background-color: inherit; margin-bottom: 5px;" v-for="(r, index) in ruleData.rules" v-if="ruleData.type == 'logical'">
           <v-card-subtitle>{{ $t('objects.rule') + ' ' + (Number(index)+1) }}
             <v-icon @click="ruleData.rules.splice(index,1)" icon="mdi-delete" v-if="ruleData.rules.length>1" />
           </v-card-subtitle>
@@ -43,12 +43,12 @@
             ></v-select>
           </v-col>
           <v-col cols="12" sm="6" md="4" v-if="logical">
-            <v-combobox
+            <v-select
               v-model="ruleData.mode"
               :items="['and', 'or']"
               :label="$t('rule.mode')"
               hide-details
-            ></v-combobox>
+            ></v-select>
           </v-col>
           <v-col cols="12" sm="6" md="4">
             <v-switch color="primary" v-model="ruleData.invert" :label="$t('rule.invert')" hide-details></v-switch>
@@ -129,21 +129,33 @@
             </v-col>
           </v-row>
         </v-card>
-  </form-shell>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn
+          color="primary"
+          variant="outlined"
+          @click="closeModal"
+        >
+          {{ $t('actions.close') }}
+        </v-btn>
+        <v-btn
+          color="primary"
+          variant="tonal"
+          :loading="loading"
+          @click="saveChanges"
+        >
+          {{ $t('actions.save') }}
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <script lang="ts">
 import { logicalDnsRule, dnsRule, actionDnsRuleKeys } from '@/types/dns'
 import RuleOptions from '@/components/DnsRule.vue'
 import { i18n } from '@/locales'
-import FormShell from '@/components/nexus/drawers/FormShell.vue'
-
-// Stable identity key per sub-rule object (see Rule.vue): keys the v-for by object
-// identity instead of array index so a middle splice does not leave stale child
-// widget state. WeakMap keeps it out of the saved config.
-const dnsRuleObjectKeys = new WeakMap<object, number>()
-let dnsRuleObjectKeySeq = 0
-
 export default {
   props: ['visible', 'data', 'index', 'clients', 'inTags', 'serverTags', 'ruleSets'],
   emits: ['close', 'save'],
@@ -151,7 +163,6 @@ export default {
     return {
       title: 'add',
       loading: false,
-      snapshot: '',
       ruleData: <any>{
         type: 'logical',
         mode: 'and',
@@ -183,15 +194,6 @@ export default {
     }
   },
   methods: {
-    ruleObjectKey(r: any): number {
-      if (r == null || typeof r !== 'object') return -1
-      let k = dnsRuleObjectKeys.get(r)
-      if (k === undefined) {
-        k = ++dnsRuleObjectKeySeq
-        dnsRuleObjectKeys.set(r, k)
-      }
-      return k
-    },
     updateData() {
       if (this.$props.index != -1) {
         const newData = JSON.parse(this.$props.data)
@@ -224,7 +226,6 @@ export default {
           }
         this.title = 'add'
       }
-      this.snapshot = JSON.stringify(this.ruleData)
     },
     closeModal() {
       this.$emit('close')
@@ -280,9 +281,6 @@ export default {
     }
   },
   computed: {
-    dirty(): boolean {
-      return this.snapshot !== '' && JSON.stringify(this.ruleData) !== this.snapshot
-    },
     logical: {
       get() { return this.ruleData.type == 'logical' },
       set(v:boolean) {
@@ -309,7 +307,7 @@ export default {
       }
     },
   },
-  components: { FormShell, RuleOptions }
+  components: { RuleOptions }
 }
 
 </script>

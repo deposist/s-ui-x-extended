@@ -62,13 +62,25 @@
               <AnyTls v-if="outbound.type == outTypes.AnyTls" :data="outbound" direction="out" />
               <Tor v-if="outbound.type == outTypes.Tor" :data="outbound" />
               <Ssh v-if="outbound.type == outTypes.SSH" :data="outbound" />
+              <Mieru v-if="outbound.type == outTypes.Mieru" direction="out" :data="outbound" />
+              <Sudoku v-if="outbound.type == outTypes.Sudoku" direction="out" :data="outbound" />
+              <TrustTunnel v-if="outbound.type == outTypes.TrustTunnel" direction="out" :data="outbound" />
+              <Masque v-if="outbound.type == outTypes.MASQUE" :data="outbound" />
+              <OpenVpn v-if="outbound.type == outTypes.OpenVPN" :data="outbound" />
+              <Parser v-if="outbound.type == outTypes.Parser" :data="outbound" />
               <Selector v-if="outbound.type == outTypes.Selector" :data="outbound" :tags="tags" />
               <UrlTest v-if="outbound.type == outTypes.URLTest" :data="outbound" :tags="tags" />
-              <Failover v-if="outbound.type == outTypes.Failover" :data="outbound" :tags="tags" />
+              <Bond v-if="outbound.type == outTypes.Bond" :data="outbound" />
+              <Failover v-if="outbound.type == outTypes.Failover" :data="outbound" />
+              <Fallback v-if="outbound.type == outTypes.Fallback" :data="outbound" :tags="tags" />
+              <BandwidthLimiter v-if="outbound.type == outTypes.BandwidthLimiter" :data="outbound" :tags="tags" />
+              <ConnectionLimiter v-if="outbound.type == outTypes.ConnectionLimiter" :data="outbound" :tags="tags" />
+              <TrafficLimiter v-if="outbound.type == outTypes.TrafficLimiter" :data="outbound" :tags="tags" />
+              <RateLimiter v-if="outbound.type == outTypes.RateLimiter" :data="outbound" :tags="tags" />
 
               <Transport v-if="Object.hasOwn(outbound,'transport')" :data="outbound" />
-              <OutTLS v-if="Object.hasOwn(outbound,'tls')" :outbound="outbound" />
-              <Multiplex v-if="Object.hasOwn(outbound,'multiplex')" direction="out" :data="outbound" />
+              <OutTLS v-if="Object.hasOwn(outbound,'tls') && ![outTypes.MASQUE, outTypes.OpenVPN].includes(outbound.type)" :outbound="outbound" />
+              <Multiplex v-if="Object.hasOwn(outbound,'multiplex') && outbound.type != outTypes.TrustTunnel" direction="out" :data="outbound" />
               <Dial v-if="!NoDial.includes(outbound.type)" :dial="outbound" />
             </v-window-item>
             <v-window-item value="t2">
@@ -129,9 +141,21 @@ import Tuic from '@/components/protocols/Tuic.vue'
 import Hysteria2 from '@/components/protocols/Hysteria2.vue'
 import Tor from '@/components/protocols/Tor.vue'
 import Ssh from '@/components/protocols/Ssh.vue'
+import Mieru from '@/components/protocols/Mieru.vue'
+import Sudoku from '@/components/protocols/Sudoku.vue'
+import TrustTunnel from '@/components/protocols/TrustTunnel.vue'
+import Masque from '@/components/protocols/Masque.vue'
+import OpenVpn from '@/components/protocols/OpenVPN.vue'
+import Parser from '@/components/protocols/Parser.vue'
 import Selector from '@/components/protocols/Selector.vue'
 import UrlTest from '@/components/protocols/UrlTest.vue'
+import Bond from '@/components/protocols/Bond.vue'
 import Failover from '@/components/protocols/Failover.vue'
+import Fallback from '@/components/protocols/Fallback.vue'
+import BandwidthLimiter from '@/components/protocols/BandwidthLimiter.vue'
+import ConnectionLimiter from '@/components/protocols/ConnectionLimiter.vue'
+import TrafficLimiter from '@/components/protocols/TrafficLimiter.vue'
+import RateLimiter from '@/components/protocols/RateLimiter.vue'
 import HttpUtils from '@/plugins/httputil'
 import AnyTls from '@/components/protocols/AnyTls.vue'
 import Data from '@/store/modules/data'
@@ -146,8 +170,8 @@ export default {
       link: "",
       loading: false,
       outTypes: OutTypes,
-      NoDial: [OutTypes.Selector, OutTypes.URLTest, OutTypes.Failover],
-      NoServer: [OutTypes.Direct, OutTypes.Selector, OutTypes.URLTest, OutTypes.Tor, OutTypes.Failover],
+      NoDial: [OutTypes.Selector, OutTypes.URLTest, OutTypes.Bond, OutTypes.Failover, OutTypes.Fallback, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter],
+      NoServer: [OutTypes.Direct, OutTypes.Selector, OutTypes.URLTest, OutTypes.Tor, OutTypes.OpenVPN, OutTypes.MASQUE, OutTypes.Parser, OutTypes.Bond, OutTypes.Failover, OutTypes.Fallback, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter],
     }
   },
   methods: {
@@ -214,6 +238,7 @@ export default {
   components: { Dial, Multiplex, Transport, OutTLS,
     Direct, Socks, Http, Shadowsocks, Vmess, Trojan,
     Wireguard, Hysteria, Naive, ShadowTls, Vless, Tuic,
-    Hysteria2, AnyTls, Tor, Ssh, Selector, UrlTest, Failover }
+    Hysteria2, AnyTls, Tor, Ssh, Mieru, Sudoku, TrustTunnel, Masque, OpenVpn, Parser, Selector, UrlTest, Bond, Failover, Fallback,
+    BandwidthLimiter, ConnectionLimiter, TrafficLimiter, RateLimiter }
 }
 </script>

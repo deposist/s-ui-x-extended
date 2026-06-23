@@ -81,6 +81,12 @@
           <Tun v-if="inbound.type == inTypes.Tun" :data="inbound" />
           <AnyTls v-if="inbound.type == inTypes.AnyTls" :data="inbound" direction="in" />
           <TProxy v-if="inbound.type == inTypes.TProxy" :inbound="inbound" />
+          <VlessInbound v-if="inbound.type == inTypes.VLESS" :data="inbound" />
+          <Mieru v-if="inbound.type == inTypes.Mieru" direction="in" :data="inbound" />
+          <Sudoku v-if="inbound.type == inTypes.Sudoku" direction="in" :data="inbound" />
+          <TrustTunnel v-if="inbound.type == inTypes.TrustTunnel" direction="in" :data="inbound" />
+          <SshInbound v-if="inbound.type == inTypes.SSH" :data="inbound" />
+          <MTProxy v-if="inbound.type == inTypes.MTProxy" :data="inbound" />
           <Transport v-if="Object.hasOwn(inbound,'transport')" :data="inbound" />
           <Users v-if="hasUser" :clients="clients" :data="initUsers" />
           <InTls v-if="HasTls.includes(inbound.type)"  :inbound="inbound" :tlsConfigs="tlsConfigs" :tls_id="inbound.tls_id" />
@@ -110,6 +116,7 @@
 
 <script lang="ts">
 import { InTypes, createInbound, Addr, ShadowTLS } from '@/types/inbounds'
+import { inboundWithUsers, HasInData, HasTls, MuxAvailable, OnlyTLS } from '@/types/capabilities'
 import RandomUtil from '@/plugins/randomUtil'
 import Dial from '@/components/Dial.vue'
 import DomainResolver from '@/components/DomainResolver.vue'
@@ -125,6 +132,12 @@ import Tuic from '@/components/protocols/Tuic.vue'
 import Tun from '@/components/protocols/Tun.vue'
 import Trojan from '@/components/protocols/Trojan.vue'
 import AnyTls from '@/components/protocols/AnyTls.vue'
+import VlessInbound from '@/components/protocols/VlessInbound.vue'
+import Mieru from '@/components/protocols/Mieru.vue'
+import Sudoku from '@/components/protocols/Sudoku.vue'
+import TrustTunnel from '@/components/protocols/TrustTunnel.vue'
+import SshInbound from '@/components/protocols/SshInbound.vue'
+import MTProxy from '@/components/protocols/MTProxy.vue'
 import InTls from '@/components/tls/InTLS.vue'
 import TProxy from '@/components/protocols/TProxy.vue'
 import Multiplex from '@/components/Multiplex.vue'
@@ -149,44 +162,17 @@ export default {
       side: "s",
       snapshot: "",
       inTypes: InTypes,
-      inboundWithUsers: ['mixed', 'socks', 'http', 'shadowsocks', 'vmess', 'trojan', 'naive', 'hysteria', 'shadowtls', 'tuic', 'hysteria2', 'vless', 'anytls'],
+      // Capability lists are generated from core/capabilities/protocols.json by
+      // scripts/gen-capabilities.cjs (shared source of truth with the Go backend).
+      inboundWithUsers,
       initUsers: {
         model: 'none',
         values: <any>[],
       },
-      HasInData: [
-        InTypes.SOCKS,
-        InTypes.HTTP,
-        InTypes.Mixed,
-        InTypes.Shadowsocks,
-        InTypes.VMess,
-        InTypes.ShadowTLS,
-        InTypes.Trojan,
-        InTypes.Hysteria,
-        InTypes.VLESS,
-        InTypes.AnyTls,
-        InTypes.TUIC,
-        InTypes.Hysteria2,
-        InTypes.Naive,
-      ],
-      HasTls: [
-        InTypes.HTTP,
-        InTypes.VMess,
-        InTypes.Trojan,
-        InTypes.Naive,
-        InTypes.Hysteria,
-        InTypes.TUIC,
-        InTypes.Hysteria2,
-        InTypes.VLESS,
-        InTypes.AnyTls,
-      ],
-      MuxAvailable: [
-        InTypes.VLESS,
-        InTypes.VMess,
-        InTypes.Trojan,
-        InTypes.Shadowsocks,
-      ],
-      OnlyTLS: [InTypes.Hysteria, InTypes.Hysteria2, InTypes.TUIC, InTypes.Naive, InTypes.AnyTls ],
+      HasInData,
+      HasTls,
+      MuxAvailable,
+      OnlyTLS,
     }
   },
   methods: {
@@ -325,7 +311,8 @@ export default {
     EntityDrawer, FormSection,
     Listen, InTls, Hysteria2, Naive, Direct, Shadowsocks,
     Users, Hysteria, ShadowTls, TProxy, Multiplex, Tuic, Tun,
-    Trojan, AnyTls, Transport, AddrVue, OutJsonVue, Dial, DomainResolver
+    Trojan, AnyTls, Transport, AddrVue, OutJsonVue, Dial, DomainResolver,
+    VlessInbound, Mieru, Sudoku, TrustTunnel, SshInbound, MTProxy
   }
 }
 </script>

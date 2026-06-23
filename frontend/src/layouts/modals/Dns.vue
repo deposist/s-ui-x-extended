@@ -1,10 +1,11 @@
 <template>
-  <form-shell
-    :dirty="dirty"
-    :title="$t('actions.' + title) + ' ' + $t('objects.dnsserver')"
-    @close="close"
-    @save="save"
-  >
+  <v-dialog transition="dialog-bottom-transition" width="800">
+    <v-card class="rounded-lg">
+      <v-card-title>
+        {{ $t('actions.' + title) + " " + $t('objects.dnsserver') }}
+      </v-card-title>
+      <v-divider></v-divider>
+      <v-card-text>
         <v-row>
           <v-col cols="12" sm="6" md="4">
             <v-select
@@ -21,7 +22,7 @@
         </v-row>
         <v-row v-if="HasServer.includes(dnsServer.type)">
           <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="dnsServer.server" :label="$t('in.addr')" hide-details />
+            <v-combobox v-model="dnsServer.server" :items="dnsResolvers" :label="$t('in.addr')" hide-details />
           </v-col>
           <v-col cols="12" sm="6" md="4">
             <v-text-field v-model.number="dnsServer.server_port" type="number" min="0" :label="$t('in.port')" hide-details />
@@ -29,7 +30,7 @@
         </v-row>
         <v-row v-if="HasHeaders.includes(dnsServer.type)">
           <v-col cols="12" sm="8">
-            <v-text-field v-model="dnsServer.path" :label="$t('transport.path')" hide-details />
+            <v-combobox v-model="dnsServer.path" :items="dohPaths" :label="$t('transport.path')" hide-details />
           </v-col>
         </v-row>
         <DialVue :dial="dnsServer" v-if="!WithoutDial.includes(dnsServer.type)" />
@@ -81,6 +82,34 @@
             <v-text-field v-model="dnsServer.inet6_range" :label="$t('dns.rule.inet6Range')" hide-details />
           </v-col>
         </v-row>
+        <v-row v-if="dnsServer.type == 'sdns'">
+          <v-col cols="12">
+            <v-text-field v-model="dnsServer.stamp" :label="$t('types.sdns.stamp')" :hint="$t('types.sdns.stampHint')" persistent-hint />
+          </v-col>
+        </v-row>
+        <template v-if="dnsServer.type == 'fallback'">
+          <v-row>
+            <v-col cols="12">
+              <v-combobox
+                v-model="dnsServer.servers"
+                :label="$t('types.fallback.servers')"
+                :hint="$t('types.fallback.serversHint')"
+                persistent-hint
+                multiple
+                chips
+                clearable
+              ></v-combobox>
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <v-select
+                v-model="dnsServer.strategy"
+                :items="['sequential', 'parallel']"
+                :label="$t('types.fallback.strategy')"
+                hide-details
+              />
+            </v-col>
+          </v-row>
+        </template>
         <v-row v-if="dnsServer.type == 'tailscale' || dnsServer.type == 'resolved'">
           <v-col cols="12" sm="6" md="4" v-if="dnsServer.type == 'tailscale'">
             <v-select v-model="dnsServer.endpoint" :label="$t('objects.endpoint')" :items="tsTags" hide-details />
@@ -92,7 +121,14 @@
             <v-switch v-model="dnsServer.accept_default_resolvers" :label="$t('dns.rule.acceptDefault')" hide-details></v-switch>
           </v-col>
         </v-row>
-  </form-shell>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn color="blue-darken-1" variant="outlined" @click="close">{{ $t('actions.close') }}</v-btn>
+        <v-btn color="blue-darken-1" variant="tonal" @click="save">{{ $t('actions.save') }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <script lang="ts">
@@ -101,20 +137,21 @@ import oTlsVue from '@/components/tls/OutTLS.vue'
 import Headers from '@/components/Headers.vue'
 import RandomUtil from '@/plugins/randomUtil'
 import { DnsTypes, createDnsServer } from '@/types/dns'
-import FormShell from '@/components/nexus/drawers/FormShell.vue'
+import { dnsResolvers, dohPaths } from '@/types/recommended'
 export default {
   props: ['visible', 'data', 'index', 'tsTags', 'rslvdTags'],
   emits: ['close', 'save'],
   data() {
     return {
       title: "add",
-      snapshot: '',
       dnsServer: createDnsServer("local",{tag: "dns-" + RandomUtil.randomSeq(3)}),
       dnsTypes: Object.keys(DnsTypes).map((key,index) => ({title: key, value: Object.values(DnsTypes)[index]})),
       HasServer: [DnsTypes.TCP, DnsTypes.UDP, DnsTypes.TLS, DnsTypes.QUIC, DnsTypes.HTTPS, DnsTypes.HTTP3],
       HasHeaders: [DnsTypes.HTTPS, DnsTypes.HTTP3],
       HasTls: [DnsTypes.TLS, DnsTypes.QUIC, DnsTypes.HTTPS, DnsTypes.HTTP3],
-      WithoutDial: [DnsTypes.Hosts, DnsTypes.Tailscale, DnsTypes.FakeIP, DnsTypes.Resolved],
+      WithoutDial: [DnsTypes.Hosts, DnsTypes.Tailscale, DnsTypes.FakeIP, DnsTypes.Resolved, DnsTypes.Fallback, DnsTypes.SDNS, DnsTypes.DHCP],
+      dnsResolvers,
+      dohPaths,
     }
   },
   methods: {
@@ -127,7 +164,6 @@ export default {
         this.dnsServer = createDnsServer("local",{tag: "dns-" + RandomUtil.randomSeq(3)})
         this.title = 'add'
       }
-      this.snapshot = JSON.stringify(this.dnsServer)
     },
     changeType(dnsType: string) {
       this.dnsServer = createDnsServer(dnsType,{tag: this.dnsServer.tag})
@@ -159,9 +195,6 @@ export default {
     },
   },
   computed:{
-    dirty(): boolean {
-      return this.snapshot !== '' && JSON.stringify(this.dnsServer) !== this.snapshot
-    },
     hostsPath: {
       get() { return this.dnsServer.path },
       set(v: string) {
@@ -203,6 +236,6 @@ export default {
       }
     },
   },
-  components: { FormShell, DialVue, oTlsVue, Headers }
+  components: { DialVue, oTlsVue, Headers }
 }
 </script>
