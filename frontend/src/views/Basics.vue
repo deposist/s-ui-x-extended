@@ -27,8 +27,12 @@
             <v-text-field
               v-model="appConfig.log.output"
               hide-details
+              placeholder="box.log"
+              persistent-placeholder
               :label="$t('basic.log.output')"
-            ></v-text-field>
+            >
+              <template v-slot:append-inner><SettingInfo :text="$t('basic.hint.logOutput')" /></template>
+            </v-text-field>
           </v-col>
           <v-col cols="12" sm="6" md="3" lg="2">
             <v-switch v-model="appConfig.log.timestamp" color="primary" :label="$t('basic.log.timestamp')" hide-details></v-switch>
@@ -43,12 +47,15 @@
             <v-switch v-model="enableNtp" color="primary" :label="$t('enable')" hide-details></v-switch>
           </v-col>
           <v-col cols="12" sm="6" md="3" lg="2" v-if="appConfig.ntp?.enabled">
-            <v-combobox
+            <v-text-field
               v-model="appConfig.ntp.server"
               hide-details
-              :items="ntpServers"
+              placeholder="time.apple.com"
+              persistent-placeholder
               :label="$t('out.addr')"
-            ></v-combobox>
+            >
+              <template v-slot:append-inner><SettingInfo :text="$t('basic.hint.ntpServer')" /></template>
+            </v-text-field>
           </v-col>
           <v-col cols="12" sm="6" md="3" lg="2" v-if="appConfig.ntp?.enabled">
             <v-text-field
@@ -56,9 +63,13 @@
               hide-details
               type="number"
               clearable
+              placeholder="123"
+              persistent-placeholder
               @click:clear="delete appConfig.ntp?.server_port"
               :label="$t('out.port')"
-            ></v-text-field>
+            >
+              <template v-slot:append><SettingInfo :text="$t('basic.hint.ntpPort')" /></template>
+            </v-text-field>
           </v-col>
           <v-col cols="12" sm="6" md="3" lg="2" v-if="appConfig.ntp?.enabled">
             <v-text-field
@@ -67,8 +78,12 @@
               :suffix="$t('date.m')"
               min="0"
               type="number"
+              placeholder="30"
+              persistent-placeholder
               :label="$t('ruleset.interval')"
-            ></v-text-field>
+            >
+              <template v-slot:append-inner><SettingInfo :text="$t('basic.hint.ntpInterval')" /></template>
+            </v-text-field>
           </v-col>
           <v-col cols="12" sm="6" md="3" lg="2" v-if="appConfig.ntp?.enabled">
             <v-switch v-model="appConfig.ntp.write_to_system" color="primary" :label="$t('singbox.writeSystemClock')" hide-details></v-switch>
@@ -129,15 +144,21 @@
             <v-text-field
               v-model="appConfig.experimental.cache_file.path"
               hide-details
+              placeholder="cache.db"
+              persistent-placeholder
               :label="$t('transport.path')"
-            ></v-text-field>
+            >
+              <template v-slot:append-inner><SettingInfo :text="$t('basic.hint.cachePath')" /></template>
+            </v-text-field>
           </v-col>
           <v-col cols="12" sm="6" md="3" lg="2" v-if="appConfig.experimental.cache_file">
             <v-text-field
               v-model="appConfig.experimental.cache_file.cache_id"
               hide-details
               :label="$t('singbox.cacheId')"
-            ></v-text-field>
+            >
+              <template v-slot:append-inner><SettingInfo :text="$t('basic.hint.cacheId')" /></template>
+            </v-text-field>
           </v-col>
           <v-col cols="12" sm="6" md="3" lg="2" v-if="appConfig.experimental.cache_file">
             <v-switch v-model="appConfig.experimental.cache_file.store_fakeip"
@@ -152,13 +173,12 @@
               hide-details></v-switch>
           </v-col>
           <v-col cols="12" sm="6" md="3" lg="2" v-if="appConfig.experimental.cache_file?.store_rdrc">
-            <v-combobox
+            <v-text-field
               v-model="appConfig.experimental.cache_file.rdrc_timeout"
               hide-details
-              :items="durationPresets"
               placeholder="7d"
               :label="$t('singbox.rdrcTimeout')">
-            </v-combobox>
+            </v-text-field>
           </v-col>
         </v-row>
         <v-row>
@@ -170,19 +190,29 @@
           </v-col>
           <template v-if="appConfig.experimental.debug">
             <v-col cols="12" sm="6" md="3" lg="2">
-              <v-text-field v-model="appConfig.experimental.debug.listen" hide-details :label="$t('objects.listen')"></v-text-field>
+              <v-text-field v-model="appConfig.experimental.debug.listen" hide-details placeholder="127.0.0.1:8080" persistent-placeholder :label="$t('objects.listen')">
+                <template v-slot:append-inner><SettingInfo :text="$t('basic.hint.debugListen')" /></template>
+              </v-text-field>
             </v-col>
             <v-col cols="12" sm="6" md="3" lg="2">
-              <v-text-field v-model.number="appConfig.experimental.debug.gc_percent" type="number" hide-details :label="$t('singbox.gcPercent')"></v-text-field>
+              <v-text-field v-model.number="appConfig.experimental.debug.gc_percent" type="number" hide-details :label="$t('singbox.gcPercent')">
+                <template v-slot:append-inner><SettingInfo :text="$t('basic.hint.gcPercent')" /></template>
+              </v-text-field>
             </v-col>
             <v-col cols="12" sm="6" md="3" lg="2">
-              <v-text-field v-model="appConfig.experimental.debug.memory_limit" hide-details :label="$t('singbox.memoryLimit')"></v-text-field>
+              <v-text-field v-model="appConfig.experimental.debug.memory_limit" hide-details placeholder="256MiB" persistent-placeholder :label="$t('singbox.memoryLimit')">
+                <template v-slot:append-inner><SettingInfo :text="$t('basic.hint.memoryLimit')" /></template>
+              </v-text-field>
             </v-col>
             <v-col cols="12" sm="6" md="3" lg="2">
-              <v-text-field v-model.number="appConfig.experimental.debug.max_stack" type="number" hide-details :label="$t('singbox.maxStack')"></v-text-field>
+              <v-text-field v-model.number="appConfig.experimental.debug.max_stack" type="number" hide-details :label="$t('singbox.maxStack')">
+                <template v-slot:append-inner><SettingInfo :text="$t('basic.hint.maxStack')" /></template>
+              </v-text-field>
             </v-col>
             <v-col cols="12" sm="6" md="3" lg="2">
-              <v-text-field v-model.number="appConfig.experimental.debug.max_threads" type="number" hide-details :label="$t('singbox.maxThreads')"></v-text-field>
+              <v-text-field v-model.number="appConfig.experimental.debug.max_threads" type="number" hide-details :label="$t('singbox.maxThreads')">
+                <template v-slot:append-inner><SettingInfo :text="$t('basic.hint.maxThreads')" /></template>
+              </v-text-field>
             </v-col>
             <v-col cols="12" sm="6" md="3" lg="2">
               <v-switch v-model="appConfig.experimental.debug.panic_on_fault" color="primary" :label="$t('singbox.panicOnFault')" hide-details></v-switch>
@@ -210,15 +240,21 @@
               <v-text-field
                 v-model="appConfig.experimental.clash_api.external_controller"
                 hide-details
+                placeholder="127.0.0.1:9090"
+                persistent-placeholder
                 :label="$t('basic.exp.extController')"
-              ></v-text-field>
+              >
+                <template v-slot:append-inner><SettingInfo :text="$t('basic.hint.clashController')" /></template>
+              </v-text-field>
             </v-col>
             <v-col cols="12" sm="6" md="3" lg="2">
               <v-text-field
                 v-model="appConfig.experimental.clash_api.secret"
                 hide-details
                 :label="$t('basic.exp.secret')"
-              ></v-text-field>
+              >
+                <template v-slot:append-inner><SettingInfo :text="$t('basic.hint.clashSecret')" /></template>
+              </v-text-field>
             </v-col>
           </template>
         </v-row>
@@ -228,14 +264,18 @@
               v-model="appConfig.experimental.clash_api.external_ui"
               hide-details
               :label="$t('basic.exp.extUi')"
-            ></v-text-field>
+            >
+              <template v-slot:append-inner><SettingInfo :text="$t('basic.hint.clashExtUi')" /></template>
+            </v-text-field>
           </v-col>
           <v-col cols="12" sm="8" md="4">
             <v-text-field
               v-model="appConfig.experimental.clash_api.external_ui_download_url"
               hide-details
               :label="$t('basic.exp.extUiDownloadUrl')"
-            ></v-text-field>
+            >
+              <template v-slot:append-inner><SettingInfo :text="$t('basic.hint.clashExtUiUrl')" /></template>
+            </v-text-field>
           </v-col>
           <v-col cols="12" sm="6" md="3" lg="2">
             <v-select
@@ -250,18 +290,26 @@
         </v-row>
         <v-row v-if="appConfig.experimental.clash_api">
           <v-col cols="12" sm="6" md="3" lg="2">
-            <v-text-field
+            <v-select
               v-model="appConfig.experimental.clash_api.default_mode"
               hide-details
+              clearable
+              :items="['rule','global','direct']"
+              placeholder="rule"
+              persistent-placeholder
               :label="$t('basic.exp.defaultMode')"
-            ></v-text-field>
+            >
+              <template v-slot:append><SettingInfo :text="$t('basic.hint.clashDefaultMode')" /></template>
+            </v-select>
           </v-col>
           <v-col cols="12" sm="8" md="4">
-            <v-text-field 
+            <v-text-field
               v-model="origin"
               hide-details
               :label="$t('basic.exp.allowOrigin') + ' ' + $t('commaSeparated')"
-            ></v-text-field>
+            >
+              <template v-slot:append-inner><SettingInfo :text="$t('basic.hint.clashAllowOrigin')" /></template>
+            </v-text-field>
           </v-col>
           <v-col cols="12" sm="6" md="3" lg="2">
             <v-switch v-model="appConfig.experimental.clash_api.access_control_allow_private_network" color="primary" :label="$t('basic.exp.allowPrivate')" hide-details></v-switch>
@@ -279,8 +327,12 @@
               <v-text-field
                 v-model="appConfig.experimental.v2ray_api.listen"
                 hide-details
+                placeholder="127.0.0.1:8080"
+                persistent-placeholder
                 :label="$t('objects.listen')"
-              ></v-text-field>
+              >
+                <template v-slot:append-inner><SettingInfo :text="$t('basic.hint.v2rayListen')" /></template>
+              </v-text-field>
             </v-col>
             <v-col cols="12" sm="6" md="3" lg="2">
               <v-switch v-model="appConfig.experimental.v2ray_api.stats.enabled"
@@ -319,14 +371,6 @@
             </v-select>
           </v-col>
         </v-row>
-        <v-row>
-          <v-col class="v-card-subtitle">{{ $t('basic.exp.unifiedDelay') }}</v-col>
-        </v-row>
-        <v-row>
-          <v-col cols="12" sm="6" md="3" lg="2">
-            <v-switch v-model="unifiedDelay" color="primary" :label="$t('enable')" hide-details></v-switch>
-          </v-col>
-        </v-row>
       </v-expansion-panel-text>
     </v-expansion-panel>
   </v-expansion-panels>
@@ -335,11 +379,11 @@
 <script lang="ts" setup>
 import Data from '@/store/modules/data'
 import Dial from '@/components/Dial.vue'
+import SettingInfo from '@/components/SettingInfo.vue'
 import { computed, ref, onBeforeMount } from 'vue'
 import { i18n } from '@/locales'
 import { Config, Ntp } from '@/types/config'
 import { FindDiff } from '@/plugins/utils'
-import { ntpServers, durationPresets } from '@/types/recommended'
 
 const oldConfig = ref(<any>{})
 const loading = ref(false)
@@ -500,11 +544,6 @@ const enableClashApi = computed({
 const enableV2rayApi = computed({
   get() { return appConfig.value.experimental.v2ray_api != undefined },
   set(v:boolean) { appConfig.value.experimental.v2ray_api = v ? { listen: '127.0.0.1:8080', stats: { enabled: false, inbounds: [], outbounds: [], users: [] }} : undefined }
-})
-
-const unifiedDelay = computed({
-  get() { return appConfig.value.experimental.unified_delay?.enabled === true },
-  set(v:boolean) { appConfig.value.experimental.unified_delay = v ? { enabled: true } : undefined }
 })
 
 const origin = computed({

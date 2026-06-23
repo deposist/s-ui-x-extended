@@ -12,6 +12,7 @@
           :rtl="isRtl"
           :temporary="isMobile"
           @navigate="closeTemporarySidebar"
+          @toggle-rail="toggleRail"
           @update:open="sidebarOpen = $event"
         >
           <template #footer>
@@ -31,6 +32,8 @@
             </slot>
           </div>
         </v-main>
+
+        <confirm-host />
       </v-app>
     </v-defaults-provider>
   </v-theme-provider>
@@ -40,21 +43,27 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useDisplay, useLocale, useTheme } from 'vuetify'
 
+import ConfirmHost from '@/components/nexus/primitives/ConfirmHost.vue'
+import { useUiPalette } from '@/uiMode/palette'
 import NexusServerStatus from './NexusServerStatus.vue'
 import NexusSidebar from './NexusSidebar.vue'
 import NexusTopbar from './NexusTopbar.vue'
 
 const theme = useTheme()
+const { palette } = useUiPalette()
 const { isRtl } = useLocale()
-const { lgAndDown, mdAndDown, smAndDown } = useDisplay()
+const { mdAndDown, smAndDown } = useDisplay()
 
 const isMobile = computed(() => smAndDown.value)
 const isTablet = computed(() => !smAndDown.value && mdAndDown.value)
-const isNarrowDesktop = computed(() => !mdAndDown.value && lgAndDown.value)
-const sidebarRail = computed(() =>
-  !isMobile.value && (isTablet.value || isNarrowDesktop.value),
-)
+// Reference keeps the sidebar expanded on desktop; only tablet auto-collapses to
+// a rail. A manual toggle (sidebar brand hamburger) can also collapse it.
+const manualRail = ref(false)
+const sidebarRail = computed(() => !isMobile.value && (isTablet.value || manualRail.value))
 const sidebarOpen = ref(true)
+const toggleRail = () => {
+  manualRail.value = !manualRail.value
+}
 
 watch(isMobile, async (mobile) => {
   await nextTick()
@@ -64,13 +73,25 @@ watch(isMobile, async (mobile) => {
 const nexusThemeName = computed(() => {
   const activeThemeName = theme.global.name.value
   const systemIsDark = activeThemeName === 'system' && theme.global.current.value.dark
+  const isDark = activeThemeName === 'dark' || systemIsDark
 
-  return activeThemeName === 'dark' || systemIsDark ? 'nexusDark' : 'nexusLight'
+  if (palette.value === 'navy') {
+    return isDark ? 'nexusDark' : 'nexusLight'
+  }
+
+  return isDark ? 'technicalDark' : 'technicalLight'
 })
+
+// Keep the html attribute in sync at runtime so the pre-mount token blocks
+// (and the body background that reads them) recolor the instant the palette
+// changes, without a reload.
+watch(palette, (next) => {
+  document.documentElement.dataset.uiPalette = next
+}, { immediate: true })
 
 const nexusDefaults = {
   VBtn: {
-    density: 'compact',
+    // Default density (36px height) + 4px radius to match the reference buttons.
     rounded: 'sm',
   },
   VCard: {
@@ -138,18 +159,13 @@ html[data-ui-mode='nexus'] body {
 .nexus-shell__view {
   min-height: 100%;
   min-width: 0;
-  padding: var(--nexus-gap-4);
+  /* Reference page padding: 24px desktop, 16px tablet/mobile. */
+  padding: var(--nexus-gap-5);
 }
 
 @media (max-width: 960px) {
   .nexus-shell__view {
-    padding: var(--nexus-gap-3);
-  }
-}
-
-@media (max-width: 600px) {
-  .nexus-shell__view {
-    padding: var(--nexus-gap-2);
+    padding: var(--nexus-gap-4);
   }
 }
 </style>

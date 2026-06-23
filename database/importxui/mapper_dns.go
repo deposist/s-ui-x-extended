@@ -161,7 +161,7 @@ func dnsServerFromAddress(addr string, nextTag func() string) (map[string]any, b
 }
 
 // schemeServer builds a typed remote DNS server, splitting an optional :port. An
-// out-of-range port is dropped with a warning rather than emitted — sing-box's
+// out-of-range port is dropped with a warning rather than emitted - sing-box's
 // server_port is a uint16 and would reject the whole config on overflow.
 func schemeServer(typ, hostPort string, nextTag func() string) (map[string]any, []string) {
 	host, port := splitHostPortLoose(strings.TrimSpace(hostPort))
@@ -230,7 +230,7 @@ func serverIsDomain(srv map[string]any) bool {
 // (a DNS server tag), the same way s-ui's own DNS editor does via the embedded
 // Dial control. sing-box refuses to start a server addressed by a domain without
 // one. The resolver target is reused from an existing IP-addressed (or local)
-// server — matching the editor, which defaults to the first DNS tag — otherwise
+// server - matching the editor, which defaults to the first DNS tag - otherwise
 // a local bootstrap is appended. Servers that already declare a resolver, and
 // the bootstrap itself, are left untouched.
 func applyDomainResolvers(servers *[]any, nextTag func() string) {

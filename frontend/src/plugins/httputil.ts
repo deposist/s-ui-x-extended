@@ -37,8 +37,11 @@ function _handleMsg(msg: any): void {
 }
 
 export const logout = async () => {
+  // POST so the request carries the CSRF token (a GET logout was forgeable
+  // cross-site). Clear the local token only AFTER the request, otherwise the
+  // CSRF interceptor would have nothing to attach.
+  const response = await HttpUtils.post('api/logout', null)
   clearCSRFToken()
-  const response = await HttpUtils.get('api/logout')
   if(response.success){
     router.push('/login')
   }

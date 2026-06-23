@@ -72,7 +72,7 @@ export interface reality {
 
 export const defaultInTls: iTls = {
   alpn: ['h3', 'h2', 'http/1.1'],
-  min_version: "1.3",
+  min_version: "1.2",
   max_version: "1.3",
   cipher_suites: [],
 }
@@ -120,7 +120,7 @@ export interface oTls {
 
 export const defaultOutTls: oTls = {
   alpn: ['h3', 'h2', 'http/1.1'],
-  min_version: "1.3",
+  min_version: "1.2",
   max_version: "1.3",
   cipher_suites: [],
   utls: {

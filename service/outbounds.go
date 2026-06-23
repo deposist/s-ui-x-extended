@@ -2,6 +2,8 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
 
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
@@ -10,7 +12,16 @@ import (
 	"gorm.io/gorm"
 )
 
-type OutboundService struct{}
+type OutboundService struct {
+	Runtime *Runtime
+}
+
+func (s *OutboundService) runtime() *Runtime {
+	if s != nil {
+		return runtimeOrDefault(s.Runtime)
+	}
+	return DefaultRuntime()
+}
 
 func (o *OutboundService) GetAll() (*[]map[string]interface{}, error) {
 	db := database.GetDB()
@@ -47,8 +58,15 @@ func (o *OutboundService) GetAllConfig(db *gorm.DB) ([]json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
+	directTag := DirectFallbackTag(db)
 	for _, outbound := range outbounds {
-		outboundJson, err := outbound.MarshalJSON()
+		var outboundJson json.RawMessage
+		var err error
+		if outbound.Type == FailoverType {
+			outboundJson, err = assembleFailoverForCore(*outbound, directTag)
+		} else {
+			outboundJson, err = outbound.MarshalJSON()
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -57,33 +75,135 @@ func (o *OutboundService) GetAllConfig(db *gorm.DB) ([]json.RawMessage, error) {
 	return outboundsJson, nil
 }
 
-func (s *OutboundService) Save(tx *gorm.DB, act string, data json.RawMessage) error {
-	var err error
-
+func (s *OutboundService) Save(tx *gorm.DB, act string, data json.RawMessage) (*entityCoreChange, error) {
 	switch act {
 	case "new", "edit":
-		var outbound model.Outbound
-		err = outbound.UnmarshalJSON(data)
-		if err != nil {
-			return err
-		}
-
-		err = tx.Save(&outbound).Error
-		if err != nil {
-			return err
-		}
+		return s.saveOutboundUpsert(tx, data)
 	case "del":
-		var tag string
-		err = json.Unmarshal(data, &tag)
-		if err != nil {
-			return err
-		}
-		err = tx.Where("tag = ?", tag).Delete(model.Outbound{}).Error
-		if err != nil {
-			return err
-		}
+		return s.saveOutboundDelete(tx, data)
 	default:
-		return common.NewErrorf("unknown action: %s", act)
+		return nil, common.NewErrorf("unknown action: %s", act)
+	}
+}
+
+func (s *OutboundService) saveOutboundUpsert(tx *gorm.DB, data json.RawMessage) (*entityCoreChange, error) {
+	var outbound model.Outbound
+	if err := outbound.UnmarshalJSON(data); err != nil {
+		return nil, err
+	}
+	if outbound.Type == FailoverType {
+		if err := validateFailoverGroup(tx, outbound); err != nil {
+			return nil, err
+		}
+	}
+	var oldTag string
+	if outbound.Id > 0 {
+		if err := tx.Model(model.Outbound{}).Select("tag").Where("id = ?", outbound.Id).Find(&oldTag).Error; err != nil {
+			return nil, err
+		}
+	}
+	renamed := oldTag != "" && oldTag != outbound.Tag
+	if renamed {
+		// Renaming a referenced tag is treated like deleting the old tag: the
+		// next core start would fail on the dangling reference.
+		refs, err := outboundTagReferences(tx, oldTag, outbound.Id, 0)
+		if err != nil {
+			return nil, err
+		}
+		if len(refs) > 0 {
+			return nil, formatTagReferenceError("outbound", oldTag, refs)
+		}
+	}
+
+	if err := tx.Save(&outbound).Error; err != nil {
+		return nil, err
+	}
+
+	refs, err := outboundTagReferences(tx, outbound.Tag, outbound.Id, 0)
+	if err != nil {
+		return nil, err
+	}
+	if eager := eagerTagReferences(refs); len(eager) > 0 {
+		// Groups, detour dialers and dns/ntp transports capture the adapter at
+		// construction; only a full restart re-binds them to the new one.
+		return &entityCoreChange{
+			needsRestart:  true,
+			restartReason: fmt.Sprintf("outbound %q is captured at construction by %s", outbound.Tag, eager[0].Locator),
+		}, nil
+	}
+	change := &entityCoreChange{reloadIds: []uint{outbound.Id}}
+	if renamed {
+		change.removeTags = []string{oldTag}
+	}
+	return change, nil
+}
+
+func (s *OutboundService) saveOutboundDelete(tx *gorm.DB, data json.RawMessage) (*entityCoreChange, error) {
+	var tag string
+	if err := json.Unmarshal(data, &tag); err != nil {
+		return nil, err
+	}
+	var ownId uint
+	if err := tx.Model(model.Outbound{}).Select("id").Where("tag = ?", tag).Scan(&ownId).Error; err != nil {
+		return nil, err
+	}
+	refs, err := outboundTagReferences(tx, tag, ownId, 0)
+	if err != nil {
+		return nil, err
+	}
+	if len(refs) > 0 {
+		return nil, formatTagReferenceError("outbound", tag, refs)
+	}
+	if err := tx.Where("tag = ?", tag).Delete(model.Outbound{}).Error; err != nil {
+		return nil, err
+	}
+	return &entityCoreChange{removeTags: []string{tag}}, nil
+}
+
+// RestartOutbounds replaces the given outbounds inside the running core
+// (remove by tag, then add the committed definition).
+func (s *OutboundService) RestartOutbounds(tx *gorm.DB, ids []uint) error {
+	coreInstance := s.runtime().Core()
+	if coreInstance == nil || !coreInstance.IsRunning() {
+		return nil
+	}
+	var outbounds []*model.Outbound
+	if err := tx.Model(model.Outbound{}).Where("id in ?", ids).Find(&outbounds).Error; err != nil {
+		return err
+	}
+	directTag := DirectFallbackTag(tx)
+	for _, outbound := range outbounds {
+		if err := coreInstance.RemoveOutbound(outbound.Tag); err != nil && err != os.ErrInvalid {
+			return err
+		}
+		var outboundConfig json.RawMessage
+		var err error
+		if outbound.Type == FailoverType {
+			outboundConfig, err = assembleFailoverForCore(*outbound, directTag)
+		} else {
+			outboundConfig, err = outbound.MarshalJSON()
+		}
+		if err != nil {
+			return err
+		}
+		if err := coreInstance.AddOutbound(outboundConfig); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RemoveOutboundsFromCore removes the given outbound tags from the running
+// core. Missing tags are tolerated so removals stay idempotent.
+func (s *OutboundService) RemoveOutboundsFromCore(tags []string) error {
+	coreInstance := s.runtime().Core()
+	if coreInstance == nil || !coreInstance.IsRunning() {
+		return nil
+	}
+	for _, tag := range tags {
+		if err := coreInstance.RemoveOutbound(tag); err != nil && err != os.ErrInvalid {
+			return err
+		}
 	}
 	return nil
 }

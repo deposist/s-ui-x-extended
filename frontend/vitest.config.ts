@@ -9,7 +9,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts', 'src/**/*.spec.ts', '*.test.ts'],
+    include: ['src/**/*.test.ts', 'src/**/*.spec.ts'],
     css: false,
     // Transform Vuetify through Vite (not Node's ESM loader) so its side-effect
     // .css imports are neutralised by `css: false` instead of crashing on the

@@ -116,7 +116,7 @@ func doWarpRequestVersions(mkRequest func(version string) (*http.Request, []byte
 				if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
 					return resp, version, nil
 				}
-				// 4xx / 5xx — no point retrying within the same version,
+				// 4xx / 5xx - no point retrying within the same version,
 				// but the next version may behave differently.
 				_ = resp.Body.Close()
 				lastErr = common.NewErrorf("cloudflare warp %s status: %d", version, resp.StatusCode)

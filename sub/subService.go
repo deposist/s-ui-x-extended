@@ -8,6 +8,7 @@ import (
 
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
+	"github.com/deposist/s-ui-x-extended/logger"
 	"github.com/deposist/s-ui-x-extended/service"
 	"github.com/deposist/s-ui-x-extended/util"
 
@@ -21,6 +22,11 @@ type SubService struct {
 }
 
 func (s *SubService) GetSubs(subId string) (*string, []string, error) {
+	now := time.Now()
+	cacheKey := "base:" + subId
+	if body, headers, ok := subscriptionCacheGet(cacheKey, now); ok {
+		return &body, headers, nil
+	}
 	client, err := s.getClientBySubId(subId)
 	if err != nil {
 		return nil, nil, err
@@ -45,6 +51,7 @@ func (s *SubService) GetSubs(subId string) (*string, []string, error) {
 		result = base64.StdEncoding.EncodeToString([]byte(result))
 	}
 
+	subscriptionCacheSet(cacheKey, result, headers, now)
 	return &result, headers, nil
 }
 
@@ -62,10 +69,16 @@ func (j *SubService) getClientBySubId(subId string) (*model.Client, error) {
 	if required {
 		return nil, gorm.ErrRecordNotFound
 	}
+	// Legacy name-based lookup, active only when the admin has disabled required
+	// sub-secrets. Client names are admin-chosen and often guessable, so this
+	// fallback allows unauthenticated enumeration of other clients' configs by
+	// name. Warn whenever it actually serves a config so the operator is aware
+	// the insecure mode is on (enable required sub-secrets to close it).
 	err = db.Model(model.Client{}).Where("enable = true and name = ?", subId).First(client).Error
 	if err != nil {
 		return nil, err
 	}
+	logger.Warning("sub: served config via legacy name lookup (subSecretRequired is OFF). Enable required sub-secrets to prevent name-based enumeration")
 	return client, j.ensureClientSubSecret(db, client)
 }
 
@@ -83,15 +96,20 @@ func (s *SubService) getClientInfo(c *model.Client) string {
 
 	var result []string
 	if vol := c.Volume - (c.Up + c.Down); vol > 0 {
-		result = append(result, fmt.Sprintf("%s%s", s.formatTraffic(vol), "📊"))
+		result = append(result, fmt.Sprintf("%s left", s.formatTraffic(vol)))
 	}
 	if c.Expiry > 0 {
-		result = append(result, fmt.Sprintf("%d%s⏳", (c.Expiry-now)/86400, "Days"))
+		days := (c.Expiry - now) / 86400
+		label := "days"
+		if days == 1 {
+			label = "day"
+		}
+		result = append(result, fmt.Sprintf("%d %s left", days, label))
 	}
 	if len(result) > 0 {
-		return " " + strings.Join(result, " ")
+		return " (" + strings.Join(result, ", ") + ")"
 	} else {
-		return " ♾"
+		return " (unlimited)"
 	}
 }
 

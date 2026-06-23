@@ -8,6 +8,14 @@ vi.mock('@/plugins/httputil', () => ({
   default: { get: vi.fn() },
 }))
 
+vi.mock('notivue', () => ({
+  push: { warning: vi.fn(), error: vi.fn(), success: vi.fn() },
+}))
+
+vi.mock('@/locales', () => ({
+  i18n: { global: { t: (key: string) => key } },
+}))
+
 vi.mock('@/store/modules/data', () => ({
   default: () => ({ loadData: vi.fn(), onlines: {} }),
 }))

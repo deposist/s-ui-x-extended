@@ -2,6 +2,7 @@ package paidsub
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/deposist/s-ui-x-extended/database"
 
@@ -11,6 +12,16 @@ import (
 // TariffService is the admin CRUD + bot-read service for tariffs. It is scoped
 // to the tariffs table only.
 type TariffService struct{}
+
+// validateTariff rejects nonsensical values before persistence. Negative
+// money/duration/traffic/sort are never valid; storing them would silently
+// no-op at apply time (the apply path guards >0), so reject up front.
+func validateTariff(t *Tariff) error {
+	if t.Price < 0 || t.StarsAmount < 0 || t.AddDays < 0 || t.AddTrafficBytes < 0 || t.Sort < 0 {
+		return fmt.Errorf("tariff fields must not be negative")
+	}
+	return nil
+}
 
 func NewTariffService() *TariffService { return &TariffService{} }
 
@@ -55,6 +66,9 @@ func (s *TariffService) Save(act string, data json.RawMessage) error {
 		t.Id = 0
 		t.CreatedAt = now
 		t.UpdatedAt = now
+		if err := validateTariff(&t); err != nil {
+			return err
+		}
 		return db.Create(&t).Error
 	case "edit":
 		var t Tariff
@@ -63,6 +77,9 @@ func (s *TariffService) Save(act string, data json.RawMessage) error {
 		}
 		if t.Id == 0 {
 			return gorm.ErrMissingWhereClause
+		}
+		if err := validateTariff(&t); err != nil {
+			return err
 		}
 		t.UpdatedAt = now
 		// Explicit column list so zero-valued fields (price=0, enabled=false)

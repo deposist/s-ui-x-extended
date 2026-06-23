@@ -27,7 +27,9 @@
           />
         </v-col>
         <v-col cols="12" sm="6" md="4">
-          <v-text-field v-model="settings.telegramChatID" :label="$t('telegram.chatId')" hide-details />
+          <v-text-field v-model="settings.telegramChatID" :label="$t('telegram.chatId')" placeholder="123456789" persistent-placeholder hide-details>
+            <template v-slot:append-inner><SettingInfo :text="$t('telegram.hint.chatId')" /></template>
+          </v-text-field>
         </v-col>
         <v-col cols="12" sm="6" md="4">
           <v-text-field
@@ -37,8 +39,12 @@
             max="100"
             :label="$t('telegram.cpuThreshold')"
             suffix="%"
+            placeholder="90"
+            persistent-placeholder
             hide-details
-          />
+          >
+            <template v-slot:append-inner><SettingInfo :text="$t('telegram.hint.cpuThreshold')" /></template>
+          </v-text-field>
         </v-col>
       </v-row>
       <v-row>
@@ -48,9 +54,11 @@
             :items="transportModes"
             item-title="title"
             item-value="value"
-            label="Transport"
+            :label="$t('telegram.transport')"
             hide-details
-          />
+          >
+            <template v-slot:append><SettingInfo :text="$t('telegram.hint.transport')" /></template>
+          </v-select>
         </v-col>
         <v-col v-if="settings.telegramTransportMode === 'outbound'" cols="12" sm="6" md="8">
           <v-select
@@ -58,8 +66,8 @@
             :items="outboundOptions"
             item-title="title"
             item-value="value"
-            label="Outbound (sing-box) — requires core running"
-            :hint="outboundOptions.length === 0 ? 'No outbounds configured' : ''"
+            :label="$t('telegram.outboundLabel')"
+            :hint="outboundOptions.length === 0 ? $t('telegram.noOutbounds') : ''"
             persistent-hint
           />
         </v-col>
@@ -92,7 +100,9 @@
       </v-row>
       <v-row>
         <v-col cols="12" md="8">
-          <v-text-field v-model="settings.telegramReportCron" :label="$t('telegram.reportCron')" hide-details />
+          <v-text-field v-model="settings.telegramReportCron" :label="$t('telegram.reportCron')" placeholder="0 9 * * *" persistent-placeholder hide-details>
+            <template v-slot:append-inner><SettingInfo :text="$t('telegram.hint.reportCron')" /></template>
+          </v-text-field>
         </v-col>
       </v-row>
       <v-divider class="my-4"></v-divider>
@@ -116,9 +126,13 @@
               max="50"
               :label="$t('telegram.backup.maxSize')"
               suffix="MB"
+              placeholder="45"
+              persistent-placeholder
               :disabled="!telegramEnabled"
               hide-details
-            />
+            >
+              <template v-slot:append-inner><SettingInfo :text="$t('telegram.hint.backupMaxSize')" /></template>
+            </v-text-field>
           </v-col>
           <v-col cols="12" sm="6" md="4">
             <v-btn
@@ -255,6 +269,7 @@ import HttpUtils from '@/plugins/httputil'
 import { FindDiff } from '@/plugins/utils'
 import { push } from 'notivue'
 import SettingsSecretField from '@/components/SettingsSecretField.vue'
+import SettingInfo from '@/components/SettingInfo.vue'
 import { normalizeSecretFields, stripSecretPlaceholders } from '@/components/settingsSecretField'
 import {
   parseTelegramBackupSchedule,
@@ -328,10 +343,10 @@ const loadData = async () => {
   loading.value = false
 }
 
-const transportModes = [
-  { title: 'Proxy', value: 'proxy' },
-  { title: 'Outbound (sing-box)', value: 'outbound' },
-]
+const transportModes = computed(() => [
+  { title: i18n.global.t('telegram.transportProxy'), value: 'proxy' },
+  { title: i18n.global.t('telegram.transportOutbound'), value: 'outbound' },
+])
 const outboundOptions = ref<{ title: string; value: string }[]>([])
 const loadOutbounds = async () => {
   const msg = await HttpUtils.get('api/outbounds')

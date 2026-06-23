@@ -21,8 +21,8 @@ var errRefundNotApplicable = errors.New("order is not refundable")
 
 // isAlreadyRefunded reports whether a refundStarPayment error means the charge
 // was already refunded (e.g. by a concurrent refund via the other path).
-// Telegram is idempotent at the charge level, so this is a success — not a
-// failure — and must not be reported to the admin/user as "refund failed".
+// Telegram is idempotent at the charge level, so this is a success, not a
+// failure, and must not be reported to the admin/user as "refund failed".
 func isAlreadyRefunded(err error) bool {
 	var apiErr *tgAPIError
 	if errors.As(err, &apiErr) {
@@ -246,6 +246,13 @@ func (p *PaymentService) ApplyPaidOrder(orderID uint, chargeID string, raw []byt
 			updates["total_down"] = client.TotalDown + client.Down
 			updates["up"] = 0
 			updates["down"] = 0
+			// Snapshot the pre-renewal usage counters onto the order so a later
+			// refund can restore the pre-purchase accounting state symmetrically
+			// (the reset above is otherwise irreversible; see finalizeRefund).
+			if err := tx.Model(&PaymentOrder{}).Where("id = ?", orderID).
+				Updates(map[string]any{"granted_up": client.Up, "granted_down": client.Down}).Error; err != nil {
+				return err
+			}
 		}
 		if err := tx.Model(&model.Client{}).Where("id = ?", client.Id).Updates(updates).Error; err != nil {
 			return err
@@ -288,11 +295,29 @@ func (p *PaymentService) ApplyPaidOrder(orderID uint, chargeID string, raw []byt
 	return true, tgUserID, nil
 }
 
-// ExpireStaleOrders marks pending orders past their TTL as expired.
+// ExpireStaleOrders marks pending non-polled orders past their TTL as expired.
+// Polled providers (CryptoBot) are deliberately EXCLUDED: their confirmation is
+// out-of-band, so a payment can land after the short local TTL and must remain
+// pending to be caught by the next poll. They are reaped instead by
+// ExpireStalePolledOrders on a long grace window.
 func (p *PaymentService) ExpireStaleOrders() error {
 	db := database.GetDB()
 	return db.Model(&PaymentOrder{}).
-		Where("status = ? AND expires_at > 0 AND expires_at < ?", StatusPending, nowUnix()).
+		Where("status = ? AND provider <> ? AND expires_at > 0 AND expires_at < ?",
+			StatusPending, string(ProviderCryptoBot), nowUnix()).
+		Update("status", StatusExpired).Error
+}
+
+// ExpireStalePolledOrders reaps pending polled-provider (CryptoBot) orders whose
+// creation is older than graceSeconds. This hard ceiling is far beyond the local
+// order TTL so a late out-of-band payment is still caught by polling, while
+// genuinely abandoned invoices do not accumulate forever.
+func (p *PaymentService) ExpireStalePolledOrders(graceSeconds int64) error {
+	db := database.GetDB()
+	cutoff := nowUnix() - graceSeconds
+	return db.Model(&PaymentOrder{}).
+		Where("status = ? AND provider = ? AND created_at > 0 AND created_at < ?",
+			StatusPending, string(ProviderCryptoBot), cutoff).
 		Update("status", StatusExpired).Error
 }
 
@@ -381,6 +406,38 @@ func (p *PaymentService) finalizeRefund(orderID uint, revoke bool) error {
 				newVolume = 0
 			}
 			updates["volume"] = newVolume
+			// Symmetric with ApplyPaidOrder: roll back the volume granted and the
+			// usage counters that the renewal reset, from the snapshot taken at
+			// apply time. Usage accrued between purchase and refund is intentionally
+			// forgiven (the refund restores the pre-purchase accounting state).
+			newTotalUp := client.TotalUp - order.GrantedUp
+			if newTotalUp < 0 {
+				newTotalUp = 0
+			}
+			newTotalDown := client.TotalDown - order.GrantedDown
+			if newTotalDown < 0 {
+				newTotalDown = 0
+			}
+			updates["total_up"] = newTotalUp
+			updates["total_down"] = newTotalDown
+			// Only restore the live up/down baseline when THIS is the most recent
+			// paid traffic order because its apply zeroed the current counters.
+			// For an older (non-latest) order a newer purchase already opened a
+			// fresh window, so the live up/down belong to that window and must not
+			// be clobbered with this order's stale snapshot (which would silently
+			// discard the usage accrued in the current window). Totals stay
+			// relative either way, so the ledger remains consistent.
+			var newerTrafficOrders int64
+			if err := tx.Model(&PaymentOrder{}).
+				Where("client_id = ? AND id > ? AND status = ?", order.ClientId, order.Id, StatusPaid).
+				Where("tariff_id IN (?)", tx.Model(&Tariff{}).Select("id").Where("add_traffic_bytes > 0")).
+				Count(&newerTrafficOrders).Error; err != nil {
+				return err
+			}
+			if newerTrafficOrders == 0 {
+				updates["up"] = order.GrantedUp
+				updates["down"] = order.GrantedDown
+			}
 		}
 		if len(updates) == 0 {
 			return nil
@@ -435,7 +492,7 @@ func (p *PaymentService) RefundOrder(ctx context.Context, orderID uint, revoke b
 		return "", errRefundNotApplicable
 	}
 	// Defensive: a paid order always has Amount > 0 (CreateOrder rejects zero),
-	// so a non-positive amount means a corrupted row — never act on it.
+	// so a non-positive amount means a corrupted row; never act on it.
 	if order.Amount <= 0 {
 		return "", errRefundNotApplicable
 	}
@@ -449,7 +506,7 @@ func (p *PaymentService) RefundOrder(ctx context.Context, orderID uint, revoke b
 			return "", fmt.Errorf("order has no Stars charge id")
 		}
 		// An "already refunded" response means a concurrent refund (e.g. the bot
-		// path) returned the money first — treat it as success, not a failure.
+		// path) returned the money first. Treat it as success, not a failure.
 		if err := sender.refundStarPayment(ctx, order.TelegramUserId, charge); err != nil && !isAlreadyRefunded(err) {
 			return "", fmt.Errorf("stars refund failed")
 		}
@@ -557,10 +614,28 @@ func (b *Bot) startPurchase(ctx context.Context, chatID int64, tgID int64, t *Ta
 	}
 }
 
+// auditCrossUserOrderAccess records an attempt by a Telegram user to act on an
+// order owned by someone else (order-id enumeration/probing on the public bot).
+// In practice this is rate-bounded by the bot's per-user command limiter, so it
+// leaves a trace without flooding the audit log. MITRE T1110/T1499.
+func auditCrossUserOrderAccess(tgID int64, orderID uint, action string) {
+	_ = (&service.AuditService{}).Record(service.AuditEvent{
+		Actor:    fmt.Sprintf("tg:%d", tgID),
+		Event:    "paidsub_cross_user_access",
+		Resource: "paidsub",
+		Severity: service.AuditSeverityWarn,
+		Details:  map[string]any{"orderId": orderID, "action": action},
+	})
+}
+
 func (b *Bot) handleManualPaid(ctx context.Context, chatID int64, tgID int64, orderID uint, l lang) {
 	order, err := b.payments.getOrder(orderID)
-	if err != nil || order.TelegramUserId != tgID {
-		return // never act on another user's order
+	if err != nil {
+		return
+	}
+	if order.TelegramUserId != tgID {
+		auditCrossUserOrderAccess(tgID, orderID, "manual_paid") // never act on another user's order
+		return
 	}
 	(&service.TelegramService{}).NotifyTelegramEvent("paidsub_manual_claim", map[string]string{
 		"orderId":  fmt.Sprintf("%d", order.Id),
@@ -642,7 +717,7 @@ func tariffButtonLabel(t *Tariff) string {
 	if price == "" {
 		return t.Name
 	}
-	return fmt.Sprintf("%s — %s", t.Name, price)
+	return fmt.Sprintf("%s: %s", t.Name, price)
 }
 
 // formatOrderAmount renders an order amount: Telegram Stars (XTR) are whole

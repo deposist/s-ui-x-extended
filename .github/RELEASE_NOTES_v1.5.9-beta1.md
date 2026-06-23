@@ -1,0 +1,67 @@
+# Release v1.5.9-beta1
+
+Security, reliability, and settings UX update. No database, API, or configuration changes are required.
+
+## EN
+
+### Security and integrity
+
+* **TLS save panic fixed.** The subscription/out-JSON TLS builder could panic when operator-provided Reality or ECH settings had mismatched client and server halves. That could commit a partial save and leave the running core out of sync with the database. The builder now handles missing and mismatched data safely, and `ConfigService.Save` turns any panic into a transaction rollback.
+* **Installer downloads verify TLS again.** `install.sh` and `s-ui.sh` had fetched release artifacts with TLS verification disabled. An on-path attacker could replace both the artifact and its checksum. Downloads now verify certificates, and self-update writes to a temporary file before replacing the script.
+* **Supply-chain pinning.** The bundled `libcronet` binary is pinned to an immutable release and verified by SHA-256 per architecture. Docker base images are pinned by digest, and GitHub Actions steps are pinned to full commit SHAs.
+
+### Reliability
+
+* **1.2 to 1.3 migration no longer blocks on a missing raw config row.** Missing rows are treated as a no-op, so upgrades and backup restores can continue.
+* **Unavailable listen addresses fall back safely.** After a restore on another host, an unbindable restricted listen address now falls back to loopback instead of widening the panel and subscription server to every interface.
+* **Safer runtime changes.** Auto-logout is now a CSRF-protected POST, admin rename rejects empty and duplicate names, traffic refunds no longer overwrite the current usage window, periodic reset settings are clamped, and external subscription fetches reuse the central SSRF validator.
+* **Runtime race fixes.** A race between deplete-cron hot reload and full core restart was fixed. IP certificate auto-renewal now restarts the panel when needed.
+
+### Performance
+
+* The dashboard stats query has a matching composite index.
+* WebSocket broadcasts serialize payloads once per message instead of once per connection.
+* The subscription server gzip-compresses responses.
+* The new stats index is created automatically at startup.
+
+### Frontend
+
+* Settings fields now show defaults or recommended values as placeholders, with `(i)` hints for web, subscription, sing-box Basics, and Telegram settings.
+* Enumerated settings now use proper controls: IANA timezone autocomplete, Clash API mode dropdown, and payment currency combobox.
+* The routing labels `Invalid IP Ranges` and `Invalid Source IPs` now describe private IP matching correctly.
+* Login errors now appear inline.
+* Telegram transport labels, routing action cards, and dashboard KPI captions moved into i18n.
+
+## RU
+
+# Релиз v1.5.9-beta1
+
+Обновление безопасности, надёжности и UX настроек. Изменения базы данных, API или конфигурации не требуются.
+
+### Безопасность и целостность
+
+* **Исправлена паника при сохранении TLS.** Сборщик TLS для подписок/out-JSON мог паниковать, если оператор указал Reality или ECH с несогласованными клиентской и серверной частями. Это могло частично сохранить изменения и рассинхронизировать работающее ядро с базой. Теперь сборщик безопасно обрабатывает отсутствующие и несовпадающие данные, а `ConfigService.Save` переводит любую панику в откат транзакции.
+* **Загрузки установщика снова проверяют TLS.** `install.sh` и `s-ui.sh` скачивали релизные артефакты с отключённой проверкой TLS. Атакующий на пути мог подменить и файл, и его checksum. Теперь загрузки проверяют сертификаты, а самообновление сначала пишет во временный файл и только потом заменяет скрипт.
+* **Фиксация цепочки поставки.** Встроенный `libcronet` привязан к неизменяемому релизу и проверяется по SHA-256 для каждой архитектуры. Базовые Docker-образы зафиксированы по digest, шаги GitHub Actions привязаны к полным commit SHA.
+
+### Надёжность
+
+* **Миграция 1.2 в 1.3 больше не блокируется отсутствующей raw config строкой.** Отсутствие строки считается no-op, поэтому обновления и восстановление бэкапов продолжаются.
+* **Недоступные listen-адреса откатываются безопасно.** После восстановления на другом хосте недоступный ограниченный listen-адрес теперь откатывается на loopback, а не расширяет панель и сервер подписок на все интерфейсы.
+* **Безопаснее runtime-изменения.** Авто-выход теперь CSRF-защищённый POST, переименование администратора отклоняет пустые и дублирующиеся имена, возврат трафикового тарифа больше не затирает текущее окно потребления, настройки периодического сброса ограничены, а загрузка внешних подписок использует центральный SSRF-валидатор.
+* **Исправлены runtime-гонки.** Убрана гонка между hot reload из deplete-cron и полным рестартом ядра. Автоперевыпуск IP-сертификата теперь перезапускает панель, когда это нужно.
+
+### Производительность
+
+* Запрос статистики дашборда получил подходящий составной индекс.
+* WebSocket-рассылки сериализуют payload один раз на сообщение, а не по разу на каждое соединение.
+* Сервер подписок сжимает ответы gzip.
+* Новый индекс stats создаётся автоматически при старте.
+
+### Фронтенд
+
+* Поля настроек показывают значения по умолчанию или рекомендуемые значения как placeholder; для настроек веб-сервера, подписок, sing-box Basics и Telegram добавлены `(i)`-подсказки.
+* Настройки с фиксированным набором значений используют нормальные контролы: autocomplete часовых поясов IANA, dropdown режима Clash API и combobox валют платежей.
+* Лейблы маршрутизации `Invalid IP Ranges` и `Invalid Source IPs` теперь корректно описывают матчинг приватных IP.
+* Ошибки входа теперь показываются inline.
+* Лейблы транспорта Telegram, карточки действий маршрутизации и KPI дашборда перенесены в i18n.

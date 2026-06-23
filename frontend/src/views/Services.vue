@@ -1,5 +1,6 @@
 <template>
-  <ServiceVue 
+  <component
+    :is="EntityForm"
     v-model="modal.visible"
     :visible="modal.visible"
     :id="modal.id"
@@ -10,71 +11,82 @@
     :tlsConfigs="tlsConfigs"
     @close="closeModal"
   />
-  <v-row>
-    <v-col cols="12" justify="center" align="center">
-      <v-btn color="primary" @click="showModal(0)">{{ $t('actions.add') }}</v-btn>
-    </v-col>
-  </v-row>
-  <v-row>
-    <v-col cols="12" sm="4" md="3" lg="2" v-for="(item, index) in <any[]>services" :key="item.tag">
-      <v-card rounded="xl" elevation="5" min-width="200" :title="item.tag">
-        <v-card-subtitle style="margin-top: -15px;">
-          <v-row>
-            <v-col>{{ item.type }}</v-col>
-          </v-row>
-        </v-card-subtitle>
-        <v-card-text>
-          <v-row v-if="item.type != 'oom-killer'">
-            <v-col>{{ $t('in.addr') }}</v-col>
-            <v-col>
-              {{ item.listen }}
-            </v-col>
-          </v-row>
-          <v-row v-if="item.type != 'oom-killer'">
-            <v-col>{{ $t('in.port') }}</v-col>
-            <v-col>
-              {{ item.listen_port }}
-            </v-col>
-          </v-row>
-          <v-row v-if="item.type != 'oom-killer'">
-            <v-col>{{ $t('objects.tls') }}</v-col>
-            <v-col>
-              {{ item.tls_id > 0 ? $t('enable') : $t('disable') }}
-            </v-col>
-          </v-row>
-          <v-row v-if="item.type == 'oom-killer'">
-            <v-col>{{ $t('types.oom.memoryLimit') }}</v-col>
-            <v-col>{{ item.memory_limit || '-' }}</v-col>
-          </v-row>
-        </v-card-text>
-        <v-divider></v-divider>
-        <v-card-actions style="padding: 0;">
-          <v-btn icon="mdi-file-edit" @click="showModal(item.id)">
-            <v-icon />
-            <v-tooltip activator="parent" location="top" :text="$t('actions.edit')"></v-tooltip>
-          </v-btn>
-          <v-btn icon="mdi-file-remove" style="margin-inline-start:0;" color="warning" @click="delOverlay[index] = true">
-            <v-icon />
-            <v-tooltip activator="parent" location="top" :text="$t('actions.del')"></v-tooltip>
-          </v-btn>
-          <v-overlay
-            v-model="delOverlay[index]"
-            contained
-            class="align-center justify-center"
-          >
-            <v-card :title="$t('actions.del')" rounded="lg">
-              <v-divider></v-divider>
-              <v-card-text>{{ $t('confirm') }}</v-card-text>
-              <v-card-actions>
-                <v-btn color="error" variant="outlined" @click="delSrv(item.id)">{{ $t('yes') }}</v-btn>
-                <v-btn color="success" variant="outlined" @click="delOverlay[index] = false">{{ $t('no') }}</v-btn>
-              </v-card-actions>
-            </v-card>
-          </v-overlay>
-        </v-card-actions>
-      </v-card>      
-    </v-col>
-  </v-row>
+
+  <ServicesNexusList
+    v-if="mode === 'nexus'"
+    :services="<any[]>services"
+    @add="showModal(0)"
+    @del="delSrv"
+    @edit="showModal"
+  />
+
+  <template v-else>
+    <v-row>
+      <v-col cols="12" justify="center" align="center">
+        <v-btn color="primary" @click="showModal(0)">{{ $t('actions.add') }}</v-btn>
+      </v-col>
+    </v-row>
+    <v-row>
+      <v-col cols="12" sm="4" md="3" lg="2" v-for="(item, index) in <any[]>services" :key="item.tag">
+        <v-card rounded="xl" elevation="5" min-width="200" :title="item.tag">
+          <v-card-subtitle style="margin-top: -15px;">
+            <v-row>
+              <v-col>{{ item.type }}</v-col>
+            </v-row>
+          </v-card-subtitle>
+          <v-card-text>
+            <v-row v-if="item.type != 'oom-killer'">
+              <v-col>{{ $t('in.addr') }}</v-col>
+              <v-col>
+                {{ item.listen }}
+              </v-col>
+            </v-row>
+            <v-row v-if="item.type != 'oom-killer'">
+              <v-col>{{ $t('in.port') }}</v-col>
+              <v-col>
+                {{ item.listen_port }}
+              </v-col>
+            </v-row>
+            <v-row v-if="item.type != 'oom-killer'">
+              <v-col>{{ $t('objects.tls') }}</v-col>
+              <v-col>
+                {{ item.tls_id > 0 ? $t('enable') : $t('disable') }}
+              </v-col>
+            </v-row>
+            <v-row v-if="item.type == 'oom-killer'">
+              <v-col>{{ $t('types.oom.memoryLimit') }}</v-col>
+              <v-col>{{ item.memory_limit || '-' }}</v-col>
+            </v-row>
+          </v-card-text>
+          <v-divider></v-divider>
+          <v-card-actions style="padding: 0;">
+            <v-btn icon="mdi-file-edit" @click="showModal(item.id)">
+              <v-icon />
+              <v-tooltip activator="parent" location="top" :text="$t('actions.edit')"></v-tooltip>
+            </v-btn>
+            <v-btn icon="mdi-file-remove" style="margin-inline-start:0;" color="warning" @click="delOverlay[index] = true">
+              <v-icon />
+              <v-tooltip activator="parent" location="top" :text="$t('actions.del')"></v-tooltip>
+            </v-btn>
+            <v-overlay
+              v-model="delOverlay[index]"
+              contained
+              class="align-center justify-center"
+            >
+              <v-card :title="$t('actions.del')" rounded="lg">
+                <v-divider></v-divider>
+                <v-card-text>{{ $t('confirm') }}</v-card-text>
+                <v-card-actions>
+                  <v-btn color="error" variant="outlined" @click="delSrv(item.id)">{{ $t('yes') }}</v-btn>
+                  <v-btn color="success" variant="outlined" @click="delOverlay[index] = false">{{ $t('no') }}</v-btn>
+                </v-card-actions>
+              </v-card>
+            </v-overlay>
+          </v-card-actions>
+        </v-card>
+      </v-col>
+    </v-row>
+  </template>
 </template>
 
 <script lang="ts" setup>
@@ -82,13 +94,22 @@ import Data from '@/store/modules/data'
 import { Srv } from '@/types/services'
 import { computed, ref } from 'vue'
 import ServiceVue from '@/layouts/modals/Service.vue'
+import { useUiMode } from '@/uiMode/useUiMode'
+import { defineAsyncComponent } from 'vue'
+
+const { mode } = useUiMode()
+
+const ServicesNexusList = defineAsyncComponent(
+  () => import('@/views/services/ServicesNexusList.vue'),
+)
+const ServiceDrawer = defineAsyncComponent(
+  () => import('@/components/nexus/drawers/ServiceDrawer.vue'),
+)
+
+const EntityForm = computed(() => (mode.value === 'nexus' ? ServiceDrawer : ServiceVue))
 
 const services = computed((): Srv[] => {
   return <Srv[]> Data().services
-})
-
-const srvTags = computed((): any[] => {
-  return services.value?.map((o:Srv) => o.tag)
 })
 
 const tsTags = computed((): any[] => {

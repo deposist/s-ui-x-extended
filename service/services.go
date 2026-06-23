@@ -69,40 +69,61 @@ func (s *ServicesService) GetAllConfig(db *gorm.DB) ([]json.RawMessage, error) {
 	return servicesJson, nil
 }
 
-func (s *ServicesService) Save(tx *gorm.DB, act string, data json.RawMessage) error {
-	var err error
-
+func (s *ServicesService) Save(tx *gorm.DB, act string, data json.RawMessage) (*entityCoreChange, error) {
 	switch act {
 	case "new", "edit":
 		var srv model.Service
-		err = srv.UnmarshalJSON(data)
-		if err != nil {
-			return err
+		if err := srv.UnmarshalJSON(data); err != nil {
+			return nil, err
 		}
 
 		if srv.TlsId > 0 {
-			err = tx.Model(model.Tls{}).Where("id = ?", srv.TlsId).Find(&srv.Tls).Error
-			if err != nil {
-				return err
+			if err := tx.Model(model.Tls{}).Where("id = ?", srv.TlsId).Find(&srv.Tls).Error; err != nil {
+				return nil, err
 			}
 		}
 
-		err = tx.Save(&srv).Error
-		if err != nil {
-			return err
+		var oldTag string
+		if srv.Id > 0 {
+			if err := tx.Model(model.Service{}).Select("tag").Where("id = ?", srv.Id).Find(&oldTag).Error; err != nil {
+				return nil, err
+			}
 		}
+
+		if err := tx.Save(&srv).Error; err != nil {
+			return nil, err
+		}
+		change := &entityCoreChange{reloadIds: []uint{srv.Id}}
+		if oldTag != "" && oldTag != srv.Tag {
+			change.removeTags = []string{oldTag}
+		}
+		return change, nil
 	case "del":
 		var tag string
-		err = json.Unmarshal(data, &tag)
-		if err != nil {
-			return err
+		if err := json.Unmarshal(data, &tag); err != nil {
+			return nil, err
 		}
-		err = tx.Where("tag = ?", tag).Delete(model.Service{}).Error
-		if err != nil {
-			return err
+		if err := tx.Where("tag = ?", tag).Delete(model.Service{}).Error; err != nil {
+			return nil, err
 		}
+		return &entityCoreChange{removeTags: []string{tag}}, nil
 	default:
-		return common.NewErrorf("unknown action: %s", act)
+		return nil, common.NewErrorf("unknown action: %s", act)
+	}
+}
+
+// RemoveServicesFromCore removes the given service tags from the running core.
+// Missing tags are tolerated so removals stay idempotent; with no running core
+// there is nothing to remove.
+func (s *ServicesService) RemoveServicesFromCore(tags []string) error {
+	coreInstance := s.runtime().Core()
+	if coreInstance == nil || !coreInstance.IsRunning() {
+		return nil
+	}
+	for _, tag := range tags {
+		if err := coreInstance.RemoveService(tag); err != nil && err != os.ErrInvalid {
+			return err
+		}
 	}
 	return nil
 }

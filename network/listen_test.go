@@ -24,9 +24,9 @@ func TestListenWithFallbackBindsImmediatelyOnLoopback(t *testing.T) {
 }
 
 // TestListenWithFallbackHandlesUnbindableAddress simulates the after-restore
-// scenario: the saved listen IP no longer exists on this machine. The
-// helper must transparently fall back to binding on every interface so the
-// panel can still come up.
+// scenario: the saved listen IP no longer exists on this machine. The helper
+// must fall back to the LOOPBACK interface only (never the 0.0.0.0/:: wildcard)
+// so an intentionally-restricted bind is not silently widened to public.
 func TestListenWithFallbackHandlesUnbindableAddress(t *testing.T) {
 	// 240.0.0.0/4 is reserved (Class E) and is not assigned to any
 	// interface on conventional hosts, so binding it produces
@@ -45,6 +45,13 @@ func TestListenWithFallbackHandlesUnbindableAddress(t *testing.T) {
 	}
 	if strings.HasPrefix(listener.Addr().String(), stale+":") {
 		t.Fatalf("expected fallback, but listener is still on %s", listener.Addr())
+	}
+	// The fallback must be loopback, never the all-interfaces wildcard.
+	if !strings.HasPrefix(result.FallbackAddr, "127.0.0.1:") {
+		t.Fatalf("fallback must be loopback, got %s", result.FallbackAddr)
+	}
+	if !strings.HasPrefix(listener.Addr().String(), "127.0.0.1:") {
+		t.Fatalf("listener must be bound to loopback, got %s", listener.Addr())
 	}
 }
 

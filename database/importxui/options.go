@@ -26,7 +26,7 @@ type Options struct {
 	IncludeRouting bool
 	// Hostname is the address baked into each migrated client's subscription
 	// links (mirrors the panel host used on a normal client save). Empty
-	// leaves Links nil — the importer never emits a link with an empty host.
+	// leaves Links nil - the importer never emits a link with an empty host.
 	Hostname string
 }
 

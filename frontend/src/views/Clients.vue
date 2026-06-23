@@ -28,6 +28,12 @@
     :id="qrcode.id"
     @close="closeQrCode"
   />
+  <ClientDoctor
+    v-model="doctor.visible"
+    :visible="doctor.visible"
+    :id="doctor.id"
+    @close="closeDoctor"
+  />
   <Stats
     v-model="stats.visible"
     :visible="stats.visible"
@@ -41,6 +47,26 @@
     :is-admin="true"
     @cleared="onClientIpsCleared"
   />
+
+  <ClientsNexusList
+    v-if="mode === 'nexus'"
+    :clients="<any[]>clients"
+    :inbounds="<any[]>inbounds"
+    :groups="groups"
+    :onlines="<string[]>(Data().onlines.user ?? [])"
+    :enable-traffic="enableTraffic"
+    @add="showModal(0)"
+    @add-bulk="addBulk"
+    @del="delClient"
+    @diagnose="showDoctor"
+    @edit="showModal"
+    @edit-bulk="editBulk"
+    @qr="showQrCode"
+    @show-ips="showClientIps"
+    @stats="showStats"
+  />
+
+  <template v-else>
   <v-row justify="center" align="center">
     <v-col cols="auto">
       <v-btn color="primary" @click="showModal(0)">{{ $t('actions.add') }}</v-btn>
@@ -185,7 +211,7 @@
         </template>
         <template v-slot:item.online="{ item }">
           <div class="text-start">
-            <template v-if="isOnline(item.name).value">
+            <template v-if="onlineUsers.has(item.name)">
               <v-chip density="comfortable" size="small" color="success" variant="flat">{{ $t('online') }}</v-chip>
             </template>
             <template v-else>-</template>
@@ -232,6 +258,9 @@
         >
           mdi-qrcode
         </v-icon>
+        <v-icon class="me-2" icon="lucide:activity" @click="showDoctor(item.id)">
+          <v-tooltip activator="parent" location="top" :text="$t('actions.diagnose')"></v-tooltip>
+        </v-icon>
         <v-icon icon="mdi-chart-line" @click="showStats(item.name)" v-if="Data().enableTraffic">
           <v-tooltip activator="parent" location="top" :text="$t('stats.graphTitle')"></v-tooltip>
         </v-icon>
@@ -239,6 +268,7 @@
       </v-data-table>
     </v-col>
   </v-row>
+  </template>
 </template>
 <style>
 .v-data-table__tr--mobile td {
@@ -255,23 +285,31 @@ import ClientModal from '@/layouts/modals/Client.vue'
 import ClientAddBulk from '@/layouts/modals/ClientAddBulk.vue'
 import ClientEditBulk from '@/layouts/modals/ClientEditBulk.vue'
 import QrCode from '@/layouts/modals/QrCode.vue'
+import ClientDoctor from '@/layouts/modals/ClientDoctor.vue'
 import Stats from '@/layouts/modals/Stats.vue'
 import IpHistoryModal from '@/components/IpHistoryModal.vue'
 import { Client } from '@/types/clients'
-import { computed, ref } from 'vue'
+import { computed, defineAsyncComponent, ref } from 'vue'
 import { HumanReadable } from '@/plugins/utils'
 import { i18n, locale } from '@/locales'
 import { useDisplay } from 'vuetify'
+import { useUiMode } from '@/uiMode/useUiMode'
 
 const { smAndDown } = useDisplay()
+
+const { mode } = useUiMode()
+const ClientsNexusList = defineAsyncComponent(
+  () => import('@/views/clients/ClientsNexusList.vue'),
+)
+const enableTraffic = computed((): boolean => Data().enableTraffic)
 
 const clients = computed((): any[] => {
   return Data().clients
 })
 
-const isOnline = (cname: string) => computed(() => {
-  return Data().onlines?.user ? Data().onlines.user.includes(cname) : false
-})
+// One reactive Set per render instead of a throwaway computed per table row:
+// O(1) membership lookup, no per-row reactive effect churn on each onlines update.
+const onlineUsers = computed(() => new Set<string>(Data().onlines?.user ?? []))
 
 const inbounds = computed((): any[] => {
   return Data().inbounds?? []
@@ -357,6 +395,19 @@ const showQrCode = (id: number) => {
 }
 const closeQrCode = () => {
   qrcode.value.visible = false
+}
+
+const doctor = ref({
+  visible: false,
+  id: 0,
+})
+
+const showDoctor = (id: number) => {
+  doctor.value.id = id
+  doctor.value.visible = true
+}
+const closeDoctor = () => {
+  doctor.value.visible = false
 }
 
 const stats = ref({

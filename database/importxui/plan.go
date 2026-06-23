@@ -996,7 +996,7 @@ func planSettings(ctx context.Context, tx *gorm.DB, src *sourceDB, plan *Migrati
 			// break it. The item stays in the plan; the operator can re-enable it
 			// when migrating within the same host.
 			action = ActionSkip
-			warnings = []string{fmt.Sprintf("setting %s is server-specific (listen address, port, domain or TLS certificate path); skipped by default to avoid breaking this host — enable it only when migrating to the same host/domain", setting.Key)}
+			warnings = []string{fmt.Sprintf("setting %s is server-specific (listen address, port, domain or TLS certificate path); skipped by default to avoid breaking this host. Enable it only when migrating to the same host/domain", setting.Key)}
 		}
 		plan.Items = append(plan.Items, PlanItem{
 			Kind:        KindSetting,
@@ -1066,7 +1066,7 @@ var xuiSettingKeyMap = map[string]string{
 // hostSpecificSettingKeys are 3x-ui source keys whose values identify the
 // SOURCE server's host/domain: the bind address, the panel/sub domain, on-disk
 // TLS certificate paths, and the absolute subscription URLs that embed the
-// host. Copying these onto a different destination host breaks it — the panel
+// host. Copying these onto a different destination host breaks it. The panel
 // would bind an IP that does not exist here, present a stale domain, reference
 // certificate files that are absent, or hand out subscription links pointing at
 // the old server. planSettings keeps them visible in the plan but defaults them

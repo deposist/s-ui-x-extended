@@ -40,7 +40,7 @@ type PaymentOrder struct {
 	Status         string `json:"status" gorm:"index;not null;default:pending"`
 	TelegramUserId int64  `json:"telegramUserId" gorm:"column:telegram_user_id;index;not null;default:0"`
 	// IdempotencyKey (the Telegram invoice payload) and ProviderChargeID are
-	// internal provider ids — never serialized to the browser (json:"-"), so the
+	// internal provider ids - never serialized to the browser (json:"-"), so the
 	// admin Orders API exposes no provider secrets/ids (mirrors ProviderPayload).
 	IdempotencyKey   string `json:"-" gorm:"column:idempotency_key;uniqueIndex;not null"`
 	ProviderChargeID string `json:"-" gorm:"column:provider_charge_id;index"`
@@ -49,6 +49,13 @@ type PaymentOrder struct {
 	CreatedAt        int64  `json:"createdAt" gorm:"column:created_at;index;not null;default:0"`
 	PaidAt           int64  `json:"paidAt" gorm:"column:paid_at;not null;default:0"`
 	ExpiresAt        int64  `json:"expiresAt" gorm:"column:expires_at;index;not null;default:0"`
+	// GrantedUp/GrantedDown snapshot the client's up/down usage counters at the
+	// instant a traffic-refilling renewal reset them to zero, so a later refund
+	// (finalizeRefund with revoke) can restore the pre-purchase accounting state
+	// symmetrically instead of leaving the reset counters stranded. Internal -
+	// never serialized to the browser.
+	GrantedUp   int64 `json:"-" gorm:"column:granted_up;not null;default:0"`
+	GrantedDown int64 `json:"-" gorm:"column:granted_down;not null;default:0"`
 }
 
 func (PaymentOrder) TableName() string { return "payment_orders" }

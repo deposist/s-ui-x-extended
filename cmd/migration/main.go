@@ -74,17 +74,21 @@ func MigrateDbWithOptions(options Options) error {
 		fmt.Println("Database is up to date, no need to migrate")
 		return nil
 	}
+	// s-ui-x-extended uses its own versioning line (1.0.0-betaN) which is
+	// semver-lower than upstream releases (1.5.x). Skip migration only when
+	// the DB version is from a DIFFERENT major and semver-higher (a genuine
+	// future release). Same-major versions (1.x.y) always proceed through the
+	// migration chain so upstream schemas (1.4.x, 1.5.x) are migrated to the
+	// extended fork's schema.
 	if dbVersion != "" {
-		if _, ok := config.CompareVersions(dbVersion, currentVersion); !ok {
-			return fmt.Errorf("database version %q is not semver-compatible", dbVersion)
-		}
-		// The running build is authoritative for the version stamp; only refuse
-		// to migrate when the database comes from a strictly higher MAJOR (a
-		// genuinely-future release). Legacy upstream databases (1.x) semver-rank
-		// above the reset 1.0.0-betaN line but must still be migrated.
-		if config.IsGenuinelyNewer(dbVersion, currentVersion) {
-			fmt.Println("Database version is newer than current binary, no migration will run")
-			return nil
+		dbSem, okDB := config.ParseSemver(dbVersion)
+		curSem, okCur := config.ParseSemver(currentVersion)
+		if okDB && okCur && dbSem.Major != curSem.Major {
+			cmp, ok := config.CompareVersions(dbVersion, currentVersion)
+			if ok && cmp > 0 {
+				fmt.Println("Database version is newer than current binary, no migration will run")
+				return nil
+			}
 		}
 	}
 
@@ -141,19 +145,33 @@ func MigrateDbWithOptions(options Options) error {
 		dbVersion = "1.7"
 	}
 
-	// Persist the new version. The settings row is created lazily in older
-	// schemas, so use UPSERT semantics.
-	var count int64
-	if err = tx.Raw("SELECT COUNT(*) FROM settings WHERE key = ?", "version").Scan(&count).Error; err != nil {
-		return fmt.Errorf("count version: %w", err)
+	// Persist the new version only if the DB version is from the same major
+	// or semver-lower. A future-version DB (different major, semver-higher)
+	// must not be downgraded.
+	shouldUpdate := true
+	if dbVersion != "" {
+		dbSem, okDB := config.ParseSemver(dbVersion)
+		curSem, okCur := config.ParseSemver(currentVersion)
+		if okDB && okCur && dbSem.Major != curSem.Major {
+			cmp, ok := config.CompareVersions(dbVersion, currentVersion)
+			if ok && cmp > 0 {
+				shouldUpdate = false
+			}
+		}
 	}
-	if count == 0 {
-		err = tx.Exec("INSERT INTO settings(key, value) VALUES(?, ?)", "version", currentVersion).Error
-	} else {
-		err = tx.Exec("UPDATE settings SET value = ? WHERE key = ?", currentVersion, "version").Error
-	}
-	if err != nil {
-		return fmt.Errorf("update version: %w", err)
+	if shouldUpdate {
+		var count int64
+		if err = tx.Raw("SELECT COUNT(*) FROM settings WHERE key = ?", "version").Scan(&count).Error; err != nil {
+			return fmt.Errorf("count version: %w", err)
+		}
+		if count == 0 {
+			err = tx.Exec("INSERT INTO settings(key, value) VALUES(?, ?)", "version", currentVersion).Error
+		} else {
+			err = tx.Exec("UPDATE settings SET value = ? WHERE key = ?", currentVersion, "version").Error
+		}
+		if err != nil {
+			return fmt.Errorf("update version: %w", err)
+		}
 	}
 	if err = tx.Commit().Error; err != nil {
 		return fmt.Errorf("commit migration: %w", err)

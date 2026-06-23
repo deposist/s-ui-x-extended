@@ -44,7 +44,9 @@ func EnsureSchema(db *gorm.DB) error {
 			external_url TEXT,
 			created_at INTEGER NOT NULL DEFAULT 0,
 			paid_at INTEGER NOT NULL DEFAULT 0,
-			expires_at INTEGER NOT NULL DEFAULT 0
+			expires_at INTEGER NOT NULL DEFAULT 0,
+			granted_up INTEGER NOT NULL DEFAULT 0,
+			granted_down INTEGER NOT NULL DEFAULT 0
 		)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_paidsub_bindings_client ON paidsub_bindings(client_id)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_paidsub_bindings_tg ON paidsub_bindings(tg_user_id)`,
@@ -59,6 +61,20 @@ func EnsureSchema(db *gorm.DB) error {
 	}
 	for _, stmt := range stmts {
 		if err := db.Exec(stmt).Error; err != nil {
+			return err
+		}
+	}
+	// Additive columns for upgraded installs (the CREATE above only covers fresh
+	// installs). SQLite lacks ADD COLUMN IF NOT EXISTS, so guard with HasColumn.
+	mig := db.Migrator()
+	for _, c := range []struct{ column, ddl string }{
+		{"granted_up", `ALTER TABLE payment_orders ADD COLUMN granted_up INTEGER NOT NULL DEFAULT 0`},
+		{"granted_down", `ALTER TABLE payment_orders ADD COLUMN granted_down INTEGER NOT NULL DEFAULT 0`},
+	} {
+		if mig.HasColumn(&PaymentOrder{}, c.column) {
+			continue
+		}
+		if err := db.Exec(c.ddl).Error; err != nil {
 			return err
 		}
 	}

@@ -17,13 +17,17 @@ const rawSources = import.meta.glob('../**/*.{vue,ts}', {
 }) as Record<string, string>
 
 // The icon infrastructure files are not icon *consumers*: mdiIconPaths.ts is the
-// generated registry (holds every key by design) and mdiIcons.ts contains the
-// 'vuetify/iconsets/mdi-svg' import path, the generator script name, and
-// doc-comment examples — none are app icon usages. Skip both; scan every real
-// consumer. Test files are skipped too (this one names a deliberately-missing
-// icon below).
+// generated registry (holds every key by design); mdiIcons.ts and lucideIcons.ts
+// both contain the 'vuetify/iconsets/mdi-svg' import path (the latter only to
+// reuse that set's component type when registering the Lucide set), the generator
+// script name, and doc-comment examples — none are app icon usages. Skip them;
+// scan every real consumer. Test files are skipped too (this one names a
+// deliberately-missing icon below).
 function isInfrastructure(path: string): boolean {
-  return path.endsWith('.test.ts') || path.endsWith('/mdiIconPaths.ts') || path.endsWith('/mdiIcons.ts')
+  return path.endsWith('.test.ts')
+    || path.endsWith('/mdiIconPaths.ts')
+    || path.endsWith('/mdiIcons.ts')
+    || path.endsWith('/lucideIcons.ts')
 }
 
 function iconsReferencedInSource(): Set<string> {

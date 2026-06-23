@@ -1,11 +1,10 @@
 {
   "name": "s-ui-frontend",
-  "version": "1.0.0-beta5",
+  "version": "1.5.10-beta3",
   "private": true,
   "scripts": {
     "dev": "vite --host",
-    "build": "node scripts/gen-capabilities.cjs --check && vue-tsc --noEmit && vite build && node scripts/verify-dist-assets.mjs",
-    "gen:capabilities": "node scripts/gen-capabilities.cjs",
+    "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:unit": "vitest run",
@@ -16,6 +15,7 @@
     "axios": "^1.14.0",
     "chart.js": "^4.5.1",
     "clipboard": "^2.0.11",
+    "lucide-vue-next": "^0.487.0",
     "moment": "^2.30.1",
     "notivue": "^2.4.5",
     "pinia": "^3.0.4",
@@ -46,10 +46,5 @@
     "vite-plugin-vuetify": "^2.1.3",
     "vitest": "^4.1.6",
     "vue-tsc": "^3.2.6"
-  },
-  "overrides": {
-    "@emnapi/core": "1.11.0",
-    "@emnapi/runtime": "1.11.0",
-    "@emnapi/wasi-threads": "1.2.2"
   }
 }

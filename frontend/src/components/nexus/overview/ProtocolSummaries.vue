@@ -1,20 +1,18 @@
 <template>
-  <article class="nexus-protocol-summaries">
-    <panel-header :title="$t('nexus.overview.protocols.title')">
+  <overview-panel class="nexus-protocol-summaries" :title="$t('nexus.overview.protocols.title')">
       <template #action>
         <span class="nexus-protocol-summaries__count">
           {{ $t('nexus.overview.protocols.groups', { count: summaries.length }) }}
         </span>
       </template>
-    </panel-header>
 
-    <div v-if="loading" class="nexus-protocol-summaries__state">
+    <overview-state v-if="loading">
       {{ $t('nexus.overview.protocols.loading') }}
-    </div>
+    </overview-state>
 
-    <div v-else-if="summaries.length === 0" class="nexus-protocol-summaries__state">
+    <overview-state v-else-if="summaries.length === 0">
       {{ $t('nexus.overview.protocols.empty') }}
-    </div>
+    </overview-state>
 
     <dense-table v-else>
       <thead>
@@ -62,13 +60,14 @@
         </tr>
       </tbody>
     </dense-table>
-  </article>
+  </overview-panel>
 </template>
 
 <script lang="ts" setup>
 import DenseTable from '@/components/nexus/primitives/DenseTable.vue'
-import PanelHeader from '@/components/nexus/primitives/PanelHeader.vue'
 import StatusBadge from '@/components/nexus/primitives/StatusBadge.vue'
+import OverviewPanel from './OverviewPanel.vue'
+import OverviewState from './OverviewState.vue'
 import type { ProtocolSummary } from './selectors/protocolSummarySelectors'
 
 defineProps<{
@@ -88,16 +87,6 @@ const overflowCount = (summary: ProtocolSummary): number => {
 </script>
 
 <style scoped>
-.nexus-protocol-summaries {
-  background: var(--nexus-surface-1);
-  border: 1px solid var(--nexus-border);
-  border-radius: var(--nexus-radius-lg);
-  display: grid;
-  gap: var(--nexus-gap-3);
-  min-width: 0;
-  padding: var(--nexus-gap-4);
-}
-
 .nexus-protocol-summaries__count {
   color: rgb(var(--v-theme-on-surface) / 68%);
   font-size: 0.76rem;
@@ -127,21 +116,5 @@ const overflowCount = (summary: ProtocolSummary): number => {
 
 .nexus-protocol-row__tag--overflow {
   border-color: var(--nexus-border-strong);
-}
-
-.nexus-protocol-summaries__state {
-  align-items: center;
-  background: var(--nexus-surface-2);
-  border: 1px dashed var(--nexus-border-strong);
-  border-radius: var(--nexus-radius-md);
-  color: rgb(var(--v-theme-on-surface) / 68%);
-  display: grid;
-  font-size: 0.86rem;
-  letter-spacing: 0;
-  line-height: 1.4;
-  min-height: auto;
-  overflow-wrap: anywhere;
-  padding: var(--nexus-gap-3);
-  text-align: center;
 }
 </style>

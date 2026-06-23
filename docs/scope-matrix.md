@@ -1,75 +1,53 @@
 # API Token Scope Matrix
 
-Status: `1.0.0-beta1`.
+Status: `1.5.1-beta`.
 
-S-UI API tokens support **six** scopes: `admin`, `read`, `write`, `database`,
-`telegram`, and `observability`. An empty scope is normalized to `admin` when a
-token is created. Browser cookie sessions carry no token scope and are treated
-as full access (single-admin model); mutating `/api/*` requests still require a
-CSRF token.
+S-UI API tokens support five scopes: `admin`, `read`, `write`, `observability`,
+and `telegram`.
+An empty scope is normalized to `admin` when a token is created. Browser cookie
+sessions are treated as `admin` in the current single-admin model.
 
-Send tokens with `Authorization: Bearer <token>` on `/apiv2/*`. The legacy
-`Token` header is accepted only during the sunset window and returns
-`Deprecation` and `Sunset` response headers (hard cutoff
-`Sat, 15 Aug 2026 00:00:00 GMT`). Never put API tokens in URLs.
+Use `Authorization: Bearer <token>` for `/apiv2/*`. The legacy `Token` header is
+accepted during the sunset window only and returns `Deprecation` and `Sunset`
+headers. Do not put API tokens into URLs.
 
-A token carries exactly one scope. When a token's scope is insufficient for an
-action, the request is rejected with `403 insufficient scope` and a
-`scope_denied` audit event is recorded.
+## Scope Rules
 
-## What each scope grants
+| Endpoint or channel | Cookie session | `admin` | `telegram` | `read` | `write` | `observability` | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `GET /api/security/audit` | allowed | allowed | denied | denied | denied | denied | Cursor pagination plus `event`, `severity`, `since`, and `until` filters. Denials write `audit_scope_denied`. |
+| `GET /apiv2/security/audit` | n/a | allowed | denied | denied | denied | denied | Bearer/API-token flow for audit reads. |
+| `GET /api/observability/history` | allowed | allowed | denied | denied | denied | allowed | Validates bucket, metric, and since query values. |
+| `GET /api/observability/core-history` | allowed | allowed | denied | denied | denied | allowed | Same scope policy as observability history. |
+| `POST /api/telegram/test` | allowed | allowed | denied | denied | denied | denied | Telegram remains off by default; proxy/token fields stay secret. |
+| `POST /api/telegram/backup` | allowed | allowed | allowed | denied | denied | denied | Legacy tg_backup_run route; requires `telegramBackupEnabled=true`, returns no `backupKey`, and shares the manual Telegram backup rate-limit bucket. |
+| `POST /api/telegram/backup/run` | allowed | allowed | allowed | denied | denied | denied | tg_backup_run manual trigger for browser sessions. |
+| `POST /apiv2/telegram/backup` | n/a | allowed | allowed | denied | denied | denied | Legacy tg_backup_run Bearer/API-token route; same behavior as `/apiv2/telegram/backup/run`. |
+| `POST /apiv2/telegram/backup/run` | n/a | allowed | allowed | denied | denied | denied | tg_backup_run manual trigger for Bearer/API-token clients. |
+| `GET /api/getdb` and `GET /apiv2/getdb` | allowed | allowed | denied | denied | denied | denied | Database exports are audited; `encryptTelegramBackup=true` optionally returns a Telegram backup envelope using the stored Telegram backup passphrase. |
+| `POST /api/importdb` and `POST /apiv2/importdb` | allowed | allowed | denied | denied | denied | denied | Database imports are capped, integrity-checked, audited, and can restore Telegram backup envelopes with a supplied passphrase. |
+| `POST /api/rotateSubSecret` and `POST /apiv2/rotateSubSecret` | allowed | allowed | denied | denied | allowed | denied | Rotates per-client subscription secrets and audits the action without logging the secret. |
+| `/api/realtime/ws-token` + `/api/realtime/ws` | allowed | allowed | connected, filtered | connected, filtered | connected, filtered | connected, filtered | Current browser flow is session-based. If a scoped context is present, `security_event` is delivered only to `admin`; other realtime topics follow the existing topic policy. |
 
-| Scope | Grants |
-| --- | --- |
-| `admin` | Everything, including the admin-only endpoints below. The default scope. |
-| `read` | Read-only config/identity reads (`load`, `inbounds`, `outbounds`, `endpoints`, `providers`, `services`, `tls`, `clients`, `config`, `users`, `settings`, `changes`, `keypairs`), link/sub conversion (`linkConvert`, `subConvert`), and operational metrics (`stats`, `status`, `onlines`, `logs`). |
-| `write` | Everything `read` allows, plus mutations and probes: `save`, `restartApp`, `restartSb`, `checkOutbound`, and subscription-secret rotation (`rotateSubSecret`). |
-| `database` | Database export (`getdb`), import (`importdb`), and x-ui / 3x-ui migration (`import-xui` plan / apply / rollback / reports). |
-| `telegram` | Manual Telegram backup trigger (`telegram/backup`, `telegram/backup/run`). |
-| `observability` | Operational metrics (`stats`, `status`, `onlines`, `logs`) plus history (`observability/history`, `observability/core-history`). |
+For endpoints not listed above, `/api/*` still requires a browser session and
+CSRF protection on mutating requests. `/apiv2/*` still requires a valid API token,
+but not every legacy action has a dedicated per-action scope gate yet; use
+`admin` unless the endpoint is explicitly listed in this matrix.
 
-## Specially-gated endpoints
-
-`admin` is always allowed in addition to the scopes listed. Cookie sessions
-carry no scope, so they pass the scope gate but still require CSRF on mutating
-requests.
-
-| Endpoint | Allowed token scopes | Notes |
-| --- | --- | --- |
-| `GET /api/security/audit`, `/apiv2/security/audit` | `admin` | Cursor pagination + `event` / `severity` / `since` / `until` filters; rate-limited; denials write `scope_denied`. |
-| `GET /api/getdb`, `/apiv2/getdb` | `database`, `admin` | Database export; `encryptTelegramBackup=true` returns an encrypted Telegram envelope using the stored backup passphrase. Audited. |
-| `POST /api/importdb`, `/apiv2/importdb` | `database`, `admin` | Database import; 64 MiB cap, SQLite-magic + read-only integrity check, audited, can restore an encrypted Telegram envelope. |
-| `/apiv2/import-xui/{plan,apply,rollback,reports}` (and `/apiv2/import-xui`) | `database`, `admin` | x-ui / 3x-ui migration; rate-limited, audited, automatic pre-import backup with rollback. |
-| `POST /api/telegram/test` | `admin` | Telegram is off by default; proxy/token fields stay secret. |
-| `POST /api/telegram/backup`, `/backup/run` (and `/apiv2/...`) | `telegram`, `admin` | Manual Telegram backup; requires `telegramBackupEnabled=true`; shares the manual-backup rate-limit bucket. |
-| `GET /api/observability/history`, `/core-history` | `observability`, `admin` | Validates `bucket` / `metric` / `since` query values. |
-| `POST /api/rotateSubSecret`, `/apiv2/rotateSubSecret` | `write`, `admin` | Rotates a client's subscription secret and audits the action without logging the secret. |
-| `stats`, `status`, `onlines`, `logs` (`/api/*` and `/apiv2/*`) | `read`, `write`, `observability`, `admin` | Operational metrics. |
-| `/api/realtime/ws-token` + `/api/realtime/ws` | session-based | If a scoped context is present, `security_event` is delivered only to `admin`; other realtime topics follow the existing topic policy. |
-
-For actions not listed above: `/api/*` requires a browser session (with CSRF on
-mutating requests), and `/apiv2/*` requires a valid token. Actions covered by
-the per-action scope map ([`api/apiV2Handler.go`](../api/apiV2Handler.go))
-enforce `read` / `write` / `observability` exactly as in the scope table; any
-other action accepts any valid token but is effectively `admin`-only in
-practice — prefer an `admin` token unless the action is listed above.
-
-## Security invariants
+## Security Invariants
 
 - Secret values are not returned by list/get endpoints; only marker or prefix
   fields are exposed where needed.
 - Secret values must not be written to logs, audit details, config change
   history, or Telegram captions.
-- API tokens must be sent in headers, not query strings. The stored form is a
-  salted SHA-256 hash plus an 8-character display prefix; the plaintext is shown
-  once at creation.
+- API tokens must be sent in headers, not query strings.
 - Browser session/CSRF cookies enable `Secure` when any of these is true:
   `SUI_FORCE_COOKIE_SECURE=true`, configured `webURI` starts with `https://`,
   configured `webDomain` starts with `https://`, or request HTTPS/proxy
   detection marks the request as HTTPS.
 - `SUI_COOKIE_KEY` accepts one or more base64-encoded raw keys of at least
-  32 bytes, separated by commas, semicolons, or newlines. The first key signs
-  new session cookies; later keys are accepted for rollover.
+  32 bytes separated by commas or semicolons. The first key signs new session
+  cookies; later keys are accepted for rollover.
 - `SUI_SECRETBOX_KEY` accepts a base64-encoded raw key of at least 32 bytes for
   encrypted settings. Without it, settings encryption uses a domain-separated
   HKDF key derived from `settings.secret` and can still read legacy ciphertexts

@@ -126,7 +126,7 @@ func (s *applyState) applyHistorical(ctx context.Context, tx *gorm.DB, src *sour
 // createNewEndpoints persists WARP/wireguard-outbound endpoints, creating each
 // only when no endpoint with that tag already exists. It never overwrites an
 // existing endpoint, so re-imports and scheduled sync stay idempotent and a
-// user-tuned (or same-tagged) endpoint — including its private key — is left
+// user-tuned (or same-tagged) endpoint - including its private key - is left
 // untouched. The routing rule still references the tag, which now exists either
 // way, so there is no dangling reference.
 func createNewEndpoints(tx *gorm.DB, endpoints []model.Endpoint, report *Report) error {
@@ -180,9 +180,9 @@ func createNewOutbounds(tx *gorm.DB, outbounds []model.Outbound, report *Report)
 }
 
 // ensureDirectOutbound appends a built-in direct outbound (tag "direct") to
-// outbounds when the migrated routing references "direct" — either a rule that
+// outbounds when the migrated routing references "direct" - either a rule that
 // routes to it (from an Xray freedom outbound) or a remote rule set whose
-// download_detour is "direct" — but none exists yet. sing-box only auto-creates
+// download_detour is "direct" - but none exists yet. sing-box only auto-creates
 // a fallback direct outbound when there are zero outbounds, so a migrated config
 // that has any other outbound would otherwise fail at route time with
 // "outbound not found: direct". It is a no-op when a direct outbound already
@@ -245,7 +245,7 @@ func routingReferencesDirect(mapped map[string]any) bool {
 // outbounds or WARP endpoints. Those live in the same xrayConfig and are only
 // migrated as part of routing import (an outbound is useless without the rules
 // that reference it), so without this notice they would vanish from the
-// migration with no plan item and no warning — the exact silent-loss the
+// migration with no plan item and no warning - the exact silent-loss the
 // operator hit before this feature existed.
 func planRoutingDisabledNotice(ctx context.Context, src *sourceDB, plan *MigrationPlan) error {
 	if err := checkContext(ctx); err != nil {
@@ -319,8 +319,8 @@ func (s *applyState) applyRouting(ctx context.Context, tx *gorm.DB, src *sourceD
 	endpoints, outbounds, targets, outboundWarnings := mapXrayOutbounds(xrayConfig)
 	s.report.warnAll(outboundWarnings)
 	mapped, warnings, mappedCount, manualCount := MapXrayRouting(xrayConfig, targets)
-	// A migrated rule that routes to "direct" — or a remote rule set that
-	// downloads via download_detour:"direct" — needs a real direct outbound.
+	// A migrated rule that routes to "direct" - or a remote rule set that
+	// downloads via download_detour:"direct" - needs a real direct outbound.
 	// sing-box 1.11+ only auto-creates one when there are no outbounds and no
 	// route.final, so a config with any other outbound would otherwise fail at
 	// route time with "outbound not found: direct".
@@ -348,7 +348,7 @@ func (s *applyState) applyRouting(ctx context.Context, tx *gorm.DB, src *sourceD
 	return nil
 }
 
-// defaultLiveConfig mirrors service.defaultConfig — the baseline sing-box config
+// defaultLiveConfig mirrors service.defaultConfig - the baseline sing-box config
 // the panel falls back to before any config is saved. It is duplicated here
 // (rather than importing the service layer from a database subpackage) so the
 // routing merge can seed it when no `config` row exists, keeping the default

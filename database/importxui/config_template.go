@@ -73,25 +73,6 @@ func deterministicClientConfig(email string) map[string]map[string]any {
 			"name":     email,
 			"password": mixedPassword,
 		},
-		"mieru": {
-			"name":     email,
-			"password": mixedPassword,
-		},
-		"trusttunnel": {
-			"name":     email,
-			"password": mixedPassword,
-		},
-		"ssh": {
-			"name":     email,
-			"password": mixedPassword,
-		},
-		// mtproxy is deliberately omitted here. Its `secret` is the sole
-		// authenticator (no username), and every value this function produces is
-		// derived from a PUBLIC constant salt + email, hence guessable by anyone
-		// who knows the email. A guessable mtproxy secret means an open proxy, so
-		// we do not mint one on the x-ui import path (x-ui has no mtproxy inbound
-		// anyway). Panel-native clients get a high-entropy random mtproxy secret
-		// via the frontend randomConfigs / autoregister generateClientConfig.
 	}
 }
 

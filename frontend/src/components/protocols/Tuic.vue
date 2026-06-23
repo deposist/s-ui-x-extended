@@ -64,7 +64,6 @@
 
 <script lang="ts">
 import Network from '@/components/Network.vue'
-import { RECOMMENDED } from '@/types/recommended'
 
 export default {
   props: ['direction', 'data'],
@@ -74,10 +73,6 @@ export default {
         "cubic","new_reno", "bbr"
       ]
     }
-  },
-  mounted() {
-    this.data.congestion_control ??= RECOMMENDED.tuicCongestion
-    if (this.direction == 'out') this.data.udp_relay_mode ??= RECOMMENDED.tuicUdpRelayMode
   },
   computed: {
     auth_timeout: {

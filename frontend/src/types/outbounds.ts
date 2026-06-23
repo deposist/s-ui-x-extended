@@ -387,9 +387,27 @@ export interface Bond extends OutboundBasics {
 }
 
 export interface Failover extends OutboundBasics {
-  strategy?: "sequential" | "cycle"
-  delay?: string
-  outbounds: { [key: string]: any }[]
+  outbounds: string[]
+  interrupt_exist_connections?: boolean
+  failover: {
+    enabled?: boolean
+    probe_target?: string
+    interval?: string
+    hysteresis?: number
+  }
+}
+
+export interface FailoverMemberStatus {
+  tag: string
+  healthy: boolean
+  priority: number
+}
+
+export interface FailoverStatusEntry {
+  tag: string
+  active: string
+  allDown: boolean
+  members?: FailoverMemberStatus[]
 }
 
 export interface Fallback extends OutboundBasics {
@@ -504,7 +522,7 @@ const defaultValues: Record<OutType, Outbound> = {
   selector: { type: OutTypes.Selector },
   urltest: { type: OutTypes.URLTest },
   bond: { type: OutTypes.Bond, outbounds: [] },
-  failover: { type: OutTypes.Failover, strategy: 'sequential', outbounds: [] },
+  failover: { type: OutTypes.Failover, outbounds: [], failover: { enabled: true, probe_target: '', interval: '30s', hysteresis: 2 } },
   fallback: { type: OutTypes.Fallback, outbounds: [] },
   'bandwidth-limiter': { type: OutTypes.BandwidthLimiter, strategy: 'global', mode: 'bidirectional', speed: '2MB', route: { final: 'direct' } },
   'connection-limiter': { type: OutTypes.ConnectionLimiter, strategy: 'connection', connection_type: 'hwid', count: 5, route: { final: 'direct' } },

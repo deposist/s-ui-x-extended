@@ -11,7 +11,6 @@ import (
 )
 
 var (
-	defaultSlog *slog.Logger
 	logConfigMu sync.RWMutex
 	logConfig   = loggerConfig{minLevel: slog.LevelDebug}
 	logBufferMu sync.RWMutex
@@ -92,28 +91,13 @@ func Init(level Level) {
 		backend:  backend,
 		minLevel: levelToSlog(level),
 	}
-	defaultSlog = panelLogger
 	logConfigMu.Unlock()
 
 	slog.SetDefault(panelLogger)
 }
 
-func Default() *slog.Logger {
-	logConfigMu.RLock()
-	current := defaultSlog
-	logConfigMu.RUnlock()
-	if current != nil {
-		return current
-	}
-	return Slog("panel")
-}
-
 func Debug(args ...interface{}) {
 	logWithSource("panel", slog.LevelDebug, fmt.Sprint(args...))
-}
-
-func Debugf(format string, args ...interface{}) {
-	logWithSource("panel", slog.LevelDebug, fmt.Sprintf(format, args...))
 }
 
 func Info(args ...interface{}) {
@@ -134,10 +118,6 @@ func Warningf(format string, args ...interface{}) {
 
 func Error(args ...interface{}) {
 	logWithSource("panel", slog.LevelError, fmt.Sprint(args...))
-}
-
-func Errorf(format string, args ...interface{}) {
-	logWithSource("panel", slog.LevelError, fmt.Sprintf(format, args...))
 }
 
 func CoreDebug(args ...interface{}) {
@@ -222,10 +202,6 @@ func addToBufferAt(source string, level slog.Level, newLog string, t time.Time) 
 		source: source,
 		log:    newLog,
 	})
-}
-
-func GetLogs(c int, level string) []string {
-	return GetLogsFiltered(c, level, "", "")
 }
 
 func GetLogsFiltered(c int, level string, source string, filter string) []string {

@@ -8,10 +8,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/deposist/s-ui-x-extended/database/model"
+	"github.com/deposist/s-ui-x-extended/logger"
 	"github.com/deposist/s-ui-x-extended/service"
 )
 
@@ -51,14 +53,14 @@ func (p *cryptoBotProvider) CreateInvoice(ctx context.Context, order *PaymentOrd
 }
 
 func (p *cryptoBotProvider) Poll(ctx context.Context, pending []PaymentOrder) ([]PollResult, error) {
-	idToOrder := map[string]uint{}
+	idToOrder := map[string]PaymentOrder{}
 	var ids []string
 	for _, o := range pending {
 		ref := extractProviderRef(o.ProviderPayload)
 		if ref == "" {
 			continue
 		}
-		idToOrder[ref] = o.Id
+		idToOrder[ref] = o
 		ids = append(ids, ref)
 	}
 	if len(ids) == 0 {
@@ -68,6 +70,8 @@ func (p *cryptoBotProvider) Poll(ctx context.Context, pending []PaymentOrder) ([
 		Items []struct {
 			InvoiceID json.Number `json:"invoice_id"`
 			Status    string      `json:"status"`
+			Amount    string      `json:"amount"`
+			Fiat      string      `json:"fiat"`
 		} `json:"items"`
 	}
 	path := "/api/getInvoices?invoice_ids=" + url.QueryEscape(strings.Join(ids, ","))
@@ -80,12 +84,34 @@ func (p *cryptoBotProvider) Poll(ctx context.Context, pending []PaymentOrder) ([
 			continue
 		}
 		invID := it.InvoiceID.String()
-		if oid, ok := idToOrder[invID]; ok {
-			results = append(results, PollResult{
-				OrderID:          oid,
-				ProviderChargeID: "cryptobot:" + invID,
-			})
+		order, ok := idToOrder[invID]
+		if !ok {
+			continue
 		}
+		// Defense in depth: re-validate the paid amount/currency against the
+		// server-side order snapshot before granting (mirrors the Stars path).
+		// The invoice amount is server-fixed at creation, so a mismatch is
+		// anomalous - refuse and alert. Fail OPEN when the provider omits the
+		// amount field so a response-format change never blocks a real payment.
+		if it.Amount != "" {
+			want := fmt.Sprintf("%.2f", float64(order.Amount)/100.0)
+			got := it.Amount
+			if paid, perr := strconv.ParseFloat(it.Amount, 64); perr == nil {
+				got = fmt.Sprintf("%.2f", paid)
+			}
+			currencyMismatch := it.Fiat != "" && !strings.EqualFold(it.Fiat, order.Currency)
+			if got != want || currencyMismatch {
+				logger.Warning("paidsub: cryptobot paid amount/currency mismatch; refusing order ", order.Id)
+				(&service.TelegramService{}).NotifyTelegramEvent("paidsub_payment_mismatch", map[string]string{
+					"orderId": fmt.Sprintf("%d", order.Id),
+				})
+				continue
+			}
+		}
+		results = append(results, PollResult{
+			OrderID:          order.Id,
+			ProviderChargeID: "cryptobot:" + invID,
+		})
 	}
 	return results, nil
 }

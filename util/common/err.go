@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-
-	"github.com/deposist/s-ui-x-extended/logger"
 )
 
 func NewErrorf(format string, a ...interface{}) error {
@@ -23,14 +21,4 @@ func NewError(a ...interface{}) error {
 	}
 	msg := builder.String()
 	return errors.New(msg)
-}
-
-func Recover(msg string) interface{} {
-	panicErr := recover()
-	if panicErr != nil {
-		if msg != "" {
-			logger.Error(msg, "panic:", panicErr)
-		}
-	}
-	return panicErr
 }

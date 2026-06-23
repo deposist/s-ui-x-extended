@@ -34,7 +34,7 @@ func resolveLinkHostname(tx *gorm.DB, explicit string) string {
 // imported client, mirroring what the panel does on a normal client save
 // (service.ClientService.updateLinksWithFixedInbounds). Without these the
 // migrated client's Links column stays NULL, so none of its inbounds appear in
-// the subscription or QR/Links view — the symptom of an imported inbound not
+// the subscription or QR/Links view - the symptom of an imported inbound not
 // being pulled into the subscription.
 //
 // hostname is the address baked into each link. When empty it returns nil, so a

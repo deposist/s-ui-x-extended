@@ -13,14 +13,13 @@
       </v-select>
     </v-col>
     <v-col cols="5" v-if="data.type != 'local'">
-      <v-combobox
+      <v-text-field
         v-model="data.server"
-        :items="dnsResolvers"
         :label="$t('in.addr')"
         density="compact"
         class="noGutters"
         hide-details>
-      </v-combobox>
+      </v-text-field>
     </v-col>
     <v-col cols="3" v-if="data.type != 'local'">
       <v-text-field
@@ -37,14 +36,10 @@
 </template>
 
 <script lang="ts">
-import { dnsResolvers } from '@/types/recommended'
-
 export default {
   props: ['data', 'label'],
   data() {
-    return {
-      dnsResolvers,
-    }
+    return {}
   },
   methods: {
     updateType(t:string) {

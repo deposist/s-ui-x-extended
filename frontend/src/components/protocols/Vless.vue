@@ -26,24 +26,11 @@
         <Network :data="data" />
       </v-col>
     </v-row>
-    <v-row>
-      <v-col cols="12">
-        <v-text-field
-          v-model="data.encryption"
-          :label="$t('types.vless.encryption')"
-          :hint="$t('types.vless.encryptionHint')"
-          persistent-hint
-          clearable
-          @click:clear="data.encryption = undefined">
-        </v-text-field>
-      </v-col>
-    </v-row>
   </v-card>
 </template>
 
 <script lang="ts">
 import Network from '@/components/Network.vue'
-import { RECOMMENDED } from '@/types/recommended'
 
 export default {
   props: ['data'],
@@ -52,7 +39,7 @@ export default {
   },
   computed: {
     packet_encoding: {
-      get() { return this.$props.data.packet_encoding != undefined ? this.$props.data.packet_encoding : RECOMMENDED.vlessPacketEncoding },
+      get() { return this.$props.data.packet_encoding != undefined ? this.$props.data.packet_encoding : 'none' },
       set(newValue:string) { this.$props.data.packet_encoding = newValue != "none" ? newValue : undefined }
     },
   },

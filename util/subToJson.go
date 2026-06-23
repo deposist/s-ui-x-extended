@@ -16,6 +16,7 @@ import (
 
 	"github.com/deposist/s-ui-x-extended/logger"
 	"github.com/deposist/s-ui-x-extended/util/common"
+	"github.com/deposist/s-ui-x-extended/util/ssrf"
 )
 
 const maxExternalSubBytes = 4 << 20
@@ -238,6 +239,10 @@ func validateExternalURL(rawURL string) error {
 }
 
 func isBlockedExternalAddr(addr netip.Addr) bool {
-	return addr.IsPrivate() || addr.IsLoopback() || addr.IsLinkLocalUnicast() || addr.IsLinkLocalMulticast() ||
-		addr.IsMulticast() || addr.IsUnspecified()
+	// Delegate to the central SSRF validator so the external-subscription fetch
+	// path enforces the SAME policy as every other outbound integration —
+	// including the CGNAT 100.64.0.0/10, 192.0.0.0/24, 198.18.0.0/15, 240.0.0.0/4
+	// and IPv6 special ranges this local list previously omitted, plus the
+	// IsGlobalUnicast requirement.
+	return ssrf.IsBlockedAddr(addr)
 }

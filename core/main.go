@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/deposist/s-ui-x-extended/logger"
+	"github.com/deposist/s-ui-x-extended/util/common"
 
 	sb "github.com/sagernet/sing-box"
 	"github.com/sagernet/sing-box/adapter"
@@ -149,6 +150,30 @@ func (c *Core) runtime() (coreRuntime, bool) {
 		router:          c.router,
 		factory:         c.factory,
 	}, true
+}
+
+// withRuntime runs fn with a consistent snapshot of the live managers while
+// HOLDING the read lock for the whole call. This serializes hot-reload manager
+// mutations (Add*/Remove*) against Stop()/startCoreLocked (which take the write
+// lock and tear the managers down): without it, a deplete-cron RemoveInbound
+// could operate on a manager whose underlying box was concurrently closed,
+// panicking inside sing-box. The managers do not call back into Core, so holding
+// the read lock across the mutation cannot deadlock.
+func (c *Core) withRuntime(fn func(coreRuntime) error) error {
+	c.access.RLock()
+	defer c.access.RUnlock()
+	if !c.isRunning || c.instance == nil {
+		return common.NewError("sing-box is not running")
+	}
+	return fn(coreRuntime{
+		ctx:             c.ctx,
+		inboundManager:  c.inboundManager,
+		outboundManager: c.outboundManager,
+		serviceManager:  c.serviceManager,
+		endpointManager: c.endpointManager,
+		router:          c.router,
+		factory:         c.factory,
+	})
 }
 
 func (c *Core) Router() adapter.Router {

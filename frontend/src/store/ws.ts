@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
+import { push } from 'notivue'
 import HttpUtils from '@/plugins/httputil'
 import Data from '@/store/modules/data'
+import { i18n } from '@/locales'
 import { clearCSRFToken } from '@/store/csrf'
 import { getBaseUrl } from '@/plugins/base-url'
 
@@ -183,12 +185,30 @@ export class WsRuntime {
   }
 }
 
+// handleCoreStateWarning surfaces an edge-triggered backend warning as a toast.
+// Currently only the failover all-down alert is surfaced; other core_state
+// payloads (e.g. stats internals) stay silent to avoid noise.
+export const handleCoreStateWarning = (payload: unknown) => {
+  if (typeof payload !== 'object' || payload === null) return
+  const p = payload as { warning?: string; group?: string }
+  if (p.warning !== 'failover_all_down') return
+
+  push.warning({
+    title: i18n.global.t('warning'),
+    duration: 6000,
+    message: i18n.global.t('types.failover.allDown') + (p.group ? ': ' + p.group : ''),
+  })
+}
+
 const applyRealtimeEvent = (event: any) => {
   const data = Data()
   const ws = Ws()
   switch (event?.type) {
     case 'onlines':
       if (event.payload) data.onlines = event.payload
+      break
+    case 'core_state':
+      handleCoreStateWarning(event.payload)
       break
     case 'xui_import_progress':
       ws.xuiImportProgress = event.payload ?? null

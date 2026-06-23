@@ -13,7 +13,7 @@ import (
 // migration creates no `dns`/`block` outbound and sing-box no longer auto-provides
 // one, so a rule that resolves to one becomes action "hijack-dns" / "reject" (see
 // MapXrayRouting). Their
-// values are deliberately NOT valid outbound tags ("__…__") so they cannot
+// values are deliberately NOT valid outbound tags ("__...__") so they cannot
 // collide with a user outbound: a proxy legitimately tagged "dns"/"block"/
 // "blocked" maps to its own tag in the targets map and keeps routing to itself,
 // rather than being silently turned into an action.
@@ -205,7 +205,7 @@ func outboundsFromXray(ob xrayOutbound) ([]model.Outbound, []string) {
 
 // outboundProxyExtras inspects an Xray outbound's mux block. It returns the
 // sing-box packet_encoding to set ("xudp" when the source used XUDP) and a
-// warning when Xray mux was enabled — sing-box multiplex uses a different,
+// warning when Xray mux was enabled, because sing-box multiplex uses a different,
 // non-interoperable wire protocol, so enabling it automatically would break an
 // otherwise-working outbound.
 func outboundProxyExtras(ob xrayOutbound, tag string) (string, []string) {
@@ -226,7 +226,7 @@ func outboundProxyExtras(ob xrayOutbound, tag string) (string, []string) {
 	}
 	var warnings []string
 	if mux.Enabled {
-		warnings = append(warnings, fmt.Sprintf("outbound %s had Xray mux enabled (concurrency %d); sing-box multiplex is not wire-compatible with Xray mux, so it was left disabled — enable multiplex manually only if the remote also speaks sing-box mux", tag, mux.Concurrency))
+		warnings = append(warnings, fmt.Sprintf("outbound %s had Xray mux enabled (concurrency %d); sing-box multiplex is not wire-compatible with Xray mux, so it was left disabled. Enable multiplex manually only if the remote also speaks sing-box mux", tag, mux.Concurrency))
 	}
 	return packetEncoding, warnings
 }

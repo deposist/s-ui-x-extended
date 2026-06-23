@@ -12,7 +12,7 @@ import (
 // TestBuildClientLinks is the CI regression guard for the migration bug where
 // imported clients had a NULL Links column, so their inbounds never appeared in
 // the subscription. It exercises buildClientLinks directly against a synthetic
-// trojan/grpc inbound with no TLS — the exact shape that reproduced the report.
+// trojan/grpc inbound with no TLS - the exact shape that reproduced the report.
 func TestBuildClientLinks(t *testing.T) {
 	initCompatDest(t)
 	db := database.GetDB()

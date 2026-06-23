@@ -58,27 +58,6 @@ func VersionIsNewer(candidate string, current string) bool {
 	return cmp > 0
 }
 
-// IsGenuinelyNewer reports whether the `existing` version represents a build
-// that is genuinely newer than `current` and therefore must NOT be overwritten
-// or downgraded by the running binary (e.g. when stamping settings.version or
-// deciding whether to run schema migrations).
-//
-// This fork reset its release line to 1.0.0-betaN, so a plain semver comparison
-// would treat legacy upstream databases (1.2–1.7) and a final 1.0.0 as "newer"
-// than the running prerelease build and wrongly skip migration / version
-// stamping. The running build is authoritative for the version stamp, so we
-// only treat the stored version as genuinely newer when it comes from a
-// strictly higher MAJOR — a clearly-future release the current binary must not
-// touch. Unparseable versions are never considered newer (the build wins).
-func IsGenuinelyNewer(existing string, current string) bool {
-	existingVersion, okExisting := parseVersion(existing, true)
-	currentVersion, okCurrent := parseVersion(current, true)
-	if !okExisting || !okCurrent {
-		return false
-	}
-	return existingVersion.Major > currentVersion.Major
-}
-
 func NormalizeVersion(version string) string {
 	semver, ok := parseVersion(version, true)
 	if !ok {

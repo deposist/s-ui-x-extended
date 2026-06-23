@@ -78,6 +78,11 @@ const ProxyGroups = `- name: Proxy
 `
 
 func (s *ClashService) GetClash(subId string) (*string, []string, error) {
+	now := time.Now()
+	cacheKey := "clash:" + subId
+	if body, headers, ok := subscriptionCacheGet(cacheKey, now); ok {
+		return &body, headers, nil
+	}
 	enabled, err := s.SettingService.GetSubClashEnable()
 	if err == nil && !enabled {
 		return nil, nil, common.NewError("clash subscription disabled")
@@ -116,7 +121,8 @@ func (s *ClashService) GetClash(subId string) (*string, []string, error) {
 		return nil, nil, err
 	}
 
-	headers := safeSubscriptionHeaders(buildClientHeaders(client, cachedSubDisplaySettings(&s.SettingService, time.Now())))
+	headers := safeSubscriptionHeaders(buildClientHeaders(client, cachedSubDisplaySettings(&s.SettingService, now)))
+	subscriptionCacheSet(cacheKey, resultStr, headers, now)
 
 	return &resultStr, headers, nil
 }

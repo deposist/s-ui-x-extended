@@ -187,11 +187,20 @@ func WarmUp() error {
 	return nil
 }
 
+// SecurityEventAuditHook, when set by app wiring, mirrors enforced security
+// events (e.g. ip_enforced_reject) into the durable audit log. It is a hook
+// rather than a direct call to avoid an import cycle (service imports ipmonitor)
+// and is debounced upstream by shouldPublishSecurityEvent (no audit flooding).
+var SecurityEventAuditHook func(clientName string, kind string, payload map[string]any)
+
 func publishSecurityEvent(clientName string, kind string, payload map[string]any) {
 	if !shouldPublishSecurityEvent(clientName, kind, time.Now()) {
 		return
 	}
 	realtime.Publish(realtime.TopicSecurityEvent, payload)
+	if hook := SecurityEventAuditHook; hook != nil {
+		hook(clientName, kind, payload)
+	}
 }
 
 func shouldPublishSecurityEvent(clientName string, kind string, now time.Time) bool {

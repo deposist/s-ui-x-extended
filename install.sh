@@ -89,6 +89,9 @@ t() {
             secretbox_key_label) echo "SUI_SECRETBOX_KEY：$2"; return ;;
             secretbox_key_file) echo "密钥文件：$2"; return ;;
             secretbox_key_keep) echo "请保持该文件和密钥私密，并在更新、恢复时保留同一个值。"; return ;;
+            cookie_key_generated) echo "已生成 S-UI 会话 Cookie 密钥。该值只显示一次："; return ;;
+            cookie_key_label) echo "SUI_COOKIE_KEY：$2"; return ;;
+            cookie_key_relogin) echo "现有浏览器会话需要重新登录一次。"; return ;;
         esac
     fi
     case "${lang}:${key}" in
@@ -172,6 +175,12 @@ t() {
         ru:secretbox_key_file) echo "Файл ключа: $2";;
         en:secretbox_key_keep) echo "Keep this file and key private, and preserve the same value across updates and restores.";;
         ru:secretbox_key_keep) echo "Держите этот файл и ключ в секрете и сохраняйте то же значение при обновлениях и восстановлении.";;
+        en:cookie_key_generated) echo "Generated the S-UI session cookie key. It is shown once:";;
+        ru:cookie_key_generated) echo "Сгенерирован ключ сессионных cookie S-UI. Он показывается один раз:";;
+        en:cookie_key_label) echo "SUI_COOKIE_KEY: $2";;
+        ru:cookie_key_label) echo "SUI_COOKIE_KEY: $2";;
+        en:cookie_key_relogin) echo "Existing browser sessions will require one re-login.";;
+        ru:cookie_key_relogin) echo "Существующие сессии браузера потребуют одного повторного входа.";;
         *) echo "${key}";;
     esac
 }
@@ -296,6 +305,67 @@ prepare_secretbox_key() {
     chmod 644 "${SECRETBOX_DROPIN_FILE}"
 }
 
+read_env_key_file() {
+    local var="$1"
+    [[ -f "${SECRETBOX_ENV_FILE}" ]] || return 1
+
+    local line value
+    while IFS= read -r line; do
+        case "${line}" in
+            "${var}="*)
+                value="${line#"${var}"=}"
+                if [[ -n "${value}" ]]; then
+                    printf '%s' "${value}"
+                    return 0
+                fi
+                ;;
+        esac
+    done <"${SECRETBOX_ENV_FILE}"
+    return 1
+}
+
+append_env_key_file() {
+    local var="$1" value="$2"
+
+    mkdir -p "${SECRETBOX_ENV_DIR}"
+    if [[ -f "${SECRETBOX_ENV_FILE}" ]]; then
+        printf '\n%s=%s\n' "${var}" "${value}" >>"${SECRETBOX_ENV_FILE}"
+    else
+        (umask 077 && printf '%s=%s\n' "${var}" "${value}" >"${SECRETBOX_ENV_FILE}")
+    fi
+    chmod 600 "${SECRETBOX_ENV_FILE}"
+}
+
+# Generates the session-cookie signing key once. An existing SUI_COOKIE_KEY is
+# never touched (key rotation is an explicit operator action — s-ui menu
+# item 23), so re-running the installer for updates is a no-op here and never
+# prompts, which keeps non-interactive installs working.
+prepare_cookie_key() {
+    local cookie_key
+
+    if cookie_key=$(read_env_key_file SUI_COOKIE_KEY); then
+        chmod 600 "${SECRETBOX_ENV_FILE}"
+        return 0
+    fi
+
+    if [[ -n "${SUI_COOKIE_KEY:-}" ]]; then
+        cookie_key="${SUI_COOKIE_KEY}"
+        append_env_key_file SUI_COOKIE_KEY "${cookie_key}"
+        return 0
+    fi
+
+    cookie_key=$(head -c 32 /dev/urandom | base64 | tr -d '\r\n')
+    append_env_key_file SUI_COOKIE_KEY "${cookie_key}"
+
+    echo -e "###############################################"
+    echo -e "${yellow}$(t cookie_key_generated)${plain}"
+    echo -e "${green}$(t cookie_key_label "${cookie_key}")${plain}"
+    echo -e "$(t secretbox_key_file "${SECRETBOX_ENV_FILE}")"
+    echo -e "${red}$(t secretbox_key_keep)${plain}"
+    echo -e "${yellow}$(t cookie_key_relogin)${plain}"
+    echo -e "###############################################"
+}
+
 config_after_install() {
     echo -e "${yellow}$(t migrate)${plain}"
     /usr/local/s-ui/sui migrate
@@ -371,7 +441,7 @@ verify_download_checksum() {
     local checksum_url="$2"
     local checksum_name="${artifact_name}.sha256"
 
-    wget -N --no-check-certificate -O "/tmp/${checksum_name}" "${checksum_url}"
+    wget -N --timeout=20 --tries=5 --retry-connrefused -O "/tmp/${checksum_name}" "${checksum_url}"
     if [[ $? -ne 0 ]]; then
         echo -e "${red}$(t checksum_failed)${plain}"
         exit 1
@@ -394,7 +464,7 @@ install_s-ui() {
         fi
         echo -e "$(t fetching_latest "${last_version}")"
         url="https://github.com/deposist/s-ui-x-extended/releases/download/${last_version}/${artifact_name}"
-        wget -N --no-check-certificate -O "/tmp/${artifact_name}" "${url}"
+        wget -N --timeout=20 --tries=5 --retry-connrefused -O "/tmp/${artifact_name}" "${url}"
         if [[ $? -ne 0 ]]; then
             echo -e "${red}$(t download_failed)${plain}"
             exit 1
@@ -405,7 +475,7 @@ install_s-ui() {
         [[ "${last_version}" != v* ]] && last_version="v${last_version}"
         url="https://github.com/deposist/s-ui-x-extended/releases/download/${last_version}/${artifact_name}"
         echo -e "$(t installing_specific "${last_version}")"
-        wget -N --no-check-certificate -O "/tmp/${artifact_name}" "${url}"
+        wget -N --timeout=20 --tries=5 --retry-connrefused -O "/tmp/${artifact_name}" "${url}"
         if [[ $? -ne 0 ]]; then
             echo -e "${red}$(t download_failed_specific "${last_version}")${plain}"
             exit 1
@@ -427,6 +497,7 @@ install_s-ui() {
     rm -rf s-ui
 
     prepare_secretbox_key
+    prepare_cookie_key
     config_after_install
     prepare_services
 

@@ -18,8 +18,7 @@
               <v-select
               hide-details
               :label="$t('type')"
-              :items="inTypeItems"
-              :item-props="itemProps"
+              :items="Object.keys(inTypes).map((key,index) => ({title: key, value: Object.values(inTypes)[index]}))"
               v-model="inbound.type"
               @update:modelValue="changeType">
               </v-select>
@@ -80,12 +79,6 @@
               <Tuic v-if="inbound.type == inTypes.TUIC" direction="in" :data="inbound" />
               <Tun v-if="inbound.type == inTypes.Tun" :data="inbound" />
               <AnyTls v-if="inbound.type == inTypes.AnyTls" :data="inbound" direction="in" />
-              <VlessInbound v-if="inbound.type == inTypes.VLESS" :data="inbound" />
-              <Mieru v-if="inbound.type == inTypes.Mieru" direction="in" :data="inbound" />
-              <Sudoku v-if="inbound.type == inTypes.Sudoku" direction="in" :data="inbound" />
-              <TrustTunnel v-if="inbound.type == inTypes.TrustTunnel" direction="in" :data="inbound" />
-              <SshInbound v-if="inbound.type == inTypes.SSH" :data="inbound" />
-              <MTProxy v-if="inbound.type == inTypes.MTProxy" :data="inbound" />
               <TProxy v-if="inbound.type == inTypes.TProxy" :inbound="inbound" />
               <Transport v-if="Object.hasOwn(inbound,'transport')" :data="inbound" />
               <Users v-if="hasUser" :clients="clients" :data="initUsers" />
@@ -137,8 +130,6 @@
 
 <script lang="ts">
 import { InTypes, createInbound, Addr, ShadowTLS } from '@/types/inbounds'
-import { inboundWithUsers, HasInData, HasTls, MuxAvailable, OnlyTLS } from '@/types/capabilities'
-import HttpUtils from '@/plugins/httputil'
 import RandomUtil from '@/plugins/randomUtil'
 import Dial from '@/components/Dial.vue'
 import DomainResolver from '@/components/DomainResolver.vue'
@@ -154,12 +145,6 @@ import Tuic from '@/components/protocols/Tuic.vue'
 import Tun from '@/components/protocols/Tun.vue'
 import Trojan from '@/components/protocols/Trojan.vue'
 import AnyTls from '@/components/protocols/AnyTls.vue'
-import VlessInbound from '@/components/protocols/VlessInbound.vue'
-import Mieru from '@/components/protocols/Mieru.vue'
-import Sudoku from '@/components/protocols/Sudoku.vue'
-import TrustTunnel from '@/components/protocols/TrustTunnel.vue'
-import SshInbound from '@/components/protocols/SshInbound.vue'
-import MTProxy from '@/components/protocols/MTProxy.vue'
 import InTls from '@/components/tls/InTLS.vue'
 import TProxy from '@/components/protocols/TProxy.vue'
 import Multiplex from '@/components/Multiplex.vue'
@@ -177,35 +162,47 @@ export default {
       loading: false,
       side: "s",
       inTypes: InTypes,
-      // Capability lists are generated from core/capabilities/protocols.json by
-      // scripts/gen-capabilities.cjs (shared source of truth with the Go backend).
-      inboundWithUsers,
+      inboundWithUsers: ['mixed', 'socks', 'http', 'shadowsocks', 'vmess', 'trojan', 'naive', 'hysteria', 'shadowtls', 'tuic', 'hysteria2', 'vless', 'anytls'],
       initUsers: {
         model: 'none',
         values: <any>[],
       },
-      HasInData,
-      HasTls,
-      MuxAvailable,
-      OnlyTLS,
-      // Inbound types whose build tag is not compiled into the running binary
-      // (from /api/capabilities). Such types are shown disabled in the picker.
-      unavailableTypes: <string[]>[],
-    }
-  },
-  async created() {
-    // Best-effort: gate inbound types not compiled into this build. Failure
-    // (e.g. older backend without the endpoint) leaves every type available.
-    const resp = await HttpUtils.get('api/capabilities')
-    const inbounds = resp?.obj?.inbounds
-    if (Array.isArray(inbounds)) {
-      this.unavailableTypes = inbounds.filter((i: any) => i.available === false).map((i: any) => i.type)
+      HasInData: [
+        InTypes.SOCKS,
+        InTypes.HTTP,
+        InTypes.Mixed,
+        InTypes.Shadowsocks,
+        InTypes.VMess,
+        InTypes.ShadowTLS,
+        InTypes.Trojan,
+        InTypes.Hysteria,
+        InTypes.VLESS,
+        InTypes.AnyTls,
+        InTypes.TUIC,
+        InTypes.Hysteria2,
+        InTypes.Naive,
+      ],
+      HasTls: [
+        InTypes.HTTP,
+        InTypes.VMess,
+        InTypes.Trojan,
+        InTypes.Naive,
+        InTypes.Hysteria,
+        InTypes.TUIC,
+        InTypes.Hysteria2,
+        InTypes.VLESS,
+        InTypes.AnyTls,
+      ],
+      MuxAvailable: [
+        InTypes.VLESS,
+        InTypes.VMess,
+        InTypes.Trojan,
+        InTypes.Shadowsocks,
+      ],
+      OnlyTLS: [InTypes.Hysteria, InTypes.Hysteria2, InTypes.TUIC, InTypes.Naive, InTypes.AnyTls ],
     }
   },
   methods: {
-    itemProps(item: any) {
-      return item.props ?? {}
-    },
     async loadData(id: number) {
       this.loading = true
       const inboundArray = await Data().loadInbounds([id])
@@ -303,18 +300,6 @@ export default {
     clients() {
       return Data().clients?? []
     },
-    inTypeItems() {
-      const values = Object.values(this.inTypes)
-      return Object.keys(this.inTypes).map((key, index) => {
-        const value = values[index]
-        const unavailable = this.unavailableTypes.includes(value)
-        return {
-          title: unavailable ? `${key} — not in this build` : key,
-          value,
-          props: { disabled: unavailable },
-        }
-      })
-    },
     hasUser() {
       if (this.$props.id > 0) return false
       if (!this.inboundWithUsers.includes(this.inbound.type)) return false
@@ -345,8 +330,7 @@ export default {
   components: {
     Listen, InTls, Hysteria2, Naive, Direct, Shadowsocks,
     Users, Hysteria, ShadowTls, TProxy, Multiplex, Tuic, Tun,
-    Trojan, AnyTls, Transport, AddrVue, OutJsonVue, Dial, DomainResolver,
-    Mieru, Sudoku, TrustTunnel, SshInbound, MTProxy, VlessInbound
+    Trojan, AnyTls, Transport, AddrVue, OutJsonVue, Dial, DomainResolver
   }
 }
 </script>

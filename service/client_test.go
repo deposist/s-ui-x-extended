@@ -44,7 +44,7 @@ func TestDecodeClientLinks(t *testing.T) {
 	}
 
 	// A NULL/empty Links column (e.g. a freshly migrated client) must decode to
-	// an empty slice, not be rejected — otherwise the link-regeneration paths
+	// an empty slice, not be rejected - otherwise the link-regeneration paths
 	// skip the client and its inbounds never reach the subscription.
 	for _, raw := range []json.RawMessage{nil, []byte(""), []byte("  "), []byte("null")} {
 		got, ok := decodeClientLinks(7, raw, "test")

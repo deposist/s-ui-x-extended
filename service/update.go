@@ -1,11 +1,6 @@
 package service
 
 import (
-	"context"
-	"encoding/json"
-	"io"
-	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -15,7 +10,8 @@ import (
 )
 
 const (
-	versionCheckURL     = "https://api.github.com/repos/deposist/s-ui-x/releases/latest"
+	githubAPIBase       = "https://api.github.com/repos/deposist/s-ui-x"
+	githubDownloadBase  = "https://github.com/deposist/s-ui-x-extended/releases/download"
 	versionCheckCache   = time.Hour
 	versionCheckTimeout = 3 * time.Second
 )
@@ -25,28 +21,60 @@ type VersionService struct{}
 type VersionInfo struct {
 	Current         string `json:"current"`
 	Version         string `json:"version"`
+	Channel         string `json:"channel,omitempty"`
 	Latest          string `json:"latest,omitempty"`
+	Prerelease      bool   `json:"prerelease,omitempty"`
 	UpdateAvailable bool   `json:"updateAvailable,omitempty"`
+	AssetAvailable  bool   `json:"assetAvailable,omitempty"`
 	ReleaseURL      string `json:"releaseURL,omitempty"`
+	ReleaseNotes    string `json:"releaseNotes,omitempty"`
 	CheckedAt       int64  `json:"checkedAt,omitempty"`
+	CheckError      string `json:"checkError,omitempty"`
 }
 
-type latestRelease struct {
-	TagName string `json:"tag_name"`
-	HTMLURL string `json:"html_url"`
+// ReleaseTarget is a concrete release selected for a channel, consumed by the
+// panel self-update apply path. URLs are built from a fixed template (SR-004).
+type ReleaseTarget struct {
+	Channel      string
+	Tag          string
+	Version      string
+	Prerelease   bool
+	ReleaseNotes string
+	ReleaseURL   string
+	Platform     string
+	AssetURL     string
+	ChecksumURL  string
+}
+
+// resolvedRelease is the cached, channel-specific view of a GitHub release.
+type resolvedRelease struct {
+	tag            string
+	version        string
+	prerelease     bool
+	notes          string
+	htmlURL        string
+	platform       string
+	assetURL       string
+	checksumURL    string
+	assetAvailable bool
+}
+
+type channelState struct {
+	checkedAt time.Time
+	etag      string
+	release   *resolvedRelease
+	lastErr   string
 }
 
 var versionCheckState = struct {
 	sync.Mutex
-	client     *http.Client
-	url        string
-	checkedAt  time.Time
-	latest     string
-	releaseURL string
-	etag       string
+	client   httpDoer
+	baseURL  string
+	channels map[string]*channelState
 }{
-	client: &http.Client{Timeout: versionCheckTimeout},
-	url:    versionCheckURL,
+	client:   defaultVersionCheckClient(),
+	baseURL:  githubAPIBase,
+	channels: map[string]*channelState{},
 }
 
 func init() {
@@ -56,98 +84,116 @@ func init() {
 func resetVersionCheckCache() {
 	versionCheckState.Lock()
 	defer versionCheckState.Unlock()
-	versionCheckState.checkedAt = time.Time{}
-	versionCheckState.latest = ""
-	versionCheckState.releaseURL = ""
-	versionCheckState.etag = ""
+	versionCheckState.channels = map[string]*channelState{}
 }
 
+// GetVersionInfo reports the stable ("main") channel version status. Kept
+// channel-agnostic for the existing /api/version consumers (backward compatible).
 func (s *VersionService) GetVersionInfo() VersionInfo {
+	return s.CheckForChannel(config.UpdateChannelMain, false)
+}
+
+// CheckForChannel returns version status for a channel. force bypasses the cache
+// (used by the explicit "Check updates" action).
+func (s *VersionService) CheckForChannel(channel string, force bool) VersionInfo {
+	channel = config.NormalizeUpdateChannel(channel)
 	current := config.GetVersion()
-	latest, releaseURL, checkedAt := latestReleaseCached()
-	info := VersionInfo{
-		Current: current,
-		Version: current,
+	info := VersionInfo{Current: current, Version: current, Channel: channel}
+
+	release, checkedAt, errStr := cachedReleaseForChannel(channel, force)
+	if !checkedAt.IsZero() {
+		info.CheckedAt = checkedAt.Unix()
 	}
-	if latest == "" {
+	if errStr != "" {
+		info.CheckError = errStr
+	}
+	if release == nil {
 		return info
 	}
-	info.Latest = latest
-	info.ReleaseURL = releaseURL
-	info.CheckedAt = checkedAt.Unix()
-	info.UpdateAvailable = versionIsNewer(latest, current)
+	info.Latest = release.tag
+	info.Prerelease = release.prerelease
+	info.ReleaseURL = release.htmlURL
+	info.ReleaseNotes = release.notes
+	info.AssetAvailable = release.assetAvailable
+	info.UpdateAvailable = versionIsNewer(release.tag, current)
 	return info
 }
 
-func latestReleaseCached() (string, string, time.Time) {
+// ResolveTarget returns the concrete release to update to on a channel, or an
+// error if there is nothing newer or no installable artifact for this platform.
+func (s *VersionService) ResolveTarget(channel string) (ReleaseTarget, error) {
+	channel = config.NormalizeUpdateChannel(channel)
+	release, _, errStr := cachedReleaseForChannel(channel, true)
+	if release == nil {
+		if errStr != "" {
+			return ReleaseTarget{}, errUpdateCheck(errStr)
+		}
+		return ReleaseTarget{}, errNoRelease
+	}
+	current := config.GetVersion()
+	if !versionIsNewer(release.tag, current) {
+		return ReleaseTarget{}, errNotNewer
+	}
+	if !release.assetAvailable {
+		return ReleaseTarget{}, errNoAsset
+	}
+	return ReleaseTarget{
+		Channel:      channel,
+		Tag:          release.tag,
+		Version:      release.version,
+		Prerelease:   release.prerelease,
+		ReleaseNotes: release.notes,
+		ReleaseURL:   release.htmlURL,
+		Platform:     release.platform,
+		AssetURL:     release.assetURL,
+		ChecksumURL:  release.checksumURL,
+	}, nil
+}
+
+func cachedReleaseForChannel(channel string, force bool) (*resolvedRelease, time.Time, string) {
 	versionCheckState.Lock()
+	st := channelStateLocked(channel)
 	now := time.Now()
-	if !versionCheckState.checkedAt.IsZero() && now.Sub(versionCheckState.checkedAt) < versionCheckCache {
-		latest := versionCheckState.latest
-		releaseURL := versionCheckState.releaseURL
-		checkedAt := versionCheckState.checkedAt
+	if !force && !st.checkedAt.IsZero() && now.Sub(st.checkedAt) < versionCheckCache {
+		release, at, errStr := st.release, st.checkedAt, st.lastErr
 		versionCheckState.Unlock()
-		return latest, releaseURL, checkedAt
+		return release, at, errStr
 	}
 	client := versionCheckState.client
-	url := versionCheckState.url
-	etag := versionCheckState.etag
+	base := versionCheckState.baseURL
+	etag := st.etag
 	versionCheckState.Unlock()
 
-	latest, releaseURL, responseETag, notModified, err := fetchLatestRelease(client, url, etag)
-	if err != nil {
-		logger.Warning("version check failed:", err)
-	}
+	release, respETag, notModified, err := fetchChannelRelease(client, base, channel, etag)
 
 	versionCheckState.Lock()
 	defer versionCheckState.Unlock()
-	versionCheckState.checkedAt = now
-	if err == nil && notModified {
-		versionCheckState.etag = responseETag
-	} else if err == nil {
-		versionCheckState.latest = latest
-		versionCheckState.releaseURL = releaseURL
-		versionCheckState.etag = responseETag
+	st = channelStateLocked(channel)
+	st.checkedAt = now
+	if err != nil {
+		logger.Warning("version check failed:", err)
+		st.lastErr = "version check failed"
+		return st.release, st.checkedAt, st.lastErr
 	}
-	return versionCheckState.latest, versionCheckState.releaseURL, versionCheckState.checkedAt
+	st.lastErr = ""
+	if notModified {
+		if respETag != "" {
+			st.etag = respETag
+		}
+		return st.release, st.checkedAt, ""
+	}
+	st.etag = respETag
+	st.release = release
+	return st.release, st.checkedAt, ""
 }
 
-func fetchLatestRelease(client *http.Client, url string, etag string) (string, string, string, bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), versionCheckTimeout)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return "", "", "", false, err
+func channelStateLocked(channel string) *channelState {
+	st, ok := versionCheckState.channels[channel]
+	if !ok {
+		st = &channelState{}
+		versionCheckState.channels[channel] = st
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "s-ui-version-check")
-	if etag != "" {
-		req.Header.Set("If-None-Match", etag)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", "", "", false, err
-	}
-	defer resp.Body.Close()
-	responseETag := strings.TrimSpace(resp.Header.Get("ETag"))
-	if resp.StatusCode == http.StatusNotModified {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1024))
-		if responseETag == "" {
-			responseETag = etag
-		}
-		return "", "", responseETag, true, nil
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1024))
-		return "", "", "", false, http.ErrNotSupported
-	}
-	var release latestRelease
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&release); err != nil {
-		return "", "", "", false, err
-	}
-	release.TagName = strings.TrimSpace(release.TagName)
-	release.HTMLURL = strings.TrimSpace(release.HTMLURL)
-	return release.TagName, release.HTMLURL, responseETag, false, nil
+	return st
 }
 
 func versionIsNewer(latest string, current string) bool {

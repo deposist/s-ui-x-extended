@@ -2,6 +2,7 @@ package migration
 
 import (
 	"encoding/json"
+	"errors"
 	"net/url"
 	"strconv"
 	"strings"
@@ -15,6 +16,13 @@ func migrate_dns(db *gorm.DB) error {
 	var configStr string
 	err := db.Model(model.Setting{}).Select("value").Where("key = ?", "config").First(&configStr).Error
 	if err != nil {
+		// A 1.2-era database managed purely via the entity UIs may have no `config`
+		// settings row at all. That is a supported state everywhere else in the
+		// codebase (the panel runs on an in-memory default config), so a missing
+		// row must be a no-op, not a hard migration/restore abort.
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
 		return err
 	}
 	if configStr == "" {

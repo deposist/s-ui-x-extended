@@ -7,9 +7,9 @@
  *
  * How resolution works (see vuetify/lib/composables/icons.js):
  *  - `icon="mdi-account"` has no `set:` prefix, so Vuetify routes it to the
- *    `defaultSet` ("mdi") — this set — with icon = "mdi-account". We map it to a
+ *    `defaultSet` ("mdi"), this set, with icon = "mdi-account". We map it to a
  *    path via the generated `iconPaths` table and hand it to VSvgIcon.
- *  - Vuetify's internal `$`-aliases (checkboxOn, sortAsc, …) resolve to
+ *  - Vuetify's internal `$`-aliases (checkboxOn, sortAsc, ...) resolve to
  *    "svg:"-prefixed paths handled by the framework's built-in `svg` set, so they
  *    never reach this component. We still export the mdi-svg `aliases` so those
  *    internals get real SVG paths rather than font class names.
@@ -18,7 +18,7 @@ import { defineComponent, h } from 'vue'
 import { aliases, mdi as mdiSvgBase } from 'vuetify/iconsets/mdi-svg'
 import { iconPaths } from './mdiIconPaths'
 
-// The component the official mdi-svg set uses to render <svg><path d="…"/>.
+// The component the official mdi-svg set uses to render <svg><path d="..."/>.
 const VSvgIcon = mdiSvgBase.component
 
 /**
@@ -32,7 +32,7 @@ export function resolveMdiIcon(name: unknown): unknown {
   if (Object.hasOwn(iconPaths, name)) return iconPaths[name]
   if (import.meta.env.DEV) {
     console.warn(
-      `[mdiIcons] no SVG path for "${name}" — add the icon and run "node scripts/gen-mdi-icons.cjs".`,
+      `[mdiIcons] no SVG path for "${name}": add the icon and run "node scripts/gen-mdi-icons.cjs".`,
     )
   }
   return name

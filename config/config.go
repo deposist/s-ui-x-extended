@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -60,6 +61,37 @@ func isValidLogLevel(level LogLevel) bool {
 
 func IsDebug() bool {
 	return os.Getenv("SUI_DEBUG") == "true"
+}
+
+// IsSafeLogOutputPath reports whether a sing-box log.output value is safe to use
+// as a file destination. Only the in-process sentinels and relative paths that
+// stay within the panel directory are allowed; absolute paths, volume-qualified
+// paths, and parent-directory traversal are rejected so a panel operator cannot
+// make the (often root) core create/append to an arbitrary file such as
+// /etc/cron.d/* or ~/.ssh/authorized_keys.
+func IsSafeLogOutputPath(output string) bool {
+	switch output {
+	case "", "stdout", "stderr":
+		return true
+	}
+	// Judge the path OS-independently: a value authored for a Linux deployment
+	// must be rejected the same way even when this code runs on Windows (where
+	// filepath.IsAbs would treat "/etc/x" as relative), and vice versa.
+	normalized := strings.ReplaceAll(output, "\\", "/")
+	// POSIX-absolute ("/x") or Windows UNC ("//host/share").
+	if strings.HasPrefix(normalized, "/") {
+		return false
+	}
+	// Windows drive/volume prefix ("C:/x" or drive-relative "C:x").
+	if len(normalized) >= 2 && normalized[1] == ':' && isASCIILetter(normalized[0]) {
+		return false
+	}
+	// Parent-directory traversal.
+	return !slices.Contains(strings.Split(normalized, "/"), "..")
+}
+
+func isASCIILetter(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
 }
 
 func GetDBFolderPath() string {

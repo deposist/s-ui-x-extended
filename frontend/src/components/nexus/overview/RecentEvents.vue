@@ -1,18 +1,16 @@
 <template>
-  <article class="nexus-overview-panel">
-    <panel-header :title="$t('nexus.overview.events.title')">
+  <overview-panel :title="$t('nexus.overview.events.title')">
       <template #action>
         <status-badge :label="stateLabel" :tone="stateTone" />
       </template>
-    </panel-header>
 
-    <div v-if="loading" class="nexus-overview-panel__state">
+    <overview-state v-if="loading">
       {{ $t('nexus.overview.events.loading') }}
-    </div>
+    </overview-state>
 
-    <div v-else-if="events.length === 0" class="nexus-overview-panel__state">
+    <overview-state v-else-if="events.length === 0">
       {{ emptyCopy }}
-    </div>
+    </overview-state>
 
     <dense-list v-else class="nexus-recent-events__list">
       <li
@@ -31,7 +29,7 @@
         </time>
       </li>
     </dense-list>
-  </article>
+  </overview-panel>
 </template>
 
 <script lang="ts" setup>
@@ -39,8 +37,9 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import DenseList from '@/components/nexus/primitives/DenseList.vue'
-import PanelHeader from '@/components/nexus/primitives/PanelHeader.vue'
 import StatusBadge from '@/components/nexus/primitives/StatusBadge.vue'
+import OverviewPanel from './OverviewPanel.vue'
+import OverviewState from './OverviewState.vue'
 import type { AuditDisplayItem } from './selectors/auditMapper'
 
 const props = defineProps<{
@@ -86,32 +85,6 @@ const dateTimeValue = (timestamp: number): string | undefined => {
 </script>
 
 <style scoped>
-.nexus-overview-panel {
-  background: var(--nexus-surface-1);
-  border: 1px solid var(--nexus-border);
-  border-radius: var(--nexus-radius-lg);
-  display: grid;
-  gap: var(--nexus-gap-3);
-  min-width: 0;
-  padding: var(--nexus-gap-4);
-}
-
-.nexus-overview-panel__state {
-  align-items: center;
-  background: var(--nexus-surface-2);
-  border: 1px dashed var(--nexus-border-strong);
-  border-radius: var(--nexus-radius-md);
-  color: rgb(var(--v-theme-on-surface) / 68%);
-  display: grid;
-  font-size: 0.86rem;
-  letter-spacing: 0;
-  line-height: 1.4;
-  min-height: auto;
-  overflow-wrap: anywhere;
-  padding: var(--nexus-gap-3);
-  text-align: center;
-}
-
 .nexus-recent-events__list :deep(li) {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

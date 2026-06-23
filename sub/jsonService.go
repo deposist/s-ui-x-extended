@@ -53,6 +53,11 @@ type JsonService struct {
 
 func (j *JsonService) GetJson(subId string, format string) (*string, []string, error) {
 	var jsonConfig map[string]interface{}
+	now := time.Now()
+	cacheKey := "json:" + format + ":" + subId
+	if body, headers, ok := subscriptionCacheGet(cacheKey, now); ok {
+		return &body, headers, nil
+	}
 
 	enabled, err := j.SettingService.GetSubJsonEnable()
 	if err == nil && !enabled {
@@ -99,7 +104,8 @@ func (j *JsonService) GetJson(subId string, format string) (*string, []string, e
 	result, _ := json.MarshalIndent(jsonConfig, "", "  ")
 	resultStr := string(result)
 
-	headers := safeSubscriptionHeaders(buildClientHeaders(client, cachedSubDisplaySettings(&j.SettingService, time.Now())))
+	headers := safeSubscriptionHeaders(buildClientHeaders(client, cachedSubDisplaySettings(&j.SettingService, now)))
+	subscriptionCacheSet(cacheKey, resultStr, headers, now)
 
 	return &resultStr, headers, nil
 }

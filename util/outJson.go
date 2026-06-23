@@ -107,6 +107,14 @@ func addTls(out *map[string]interface{}, tls *model.Tls) {
 		return
 	}
 
+	// tls.Client may be JSON null/absent (nil map) or an object that omits the
+	// reality/ech sub-maps the server enables. addTls writes into tlsConfig and
+	// merges those sub-maps, so guard every access: a non-lockstep server/client
+	// pair (import, apiv2, future UI regression) must not panic the save path.
+	if tlsConfig == nil {
+		tlsConfig = map[string]interface{}{}
+	}
+
 	if enabled, ok := tlsServer["enabled"]; ok {
 		tlsConfig["enabled"] = enabled
 	}
@@ -128,20 +136,30 @@ func addTls(out *map[string]interface{}, tls *model.Tls) {
 	if cipherSuites, ok := tlsServer["cipher_suites"]; ok {
 		tlsConfig["cipher_suites"] = cipherSuites
 	}
-	if reality, ok := tlsServer["reality"].(map[string]interface{}); ok && reality["enabled"].(bool) {
-		realityConfig := tlsConfig["reality"].(map[string]interface{})
-		realityConfig["enabled"] = true
-		if shortIDs, ok := reality["short_id"].([]interface{}); ok && len(shortIDs) > 0 {
-			realityConfig["short_id"] = shortIDs[common.RandomInt(len(shortIDs))]
+	if reality, ok := tlsServer["reality"].(map[string]interface{}); ok {
+		if enabled, _ := reality["enabled"].(bool); enabled {
+			realityConfig, ok := tlsConfig["reality"].(map[string]interface{})
+			if !ok {
+				realityConfig = map[string]interface{}{}
+			}
+			realityConfig["enabled"] = true
+			if shortIDs, ok := reality["short_id"].([]interface{}); ok && len(shortIDs) > 0 {
+				realityConfig["short_id"] = shortIDs[common.RandomInt(len(shortIDs))]
+			}
+			tlsConfig["reality"] = realityConfig
 		}
-		tlsConfig["reality"] = realityConfig
 	}
-	if ech, ok := tlsServer["ech"].(map[string]interface{}); ok && ech["enabled"].(bool) {
-		echConfig := tlsConfig["ech"].(map[string]interface{})
-		echConfig["enabled"] = true
-		echConfig["pq_signature_schemes_enabled"] = ech["pq_signature_schemes_enabled"]
-		echConfig["dynamic_record_sizing_disabled"] = ech["dynamic_record_sizing_disabled"]
-		tlsConfig["ech"] = echConfig
+	if ech, ok := tlsServer["ech"].(map[string]interface{}); ok {
+		if enabled, _ := ech["enabled"].(bool); enabled {
+			echConfig, ok := tlsConfig["ech"].(map[string]interface{})
+			if !ok {
+				echConfig = map[string]interface{}{}
+			}
+			echConfig["enabled"] = true
+			echConfig["pq_signature_schemes_enabled"] = ech["pq_signature_schemes_enabled"]
+			echConfig["dynamic_record_sizing_disabled"] = ech["dynamic_record_sizing_disabled"]
+			tlsConfig["ech"] = echConfig
+		}
 	}
 
 	(*out)["tls"] = tlsConfig

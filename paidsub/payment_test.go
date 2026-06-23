@@ -141,25 +141,63 @@ func TestExpireStaleOrders(t *testing.T) {
 		t.Fatalf("EnsureSchema: %v", err)
 	}
 	now := time.Now().Unix()
-	stale := PaymentOrder{ClientId: 1, TariffId: 1, Provider: "cryptobot", Amount: 1, Currency: "RUB", Status: StatusPending, IdempotencyKey: "stale", ExpiresAt: now - 10}
-	fresh := PaymentOrder{ClientId: 1, TariffId: 1, Provider: "cryptobot", Amount: 1, Currency: "RUB", Status: StatusPending, IdempotencyKey: "fresh", ExpiresAt: now + 3600}
+	// Non-polled provider: short order-TTL expiry applies.
+	stale := PaymentOrder{ClientId: 1, TariffId: 1, Provider: "stripe", Amount: 1, Currency: "RUB", Status: StatusPending, IdempotencyKey: "stale", ExpiresAt: now - 10}
+	fresh := PaymentOrder{ClientId: 1, TariffId: 1, Provider: "stripe", Amount: 1, Currency: "RUB", Status: StatusPending, IdempotencyKey: "fresh", ExpiresAt: now + 3600}
+	// Polled provider (cryptobot) past its short TTL must NOT be expired here:
+	// it stays pending so a late out-of-band payment is still caught by polling.
+	cbStale := PaymentOrder{ClientId: 1, TariffId: 1, Provider: "cryptobot", Amount: 1, Currency: "RUB", Status: StatusPending, IdempotencyKey: "cb-stale", ExpiresAt: now - 10}
 	db.Create(&stale)
 	db.Create(&fresh)
+	db.Create(&cbStale)
 
 	ps := NewPaymentService()
 	if err := ps.ExpireStaleOrders(); err != nil {
 		t.Fatalf("ExpireStaleOrders: %v", err)
 	}
-	var s, f PaymentOrder
+	var s, f, cb PaymentOrder
 	db.Where("idempotency_key = ?", "stale").First(&s)
 	db.Where("idempotency_key = ?", "fresh").First(&f)
+	db.Where("idempotency_key = ?", "cb-stale").First(&cb)
 	if s.Status != StatusExpired {
 		t.Errorf("stale order not expired: %s", s.Status)
 	}
 	if f.Status != StatusPending {
 		t.Errorf("fresh order should stay pending: %s", f.Status)
 	}
+	if cb.Status != StatusPending {
+		t.Errorf("polled (cryptobot) order must NOT be short-TTL expired: %s", cb.Status)
+	}
 	_ = database.GetDB()
+}
+
+func TestExpireStalePolledOrders(t *testing.T) {
+	db := openTestDB(t)
+	if err := EnsureSchema(db); err != nil {
+		t.Fatalf("EnsureSchema: %v", err)
+	}
+	now := time.Now().Unix()
+	grace := int64(3600)
+	// Created well before the grace window -> reaped as abandoned.
+	old := PaymentOrder{ClientId: 1, TariffId: 1, Provider: "cryptobot", Amount: 1, Currency: "RUB", Status: StatusPending, IdempotencyKey: "cb-old", CreatedAt: now - grace - 10}
+	// Recent cryptobot order within grace -> stays pending (poll keeps trying).
+	recent := PaymentOrder{ClientId: 1, TariffId: 1, Provider: "cryptobot", Amount: 1, Currency: "RUB", Status: StatusPending, IdempotencyKey: "cb-recent", CreatedAt: now - 10}
+	db.Create(&old)
+	db.Create(&recent)
+
+	ps := NewPaymentService()
+	if err := ps.ExpireStalePolledOrders(grace); err != nil {
+		t.Fatalf("ExpireStalePolledOrders: %v", err)
+	}
+	var o, r PaymentOrder
+	db.Where("idempotency_key = ?", "cb-old").First(&o)
+	db.Where("idempotency_key = ?", "cb-recent").First(&r)
+	if o.Status != StatusExpired {
+		t.Errorf("old polled order not reaped: %s", o.Status)
+	}
+	if r.Status != StatusPending {
+		t.Errorf("recent polled order should stay pending: %s", r.Status)
+	}
 }
 
 func TestOrdersForTgUserScoped(t *testing.T) {

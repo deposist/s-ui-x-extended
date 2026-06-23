@@ -9,9 +9,11 @@
   >
     <v-list-item
       height="63"
-      prepend-avatar="@/assets/logo.svg"
-      title="S-UI"
+      title="S-UI-X Extended"
     >
+      <template v-slot:prepend>
+        <span aria-hidden="true" class="default-drawer__logo">S</span>
+      </template>
       <template v-slot:append v-if="isMobile">
         <v-icon icon="mdi-close" />
       </template>
@@ -41,7 +43,6 @@
 import { computed } from 'vue'
 import router from '@/router'
 import { logout } from '@/plugins/httputil'
-import { appMenu as menu } from '@/layouts/menu'
 
 const props = defineProps(['isMobile','displayDrawer'])
 
@@ -49,7 +50,41 @@ const showDrawer = computed((): boolean => {
   return props.displayDrawer
 })
 
+const menu = [
+  { title: 'pages.home', icon: 'mdi-home',  path: '/' },
+  { title: 'pages.inbounds', icon: 'mdi-cloud-download',  path: '/inbounds' },
+  { title: 'pages.clients', icon: 'mdi-account-multiple',  path: '/clients' },
+  { title: 'pages.outbounds', icon: 'mdi-cloud-upload',  path: '/outbounds' },
+  { title: 'pages.endpoints', icon: 'mdi-cloud-tags',  path: '/endpoints' },
+  { title: 'pages.services', icon: 'mdi-server',  path: '/services' },
+  { title: 'pages.tls', icon: 'mdi-certificate',  path: '/tls' },
+  { title: 'pages.basics', icon: 'mdi-application-cog',  path: '/basics' },
+  { title: 'pages.rules', icon: 'mdi-routes',  path: '/rules' },
+  { title: 'pages.dns', icon: 'mdi-dns',  path: '/dns' },
+  { title: 'pages.admins', icon: 'mdi-account-tie',  path: '/admins' },
+  { title: 'pages.telegram', icon: 'mdi-send',  path: '/telegram' },
+  { title: 'pages.audit', icon: 'mdi-shield-search',  path: '/audit' },
+  { title: 'pages.settings', icon: 'mdi-cog',  path: '/settings' },
+  { title: 'pages.donations', icon: 'mdi-heart',  path: '/donations' },
+]
+
 const Logout = async () => {
   logout()
 }
 </script>
+
+<style scoped>
+.default-drawer__logo {
+  align-items: center;
+  background: #00d4ff;
+  border-radius: 6px;
+  color: #0a0a0a;
+  display: inline-flex;
+  font-size: 18px;
+  font-weight: 700;
+  height: 32px;
+  justify-content: center;
+  line-height: 1;
+  width: 32px;
+}
+</style>

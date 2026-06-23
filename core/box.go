@@ -13,8 +13,8 @@ import (
 	"github.com/sagernet/sing-box/adapter/endpoint"
 	"github.com/sagernet/sing-box/adapter/inbound"
 	"github.com/sagernet/sing-box/adapter/outbound"
-	"github.com/sagernet/sing-box/adapter/provider"
 	boxService "github.com/sagernet/sing-box/adapter/service"
+	"github.com/sagernet/sing-box/adapter/provider"
 	"github.com/sagernet/sing-box/common/certificate"
 	"github.com/sagernet/sing-box/common/dialer"
 	"github.com/sagernet/sing-box/common/taskmonitor"
@@ -113,8 +113,8 @@ func NewBox(options Options) (*Box, error) {
 	endpointRegistry := service.FromContext[adapter.EndpointRegistry](ctx)
 	inboundRegistry := service.FromContext[adapter.InboundRegistry](ctx)
 	outboundRegistry := service.FromContext[adapter.OutboundRegistry](ctx)
-	providerRegistry := service.FromContext[adapter.ProviderRegistry](ctx)
 	dnsTransportRegistry := service.FromContext[adapter.DNSTransportRegistry](ctx)
+	providerRegistry := service.FromContext[adapter.ProviderRegistry](ctx)
 	serviceRegistry := service.FromContext[adapter.ServiceRegistry](ctx)
 
 	if endpointRegistry == nil {
@@ -126,11 +126,11 @@ func NewBox(options Options) (*Box, error) {
 	if outboundRegistry == nil {
 		return nil, common.NewError("missing outbound registry in context")
 	}
-	if providerRegistry == nil {
-		return nil, common.NewError("missing provider registry in context")
-	}
 	if dnsTransportRegistry == nil {
 		return nil, common.NewError("missing DNS transport registry in context")
+	}
+	if providerRegistry == nil {
+		return nil, common.NewError("missing provider registry in context")
 	}
 	if serviceRegistry == nil {
 		return nil, common.NewError("missing service registry in context")
@@ -167,24 +167,6 @@ func NewBox(options Options) (*Box, error) {
 	}
 
 	var internalServices []adapter.LifecycleService
-	// Close anything already constructed if NewBox returns early with an error.
-	// The managers start goroutines only in Start(), so the resources at risk
-	// here are the OS-backed internal services (cache file, clash/v2ray/NTP)
-	// and the log factory's writers.
-	var success bool
-	defer func() {
-		if success {
-			return
-		}
-		for i := len(internalServices) - 1; i >= 0; i-- {
-			if internalServices[i] != nil {
-				_ = internalServices[i].Close()
-			}
-		}
-		if logFactory != nil {
-			_ = logFactory.Close()
-		}
-	}()
 	certificateOptions := sbCommon.PtrValueOrDefault(options.Certificate)
 	if C.IsAndroid || certificateOptions.Store != "" && certificateOptions.Store != C.CertificateStoreSystem ||
 		len(certificateOptions.Certificate) > 0 ||
@@ -203,16 +185,17 @@ func NewBox(options Options) (*Box, error) {
 	endpointManager := endpoint.NewManager(logFactory.NewLogger("endpoint"), endpointRegistry)
 	inboundManager := inbound.NewManager(logFactory.NewLogger("inbound"), inboundRegistry, endpointManager)
 	outboundManager := outbound.NewManager(logFactory.NewLogger("outbound"), outboundRegistry, endpointManager, routeOptions.Final)
-	providerManager := provider.NewManager(logFactory.NewLogger("provider"), providerRegistry)
 	dnsTransportManager := dns.NewTransportManager(logFactory.NewLogger("dns/transport"), dnsTransportRegistry, outboundManager, dnsOptions.Final)
 	serviceManager := boxService.NewManager(logFactory.NewLogger("service"), serviceRegistry)
 
 	service.MustRegister[adapter.EndpointManager](ctx, endpointManager)
 	service.MustRegister[adapter.InboundManager](ctx, inboundManager)
 	service.MustRegister[adapter.OutboundManager](ctx, outboundManager)
-	service.MustRegister[adapter.ProviderManager](ctx, providerManager)
 	service.MustRegister[adapter.DNSTransportManager](ctx, dnsTransportManager)
 	service.MustRegister[adapter.ServiceManager](ctx, serviceManager)
+
+	providerManager := provider.NewManager(logFactory.NewLogger("provider"), providerRegistry)
+	service.MustRegister[adapter.ProviderManager](ctx, providerManager)
 
 	dnsRouter := dns.NewRouter(ctx, logFactory, dnsOptions)
 	service.MustRegister[adapter.DNSRouter](ctx, dnsRouter)
@@ -425,13 +408,13 @@ func NewBox(options Options) (*Box, error) {
 		service.MustRegister[ntp.TimeService](ctx, timeService)
 		internalServices = append(internalServices, adapter.NewLifecycleService(timeService, "ntp service"))
 	}
-	box := &Box{
+	return &Box{
 		network:         networkManager,
 		endpoint:        endpointManager,
 		inbound:         inboundManager,
 		outbound:        outboundManager,
-		provider:        providerManager,
 		dnsTransport:    dnsTransportManager,
+		provider:        providerManager,
 		service:         serviceManager,
 		dnsRouter:       dnsRouter,
 		connection:      connectionManager,
@@ -443,11 +426,7 @@ func NewBox(options Options) (*Box, error) {
 		statsTracker:    statsTracker,
 		connTracker:     connTracker,
 		done:            make(chan struct{}),
-	}
-	// Ownership of internalServices/logFactory transfers to the Box; skip the
-	// early-error cleanup defer above.
-	success = true
-	return box, nil
+	}, nil
 }
 
 func (s *Box) PreStart() error {
@@ -489,11 +468,11 @@ func (s *Box) preStart() error {
 	if err != nil {
 		return err
 	}
-	err = adapter.Start(s.logger, adapter.StartStateInitialize, s.network, s.dnsTransport, s.dnsRouter, s.connection, s.router, s.outbound, s.inbound, s.endpoint, s.provider, s.service)
+	err = adapter.Start(s.logger, adapter.StartStateInitialize, s.network, s.dnsTransport, s.dnsRouter, s.connection, s.router, s.outbound, s.inbound, s.endpoint, s.service)
 	if err != nil {
 		return err
 	}
-	err = adapter.Start(s.logger, adapter.StartStateStart, s.outbound, s.provider, s.dnsTransport, s.dnsRouter, s.network, s.connection, s.router)
+	err = adapter.Start(s.logger, adapter.StartStateStart, s.outbound, s.dnsTransport, s.dnsRouter, s.network, s.connection, s.router)
 	if err != nil {
 		return err
 	}
@@ -513,7 +492,7 @@ func (s *Box) start() error {
 	if err != nil {
 		return err
 	}
-	err = adapter.Start(s.logger, adapter.StartStatePostStart, s.outbound, s.network, s.dnsTransport, s.dnsRouter, s.connection, s.router, s.inbound, s.endpoint, s.provider, s.service)
+	err = adapter.Start(s.logger, adapter.StartStatePostStart, s.outbound, s.network, s.dnsTransport, s.dnsRouter, s.connection, s.router, s.inbound, s.endpoint, s.service)
 	if err != nil {
 		return err
 	}
@@ -521,7 +500,7 @@ func (s *Box) start() error {
 	if err != nil {
 		return err
 	}
-	err = adapter.Start(s.logger, adapter.StartStateStarted, s.network, s.dnsTransport, s.dnsRouter, s.connection, s.router, s.outbound, s.inbound, s.endpoint, s.provider, s.service)
+	err = adapter.Start(s.logger, adapter.StartStateStarted, s.network, s.dnsTransport, s.dnsRouter, s.connection, s.router, s.outbound, s.inbound, s.endpoint, s.service)
 	if err != nil {
 		return err
 	}
@@ -548,7 +527,6 @@ func (s *Box) Close() error {
 		{"service", s.service},
 		{"endpoint", s.endpoint},
 		{"inbound", s.inbound},
-		{"provider", s.provider},
 		{"outbound", s.outbound},
 		{"router", s.router},
 		{"connection", s.connection},

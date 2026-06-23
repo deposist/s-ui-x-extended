@@ -50,6 +50,7 @@ func ParseCmd() {
 		fmt.Println("    admin          set/reset/show first admin credentials")
 		fmt.Println("    decrypt-backup decrypt Telegram backup envelope")
 		fmt.Println("    import-xui     import configuration from a 3x-ui database")
+		fmt.Println("    ip-cert        issue/renew/status/disable an IP-address TLS certificate")
 		fmt.Println("    uri            Show panel URI")
 		fmt.Println("    migrate        migrate form older version")
 		fmt.Println("    setting        set/reset/clear/show settings")
@@ -108,6 +109,9 @@ func ParseCmd() {
 
 	case "import-xui":
 		os.Exit(runImportXui(os.Args[2:], os.Stdout))
+
+	case "ip-cert":
+		os.Exit(runIpCert(os.Args[2:]))
 
 	case "decrypt-backup":
 		os.Exit(runDecryptBackup(os.Args[2:], os.Stdin, os.Stdout, os.Stderr, os.Getenv))

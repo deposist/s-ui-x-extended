@@ -186,6 +186,14 @@ func generateClientConfig(name string) (json.RawMessage, error) {
 	return json.Marshal(cfg)
 }
 
+func randomSSPassword(n int) (string, error) {
+	buf := make([]byte, n)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(buf), nil
+}
+
 // mtProtoFrontHosts mirrors the frontend sniFrontHosts presets: plausible TLS 1.3
 // hosts used as the faketls SNI embedded in an MTProto secret.
 var mtProtoFrontHosts = []string{
@@ -204,14 +212,6 @@ func randomMTProtoSecret() (string, error) {
 	}
 	host := mtProtoFrontHosts[int(key[0])%len(mtProtoFrontHosts)]
 	return "ee" + hex.EncodeToString(key) + hex.EncodeToString([]byte(host)), nil
-}
-
-func randomSSPassword(n int) (string, error) {
-	buf := make([]byte, n)
-	if _, err := rand.Read(buf); err != nil {
-		return "", err
-	}
-	return base64.StdEncoding.EncodeToString(buf), nil
 }
 
 // sanitizeUsername keeps only safe characters for display in the client's desc.

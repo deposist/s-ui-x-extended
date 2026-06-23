@@ -102,3 +102,47 @@ func TestBlockedAddrCoversReservedAndMappedRanges(t *testing.T) {
 		})
 	}
 }
+
+// TestIsInfrastructureAddr pins the contract of the metadata-SSRF guard: it must
+// always block the crown-jewel targets (cloud metadata via link-local, multicast,
+// unspecified) regardless of caller trust, while deliberately ALLOWING loopback
+// and RFC1918 private ranges so a trusted same-host / LAN target stays reachable.
+// This is the narrower companion to IsBlockedAddr and is exported for callers
+// outside this package.
+func TestIsInfrastructureAddr(t *testing.T) {
+	blocked := []string{
+		"169.254.169.254", // cloud metadata (IPv4 link-local)
+		"169.254.0.1",     // IPv4 link-local
+		"224.0.0.1",       // IPv4 multicast
+		"239.255.255.250", // IPv4 multicast (SSDP)
+		"0.0.0.0",         // IPv4 unspecified
+		"fe80::1",         // IPv6 link-local unicast
+		"ff02::1",         // IPv6 link-local multicast
+		"ff00::1",         // IPv6 multicast
+		"::",              // IPv6 unspecified
+	}
+	for _, ip := range blocked {
+		t.Run("block/"+ip, func(t *testing.T) {
+			if !IsInfrastructureAddr(netip.MustParseAddr(ip)) {
+				t.Fatal("expected infrastructure address to be blocked")
+			}
+		})
+	}
+
+	allowed := []string{
+		"127.0.0.1",            // loopback allowed (unlike IsBlockedAddr)
+		"::1",                  // IPv6 loopback allowed
+		"10.0.0.1",             // RFC1918 private allowed
+		"192.168.1.1",          // RFC1918 private allowed
+		"172.16.0.1",           // RFC1918 private allowed
+		"8.8.8.8",              // public
+		"2606:4700:4700::1111", // public
+	}
+	for _, ip := range allowed {
+		t.Run("allow/"+ip, func(t *testing.T) {
+			if IsInfrastructureAddr(netip.MustParseAddr(ip)) {
+				t.Fatal("expected non-infrastructure address to be allowed")
+			}
+		})
+	}
+}

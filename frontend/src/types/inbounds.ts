@@ -18,11 +18,6 @@ export const InTypes = {
   Hysteria2: 'hysteria2',
   VLESS: 'vless',
   AnyTls: 'anytls',
-  Mieru: 'mieru',
-  Sudoku: 'sudoku',
-  TrustTunnel: 'trusttunnel',
-  SSH: 'ssh',
-  MTProxy: 'mtproxy',
   Tun: 'tun',
   Redirect: 'redirect',
   TProxy: 'tproxy',
@@ -133,7 +128,6 @@ export interface ShadowTLS extends InboundBasics {
   wildcard_sni?: string
 }
 export interface VLESS extends InboundBasics {
-  decryption?: string
   multiplex?: iMultiplex
   transport?: Transport
   tls: iTls
@@ -214,58 +208,6 @@ export interface Redirect extends InboundBasics {}
 export interface TProxy extends InboundBasics {
   network?: "udp" | "tcp"
 }
-export interface Mieru extends InboundBasics {
-  listen_ports?: string[]
-  transport?: string
-  traffic_pattern?: string
-  user_hint_is_mandatory?: boolean
-}
-export interface Sudoku extends InboundBasics {
-  key: string
-  aead_method?: string
-  table_type?: string
-  padding_min?: number
-  padding_max?: number
-  handshake_timeout?: number
-  enable_pure_downlink?: boolean
-  custom_table?: string
-  custom_tables?: string[]
-  disable_http_mask?: boolean
-  http_mask_mode?: string
-  path_root?: string
-  fallback?: string
-}
-export interface TrustTunnel extends InboundBasics {
-  tls: iTls
-  network?: string[]
-  congestion_controller?: string
-  bbr_profile?: string
-  cwnd?: number
-}
-export interface SSH extends InboundBasics {
-  host_key?: string[]
-  host_key_path?: string[]
-  server_version?: string
-  max_auth_tries?: number
-}
-export interface MTProxy extends InboundBasics {
-  concurrency?: number
-  domain_fronting_port?: number
-  domain_fronting_host?: string
-  domain_fronting_proxy_protocol?: boolean
-  prefer_ip?: string
-  auto_update?: boolean
-  allow_fallback_on_unknown_dc?: boolean
-  tolerate_time_skewness?: string
-  idle_timeout?: string
-  handshake_timeout?: string
-  doppelganger_urls?: string[]
-  doppelganger_per_raid?: number
-  doppelganger_each?: string
-  doppelganger_drs?: boolean
-  throttle_max_connections?: number
-  throttle_check_interval?: string
-}
 
 // Create interfaces dynamically based on InTypes keys
 type InterfaceMap = {
@@ -283,11 +225,6 @@ type InterfaceMap = {
   hysteria2: Hysteria2
   vless: VLESS
   anytls: AnyTls
-  mieru: Mieru
-  sudoku: Sudoku
-  trusttunnel: TrustTunnel
-  ssh: SSH
-  mtproxy: MTProxy
   tun: Tun
   redirect: Redirect
   tproxy: TProxy
@@ -308,7 +245,7 @@ const defaultValues: Record<InType, Inbound> = {
   naive: <Naive>{ type: InTypes.Naive, tls_id: 0 },
   hysteria: <Hysteria>{ type: InTypes.Hysteria, up_mbps: 100, down_mbps: 100, tls_id: 0 },
   shadowtls: <ShadowTLS>{ type: InTypes.ShadowTLS, version: 3, handshake: {}, handshake_for_server_name: {} },
-  tuic: <TUIC>{ type: InTypes.TUIC, congestion_control: "bbr", tls_id: 0 },
+  tuic: <TUIC>{ type: InTypes.TUIC, congestion_control: "cubic", tls_id: 0 },
   hysteria2: <Hysteria2>{ type: InTypes.Hysteria2, tls_id: 0 },
   vless: <VLESS>{ type: InTypes.VLESS, tls_id: 0, transport: {} },
   anytls: <AnyTls>{ type: InTypes.AnyTls, tls_id: 0, padding_scheme: [
@@ -322,11 +259,6 @@ const defaultValues: Record<InType, Inbound> = {
     "6=500-1000",
     "7=500-1000"
   ]},
-  mieru: <Mieru>{ type: InTypes.Mieru, transport: 'TCP' },
-  sudoku: <Sudoku>{ type: InTypes.Sudoku, key: '', aead_method: 'chacha20-poly1305', padding_min: 10, padding_max: 30, handshake_timeout: 5, enable_pure_downlink: true },
-  trusttunnel: <TrustTunnel>{ type: InTypes.TrustTunnel, tls_id: 0, network: ['tcp', 'udp'], congestion_controller: 'bbr' },
-  ssh: <SSH>{ type: InTypes.SSH },
-  mtproxy: <MTProxy>{ type: InTypes.MTProxy, prefer_ip: 'prefer-ipv4' },
   tun: <Tun>{ type: InTypes.Tun, mtu: 9000, stack: 'system', udp_timeout: '5m', auto_route: false },
   redirect: <Redirect>{ type: InTypes.Redirect },
   tproxy: <TProxy>{ type: InTypes.TProxy },

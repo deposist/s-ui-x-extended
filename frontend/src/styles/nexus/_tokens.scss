@@ -1,9 +1,109 @@
+/* Shared tokens — palette-independent. Fonts, motion, spacing and radii are
+ * declared on every theme class and the pre-mount data-attr selector so light
+ * and dark Nexus differ by color tokens only. */
+html[data-ui-mode='nexus'],
+.v-theme--technicalDark,
+.v-theme--technicalLight,
+.v-theme--nexusDark,
+.v-theme--nexusLight {
+  --nexus-font-mono: 'SF Mono', 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+  --nexus-transition-fast: 100ms ease;
+  --nexus-transition-base: 200ms ease-out;
+  --nexus-transition-slow: 300ms ease-out;
+  --nexus-gap-1: 4px;
+  --nexus-gap-2: 8px;
+  --nexus-gap-3: 12px;
+  --nexus-gap-4: 16px;
+  --nexus-gap-20: 20px;
+  --nexus-gap-5: 24px;
+  --nexus-gap-6: 32px;
+  --nexus-radius-sm: 4px;
+  --nexus-radius-md: 6px;
+  --nexus-radius-lg: 8px;
+}
+
+/* Monospace utility for IPs, ports, UUIDs and keys (reference .text-mono). */
+.nexus-mono {
+  font-family: var(--nexus-font-mono);
+  font-size: 0.8125rem;
+}
+
+/* Technical palette (default): near-black surfaces + cyan accent.
+ * The html[data-ui-palette='technical'] selector is more specific than the
+ * navy html[data-ui-mode='nexus'] block, so technical wins before Vuetify
+ * mounts; after mount the .v-theme--technical* classes refine the same values. */
+html[data-ui-mode='nexus'][data-ui-palette='technical'],
+.v-theme--technicalDark {
+  --nexus-surface-0: #0a0a0a;
+  --nexus-surface-1: #151515;
+  --nexus-surface-2: #1a1a1a;
+  --nexus-elevated: #202020;
+  --nexus-surface-hover: #252525;
+  --nexus-border: #2a2a2a;
+  --nexus-border-strong: #3a3a3a;
+
+  --nexus-accent-primary: #00d4ff;
+  --nexus-accent-secondary: #3399ff;
+  --nexus-accent-muted: #0099cc;
+  --nexus-status-success: #00cc66;
+  --nexus-status-warn: #ffaa00;
+  --nexus-status-error: #ff4444;
+  --nexus-status-info: #3399ff;
+
+  --nexus-text-primary: #ffffff;
+  --nexus-text-secondary: #a0a0a0;
+  --nexus-text-muted: #666666;
+  --nexus-text-disabled: #4a4a4a;
+
+  --nexus-chart-1: #00d4ff;
+  --nexus-chart-2: #3399ff;
+  --nexus-chart-3: #00cc66;
+  --nexus-chart-4: #ffaa00;
+  --nexus-chart-5: #ff4444;
+  --nexus-chart-6: #a78bfa;
+
+}
+
+.v-theme--technicalLight {
+  --nexus-surface-0: #f5f6f7;
+  --nexus-surface-1: #ffffff;
+  --nexus-surface-2: #ffffff;
+  --nexus-elevated: #f0f1f3;
+  --nexus-surface-hover: #eceef0;
+  --nexus-border: #e2e4e7;
+  --nexus-border-strong: #cdd0d4;
+
+  --nexus-accent-primary: #0091b3;
+  --nexus-accent-secondary: #2f6fd1;
+  --nexus-accent-muted: #0077a3;
+  --nexus-status-success: #0a8f4d;
+  --nexus-status-warn: #b06f00;
+  --nexus-status-error: #cc3333;
+  --nexus-status-info: #2f6fd1;
+
+  --nexus-text-primary: #0a0a0a;
+  --nexus-text-secondary: #555555;
+  --nexus-text-muted: #777777;
+  --nexus-text-disabled: #aaaaaa;
+
+  --nexus-chart-1: #0091b3;
+  --nexus-chart-2: #2f6fd1;
+  --nexus-chart-3: #0a8f4d;
+  --nexus-chart-4: #b06f00;
+  --nexus-chart-5: #cc3333;
+  --nexus-chart-6: #6c4fd3;
+}
+
+/* Navy palette: original Nexus dark theme. Existing color values are unchanged;
+ * only the new shared tokens (surface-hover, text-*, gap-20) are added so the
+ * navy palette keeps working with the new data primitives. */
 html[data-ui-mode='nexus'],
 .v-theme--nexusDark {
   --nexus-surface-0: #0a1226;
   --nexus-surface-1: #0f1830;
   --nexus-surface-2: #172041;
   --nexus-elevated: #1d2752;
+  --nexus-surface-hover: #1b2547;
   --nexus-border: rgb(148 163 184 / 16%);
   --nexus-border-strong: rgb(148 163 184 / 32%);
 
@@ -15,6 +115,11 @@ html[data-ui-mode='nexus'],
   --nexus-status-error: #fb7185;
   --nexus-status-info: #38bdf8;
 
+  --nexus-text-primary: #e2e8f0;
+  --nexus-text-secondary: #94a3b8;
+  --nexus-text-muted: #64748b;
+  --nexus-text-disabled: #475569;
+
   --nexus-chart-1: #22d3ee;
   --nexus-chart-2: #a78bfa;
   --nexus-chart-3: #34d399;
@@ -22,15 +127,6 @@ html[data-ui-mode='nexus'],
   --nexus-chart-5: #fb7185;
   --nexus-chart-6: #38bdf8;
 
-  --nexus-gap-1: 4px;
-  --nexus-gap-2: 8px;
-  --nexus-gap-3: 12px;
-  --nexus-gap-4: 16px;
-  --nexus-gap-5: 24px;
-  --nexus-gap-6: 32px;
-  --nexus-radius-sm: 4px;
-  --nexus-radius-md: 6px;
-  --nexus-radius-lg: 8px;
 }
 
 .v-theme--nexusLight {
@@ -38,6 +134,7 @@ html[data-ui-mode='nexus'],
   --nexus-surface-1: #ffffff;
   --nexus-surface-2: #eaf4f6;
   --nexus-elevated: #d9e9ed;
+  --nexus-surface-hover: #e2f0f3;
   --nexus-border: rgb(16 72 88 / 16%);
   --nexus-border-strong: rgb(16 72 88 / 30%);
 
@@ -48,6 +145,11 @@ html[data-ui-mode='nexus'],
   --nexus-status-warn: #a85700;
   --nexus-status-error: #b92d4b;
   --nexus-status-info: #0069a8;
+
+  --nexus-text-primary: #0b2730;
+  --nexus-text-secondary: #3f5a64;
+  --nexus-text-muted: #6b828b;
+  --nexus-text-disabled: #9bb0b8;
 
   --nexus-chart-1: #007d87;
   --nexus-chart-2: #0069a8;

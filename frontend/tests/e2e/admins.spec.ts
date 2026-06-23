@@ -8,7 +8,9 @@ const screenshotDir = path.join(phase6Dir, 'admin-smoke')
 
 const unique = () => `${Date.now()}-${Math.floor(Math.random() * 10000)}`
 
-const userCards = (page: Page) => page.locator('.v-card.rounded-xl')
+// Classic renders each admin as a rounded card; Nexus renders them as dense
+// table rows. Match both so the same assertions cover either mode.
+const userCards = (page: Page) => page.locator('.v-card.rounded-xl, tr.nexus-data-table__row')
 const userCard = (page: Page, username: string) => userCards(page).filter({ hasText: username })
 
 const disableNotificationPointerEvents = async (page: Page) => {

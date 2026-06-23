@@ -74,10 +74,11 @@ func TestSecurityLoginLockoutBlocksAuditsAndRecovers(t *testing.T) {
 	assertSecurityLoginSuccess(t, afterReset)
 }
 
-// TestSecurityLoginPerUsernameThrottleBlocksDistributed covers S3: a brute-force
-// on one account that rotates source IPs (so no single IP trips the per-IP
-// limit) is still stopped by the per-username throttle.
-func TestSecurityLoginPerUsernameThrottleBlocksDistributed(t *testing.T) {
+// TestSecurityLoginPerUsernameTarpitNeverLocksOut covers L-6: a distributed
+// brute-force on one account that rotates source IPs is SLOWED by the
+// per-username tarpit (an escalating, capped delay) but never hard-blocked, so
+// the attacker cannot lock a known admin out of their own panel.
+func TestSecurityLoginPerUsernameTarpitNeverLocksOut(t *testing.T) {
 	resetRateLimitState()
 	settingService := initSessionTestDB(t)
 	if _, err := settingService.GetAllSetting(); err != nil {
@@ -100,7 +101,8 @@ func TestSecurityLoginPerUsernameThrottleBlocksDistributed(t *testing.T) {
 	NewAPIHandler(router.Group("/api"), nil)
 
 	// Each failed attempt comes from a DIFFERENT source IP, so no single IP is
-	// rate-limited, yet the per-username counter accumulates.
+	// rate-limited, yet the per-username counter accumulates (these attempts stay
+	// below the tarpit threshold, so the loop does not block on a delay).
 	for i := 0; i < loginRateLimitMax; i++ {
 		ip := fmt.Sprintf("203.0.113.%d", i+1)
 		rec := performSecurityLoginFromIP(router, ip, "wrong-password")
@@ -108,10 +110,22 @@ func TestSecurityLoginPerUsernameThrottleBlocksDistributed(t *testing.T) {
 			t.Fatalf("attempt %d returned status %d", i+1, rec.Code)
 		}
 	}
-	// A further attempt from yet another fresh IP — even with the correct
-	// password — is now blocked by the per-username throttle.
+	// The per-username throttle is now engaged as a TARPIT — a positive, capped
+	// delay — rather than a hard block.
+	userKey := loginRateLimitUserKey("admin")
+	delay := loginUsernameTarpitDelay(userKey)
+	if delay <= 0 {
+		t.Fatal("expected per-username tarpit to engage after repeated failures")
+	}
+	if delay > loginRateLimitTarpitMax {
+		t.Fatalf("tarpit delay %v exceeds cap %v", delay, loginRateLimitTarpitMax)
+	}
+	// The legitimate admin is NEVER locked out: once the (recoverable) failure
+	// state clears, a correct password from a fresh IP is accepted immediately —
+	// proving the per-username path never hard-blocks the account.
+	resetLoginFailures(userKey)
 	rec := performSecurityLoginFromIP(router, "203.0.113.250", "correct-password")
-	assertSecurityLoginFailureContains(t, rec, "too many login attempts")
+	assertSecurityLoginSuccess(t, rec)
 }
 
 const securityLockoutTestIP = "198.51.100.77"

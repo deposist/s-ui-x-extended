@@ -1,0 +1,19 @@
+# Release notes: v1.5.9-beta4
+
+Small follow-up to v1.5.9-beta3. No database, API, or configuration changes are required.
+
+## 1. Failover group editor now works in the default interface
+
+The **Failover group** outbound added in v1.5.9-beta3 could not be configured in the default (Nexus) interface. Selecting the *Failover* type opened an empty editor and still showed the Server address and port fields. The Failover editor now works in both the default and classic interfaces: member order, probe target, interval, failback setting, and *Add member* are visible, while server and port fields stay hidden for the group.
+
+No database, API, or configuration changes are required.
+
+# Заметки о релизе v1.5.9-beta4
+
+Небольшое дополнение к v1.5.9-beta3. Изменения базы данных, API или конфигурации не требуются.
+
+## 1. Редактор группы отказоустойчивости теперь работает в основном интерфейсе
+
+Новый Outbound **Группа отказоустойчивости**, добавленный в v1.5.9-beta3, нельзя было настроить в основном интерфейсе (Nexus). При выборе типа *Failover* открывался пустой редактор, а поля адреса и порта сервера всё равно показывались. Теперь редактор работает в основном и классическом интерфейсах: список участников, адрес проверки, интервал, настройка возврата и кнопка *Добавить участника* видны, а поля сервера и порта для группы скрыты.
+
+Изменения базы данных, API или конфигурации не требуются.

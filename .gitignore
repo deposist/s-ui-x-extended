@@ -1,5 +1,10 @@
 .DS_Store
+node_modules/
+frontend/node_modules/
 dist/
+frontend/dist/
+build/
+coverage/
 release/
 backup/
 bin/
@@ -12,6 +17,9 @@ tmp
 *.tar.gz
 
 # local env files
+.env
+.env.*
+!.env.example
 .env.local
 .env.*.local
 
@@ -49,8 +57,21 @@ tests/baseline/*
 .idea
 .vscode
 
+# Local AI assistant instructions/state (not for public repo)
+CLAUDE.md
+AGENTS.md
+.claude/
+.pi/
+
 # Kiro local specs (not for public repo)
 .kiro/
+
+# Spec Kit / local dev tooling and design docs (not for public repo)
+specs/
+.specify/
+.codegraph/
+.continue/
+.agents/
 
 # Local 3x-ui import fixtures with real production data
 test-db/

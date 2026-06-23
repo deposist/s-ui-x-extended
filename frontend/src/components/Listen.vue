@@ -2,13 +2,12 @@
   <v-card :subtitle="$t('objects.listen')">
     <v-row>
       <v-col cols="12" sm="6" md="4">
-        <v-combobox
+        <v-text-field
         :label="$t('in.addr')"
         hide-details
         required
-        :items="listenAddresses"
         v-model="data.listen">
-        </v-combobox>
+        </v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4">
         <v-text-field
@@ -70,10 +69,10 @@
         <v-switch v-model="data.disable_tcp_keep_alive" color="primary" :label="$t('listen.disableTcpKeepAlive')" hide-details></v-switch>
       </v-col>
       <v-col cols="12" sm="6" md="4">
-        <v-combobox v-model="data.tcp_keep_alive" :label="$t('listen.tcpKeepAlive')" :items="durationPresets" hide-details></v-combobox>
+        <v-text-field v-model="data.tcp_keep_alive" :label="$t('listen.tcpKeepAlive')" hide-details></v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4">
-        <v-combobox v-model="data.tcp_keep_alive_interval" :label="$t('listen.tcpKeepAliveInterval')" :items="durationPresets" hide-details></v-combobox>
+        <v-text-field v-model="data.tcp_keep_alive_interval" :label="$t('listen.tcpKeepAliveInterval')" hide-details></v-text-field>
       </v-col>
     </v-row>
     <v-card-actions class="pt-0">
@@ -116,15 +115,11 @@
 </template>
 
 <script lang="ts">
-import { listenAddresses, durationPresets } from '@/types/recommended'
-
 export default {
   props: ['data', 'inTags'],
   data() {
     return {
-      menu: false,
-      listenAddresses,
-      durationPresets
+      menu: false
     }
   },
   computed: {

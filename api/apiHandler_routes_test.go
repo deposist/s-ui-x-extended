@@ -28,6 +28,7 @@ func TestAPIHandlerRegistersLegacyActionRoutesExplicitly(t *testing.T) {
 	expected := map[string][]string{
 		http.MethodPost: {
 			"/api/login",
+			"/api/logout",
 			"/api/changePass",
 			"/api/addAdmin",
 			"/api/deleteAdmin",
@@ -47,6 +48,8 @@ func TestAPIHandlerRegistersLegacyActionRoutesExplicitly(t *testing.T) {
 			"/api/logoutAllAdmins",
 			"/api/checkOutbounds",
 			"/api/rotateSubSecret",
+			"/api/doctor/run",
+			"/api/doctor/client",
 			"/api/telegram/test",
 			"/api/telegram/backup",
 			"/api/telegram/backup/run",
@@ -54,7 +57,6 @@ func TestAPIHandlerRegistersLegacyActionRoutesExplicitly(t *testing.T) {
 		},
 		http.MethodGet: {
 			"/api/csrf",
-			"/api/logout",
 			"/api/load",
 			"/api/inbounds",
 			"/api/outbounds",
@@ -75,8 +77,8 @@ func TestAPIHandlerRegistersLegacyActionRoutesExplicitly(t *testing.T) {
 			"/api/tokens",
 			"/api/singbox-config",
 			"/api/checkOutbound",
+			"/api/failover-status",
 			"/api/version",
-			"/api/capabilities",
 			"/api/import-xui/reports",
 			"/api/security/audit",
 			"/api/realtime/ws-token",

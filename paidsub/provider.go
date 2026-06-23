@@ -69,20 +69,20 @@ type pollingProvider interface {
 func providerTitle(kind ProviderKind, l lang) string {
 	switch kind {
 	case ProviderStars:
-		return "⭐ Telegram Stars"
+		return "Telegram Stars"
 	case ProviderYooKassa:
-		return "💳 YooKassa"
+		return "YooKassa"
 	case ProviderStripe:
-		return "💳 Stripe"
+		return "Stripe"
 	case ProviderPayMaster:
-		return "💳 PayMaster"
+		return "PayMaster"
 	case ProviderCryptoBot:
-		return "🪙 CryptoBot"
+		return "CryptoBot"
 	case ProviderExternal:
 		if l == langRU {
-			return "🌐 Оплата по ссылке"
+			return "Оплата по ссылке"
 		}
-		return "🌐 External link"
+		return "External link"
 	}
 	return string(kind)
 }

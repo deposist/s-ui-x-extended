@@ -100,6 +100,24 @@ func TestStatsServiceSaveStatsCommitFailureAuditsAndReturnsIssue26(t *testing.T)
 	}
 }
 
+func TestStatsServiceDownsampleStatsSmallInputUnchangedExtra(t *testing.T) {
+	statsService := &StatsService{}
+	input := []model.Stats{
+		{DateTime: 101, Resource: "user", Tag: "alice", Direction: false, Traffic: 30},
+		{DateTime: 100, Resource: "user", Tag: "alice", Direction: true, Traffic: 10},
+	}
+
+	got := statsService.downsampleStats(input, 2)
+	if len(got) != len(input) {
+		t.Fatalf("expected unchanged input length, got %d", len(got))
+	}
+	for i := range input {
+		if got[i] != input[i] {
+			t.Fatalf("small input changed at %d: got %#v want %#v", i, got[i], input[i])
+		}
+	}
+}
+
 func TestStatsServiceDownsampleStatsBucketsExtra(t *testing.T) {
 	statsService := &StatsService{}
 	input := []model.Stats{
@@ -132,6 +150,30 @@ func TestStatsServiceDownsampleStatsBucketsExtra(t *testing.T) {
 	}
 	if got[0].DateTime > got[2].DateTime {
 		t.Fatalf("bucket order regressed: %#v", got)
+	}
+}
+
+func TestStatsServiceDownsampleStatsIdenticalTimestampsExtra(t *testing.T) {
+	statsService := &StatsService{}
+	input := make([]model.Stats, 0, 62)
+	for i := 0; i < 31; i++ {
+		input = append(input,
+			model.Stats{DateTime: 100, Resource: "user", Tag: "alice", Direction: false, Traffic: 10},
+			model.Stats{DateTime: 100, Resource: "user", Tag: "alice", Direction: true, Traffic: 20},
+		)
+	}
+
+	got := statsService.downsampleStats(input, 60)
+	if len(got) != 60 {
+		t.Fatalf("expected 60 downsampled rows, got %d", len(got))
+	}
+	if got[0].Traffic != 10 || got[1].Traffic != 20 {
+		t.Fatalf("first bucket should average all identical timestamps, got %#v %#v", got[0], got[1])
+	}
+	for i := 2; i < len(got); i++ {
+		if got[i].Traffic != 0 {
+			t.Fatalf("bucket %d should be empty for identical timestamps, got %#v", i, got[i])
+		}
 	}
 }
 

@@ -297,6 +297,11 @@ func ensureIndexes() error {
 	indexes := []string{
 		"CREATE UNIQUE INDEX IF NOT EXISTS idx_settings_key ON settings(key)",
 		"CREATE INDEX IF NOT EXISTS idx_stats_lookup ON stats(date_time, resource, tag)",
+		// GetStats filters `resource IN ? AND tag = ? AND date_time > ?`; an index
+		// leading with the equality columns lets SQLite seek to the resource+tag
+		// and walk the time range instead of scanning every tag in the window. The
+		// date_time-leading idx_stats_lookup is kept for DelOldStats (date_time < ?).
+		"CREATE INDEX IF NOT EXISTS idx_stats_resource_tag_dt ON stats(resource, tag, date_time)",
 		"CREATE INDEX IF NOT EXISTS idx_changes_lookup ON changes(date_time, actor, key)",
 		"CREATE INDEX IF NOT EXISTS idx_audit_events_lookup ON audit_events(date_time, actor, event)",
 		"CREATE INDEX IF NOT EXISTS idx_audit_events_event_dt ON audit_events(event, date_time DESC)",

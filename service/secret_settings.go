@@ -39,6 +39,7 @@ var (
 		"paidSubProxyURL":          {},
 		"paidSubProxyUsername":     {},
 		"paidSubProxyPassword":     {},
+		"ipCertAccountKey":         {},
 	}
 )
 
@@ -262,6 +263,21 @@ func (s *SettingService) encryptSettingValue(key string, value string) (string, 
 	return box.EncryptString(value, key)
 }
 
+// setEncryptedString encrypts value under key and persists it. The matching
+// getString transparently decrypts because key is in encryptedSettingKeys. An
+// empty value is stored verbatim (cleared). Used for machine-managed secrets
+// (e.g. the ACME account key) that bypass the bulk Save path.
+func (s *SettingService) setEncryptedString(key string, value string) error {
+	if value == "" {
+		return s.saveSetting(key, "")
+	}
+	encrypted, err := s.encryptSettingValue(key, value)
+	if err != nil {
+		return err
+	}
+	return s.saveSetting(key, encrypted)
+}
+
 func (s *SettingService) decryptSettingValue(key string, value string) (string, error) {
 	if value == "" || !secretbox.IsEncrypted(value) {
 		return value, nil
@@ -373,7 +389,7 @@ func decryptWithCandidate(candidates []secretboxCandidate, key, value string) (i
 // A row is only rewritten after it successfully decrypts, and it is re-sealed
 // with that exact recovered plaintext, so the round-trip cannot lose data. Once
 // re-sealed under SUI_SECRETBOX_KEY a value can no longer be recovered from the
-// database alone — that is the intended hardening. Returns the rows re-sealed.
+// database alone - that is the intended hardening. Returns the rows re-sealed.
 func (s *SettingService) ResealSecretSettings() (int, error) {
 	if strings.TrimSpace(os.Getenv("SUI_SECRETBOX_KEY")) == "" {
 		return 0, nil

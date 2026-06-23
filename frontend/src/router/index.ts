@@ -4,7 +4,6 @@ import Login from '@/views/Login.vue'
 import Data from '@/store/modules/data'
 import Ws from '@/store/ws'
 import { getBaseUrl } from '@/plugins/base-url'
-import { isPreloadError } from './preload-error'
 
 const routes = [
   {
@@ -46,11 +45,6 @@ const routes = [
         path: '/endpoints',
         name: 'pages.endpoints',
         component: () => import('@/views/Endpoints.vue'),
-      },
-      {
-        path: '/providers',
-        name: 'pages.providers',
-        component: () => import('@/views/Providers.vue'),
       },
       {
         path: '/rules',
@@ -102,6 +96,11 @@ const routes = [
         name: 'pages.settings',
         component: () => import('@/views/Settings.vue'),
       },
+      {
+        path: '/donations',
+        name: 'pages.donations',
+        component: () => import('@/views/Donations.vue'),
+      },
     ],
   },
 ]
@@ -127,6 +126,14 @@ const reloadOnce = () => {
     // sessionStorage may be disabled (private mode); fall through.
   }
   window.location.reload()
+}
+const isPreloadError = (err: any): boolean => {
+  if (!err) return false
+  const msg: string = err?.message ?? String(err)
+  return /Failed to fetch dynamically imported module/i.test(msg) ||
+    /Importing a module script failed/i.test(msg) ||
+    /Failed to load module script/i.test(msg) ||
+    err?.name === 'ChunkLoadError'
 }
 window.addEventListener('vite:preloadError', () => reloadOnce())
 router.onError((err) => {

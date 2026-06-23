@@ -1,12 +1,15 @@
 <template>
+  <page-header v-if="nexus" :title="$t('pages.paidSub')" />
   <v-card flat>
     <v-card-title class="d-flex align-center">
-      <v-icon class="mr-2">mdi-cash-multiple</v-icon>
-      {{ $t('pages.paidSub') }}
-      <v-chip class="ml-3" color="warning" size="small" variant="flat">experimental</v-chip>
+      <template v-if="!nexus">
+        <v-icon class="mr-2">mdi-cash-multiple</v-icon>
+        {{ $t('pages.paidSub') }}
+      </template>
+      <v-chip :class="nexus ? '' : 'ml-3'" color="warning" size="small" variant="flat">{{ $t('paidSub.experimental') }}</v-chip>
       <v-spacer />
       <v-btn color="primary" :loading="loading" variant="tonal" @click="reloadAll">
-        <v-icon start>mdi-refresh</v-icon>{{ $t('actions.refresh') ?? 'Refresh' }}
+        <v-icon start>lucide:rotate-cw</v-icon>{{ $t('actions.refresh') }}
       </v-btn>
     </v-card-title>
 
@@ -17,18 +20,17 @@
       class="mx-4 mb-2"
       density="comfortable"
     >
-      For production, set the <strong>SUI_SECRETBOX_KEY</strong> environment variable so payment tokens
-      are encrypted with a key kept outside the database.
+      {{ $t('paidSub.secretboxWarning') }}
     </v-alert>
 
     <v-tabs v-model="tab" color="primary" class="px-2">
-      <v-tab value="bindings">Bindings</v-tab>
-      <v-tab value="autoreg">Auto-registration</v-tab>
-      <v-tab value="tariffs">Tariffs</v-tab>
-      <v-tab value="payments">Payments</v-tab>
-      <v-tab value="messages">Messages</v-tab>
-      <v-tab value="orders">Orders</v-tab>
-      <v-tab value="bot">Bot</v-tab>
+      <v-tab value="bindings">{{ $t('paidSub.tabs.bindings') }}</v-tab>
+      <v-tab value="autoreg">{{ $t('paidSub.tabs.autoreg') }}</v-tab>
+      <v-tab value="tariffs">{{ $t('paidSub.tabs.tariffs') }}</v-tab>
+      <v-tab value="payments">{{ $t('paidSub.tabs.payments') }}</v-tab>
+      <v-tab value="messages">{{ $t('paidSub.tabs.messages') }}</v-tab>
+      <v-tab value="orders">{{ $t('paidSub.tabs.orders') }}</v-tab>
+      <v-tab value="bot">{{ $t('paidSub.tabs.bot') }}</v-tab>
     </v-tabs>
 
     <v-window v-model="tab" class="pa-4">
@@ -36,21 +38,55 @@
       <v-window-item value="bindings">
         <div class="d-flex align-center mb-2">
           <div class="text-caption text-medium-emphasis">
-            Bind a panel client to a Telegram user ID. The client then gets links/QR/stats and can pay in the bot.
+            {{ $t('paidSub.bindings.hint') }}
           </div>
           <v-spacer />
           <v-btn color="primary" :disabled="bindings.length === 0" @click="openAddBinding()">
-            <v-icon start>mdi-link-plus</v-icon>Add binding
+            <v-icon start>lucide:plus</v-icon>{{ $t('paidSub.bindings.add') }}
           </v-btn>
         </div>
         <v-alert v-if="!bindingsLoading && bindings.length === 0" type="info" variant="tonal" density="comfortable">
-          No clients found. Create a client on the <strong>Clients</strong> page (or enable Auto-registration),
-          then bind it to a Telegram ID here.
+          {{ $t('paidSub.bindings.empty') }}
         </v-alert>
+        <nexus-data-table
+          v-else-if="nexus"
+          :columns="bindingColumns"
+          :items="bindings"
+          :loading="bindingsLoading"
+          :row-key="(item) => item.clientId"
+        >
+          <template #col.name="{ item }">
+            <span class="paidsub-nexus__name">{{ item.name }}</span>
+          </template>
+          <template #col.enable="{ item }">
+            <status-badge :label="item.enable ? $t('paidSub.active') : $t('paidSub.disabled')" :tone="item.enable ? 'success' : 'error'" />
+          </template>
+          <template #col.tgUserId="{ item }">
+            <span v-if="item.tgUserId">{{ item.tgUserId }}</span>
+            <span v-else class="text-disabled">—</span>
+          </template>
+          <template #col.desc="{ item }">
+            <span v-if="item.desc">{{ item.desc }}</span>
+            <span v-else class="text-disabled">—</span>
+          </template>
+          <template #col.expiry="{ item }">
+            <template v-if="item.expiry > 0">
+              {{ new Date(item.expiry * 1000).toLocaleString() }}
+              (<v-chip size="x-small" label :color="item.expiry <= Date.now() / 1000 ? 'error' : ''">{{ HumanReadable.remainedDays(item.expiry) }}</v-chip>)
+            </template>
+            <v-chip v-else size="small" color="success" label>{{ HumanReadable.remainedDays(item.expiry) }}</v-chip>
+          </template>
+          <template #actions="{ item }">
+            <row-actions :actions="bindingActions(item)" @action="(key) => handleBindingAction(key, item)" />
+          </template>
+          <template #empty>
+            <empty-state icon="lucide:link" :title="$t('paidSub.bindings.none')" />
+          </template>
+        </nexus-data-table>
         <v-data-table v-else :headers="bindingHeaders" :items="bindings" :loading="bindingsLoading" density="comfortable">
           <template #item.enable="{ item }">
             <v-chip :color="item.enable ? 'success' : 'error'" size="small" variant="flat">
-              {{ item.enable ? 'active' : 'disabled' }}
+              {{ item.enable ? $t('paidSub.active') : $t('paidSub.disabled') }}
             </v-chip>
           </template>
           <template #item.tgUserId="{ item }">
@@ -79,7 +115,7 @@
       <v-window-item value="autoreg">
         <v-row>
           <v-col cols="12" md="6">
-            <v-switch v-model="autoRegister" color="primary" label="Auto-register unknown users" hide-details />
+            <v-switch v-model="autoRegister" color="primary" :label="$t('paidSub.autoreg.enable')" hide-details />
           </v-col>
           <v-col cols="12" md="6">
             <v-select
@@ -87,39 +123,62 @@
               :items="inboundOptions"
               item-title="title"
               item-value="value"
-              label="Inbounds for new clients"
+              :label="$t('paidSub.autoreg.inbounds')"
               multiple
               chips
             />
           </v-col>
           <v-col cols="12" md="4">
-            <v-text-field v-model="settings.paidSubTrialDays" type="number" label="Trial days" />
+            <v-text-field v-model="settings.paidSubTrialDays" type="number" :label="$t('paidSub.autoreg.trialDays')" />
           </v-col>
           <v-col cols="12" md="4">
-            <v-text-field v-model="settings.paidSubTrialVolumeGB" type="number" label="Trial traffic (GB, 0 = unlimited)" />
+            <v-text-field v-model="settings.paidSubTrialVolumeGB" type="number" :label="$t('paidSub.autoreg.trialVolume')" />
           </v-col>
           <v-col cols="12" md="4">
-            <v-text-field v-model="settings.paidSubMaxClients" type="number" label="Max auto-registered clients" />
+            <v-text-field v-model="settings.paidSubMaxClients" type="number" :label="$t('paidSub.autoreg.maxClients')" />
           </v-col>
           <v-col cols="12" md="4">
-            <v-text-field v-model="settings.paidSubStartRateLimitPerMin" type="number" label="/start rate limit (per min)" />
+            <v-text-field v-model="settings.paidSubStartRateLimitPerMin" type="number" :label="$t('paidSub.autoreg.rateLimit')" />
           </v-col>
         </v-row>
-        <v-btn color="primary" :loading="loading" @click="saveSettings">{{ $t('actions.set') ?? 'Save' }}</v-btn>
+        <v-btn color="primary" :loading="loading" @click="saveSettings">{{ $t('actions.set') }}</v-btn>
       </v-window-item>
 
       <!-- TARIFFS -->
       <v-window-item value="tariffs">
         <div class="d-flex mb-2">
           <v-spacer />
-          <v-btn color="primary" @click="openTariff()"><v-icon start>mdi-plus</v-icon>Add tariff</v-btn>
+          <v-btn color="primary" @click="openTariff()"><v-icon start>lucide:plus</v-icon>{{ $t('paidSub.tariffs.add') }}</v-btn>
         </div>
-        <v-data-table :headers="tariffHeaders" :items="tariffs" :loading="tariffsLoading" density="comfortable">
+        <nexus-data-table
+          v-if="nexus"
+          :columns="tariffColumns"
+          :items="tariffs"
+          :loading="tariffsLoading"
+          :row-key="(item) => item.id"
+        >
+          <template #col.name="{ item }">
+            <span class="paidsub-nexus__name">{{ item.name }}</span>
+          </template>
+          <template #col.price="{ item }">{{ (item.price / 100).toFixed(2) }} {{ item.currency }}</template>
+          <template #col.starsAmount="{ item }">{{ item.starsAmount || '—' }}</template>
+          <template #col.addTrafficBytes="{ item }">{{ item.addTrafficBytes ? (item.addTrafficBytes / (1024*1024*1024)).toFixed(2) + ' GB' : '∞' }}</template>
+          <template #col.enabled="{ item }">
+            <status-badge :label="item.enabled ? $t('nexus.on') : $t('nexus.off')" :tone="item.enabled ? 'success' : 'info'" />
+          </template>
+          <template #actions="{ item }">
+            <row-actions :actions="tariffActions()" @action="(key) => handleTariffAction(key, item)" />
+          </template>
+          <template #empty>
+            <empty-state icon="lucide:tag" :title="$t('paidSub.tariffs.none')" />
+          </template>
+        </nexus-data-table>
+        <v-data-table v-else :headers="tariffHeaders" :items="tariffs" :loading="tariffsLoading" density="comfortable">
           <template #item.price="{ item }">{{ (item.price / 100).toFixed(2) }} {{ item.currency }}</template>
           <template #item.starsAmount="{ item }">{{ item.starsAmount || '—' }}</template>
           <template #item.addTrafficBytes="{ item }">{{ item.addTrafficBytes ? (item.addTrafficBytes / (1024*1024*1024)).toFixed(2) + ' GB' : '∞' }}</template>
           <template #item.enabled="{ item }">
-            <v-chip :color="item.enabled ? 'success' : 'grey'" size="small" variant="flat">{{ item.enabled ? 'on' : 'off' }}</v-chip>
+            <v-chip :color="item.enabled ? 'success' : 'grey'" size="small" variant="flat">{{ item.enabled ? $t('nexus.on') : $t('nexus.off') }}</v-chip>
           </template>
           <template #item.actions="{ item }">
             <v-btn size="small" variant="text" icon="mdi-pencil" @click="openTariff(item)" />
@@ -132,78 +191,109 @@
       <v-window-item value="payments">
         <v-row>
           <v-col cols="12" md="4">
-            <v-text-field v-model="settings.paidSubCurrency" label="Default currency (e.g. RUB, USD)" maxlength="3" />
+            <v-combobox v-model="settings.paidSubCurrency" :items="currencies" :label="$t('paidSub.payments.currency')" />
           </v-col>
           <v-col cols="12" md="4">
-            <v-text-field v-model="settings.paidSubOrderTTLMinutes" type="number" label="Pending order TTL (min)" />
+            <v-text-field v-model="settings.paidSubOrderTTLMinutes" type="number" :label="$t('paidSub.payments.orderTtl')" />
           </v-col>
         </v-row>
         <v-divider class="my-2" />
-        <v-switch v-model="starsEnabled" color="primary" label="Telegram Stars (XTR)" hide-details />
+        <v-switch v-model="starsEnabled" color="primary" :label="$t('paidSub.payments.stars')" hide-details />
         <v-divider class="my-2" />
-        <v-switch v-model="yooEnabled" color="primary" label="YooKassa" hide-details />
+        <v-switch v-model="yooEnabled" color="primary" :label="$t('paidSub.payments.yookassa')" hide-details />
         <SettingsSecretField
           v-model="settings.paidSubYooKassaToken"
           :has-secret="settings.paidSubYooKassaTokenHasSecret"
-          label="YooKassa provider_token (BotFather)"
+          :label="$t('paidSub.payments.yookassaToken')"
         />
         <v-divider class="my-2" />
-        <v-switch v-model="stripeEnabled" color="primary" label="Stripe" hide-details />
+        <v-switch v-model="stripeEnabled" color="primary" :label="$t('paidSub.payments.stripe')" hide-details />
         <SettingsSecretField
           v-model="settings.paidSubStripeToken"
           :has-secret="settings.paidSubStripeTokenHasSecret"
-          label="Stripe provider_token (BotFather)"
+          :label="$t('paidSub.payments.stripeToken')"
         />
         <v-divider class="my-2" />
-        <v-switch v-model="paymasterEnabled" color="primary" label="PayMaster" hide-details />
+        <v-switch v-model="paymasterEnabled" color="primary" :label="$t('paidSub.payments.paymaster')" hide-details />
         <SettingsSecretField
           v-model="settings.paidSubPayMasterToken"
           :has-secret="settings.paidSubPayMasterTokenHasSecret"
-          label="PayMaster provider_token (BotFather)"
+          :label="$t('paidSub.payments.paymasterToken')"
         />
         <v-divider class="my-2" />
-        <v-switch v-model="cryptoEnabled" color="primary" label="CryptoBot" hide-details />
+        <v-switch v-model="cryptoEnabled" color="primary" :label="$t('paidSub.payments.crypto')" hide-details />
         <SettingsSecretField
           v-model="settings.paidSubCryptoBotToken"
           :has-secret="settings.paidSubCryptoBotTokenHasSecret"
-          label="CryptoBot API token"
+          :label="$t('paidSub.payments.cryptoToken')"
         />
         <v-divider class="my-2" />
-        <v-switch v-model="externalEnabled" color="primary" label="External payment link" hide-details />
+        <v-switch v-model="externalEnabled" color="primary" :label="$t('paidSub.payments.external')" hide-details />
         <v-text-field
           v-model="settings.paidSubExternalUrlTemplate"
-          label="External URL template (https://… with {orderId} {amount} {currency} {clientId})"
+          :label="$t('paidSub.payments.externalTemplate')"
         />
-        <v-btn class="mt-2" color="primary" :loading="loading" @click="saveSettings">{{ $t('actions.set') ?? 'Save' }}</v-btn>
+        <v-btn class="mt-2" color="primary" :loading="loading" @click="saveSettings">{{ $t('actions.set') }}</v-btn>
       </v-window-item>
 
       <!-- MESSAGES -->
       <v-window-item value="messages">
-        <div class="text-subtitle-2 mb-1">Greeting on /start</div>
+        <div class="text-subtitle-2 mb-1">{{ $t('paidSub.messages.greetingTitle') }}</div>
         <div class="text-caption text-medium-emphasis mb-2">
-          Shown to a bound client when they open the bot. Leave empty for the default greeting.
+          {{ $t('paidSub.messages.greetingHint') }}
         </div>
-        <v-textarea v-model="settings.paidSubGreeting" label="Custom greeting" rows="3" auto-grow counter="4096" />
-        <v-btn color="primary" :loading="loading" @click="saveSettings">{{ $t('actions.set') ?? 'Save' }}</v-btn>
+        <v-textarea v-model="settings.paidSubGreeting" :label="$t('paidSub.messages.greetingLabel')" rows="3" auto-grow counter="4096" />
+        <v-btn color="primary" :loading="loading" @click="saveSettings">{{ $t('actions.set') }}</v-btn>
 
         <v-divider class="my-4" />
 
-        <div class="text-subtitle-2 mb-1">Broadcast to all clients</div>
+        <div class="text-subtitle-2 mb-1">{{ $t('paidSub.messages.broadcastTitle') }}</div>
         <div class="text-caption text-medium-emphasis mb-2">
-          Sends a one-off announcement to every bound Telegram user ({{ recipientCount }} recipient(s)).
+          {{ $t('paidSub.messages.broadcastHint', { count: recipientCount }) }}
         </div>
-        <v-textarea v-model="broadcastText" label="Announcement text" rows="4" auto-grow counter="4096" />
+        <v-textarea v-model="broadcastText" :label="$t('paidSub.messages.broadcastLabel')" rows="4" auto-grow counter="4096" />
         <v-btn color="primary" :loading="broadcastLoading" :disabled="!broadcastText.trim() || recipientCount === 0" @click="broadcastDialog = true">
-          <v-icon start>mdi-bullhorn</v-icon>Send to all
+          <v-icon start>lucide:megaphone</v-icon>{{ $t('paidSub.messages.sendAll') }}
         </v-btn>
         <v-alert v-if="broadcastResult" type="info" variant="tonal" class="mt-3" density="comfortable">
-          Sent: {{ broadcastResult.sent }} · failed: {{ broadcastResult.failed }}
+          {{ $t('paidSub.messages.result', { sent: broadcastResult.sent, failed: broadcastResult.failed }) }}
         </v-alert>
       </v-window-item>
 
       <!-- ORDERS -->
       <v-window-item value="orders">
-        <v-data-table :headers="orderHeaders" :items="orders" :loading="ordersLoading" density="comfortable">
+        <nexus-data-table
+          v-if="nexus"
+          :columns="orderColumns"
+          :items="orders"
+          :loading="ordersLoading"
+          :row-key="(item) => item.id"
+        >
+          <template #col.clientName="{ item }">
+            <span v-if="item.clientName">{{ item.clientName }}</span>
+            <span v-else class="text-disabled">—</span>
+          </template>
+          <template #col.telegramUserId="{ item }">
+            <span v-if="item.telegramUserId">{{ item.telegramUserId }}</span>
+            <span v-else class="text-disabled">—</span>
+          </template>
+          <template #col.clientDesc="{ item }">
+            <span v-if="item.clientDesc">{{ item.clientDesc }}</span>
+            <span v-else class="text-disabled">—</span>
+          </template>
+          <template #col.amount="{ item }">{{ formatMoney(item.amount, item.currency) }}</template>
+          <template #col.status="{ item }">
+            <status-badge :label="item.status" :tone="orderStatusTone(item.status)" />
+          </template>
+          <template #col.createdAt="{ item }">{{ item.createdAt ? new Date(item.createdAt * 1000).toLocaleString() : '' }}</template>
+          <template #actions="{ item }">
+            <row-actions :actions="orderActions(item)" @action="(key) => handleOrderAction(key, item)" />
+          </template>
+          <template #empty>
+            <empty-state icon="lucide:receipt" :title="$t('table.noData')" />
+          </template>
+        </nexus-data-table>
+        <v-data-table v-else :headers="orderHeaders" :items="orders" :loading="ordersLoading" density="comfortable">
           <template #item.clientName="{ item }">
             <span v-if="item.clientName">{{ item.clientName }}</span>
             <span v-else class="text-disabled">—</span>
@@ -222,7 +312,7 @@
           </template>
           <template #item.createdAt="{ item }">{{ item.createdAt ? new Date(item.createdAt * 1000).toLocaleString() : '' }}</template>
           <template #item.actions="{ item }">
-            <v-btn v-if="item.status === 'paid'" size="small" variant="text" color="warning" @click="openRefund(item)">Refund</v-btn>
+            <v-btn v-if="item.status === 'paid'" size="small" variant="text" color="warning" @click="openRefund(item)">{{ $t('paidSub.orders.refund') }}</v-btn>
           </template>
         </v-data-table>
       </v-window-item>
@@ -231,24 +321,24 @@
       <v-window-item value="bot">
         <v-row>
           <v-col cols="12" md="6">
-            <v-switch v-model="enabled" color="primary" label="Enable client bot" hide-details />
+            <v-switch v-model="enabled" color="primary" :label="$t('paidSub.bot.enable')" hide-details />
           </v-col>
           <v-col cols="12" md="6">
-            <v-text-field v-model="settings.paidSubBotPollSeconds" type="number" label="Long-poll timeout (s)" />
+            <v-text-field v-model="settings.paidSubBotPollSeconds" type="number" :label="$t('paidSub.bot.pollTimeout')" />
           </v-col>
           <v-col cols="12">
             <SettingsSecretField
               v-model="settings.paidSubBotToken"
               :has-secret="settings.paidSubBotTokenHasSecret"
-              label="Bot token (separate from admin bot)"
+              :label="$t('paidSub.bot.token')"
             />
           </v-col>
         </v-row>
 
         <v-divider class="my-3" />
-        <div class="text-subtitle-2 mb-1">Connection / transport</div>
+        <div class="text-subtitle-2 mb-1">{{ $t('paidSub.bot.transportTitle') }}</div>
         <div class="text-caption text-medium-emphasis mb-2">
-          How this bot reaches Telegram. Independent from the admin Telegram module.
+          {{ $t('paidSub.bot.transportHint') }}
         </div>
         <v-row>
           <v-col cols="12" md="4">
@@ -257,7 +347,7 @@
               :items="transportModes"
               item-title="title"
               item-value="value"
-              label="Transport"
+              :label="$t('paidSub.bot.transport')"
             />
           </v-col>
           <v-col v-if="settings.paidSubTransportMode === 'outbound'" cols="12" md="8">
@@ -266,8 +356,8 @@
               :items="outboundOptions"
               item-title="title"
               item-value="value"
-              label="Outbound (sing-box) — requires core running"
-              :hint="outboundOptions.length === 0 ? 'No outbounds configured' : ''"
+              :label="$t('paidSub.bot.outbound')"
+              :hint="outboundOptions.length === 0 ? $t('paidSub.bot.noOutbounds') : ''"
               persistent-hint
             />
           </v-col>
@@ -276,27 +366,27 @@
               <SettingsSecretField
                 v-model="settings.paidSubProxyURL"
                 :has-secret="settings.paidSubProxyURLHasSecret"
-                label="Proxy URL (http/https/socks5, empty = direct)"
+                :label="$t('paidSub.bot.proxyUrl')"
               />
             </v-col>
             <v-col cols="12" md="6">
               <SettingsSecretField
                 v-model="settings.paidSubProxyUsername"
                 :has-secret="settings.paidSubProxyUsernameHasSecret"
-                label="Proxy username (optional)"
+                :label="$t('paidSub.bot.proxyUser')"
               />
             </v-col>
             <v-col cols="12" md="6">
               <SettingsSecretField
                 v-model="settings.paidSubProxyPassword"
                 :has-secret="settings.paidSubProxyPasswordHasSecret"
-                label="Proxy password (optional)"
+                :label="$t('paidSub.bot.proxyPass')"
               />
             </v-col>
           </template>
         </v-row>
 
-        <v-btn color="primary" :loading="loading" @click="saveSettings">{{ $t('actions.set') ?? 'Save' }}</v-btn>
+        <v-btn color="primary" :loading="loading" @click="saveSettings">{{ $t('actions.set') }}</v-btn>
       </v-window-item>
     </v-window>
   </v-card>
@@ -304,7 +394,7 @@
   <!-- Binding dialog -->
   <v-dialog v-model="bindingDialog" max-width="420">
     <v-card>
-      <v-card-title>{{ bindingEdit.isNew ? 'Add binding' : 'Bind Telegram to ' + bindingEdit.name }}</v-card-title>
+      <v-card-title>{{ bindingEdit.isNew ? $t('paidSub.bindingDialog.addTitle') : $t('paidSub.bindingDialog.editTitle', { name: bindingEdit.name }) }}</v-card-title>
       <v-card-text>
         <v-select
           v-if="bindingEdit.isNew"
@@ -312,14 +402,14 @@
           :items="clientOptions"
           item-title="title"
           item-value="value"
-          label="Client"
+          :label="$t('paidSub.bindingDialog.client')"
         />
-        <v-text-field v-model="bindingEdit.tgUserId" type="number" label="Telegram user ID (0 = unbind)" autofocus />
+        <v-text-field v-model="bindingEdit.tgUserId" type="number" :label="$t('paidSub.bindingDialog.tgId')" autofocus />
       </v-card-text>
       <v-card-actions>
         <v-spacer />
-        <v-btn variant="text" @click="bindingDialog = false">{{ $t('actions.cancel') ?? 'Cancel' }}</v-btn>
-        <v-btn color="primary" @click="saveBinding">{{ $t('actions.set') ?? 'Save' }}</v-btn>
+        <v-btn variant="text" @click="bindingDialog = false">{{ $t('actions.cancel') }}</v-btn>
+        <v-btn color="primary" @click="saveBinding">{{ $t('actions.set') }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -327,24 +417,24 @@
   <!-- Tariff dialog -->
   <v-dialog v-model="tariffDialog" max-width="560">
     <v-card>
-      <v-card-title>{{ tariffEdit.id ? 'Edit tariff' : 'New tariff' }}</v-card-title>
+      <v-card-title>{{ tariffEdit.id ? $t('paidSub.tariffs.edit') : $t('paidSub.tariffs.new') }}</v-card-title>
       <v-card-text>
-        <v-text-field v-model="tariffEdit.name" label="Name" />
-        <v-text-field v-model="tariffEdit.description" label="Description" />
+        <v-text-field v-model="tariffEdit.name" :label="$t('paidSub.cols.name')" />
+        <v-text-field v-model="tariffEdit.description" :label="$t('paidSub.cols.description')" />
         <v-row>
-          <v-col cols="6"><v-text-field v-model.number="tariffEdit.priceMajor" type="number" label="Price (major units)" /></v-col>
-          <v-col cols="6"><v-text-field v-model="tariffEdit.currency" label="Currency" maxlength="3" /></v-col>
-          <v-col cols="6"><v-text-field v-model.number="tariffEdit.starsAmount" type="number" label="Stars amount (XTR)" /></v-col>
-          <v-col cols="6"><v-text-field v-model.number="tariffEdit.addDays" type="number" label="+Days" /></v-col>
-          <v-col cols="6"><v-text-field v-model.number="tariffEdit.addTrafficGB" type="number" label="+Traffic (GB, 0 = unlimited)" /></v-col>
-          <v-col cols="6"><v-text-field v-model.number="tariffEdit.sort" type="number" label="Sort" /></v-col>
+          <v-col cols="6"><v-text-field v-model.number="tariffEdit.priceMajor" type="number" :label="$t('paidSub.tariffs.priceMajor')" /></v-col>
+          <v-col cols="6"><v-combobox v-model="tariffEdit.currency" :items="currencies" :label="$t('paidSub.tariffs.currency')" /></v-col>
+          <v-col cols="6"><v-text-field v-model.number="tariffEdit.starsAmount" type="number" :label="$t('paidSub.tariffs.starsAmount')" /></v-col>
+          <v-col cols="6"><v-text-field v-model.number="tariffEdit.addDays" type="number" :label="$t('paidSub.tariffs.addDays')" /></v-col>
+          <v-col cols="6"><v-text-field v-model.number="tariffEdit.addTrafficGB" type="number" :label="$t('paidSub.tariffs.addTrafficGB')" /></v-col>
+          <v-col cols="6"><v-text-field v-model.number="tariffEdit.sort" type="number" :label="$t('paidSub.tariffs.sort')" /></v-col>
         </v-row>
-        <v-switch v-model="tariffEdit.enabled" color="primary" label="Enabled" hide-details />
+        <v-switch v-model="tariffEdit.enabled" color="primary" :label="$t('paidSub.tariffs.enabledField')" hide-details />
       </v-card-text>
       <v-card-actions>
         <v-spacer />
-        <v-btn variant="text" @click="tariffDialog = false">{{ $t('actions.cancel') ?? 'Cancel' }}</v-btn>
-        <v-btn color="primary" @click="saveTariff">{{ $t('actions.set') ?? 'Save' }}</v-btn>
+        <v-btn variant="text" @click="tariffDialog = false">{{ $t('actions.cancel') }}</v-btn>
+        <v-btn color="primary" @click="saveTariff">{{ $t('actions.set') }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -352,12 +442,12 @@
   <!-- Broadcast confirm dialog -->
   <v-dialog v-model="broadcastDialog" max-width="460">
     <v-card>
-      <v-card-title>Send announcement?</v-card-title>
-      <v-card-text>This will message all {{ recipientCount }} bound client(s).</v-card-text>
+      <v-card-title>{{ $t('paidSub.messages.confirmTitle') }}</v-card-title>
+      <v-card-text>{{ $t('paidSub.messages.confirmText', { count: recipientCount }) }}</v-card-text>
       <v-card-actions>
         <v-spacer />
-        <v-btn variant="text" @click="broadcastDialog = false">{{ $t('actions.cancel') ?? 'Cancel' }}</v-btn>
-        <v-btn color="primary" @click="sendBroadcast">Send</v-btn>
+        <v-btn variant="text" @click="broadcastDialog = false">{{ $t('actions.cancel') }}</v-btn>
+        <v-btn color="primary" @click="sendBroadcast">{{ $t('paidSub.messages.send') }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -365,25 +455,23 @@
   <!-- Refund confirm dialog -->
   <v-dialog v-model="refundDialog" max-width="480">
     <v-card>
-      <v-card-title>Refund order #{{ refundEdit.id }}?</v-card-title>
+      <v-card-title>{{ $t('paidSub.refund.title', { id: refundEdit.id }) }}</v-card-title>
       <v-card-text>
         <div class="mb-2">{{ refundEdit.provider }} · {{ formatMoney(refundEdit.amount, refundEdit.currency) }}</div>
         <v-alert :type="refundEdit.provider === 'stars' ? 'info' : 'warning'" variant="tonal" density="comfortable" class="mb-3">
-          {{ refundEdit.provider === 'stars'
-            ? 'Telegram Stars will be refunded automatically.'
-            : 'Marks the order refunded only — refund the money in the provider\'s dashboard.' }}
+          {{ refundEdit.provider === 'stars' ? $t('paidSub.refund.starsNote') : $t('paidSub.refund.manualNote') }}
         </v-alert>
         <v-switch
           v-model="refundEdit.revoke"
           color="primary"
           hide-details
-          label="Revoke granted days/traffic from this order"
+          :label="$t('paidSub.refund.revoke')"
         />
       </v-card-text>
       <v-card-actions>
         <v-spacer />
-        <v-btn variant="text" @click="refundDialog = false">{{ $t('actions.cancel') ?? 'Cancel' }}</v-btn>
-        <v-btn color="warning" :loading="refundBusy" @click="doRefund">Refund</v-btn>
+        <v-btn variant="text" @click="refundDialog = false">{{ $t('actions.cancel') }}</v-btn>
+        <v-btn color="warning" :loading="refundBusy" @click="doRefund">{{ $t('paidSub.orders.refund') }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -391,15 +479,14 @@
   <!-- Unbind confirm dialog -->
   <v-dialog v-model="unbindDialog" max-width="440">
     <v-card>
-      <v-card-title>Unbind Telegram from {{ unbindEdit.name }}?</v-card-title>
+      <v-card-title>{{ $t('paidSub.unbind.title', { name: unbindEdit.name }) }}</v-card-title>
       <v-card-text>
-        This removes the Telegram link for client #{{ unbindEdit.clientId }}
-        (Telegram ID {{ unbindEdit.tgUserId }}). The client stays in the panel; only the binding is cleared.
+        {{ $t('paidSub.unbind.text', { clientId: unbindEdit.clientId, tgUserId: unbindEdit.tgUserId }) }}
       </v-card-text>
       <v-card-actions>
         <v-spacer />
-        <v-btn variant="text" @click="unbindDialog = false">{{ $t('actions.cancel') ?? 'Cancel' }}</v-btn>
-        <v-btn color="error" :loading="unbindBusy" @click="doUnbind">Unbind</v-btn>
+        <v-btn variant="text" @click="unbindDialog = false">{{ $t('actions.cancel') }}</v-btn>
+        <v-btn color="error" :loading="unbindBusy" @click="doUnbind">{{ $t('paidSub.unbind.confirm') }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -413,6 +500,73 @@ import SettingsSecretField from '@/components/SettingsSecretField.vue'
 import { normalizeSecretFields, stripSecretPlaceholders } from '@/components/settingsSecretField'
 import { push } from 'notivue'
 import { i18n } from '@/locales'
+import type { Column } from '@/components/nexus/data/dataTableColumns'
+import NexusDataTable from '@/components/nexus/data/NexusDataTable.vue'
+import RowActions from '@/components/nexus/data/RowActions.vue'
+import type { RowAction } from '@/components/nexus/data/rowActions'
+import EmptyState from '@/components/nexus/primitives/EmptyState.vue'
+import PageHeader from '@/components/nexus/primitives/PageHeader.vue'
+import StatusBadge from '@/components/nexus/primitives/StatusBadge.vue'
+import { useUiMode } from '@/uiMode/useUiMode'
+
+const { mode } = useUiMode()
+const nexus = computed(() => mode.value === 'nexus')
+
+// Nexus column labels are i18n keys (resolved via $t in NexusTableHeader); the
+// classic v-data-table headers below render titles directly, so they use
+// i18n.global.t. EN + RU translated; other locales fall back to EN.
+const bindingColumns: Column<any>[] = [
+  { key: 'name', labelKey: 'paidSub.cols.client', sortable: true },
+  { key: 'clientId', labelKey: 'paidSub.cols.clientId', sortable: true },
+  { key: 'desc', labelKey: 'paidSub.cols.description' },
+  { key: 'tgUserId', labelKey: 'paidSub.cols.telegramId' },
+  { key: 'expiry', labelKey: 'paidSub.cols.expiry', sortable: true },
+  { key: 'enable', labelKey: 'paidSub.cols.status' },
+]
+const tariffColumns: Column<any>[] = [
+  { key: 'name', labelKey: 'paidSub.cols.name', sortable: true },
+  { key: 'price', labelKey: 'paidSub.cols.price' },
+  { key: 'starsAmount', labelKey: 'paidSub.cols.stars' },
+  { key: 'addDays', labelKey: 'paidSub.cols.addDays' },
+  { key: 'addTrafficBytes', labelKey: 'paidSub.cols.addTraffic' },
+  { key: 'enabled', labelKey: 'paidSub.cols.enabled' },
+]
+const orderColumns: Column<any>[] = [
+  { key: 'id', labelKey: 'paidSub.cols.id', sortable: true },
+  { key: 'clientName', labelKey: 'paidSub.cols.clientName' },
+  { key: 'telegramUserId', labelKey: 'paidSub.cols.telegramId' },
+  { key: 'clientDesc', labelKey: 'paidSub.cols.description' },
+  { key: 'provider', labelKey: 'paidSub.cols.provider' },
+  { key: 'amount', labelKey: 'paidSub.cols.amount' },
+  { key: 'status', labelKey: 'paidSub.cols.status', sortable: true },
+  { key: 'createdAt', labelKey: 'paidSub.cols.created', sortable: true },
+]
+
+const bindingActions = (item: any): RowAction[] => [
+  { key: 'edit', labelKey: 'actions.edit', icon: 'lucide:pencil', inline: true },
+  { key: 'unbind', labelKey: 'paidSub.unbind.confirm', icon: 'lucide:unlink', tone: 'error', inline: true, hidden: !item.tgUserId },
+]
+const tariffActions = (): RowAction[] => [
+  { key: 'edit', labelKey: 'actions.edit', icon: 'lucide:pencil', inline: true },
+  { key: 'del', labelKey: 'actions.del', icon: 'lucide:trash-2', tone: 'error', inline: true },
+]
+const orderActions = (item: any): RowAction[] => [
+  { key: 'refund', labelKey: 'paidSub.orders.refund', icon: 'lucide:rotate-ccw', inline: true, hidden: item.status !== 'paid' },
+]
+
+const handleBindingAction = (key: string, item: any) => {
+  if (key === 'edit') openBinding(item)
+  else if (key === 'unbind') openUnbindConfirm(item)
+}
+const handleTariffAction = (key: string, item: any) => {
+  if (key === 'edit') openTariff(item)
+  else if (key === 'del') deleteTariff(item)
+}
+const handleOrderAction = (key: string, item: any) => {
+  if (key === 'refund') openRefund(item)
+}
+const orderStatusTone = (status: string): 'info' | 'success' | 'warning' | 'error' =>
+  status === 'paid' ? 'success' : status === 'pending' ? 'warning' : status === 'failed' ? 'error' : 'info'
 
 type SMap = Record<string, string>
 
@@ -532,9 +686,12 @@ const loadInbounds = async () => {
 }
 
 // ---- transport (proxy / outbound) ----
+// Common payment currencies offered as a dropdown; v-combobox still accepts a
+// provider-specific code not in this list. XTR = Telegram Stars.
+const currencies = ['RUB', 'USD', 'EUR', 'GBP', 'UAH', 'KZT', 'BYN', 'XTR']
 const transportModes = [
-  { title: 'Proxy', value: 'proxy' },
-  { title: 'Outbound (sing-box)', value: 'outbound' },
+  { title: i18n.global.t('paidSub.transportModes.proxy'), value: 'proxy' },
+  { title: i18n.global.t('paidSub.transportModes.outbound'), value: 'outbound' },
 ]
 const outboundOptions = ref<{ title: string; value: string }[]>([])
 const loadOutbounds = async () => {
@@ -549,12 +706,12 @@ const loadOutbounds = async () => {
 const bindings = ref<any[]>([])
 const bindingsLoading = ref(false)
 const bindingHeaders = [
-  { title: 'Client', key: 'name' },
-  { title: 'Client ID', key: 'clientId' },
-  { title: 'Description', key: 'desc' },
-  { title: 'Telegram ID', key: 'tgUserId' },
-  { title: 'Expiry', key: 'expiry' },
-  { title: 'Status', key: 'enable' },
+  { title: i18n.global.t('paidSub.cols.client'), key: 'name' },
+  { title: i18n.global.t('paidSub.cols.clientId'), key: 'clientId' },
+  { title: i18n.global.t('paidSub.cols.description'), key: 'desc' },
+  { title: i18n.global.t('paidSub.cols.telegramId'), key: 'tgUserId' },
+  { title: i18n.global.t('paidSub.cols.expiry'), key: 'expiry' },
+  { title: i18n.global.t('paidSub.cols.status'), key: 'enable' },
   { title: '', key: 'actions', sortable: false, align: 'end' as const },
 ]
 const bindingDialog = ref(false)
@@ -623,12 +780,12 @@ const sendBroadcast = async () => {
 const tariffs = ref<any[]>([])
 const tariffsLoading = ref(false)
 const tariffHeaders = [
-  { title: 'Name', key: 'name' },
-  { title: 'Price', key: 'price' },
-  { title: 'Stars', key: 'starsAmount' },
-  { title: '+Days', key: 'addDays' },
-  { title: '+Traffic', key: 'addTrafficBytes' },
-  { title: 'Enabled', key: 'enabled' },
+  { title: i18n.global.t('paidSub.cols.name'), key: 'name' },
+  { title: i18n.global.t('paidSub.cols.price'), key: 'price' },
+  { title: i18n.global.t('paidSub.cols.stars'), key: 'starsAmount' },
+  { title: i18n.global.t('paidSub.cols.addDays'), key: 'addDays' },
+  { title: i18n.global.t('paidSub.cols.addTraffic'), key: 'addTrafficBytes' },
+  { title: i18n.global.t('paidSub.cols.enabled'), key: 'enabled' },
   { title: '', key: 'actions', sortable: false, align: 'end' as const },
 ]
 const tariffDialog = ref(false)
@@ -657,14 +814,16 @@ const openTariff = (item?: any) => {
 }
 const saveTariff = async () => {
   const e = tariffEdit.value
+  // Clamp every numeric to >= 0 so a typo / negative spinner value never reaches
+  // the backend (which now also rejects negatives — defense in depth).
   const data: any = {
     name: e.name, description: e.description,
-    price: Math.round(Number(e.priceMajor) * 100),
+    price: Math.max(0, Math.round(Number(e.priceMajor) * 100) || 0),
     currency: (e.currency || 'RUB').toUpperCase(),
-    starsAmount: Math.round(Number(e.starsAmount) || 0),
-    addDays: Math.round(Number(e.addDays) || 0),
-    addTrafficBytes: Math.round((Number(e.addTrafficGB) || 0) * 1024 * 1024 * 1024),
-    sort: Math.round(Number(e.sort) || 0),
+    starsAmount: Math.max(0, Math.round(Number(e.starsAmount) || 0)),
+    addDays: Math.max(0, Math.round(Number(e.addDays) || 0)),
+    addTrafficBytes: Math.max(0, Math.round((Number(e.addTrafficGB) || 0) * 1024 * 1024 * 1024)),
+    sort: Math.max(0, Math.round(Number(e.sort) || 0)),
     enabled: !!e.enabled,
   }
   const action = e.id ? 'edit' : 'new'
@@ -681,14 +840,14 @@ const deleteTariff = async (item: any) => {
 const orders = ref<any[]>([])
 const ordersLoading = ref(false)
 const orderHeaders = [
-  { title: 'ID', key: 'id' },
-  { title: 'Client Name', key: 'clientName' },
-  { title: 'Telegram ID', key: 'telegramUserId' },
-  { title: 'Description', key: 'clientDesc' },
-  { title: 'Provider', key: 'provider' },
-  { title: 'Amount', key: 'amount' },
-  { title: 'Status', key: 'status' },
-  { title: 'Created', key: 'createdAt' },
+  { title: i18n.global.t('paidSub.cols.id'), key: 'id' },
+  { title: i18n.global.t('paidSub.cols.clientName'), key: 'clientName' },
+  { title: i18n.global.t('paidSub.cols.telegramId'), key: 'telegramUserId' },
+  { title: i18n.global.t('paidSub.cols.description'), key: 'clientDesc' },
+  { title: i18n.global.t('paidSub.cols.provider'), key: 'provider' },
+  { title: i18n.global.t('paidSub.cols.amount'), key: 'amount' },
+  { title: i18n.global.t('paidSub.cols.status'), key: 'status' },
+  { title: i18n.global.t('paidSub.cols.created'), key: 'createdAt' },
   { title: '', key: 'actions', sortable: false },
 ]
 const loadOrders = async () => {
@@ -732,3 +891,10 @@ const reloadAll = async () => {
 
 onMounted(reloadAll)
 </script>
+
+<style scoped>
+.paidsub-nexus__name {
+  color: var(--nexus-text-primary);
+  font-weight: 600;
+}
+</style>

@@ -1,5 +1,11 @@
 .DS_Store
+.git/
+node_modules/
+frontend/node_modules/
 dist/
+frontend/dist/
+build/
+coverage/
 release/
 backup/
 bin/
@@ -11,10 +17,12 @@ tmp
 .sync*
 *.tar.gz
 .kiro/
-frontend/node_modules
 frontend/.vite
 
 # local env files
+.env
+.env.*
+!.env.example
 .env.local
 .env.*.local
 

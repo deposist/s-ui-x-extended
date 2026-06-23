@@ -50,3 +50,36 @@ func TestTariffCRUD(t *testing.T) {
 		t.Fatalf("tariff not deleted")
 	}
 }
+
+// TestTariffRejectsNegativeValues pins F-14: negative money/duration/traffic/sort
+// must be refused on create and edit (not silently stored and ignored at apply).
+func TestTariffRejectsNegativeValues(t *testing.T) {
+	db := openTestDB(t)
+	if err := EnsureSchema(db); err != nil {
+		t.Fatalf("EnsureSchema: %v", err)
+	}
+	ts := NewTariffService()
+
+	if err := ts.Save("new", json.RawMessage(`{"name":"Bad","price":10000,"addDays":-5,"enabled":true}`)); err == nil {
+		t.Fatal("new with negative addDays must be rejected")
+	}
+	if all, _ := ts.GetAll(); len(all) != 0 {
+		t.Fatalf("rejected tariff must not be persisted, got %d", len(all))
+	}
+
+	// A valid tariff, then an edit that introduces a negative value must fail.
+	if err := ts.Save("new", json.RawMessage(`{"name":"OK","price":10000,"addDays":30,"enabled":true}`)); err != nil {
+		t.Fatalf("valid new: %v", err)
+	}
+	all, _ := ts.GetAll()
+	if len(all) != 1 {
+		t.Fatalf("expected 1 tariff, got %d", len(all))
+	}
+	if err := ts.Save("edit", json.RawMessage(fmt.Sprintf(`{"id":%d,"name":"OK","price":-1,"addDays":30,"enabled":true}`, all[0].Id))); err == nil {
+		t.Fatal("edit with negative price must be rejected")
+	}
+	got, _ := ts.Get(all[0].Id)
+	if got.Price != 10000 {
+		t.Fatalf("rejected edit must not change price, got %d", got.Price)
+	}
+}

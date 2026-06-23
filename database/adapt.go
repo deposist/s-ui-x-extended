@@ -86,17 +86,22 @@ func bumpVersionSetting(tx *gorm.DB) error {
 	if err != nil {
 		return err
 	}
+	// s-ui-x-extended uses its own versioning line (1.0.0-betaN) which is
+	// semver-lower than upstream releases (1.5.x). Always update when the
+	// major version matches (so upstream 1.4.x/1.5.x schemas are stamped to
+	// the current build version). Only skip when the DB version is from a
+	// different major AND semver-higher (a genuine future release).
 	if existing.Value == current {
 		return nil
 	}
-	// The running build is authoritative for the version stamp; only refuse to
-	// overwrite when the stored version is from a strictly higher MAJOR (a
-	// genuinely-future release we must not downgrade). Legacy/stale versions
-	// (e.g. upstream 1.x, or a final 1.0.0 vs a 1.0.0-betaN build) are stamped
-	// with the current build version.
-	if config.IsGenuinelyNewer(existing.Value, current) {
-		return nil
-	}
+	dbSem, okDB := config.ParseSemver(existing.Value)
+		curSem, okCur := config.ParseSemver(current)
+		if okDB && okCur && dbSem.Major != curSem.Major {
+			cmp, ok := config.CompareVersions(existing.Value, current)
+			if ok && cmp > 0 {
+				return nil // don't downgrade a future-version DB
+			}
+		}
 	return tx.Model(model.Setting{}).Where("key = ?", "version").Update("value", current).Error
 }
 

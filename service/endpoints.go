@@ -2,6 +2,8 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
 
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
@@ -12,6 +14,14 @@ import (
 
 type EndpointService struct {
 	WarpService
+	Runtime *Runtime
+}
+
+func (s *EndpointService) runtime() *Runtime {
+	if s != nil {
+		return runtimeOrDefault(s.Runtime)
+	}
+	return DefaultRuntime()
 }
 
 func (o *EndpointService) GetAll() (*[]map[string]interface{}, error) {
@@ -60,52 +70,140 @@ func (o *EndpointService) GetAllConfig(db *gorm.DB) ([]json.RawMessage, error) {
 	return endpointsJson, nil
 }
 
-func (s *EndpointService) Save(tx *gorm.DB, act string, data json.RawMessage) error {
-	var err error
-
+func (s *EndpointService) Save(tx *gorm.DB, act string, data json.RawMessage) (*entityCoreChange, error) {
 	switch act {
 	case "new", "edit":
-		var endpoint model.Endpoint
-		err = endpoint.UnmarshalJSON(data)
-		if err != nil {
-			return err
-		}
+		return s.saveEndpointUpsert(tx, act, data)
+	case "del":
+		return s.saveEndpointDelete(tx, data)
+	default:
+		return nil, common.NewErrorf("unknown action: %s", act)
+	}
+}
 
-		if endpoint.Type == "warp" {
-			if act == "new" {
-				err = s.WarpService.RegisterWarp(&endpoint)
-				if err != nil {
-					return err
-				}
-			} else {
-				var old_license string
-				err = tx.Model(model.Endpoint{}).Select("json_extract(ext, '$.license_key')").Where("id = ?", endpoint.Id).Find(&old_license).Error
-				if err != nil {
-					return err
-				}
-				err = s.WarpService.SetWarpLicense(old_license, &endpoint)
-				if err != nil {
-					return err
-				}
+func (s *EndpointService) saveEndpointUpsert(tx *gorm.DB, act string, data json.RawMessage) (*entityCoreChange, error) {
+	var endpoint model.Endpoint
+	if err := endpoint.UnmarshalJSON(data); err != nil {
+		return nil, err
+	}
+
+	if endpoint.Type == "warp" {
+		if act == "new" {
+			if err := s.WarpService.RegisterWarp(&endpoint); err != nil {
+				return nil, err
+			}
+		} else {
+			var old_license string
+			if err := tx.Model(model.Endpoint{}).Select("json_extract(ext, '$.license_key')").Where("id = ?", endpoint.Id).Find(&old_license).Error; err != nil {
+				return nil, err
+			}
+			if err := s.WarpService.SetWarpLicense(old_license, &endpoint); err != nil {
+				return nil, err
 			}
 		}
+	}
 
-		err = tx.Save(&endpoint).Error
+	var oldTag string
+	if endpoint.Id > 0 {
+		if err := tx.Model(model.Endpoint{}).Select("tag").Where("id = ?", endpoint.Id).Find(&oldTag).Error; err != nil {
+			return nil, err
+		}
+	}
+	renamed := oldTag != "" && oldTag != endpoint.Tag
+	if renamed {
+		// Renaming a referenced tag is treated like deleting the old tag: the
+		// next core start would fail on the dangling reference.
+		refs, err := outboundTagReferences(tx, oldTag, 0, endpoint.Id)
+		if err != nil {
+			return nil, err
+		}
+		if len(refs) > 0 {
+			return nil, formatTagReferenceError("endpoint", oldTag, refs)
+		}
+	}
+
+	if err := tx.Save(&endpoint).Error; err != nil {
+		return nil, err
+	}
+
+	refs, err := outboundTagReferences(tx, endpoint.Tag, 0, endpoint.Id)
+	if err != nil {
+		return nil, err
+	}
+	if eager := eagerTagReferences(refs); len(eager) > 0 {
+		// Groups, detour dialers and dns/ntp transports capture the adapter at
+		// construction; only a full restart re-binds them to the new one.
+		return &entityCoreChange{
+			needsRestart:  true,
+			restartReason: fmt.Sprintf("endpoint %q is captured at construction by %s", endpoint.Tag, eager[0].Locator),
+		}, nil
+	}
+	change := &entityCoreChange{reloadIds: []uint{endpoint.Id}}
+	if renamed {
+		change.removeTags = []string{oldTag}
+	}
+	return change, nil
+}
+
+func (s *EndpointService) saveEndpointDelete(tx *gorm.DB, data json.RawMessage) (*entityCoreChange, error) {
+	var tag string
+	if err := json.Unmarshal(data, &tag); err != nil {
+		return nil, err
+	}
+	var ownId uint
+	if err := tx.Model(model.Endpoint{}).Select("id").Where("tag = ?", tag).Scan(&ownId).Error; err != nil {
+		return nil, err
+	}
+	refs, err := outboundTagReferences(tx, tag, 0, ownId)
+	if err != nil {
+		return nil, err
+	}
+	if len(refs) > 0 {
+		return nil, formatTagReferenceError("endpoint", tag, refs)
+	}
+	if err := tx.Where("tag = ?", tag).Delete(model.Endpoint{}).Error; err != nil {
+		return nil, err
+	}
+	return &entityCoreChange{removeTags: []string{tag}}, nil
+}
+
+// RestartEndpoints replaces the given endpoints inside the running core
+// (remove by tag, then add the committed definition).
+func (s *EndpointService) RestartEndpoints(tx *gorm.DB, ids []uint) error {
+	coreInstance := s.runtime().Core()
+	if coreInstance == nil || !coreInstance.IsRunning() {
+		return nil
+	}
+	var endpoints []*model.Endpoint
+	if err := tx.Model(model.Endpoint{}).Where("id in ?", ids).Find(&endpoints).Error; err != nil {
+		return err
+	}
+	for _, endpoint := range endpoints {
+		if err := coreInstance.RemoveEndpoint(endpoint.Tag); err != nil && err != os.ErrInvalid {
+			return err
+		}
+		endpointConfig, err := endpoint.MarshalJSON()
 		if err != nil {
 			return err
 		}
-	case "del":
-		var tag string
-		err = json.Unmarshal(data, &tag)
-		if err != nil {
+		if err := coreInstance.AddEndpoint(endpointConfig); err != nil {
 			return err
 		}
-		err = tx.Where("tag = ?", tag).Delete(model.Endpoint{}).Error
-		if err != nil {
+	}
+	return nil
+}
+
+// RemoveEndpointsFromCore removes the given endpoint tags from the running
+// core. Missing tags are tolerated so removals stay idempotent.
+func (s *EndpointService) RemoveEndpointsFromCore(tags []string) error {
+	coreInstance := s.runtime().Core()
+	if coreInstance == nil || !coreInstance.IsRunning() {
+		return nil
+	}
+	for _, tag := range tags {
+		if err := coreInstance.RemoveEndpoint(tag); err != nil && err != os.ErrInvalid {
 			return err
 		}
-	default:
-		return common.NewErrorf("unknown action: %s", act)
 	}
 	return nil
 }

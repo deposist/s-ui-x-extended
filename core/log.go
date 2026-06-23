@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/deposist/s-ui-x-extended/config"
 	suiLog "github.com/deposist/s-ui-x-extended/logger"
 
 	"github.com/sagernet/sing-box/log"
@@ -58,7 +59,16 @@ func NewFactory(options log.Options) (log.Factory, error) {
 	case "stdout":
 		logWriter = os.Stdout
 	default:
-		logFilePath = logOptions.Output
+		// Defense-in-depth: never let a configured log path escape the panel
+		// directory. An unsafe value (absolute path or "..") that reached the
+		// stored config (legacy import, manual DB edit) falls back to stderr
+		// instead of letting the (often root) core write to an arbitrary file.
+		if !config.IsSafeLogOutputPath(logOptions.Output) {
+			suiLog.CoreWarning("ignoring unsafe log.output path; writing to stderr instead: ", logOptions.Output)
+			logWriter = os.Stderr
+		} else {
+			logFilePath = logOptions.Output
+		}
 	}
 	logFormatter := log.Formatter{
 		BaseTime:         options.BaseTime,

@@ -143,9 +143,11 @@ func TestSecurityCSRFMatrixDocumentsExceptions(t *testing.T) {
 	if login.Code == http.StatusForbidden {
 		t.Fatal("login must remain CSRF-exempt")
 	}
-	logout := performCSRFRequest(router, http.MethodGet, "/api/logout", "")
-	if logout.Code == http.StatusForbidden {
-		t.Fatal("GET logout must remain CSRF-exempt")
+	// Logout is now a CSRF-protected POST (a GET logout was forgeable cross-site),
+	// so a POST without a CSRF token must be rejected.
+	logout := performCSRFRequest(router, http.MethodPost, "/api/logout", "")
+	if logout.Code != http.StatusForbidden {
+		t.Fatalf("POST logout without CSRF token must be forbidden, got %d", logout.Code)
 	}
 	sessionLogin := performCSRFRequest(router, http.MethodGet, "/login", "")
 	if sessionLogin.Code != http.StatusNoContent {

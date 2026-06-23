@@ -83,9 +83,10 @@ describe('HttpUtils regression anchors', () => {
 
   it('clears CSRF and navigates to login on Invalid login responses', async () => {
     const { default: HttpUtils } = await loadHttpUtils()
-    mocks.apiGet
-      .mockResolvedValueOnce({ data: { success: false, msg: 'Invalid login', obj: null } })
-      .mockResolvedValueOnce({ data: { success: true, msg: '', obj: null } })
+    // logout() is now a CSRF-protected POST (no longer a forgeable GET), so the
+    // auto-logout consumes apiPost, not apiGet.
+    mocks.apiGet.mockResolvedValueOnce({ data: { success: false, msg: 'Invalid login', obj: null } })
+    mocks.apiPost.mockResolvedValueOnce({ data: { success: true, msg: '', obj: null } })
 
     await HttpUtils.get('api/load')
     await Promise.resolve()
@@ -93,7 +94,7 @@ describe('HttpUtils regression anchors', () => {
 
     expect(mocks.pushError).toHaveBeenCalledWith({ title: 'invalidLogin' })
     expect(mocks.clearCSRFToken).toHaveBeenCalledTimes(1)
-    expect(mocks.apiGet).toHaveBeenLastCalledWith('api/logout', { params: {} })
+    expect(mocks.apiPost).toHaveBeenLastCalledWith('api/logout', null, undefined)
     expect(mocks.routerPush).toHaveBeenCalledWith('/login')
   })
 

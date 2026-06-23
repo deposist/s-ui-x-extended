@@ -257,8 +257,14 @@ let intervalId: ReturnType<typeof setInterval> | null = null
 
 const startTimer = () => {
   intervalId = setInterval(() => {
+    // Don't poll a backgrounded tab nobody is looking at; resume on re-show.
+    if (document.hidden) return
     reloadData()
   }, 2000)
+}
+
+const onVisibilityChange = () => {
+  if (!document.hidden) reloadData()
 }
 
 const stopTimer = () => {
@@ -273,12 +279,14 @@ onMounted(async () => {
   if (Data().reloadItems.length != 0) {
     await reloadData()
     startTimer()
+    document.addEventListener('visibilitychange', onVisibilityChange)
   }
   loading.value = false
 })
 
 onBeforeUnmount(() => {
   stopTimer()
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 
 const logModal = ref({ visible: false })

@@ -46,6 +46,9 @@ func TestVersionInfoFailsSoftAndCachesFailure(t *testing.T) {
 	if info.Current != config.GetVersion() || info.Latest != "" || info.UpdateAvailable {
 		t.Fatalf("version check should fail soft: %#v", info)
 	}
+	if info.CheckError == "" {
+		t.Fatalf("soft failure should surface a checkError: %#v", info)
+	}
 	_ = (&VersionService{}).GetVersionInfo()
 	if calls.Load() != 1 {
 		t.Fatalf("failed version check should be cached, calls=%d", calls.Load())
@@ -107,30 +110,110 @@ func TestVersionIsNewer(t *testing.T) {
 	}
 }
 
-func resetVersionCheckForTest(t *testing.T, client *http.Client, url string) {
+// T010: beta channel picks the highest semver including a freshly-published
+// stable, i.e. graduation beta -> stable (1.5.9-beta2 -> 1.5.9).
+func TestSelectBetaReleasePicksHighestIncludingStableGraduation(t *testing.T) {
+	releases := []ghRelease{
+		{TagName: "v1.5.8"},
+		{TagName: "v1.5.9-beta2"},
+		{TagName: "v1.5.9"}, // stable graduation of the beta
+		{TagName: "v2.0.0", Draft: true},
+	}
+	best := selectBetaRelease(releases)
+	if best == nil || best.TagName != "v1.5.9" {
+		t.Fatalf("beta channel should pick stable v1.5.9 over beta and skip drafts, got %#v", best)
+	}
+}
+
+// T010: artifact URLs are derived from a fixed template (SR-004) and asset
+// availability is taken from the release's published assets.
+func TestResolveReleaseBuildsAssetURLsFromTemplate(t *testing.T) {
+	setArtifactPlatformForTest(t, "amd64")
+	resolved := resolveRelease(&ghRelease{
+		TagName: "v9.9.9",
+		Body:    "release notes here",
+		Assets: []ghAsset{
+			{Name: "s-ui-linux-amd64.tar.gz"},
+			{Name: "s-ui-linux-amd64.tar.gz.sha256"},
+		},
+	})
+	if resolved == nil || !resolved.assetAvailable {
+		t.Fatalf("expected installable asset, got %#v", resolved)
+	}
+	wantAsset := "https://github.com/deposist/s-ui-x-extended/releases/download/v9.9.9/s-ui-linux-amd64.tar.gz"
+	if resolved.assetURL != wantAsset || resolved.checksumURL != wantAsset+".sha256" {
+		t.Fatalf("artifact URLs not from template: %#v", resolved)
+	}
+	if resolved.notes != "release notes here" {
+		t.Fatalf("release notes not captured: %#v", resolved)
+	}
+}
+
+// T010: beta channel over HTTP surfaces the graduated stable as the latest.
+func TestCheckForChannelBetaGraduationOverHTTP(t *testing.T) {
+	setArtifactPlatformForTest(t, "amd64")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[
+			{"tag_name":"v99.0.0-beta1","prerelease":true,"assets":[{"name":"s-ui-linux-amd64.tar.gz"},{"name":"s-ui-linux-amd64.tar.gz.sha256"}]},
+			{"tag_name":"v99.0.0","prerelease":false,"assets":[{"name":"s-ui-linux-amd64.tar.gz"},{"name":"s-ui-linux-amd64.tar.gz.sha256"}]}
+		]`))
+	}))
+	defer server.Close()
+	resetVersionCheckForTest(t, server.Client(), server.URL)
+
+	info := (&VersionService{}).CheckForChannel(config.UpdateChannelBeta, true)
+	if info.Channel != config.UpdateChannelBeta {
+		t.Fatalf("channel not echoed: %#v", info)
+	}
+	if info.Latest != "v99.0.0" || info.Prerelease {
+		t.Fatalf("beta channel should graduate to stable v99.0.0, got %#v", info)
+	}
+	if !info.UpdateAvailable || !info.AssetAvailable {
+		t.Fatalf("expected an installable update, got %#v", info)
+	}
+}
+
+// T010: downgrade guard and missing-asset guard for the apply target.
+func TestResolveTargetGuards(t *testing.T) {
+	setArtifactPlatformForTest(t, "amd64")
+
+	// Older-than-current release on the channel -> no downgrade.
+	older := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"tag_name":"v0.0.1","assets":[{"name":"s-ui-linux-amd64.tar.gz"},{"name":"s-ui-linux-amd64.tar.gz.sha256"}]}`))
+	}))
+	defer older.Close()
+	resetVersionCheckForTest(t, older.Client(), older.URL)
+	if _, err := (&VersionService{}).ResolveTarget(config.UpdateChannelMain); err != errNotNewer {
+		t.Fatalf("expected errNotNewer for downgrade, got %v", err)
+	}
+
+	// Newer release but no asset for this platform -> not installable.
+	noAsset := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"tag_name":"v99.0.0","assets":[]}`))
+	}))
+	defer noAsset.Close()
+	resetVersionCheckForTest(t, noAsset.Client(), noAsset.URL)
+	if _, err := (&VersionService{}).ResolveTarget(config.UpdateChannelMain); err != errNoAsset {
+		t.Fatalf("expected errNoAsset, got %v", err)
+	}
+}
+
+func resetVersionCheckForTest(t *testing.T, client httpDoer, baseURL string) {
 	t.Helper()
 	versionCheckState.Lock()
 	oldClient := versionCheckState.client
-	oldURL := versionCheckState.url
-	oldCheckedAt := versionCheckState.checkedAt
-	oldLatest := versionCheckState.latest
-	oldReleaseURL := versionCheckState.releaseURL
-	oldETag := versionCheckState.etag
+	oldBase := versionCheckState.baseURL
+	oldChannels := versionCheckState.channels
 	versionCheckState.client = client
-	versionCheckState.url = url
-	versionCheckState.checkedAt = time.Time{}
-	versionCheckState.latest = ""
-	versionCheckState.releaseURL = ""
-	versionCheckState.etag = ""
+	versionCheckState.baseURL = baseURL
+	versionCheckState.channels = map[string]*channelState{}
 	versionCheckState.Unlock()
 	t.Cleanup(func() {
 		versionCheckState.Lock()
 		versionCheckState.client = oldClient
-		versionCheckState.url = oldURL
-		versionCheckState.checkedAt = oldCheckedAt
-		versionCheckState.latest = oldLatest
-		versionCheckState.releaseURL = oldReleaseURL
-		versionCheckState.etag = oldETag
+		versionCheckState.baseURL = oldBase
+		versionCheckState.channels = oldChannels
 		versionCheckState.Unlock()
 	})
 }
@@ -138,6 +221,15 @@ func resetVersionCheckForTest(t *testing.T, client *http.Client, url string) {
 func expireVersionCheckCacheForTest(t *testing.T) {
 	t.Helper()
 	versionCheckState.Lock()
-	versionCheckState.checkedAt = time.Now().Add(-2 * versionCheckCache)
+	for _, st := range versionCheckState.channels {
+		st.checkedAt = time.Now().Add(-2 * versionCheckCache)
+	}
 	versionCheckState.Unlock()
+}
+
+func setArtifactPlatformForTest(t *testing.T, platform string) {
+	t.Helper()
+	old := config.ArtifactPlatform
+	config.ArtifactPlatform = platform
+	t.Cleanup(func() { config.ArtifactPlatform = old })
 }

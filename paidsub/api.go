@@ -68,14 +68,14 @@ func (h *apiHandlers) broadcast(c *gin.Context) {
 }
 
 // status reports module health hints for the admin UI (whether the secretbox
-// env key is configured — payment tokens are better protected when it is).
+// env key is configured - payment tokens are better protected when it is).
 func (h *apiHandlers) status(c *gin.Context) {
 	respOK(c, map[string]any{
 		"secretboxKeySet": strings.TrimSpace(os.Getenv("SUI_SECRETBOX_KEY")) != "",
 	})
 }
 
-// apiMsg mirrors api.Msg exactly — all three fields MUST be present (no
+// apiMsg mirrors api.Msg exactly - all three fields MUST be present (no
 // omitempty), because the frontend's isMsg() requires the keys success, msg AND
 // obj; omitting msg/obj makes the client report "unknown data".
 type apiMsg struct {
@@ -207,7 +207,7 @@ func (h *apiHandlers) saveTariff(c *gin.Context) {
 }
 
 // orderRow is the read-only order history projection shown in the admin UI. It
-// joins the client's name/desc and deliberately selects only display columns —
+// joins the client's name/desc and deliberately selects only display columns -
 // provider secrets (idempotency_key, provider_charge_id, provider_payload) are
 // never selected, so they cannot leak.
 type orderRow struct {

@@ -14,7 +14,7 @@
     </v-row>
     <v-row>
       <v-col cols="12" sm="6" v-if="optionUrl">
-        <v-combobox v-model="data.url" :items="healthCheckUrls" :label="$t('types.lb.testUrl')" hide-details></v-combobox>
+        <v-text-field v-model="data.url" :label="$t('types.lb.testUrl')" hide-details></v-text-field>
       </v-col>
     </v-row>
     <v-row>
@@ -79,14 +79,12 @@
 </template>
 
 <script lang="ts">
-import { healthCheckUrls } from '@/types/recommended'
 
 export default {
   props: ['data', 'tags'],
   data() {
     return {
       menu: false,
-      healthCheckUrls,
     }
   },
   computed: {

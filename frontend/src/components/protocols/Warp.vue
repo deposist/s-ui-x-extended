@@ -109,7 +109,6 @@
         </v-text-field>
       </v-col>
     </v-row>
-    <Amnezia :data="data" />
     <v-card-actions>
       <v-spacer></v-spacer>
       <v-menu v-model="menu" :close-on-content-click="false" location="start">
@@ -135,11 +134,9 @@
 </template>
 
 <script lang="ts">
-import Amnezia from '@/components/protocols/Amnezia.vue'
 
 export default {
   props: ['data'],
-  components: { Amnezia },
   data() {
     return {
       menu: false,

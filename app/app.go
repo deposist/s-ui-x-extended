@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log"
+	"os"
 	"time"
 
 	"github.com/deposist/s-ui-x-extended/cmd/migration"
@@ -36,6 +37,17 @@ func (a *APP) Init() error {
 	log.Printf("%v %v", config.GetName(), config.GetVersion())
 
 	a.initLog()
+
+	// Self-update safety net (SR-012): if a freshly-applied binary keeps failing
+	// to boot, roll back to the backed-up previous binary and exit so systemd
+	// restarts into the restored version. Runs once per process (not on the
+	// in-process SIGHUP RestartApp, which does not re-run Init).
+	if exe, err := os.Executable(); err == nil && exe != "" {
+		if service.CheckPendingUpdate(exe) {
+			logger.Warning("self-update: new binary failed to boot; rolled back to previous version, restarting")
+			os.Exit(1)
+		}
+	}
 
 	// Run schema migrations against the on-disk DB before opening it. This
 	// turns the upgrade flow into a one-step procedure: drop in the new
@@ -72,6 +84,19 @@ func (a *APP) Init() error {
 	a.runtime = service.NewRuntime(a.core)
 	service.SetDefaultRuntime(a.runtime)
 
+	// Mirror ipmonitor IP-limit enforcement into the durable audit log (D-5).
+	// Set via a hook to avoid an import cycle; debounced upstream so it cannot
+	// flood the audit log.
+	ipmonitor.SecurityEventAuditHook = func(clientName string, kind string, payload map[string]any) {
+		_ = (&service.AuditService{}).Record(service.AuditEvent{
+			Actor:    "system",
+			Event:    "ip_limit_enforced",
+			Resource: "ipmonitor",
+			Severity: service.AuditSeverityWarn,
+			Details:  payload,
+		})
+	}
+
 	a.cronJob = cronjob.NewCronJob()
 	a.webServer, err = web.NewServer(web.WithRuntime(a.runtime))
 	if err != nil {
@@ -85,6 +110,10 @@ func (a *APP) Init() error {
 	// idempotently at startup. Non-fatal: a failure here must not block core.
 	if err := paidsub.EnsureSchema(database.GetDB()); err != nil {
 		logger.Warning("failed to ensure paidsub schema: ", err)
+	}
+	// Outbound failover observability table (non-authoritative; idempotent).
+	if err := service.EnsureFailoverSchema(database.GetDB()); err != nil {
+		logger.Warning("failed to ensure failover_state schema: ", err)
 	}
 
 	return nil
@@ -126,6 +155,13 @@ func (a *APP) Start() error {
 	// failure is surfaced loudly here and reflected in the panel's core status.
 	if err = a.configService.StartCore(); err != nil {
 		logger.Error("sing-box core failed to start; panel stays up so you can fix the config: ", err)
+	}
+
+	// Healthy boot reached: clear any pending self-update marker so this start is
+	// not counted as a failed update attempt (SR-012). No-op when no update is
+	// pending (e.g. normal restarts).
+	if exe, err := os.Executable(); err == nil && exe != "" {
+		service.ClearPendingUpdate(exe)
 	}
 
 	return nil
@@ -188,8 +224,4 @@ func (a *APP) RestartApp() {
 	if err := a.Start(); err != nil {
 		logger.Warning("failed to restart app: ", err)
 	}
-}
-
-func (a *APP) GetCore() *core.Core {
-	return a.core
 }

@@ -26,7 +26,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-//go:embed *
+// all: is required so Go embeds asset files whose names begin with "_" or ".".
+// Rolldown hashes are URL-safe base64 and occasionally produce "_"-leading
+// chunk/style names; a plain `//go:embed *` silently drops them, yielding a 404
+// on a dynamically imported module and a blank panel. (Vite is also configured
+// to prefix asset names so they never start with "_".)
+//
+//go:embed all:*
 var content embed.FS
 
 type Server struct {
@@ -280,8 +286,4 @@ func (s *Server) Stop() error {
 	}
 	s.cancel()
 	return nil
-}
-
-func (s *Server) GetCtx() context.Context {
-	return s.ctx
 }

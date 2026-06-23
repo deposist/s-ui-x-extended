@@ -83,7 +83,7 @@ func TestRoutingMatchers_SourceInboundUser(t *testing.T) {
 
 func TestRoutingMatchers_ExtGeoipAndBareIP(t *testing.T) {
 	// Regression: an Xray external geoip reference (ext:<file>:<code>) and a bare
-	// IP must never land in ip_cidr verbatim — sing-box's ParsePrefix rejects a
+	// IP must never land in ip_cidr verbatim - sing-box's ParsePrefix rejects a
 	// value without a mask, which used to make the whole migrated config fail to
 	// load ("ipcidr: parse: no '/'").
 	raw := `{"routing":{"rules":[{"outboundTag":"out","ip":["ext:geoip_RU.dat:ru","8.8.8.8","1.2.3.0/24","not-an-ip"]}]}}`
@@ -103,7 +103,7 @@ func TestRoutingMatchers_ExtGeoipAndBareIP(t *testing.T) {
 	want := map[string]bool{"8.8.8.8/32": true, "1.2.3.0/24": true}
 	for _, c := range ipc {
 		if !strings.Contains(c, "/") {
-			t.Errorf("ip_cidr entry %q has no mask — sing-box would refuse to start", c)
+			t.Errorf("ip_cidr entry %q has no mask - sing-box would refuse to start", c)
 		}
 		if !want[c] {
 			t.Errorf("unexpected ip_cidr entry %q", c)
@@ -192,7 +192,7 @@ func TestRouting_ProxyTaggedBlockKeepsRouting(t *testing.T) {
 
 // TestEnsureDirectOutbound_SkipsWhenSeededInDB is a regression test: when a
 // direct outbound already exists in the DB (the s-ui default InitDB seeds), the
-// migration must NOT inject a duplicate — otherwise createNewOutbounds reports a
+// migration must NOT inject a duplicate - otherwise createNewOutbounds reports a
 // misleading "outbound \"direct\" already exists; left unchanged" skip on every
 // routing import that references direct.
 func TestEnsureDirectOutbound_SkipsWhenSeededInDB(t *testing.T) {

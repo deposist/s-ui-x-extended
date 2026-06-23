@@ -27,7 +27,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { isNexusEnabled } from '@/uiMode/featureGate'
-import { DEFAULT_UI_MODE, isUiMode, type UiMode } from '@/uiMode/types'
+import { isUiMode, type UiMode } from '@/uiMode/types'
 import { useUiMode } from '@/uiMode/useUiMode'
 
 withDefaults(defineProps<{
@@ -40,15 +40,16 @@ const { t } = useI18n()
 const { mode, setMode } = useUiMode()
 const enabled = isNexusEnabled()
 const nexusMode: UiMode = 'nexus'
+const classicMode: UiMode = 'classic'
 
 const modeItems = computed(() => [
-  { title: t('nexus.mode.options.classic'), value: DEFAULT_UI_MODE },
+  { title: t('nexus.mode.options.classic'), value: classicMode },
   { title: t('nexus.mode.options.nexus'), value: nexusMode },
 ])
 
-const nextMode = computed<UiMode>(() => mode.value === nexusMode ? DEFAULT_UI_MODE : nexusMode)
+const nextMode = computed<UiMode>(() => mode.value === nexusMode ? classicMode : nexusMode)
 const quickIcon = computed(() =>
-  mode.value === nexusMode ? 'mdi-view-dashboard-outline' : 'mdi-view-dashboard-edit-outline',
+  mode.value === nexusMode ? 'lucide:layout-dashboard' : 'lucide:layout-panel-left',
 )
 const quickLabel = computed(() =>
   t('nexus.mode.switchTo', { mode: t(`nexus.mode.options.${nextMode.value}`) }),

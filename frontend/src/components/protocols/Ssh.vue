@@ -67,10 +67,10 @@
     </v-row>
     <v-row>
       <v-col cols="12" sm="6" md="4" v-if="data.host_key_algorithms != undefined">
-        <v-combobox v-model="data.host_key_algorithms" :items="sshHostKeyAlgorithms" :label="$t('types.ssh.algorithm')" multiple chips clearable hide-details></v-combobox>
+        <v-text-field v-model="algorithms" :label="$t('types.ssh.algorithm') + ' ' + $t('commaSeparated')" hide-details></v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4" v-if="data.client_version != undefined">
-        <v-combobox v-model="data.client_version" :items="sshVersions" :label="$t('types.ssh.clientVer')" hide-details></v-combobox>
+        <v-text-field v-model="data.client_version" :label="$t('types.ssh.clientVer')" hide-details></v-text-field>
       </v-col>
     </v-row>
     <v-card-actions>
@@ -101,7 +101,6 @@
 </template>
 
 <script lang="ts">
-import { sshVersions, sshHostKeyAlgorithms } from '@/types/recommended'
 
 export default {
   props: ['data'],
@@ -109,8 +108,6 @@ export default {
     return {
       menu: false,
       usePath: 0,
-      sshVersions,
-      sshHostKeyAlgorithms,
     }
   },
   computed: {
@@ -139,11 +136,15 @@ export default {
     },
     optionVer: {
       get(): boolean { return this.data.client_version != undefined },
-      set(v:boolean) { this.data.client_version = v ? 'SSH-2.0-OpenSSH_9.7' : undefined }
+      set(v:boolean) { this.data.client_version = v ? 'SSH-2.0-OpenSSH_7.4p1' : undefined }
     },
     host_key: {
       get(): string { return this.$props.data.host_key ? this.$props.data.host_key.join('\n') : '' },
       set(v:string) { this.$props.data.host_key = v.split('\n') }
+    },
+    algorithms: {
+      get() { return this.$props.data.host_key_algorithms ? this.$props.data.host_key_algorithms.join(',') : '' },
+      set(v:string) { this.$props.data.host_key_algorithms = v.length > 0 ? v.split(',') : undefined }
     },
   },
 }

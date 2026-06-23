@@ -17,8 +17,6 @@
     <WebSocket v-if="Transport.type == trspTypes.WebSocket" :transport="Transport" />
     <GRPC v-if="Transport.type == trspTypes.gRPC" :transport="Transport" />
     <HttpUpgrade v-if="Transport.type == trspTypes.HTTPUpgrade" :transport="Transport" />
-    <Xhttp v-if="Transport.type == trspTypes.XHTTP" :transport="Transport" />
-    <Mkcp v-if="Transport.type == trspTypes.mKCP" :transport="Transport" />
   </v-card>
 </template>
 
@@ -28,8 +26,6 @@ import Http from './transports/Http.vue'
 import WebSocket from './transports/WebSocket.vue'
 import GRPC from './transports/gRPC.vue'
 import HttpUpgrade from './transports/HttpUpgrade.vue'
-import Xhttp from './transports/Xhttp.vue'
-import Mkcp from './transports/Mkcp.vue'
 export default {
   props: ['data'],
   data() {
@@ -50,6 +46,6 @@ export default {
       set(newValue: string) { this.$props.data.transport = { type: newValue } }
     }
   },
-  components: { Http, WebSocket, GRPC, HttpUpgrade, Xhttp, Mkcp }
+  components: { Http, WebSocket, GRPC, HttpUpgrade }
 }
 </script>

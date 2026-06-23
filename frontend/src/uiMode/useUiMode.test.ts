@@ -26,10 +26,10 @@ describe('useUiMode', () => {
     stubLocalStorage()
   })
 
-  it('returns classic for a missing key without writing the default', async () => {
+  it('returns nexus for a missing key without writing the default', async () => {
     const { useUiMode } = await import('./useUiMode')
 
-    expect(useUiMode().mode.value).toBe('classic')
+    expect(useUiMode().mode.value).toBe('nexus')
     expect(getItem).toHaveBeenCalledWith(UI_MODE_KEY)
     expect(setItem).not.toHaveBeenCalled()
   })
@@ -43,14 +43,28 @@ describe('useUiMode', () => {
     expect(setItem).toHaveBeenCalledWith(UI_MODE_KEY, 'nexus')
   })
 
-  it('falls back to classic for an invalid stored value', async () => {
+  it('syncs the html ui mode dataset when mode changes', async () => {
+    const dataset: Record<string, string> = {}
+    vi.stubGlobal('document', { documentElement: { dataset } })
+    const { useUiMode } = await import('./useUiMode')
+
+    useUiMode().setMode('classic')
+
+    expect(dataset.uiMode).toBe('classic')
+
+    useUiMode().setMode('nexus')
+
+    expect(dataset.uiMode).toBe('nexus')
+  })
+
+  it('falls back to the default (nexus) for an invalid stored value', async () => {
     storage.set(UI_MODE_KEY, 'NEXUS')
     const { useUiMode } = await import('./useUiMode')
 
     const { mode, persisted } = useUiMode()
 
-    expect(mode.value).toBe('classic')
-    expect(persisted.value).toBe('classic')
+    expect(mode.value).toBe('nexus')
+    expect(persisted.value).toBe('nexus')
   })
 
   it('updates reactively when mode changes', async () => {

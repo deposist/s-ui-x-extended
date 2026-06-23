@@ -14,6 +14,12 @@ const (
 	loginRateLimitMax     = 5
 	loginRateLimitMaxKeys = 4096
 	loginRateLimitGCEvery = 1 * time.Minute
+	// Per-username tarpit: once a username exceeds loginRateLimitMax failures the
+	// per-username throttle imposes an escalating delay (capped) instead of a
+	// hard block, so a distributed attacker cannot lock a known admin out of
+	// their own panel by burning failures from rotating IPs.
+	loginRateLimitTarpitStep = 1 * time.Second
+	loginRateLimitTarpitMax  = 8 * time.Second
 
 	wsHandshakeRateLimitWindow  = 1 * time.Minute
 	wsHandshakeRateLimitMax     = 30
@@ -148,6 +154,34 @@ func loginRateLimitUserKey(username string) string {
 		u = "unknown"
 	}
 	return "user|" + u
+}
+
+// loginUsernameTarpitDelay returns how long to delay a login attempt for a
+// username that has exceeded the failure threshold. Unlike the per-IP limit,
+// the per-username throttle never refuses outright — it only slows attempts —
+// so a distributed attacker rotating source IPs cannot lock a known admin out
+// of their own panel. The delay grows with the failure count past the threshold
+// and is capped at loginRateLimitTarpitMax. Failures still accumulate via
+// recordLoginFailure and are cleared on success via resetLoginFailures.
+func loginUsernameTarpitDelay(key string) time.Duration {
+	loginRateLimitMu.Lock()
+	defer loginRateLimitMu.Unlock()
+	now := time.Now()
+	gcLoginRateLimitsLocked(now)
+	attempt := loginRateLimits[key]
+	if !attempt.firstFailAt.IsZero() && now.Sub(attempt.firstFailAt) > loginRateLimitWindow {
+		delete(loginRateLimits, key)
+		return 0
+	}
+	if attempt.failures < loginRateLimitMax {
+		return 0
+	}
+	over := attempt.failures - loginRateLimitMax + 1
+	delay := loginRateLimitTarpitStep * time.Duration(over)
+	if delay > loginRateLimitTarpitMax {
+		delay = loginRateLimitTarpitMax
+	}
+	return delay
 }
 
 func gcWSHandshakeRateLimitsLocked(now time.Time) {

@@ -1,6 +1,11 @@
 <template>
   <article class="nexus-kpi-card">
-    <span class="nexus-kpi-card__label">{{ label }}</span>
+    <div class="nexus-kpi-card__header">
+      <span class="nexus-kpi-card__label">{{ label }}</span>
+      <div v-if="$slots.meta" class="nexus-kpi-card__meta">
+        <slot name="meta" />
+      </div>
+    </div>
 
     <div class="nexus-kpi-card__summary">
       <strong class="nexus-kpi-card__value">{{ value }}</strong>
@@ -33,13 +38,29 @@ defineProps<{
   padding: var(--nexus-gap-4);
 }
 
+.nexus-kpi-card__header {
+  align-items: start;
+  display: flex;
+  gap: var(--nexus-gap-3);
+  justify-content: space-between;
+  min-width: 0;
+}
+
 .nexus-kpi-card__label {
   color: rgb(var(--v-theme-on-surface) / 68%);
+  flex: 1 1 auto;
   font-size: 0.76rem;
   font-weight: 600;
   letter-spacing: 0;
   line-height: 1.3;
+  min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.nexus-kpi-card__meta {
+  flex: 0 1 auto;
+  max-inline-size: min(100%, 320px);
+  min-inline-size: 0;
 }
 
 .nexus-kpi-card__summary {
@@ -78,5 +99,16 @@ defineProps<{
   display: grid;
   min-height: 40px;
   min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .nexus-kpi-card__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .nexus-kpi-card__meta {
+    max-inline-size: 100%;
+  }
 }
 </style>

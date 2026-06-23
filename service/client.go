@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -59,7 +60,7 @@ func decodeClientLinks(clientID uint, raw json.RawMessage, operation string) ([]
 
 // buildLinksForInbounds generates the "local" link entries for the given
 // inbounds. The result is always a non-nil slice so an empty result marshals to
-// `[]`, never `null` (the NULL Links class of bug — see decodeClientLinks).
+// `[]`, never `null` (the NULL Links class of bug - see decodeClientLinks).
 func buildLinksForInbounds(config json.RawMessage, inbounds []model.Inbound, hostname string) []map[string]string {
 	links := []map[string]string{}
 	for i := range inbounds {
@@ -229,6 +230,12 @@ func (s *ClientService) Save(tx *gorm.DB, act string, data json.RawMessage, host
 		for _, id := range ids {
 			var client model.Client
 			err = tx.Where("id = ?", id).First(&client).Error
+			// An id already gone (concurrent delete / stale client list) is a
+			// no-op, not a failure: deleting an absent client still leaves the
+			// caller with the intended end state (client absent).
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				continue
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -251,6 +258,13 @@ func (s *ClientService) Save(tx *gorm.DB, act string, data json.RawMessage, host
 		}
 		var client model.Client
 		err = tx.Where("id = ?", id).First(&client).Error
+		// Deleting a client that is already gone (a stale UI row, a concurrent
+		// delete from another session, or a resubmitted request) is an
+		// idempotent no-op instead of a "record not found" failure - the
+		// intended end state (client absent) already holds.
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -286,7 +300,7 @@ func (s *ClientService) updateLinksWithFixedInbounds(tx *gorm.DB, clients []*mod
 	// Each client may carry a different inbound set (notably act="editbulk", where
 	// ClientEditBulk.vue preserves per-client inbounds), so the inbound list used
 	// to regenerate a client's local links must come from THAT client's own
-	// Inbounds — not from clients[0], which would corrupt subscriptions for every
+	// Inbounds - not from clients[0], which would corrupt subscriptions for every
 	// client whose inbound set differs from the first one. Preloaded inbound rows
 	// are memoised by the raw Inbounds JSON so the common case of one shared set
 	// (act="addbulk", act="new"/"edit") still issues a single query.
@@ -524,6 +538,18 @@ func (s *ClientService) DepleteClients() (inboundIds []uint, err error) {
 	return inboundIds, nil
 }
 
+// clientResetPeriodDays returns a client's periodic-reset interval in days,
+// clamped to at least 1. The API save path persists model.Client verbatim, so an
+// apiv2/import caller can set auto_reset=true with reset_days=0 (the Vue UI forbids
+// it). Without the clamp NextReset == dt, and the @every-1m DepleteJob re-matches
+// and zeroes the client's traffic every minute, permanently defeating quota.
+func clientResetPeriodDays(resetDays int) int64 {
+	if resetDays < 1 {
+		return 1
+	}
+	return int64(resetDays)
+}
+
 func (s *ClientService) ResetClients(tx *gorm.DB, dt int64) ([]uint, error) {
 	var err error
 	var resetClients []*model.Client
@@ -561,7 +587,7 @@ func (s *ClientService) ResetClients(tx *gorm.DB, dt int64) ([]uint, error) {
 		return nil, err
 	}
 	for _, client := range resetClients {
-		client.NextReset = dt + (int64(client.ResetDays) * 86400)
+		client.NextReset = dt + (clientResetPeriodDays(client.ResetDays) * 86400)
 		client.DelayStart = false
 		if err := updateClientResetFields(tx, client.Id, map[string]interface{}{
 			"next_reset":  client.NextReset,
@@ -593,7 +619,7 @@ func (s *ClientService) ResetClients(tx *gorm.DB, dt int64) ([]uint, error) {
 			}
 			inboundIds = common.UnionUintArray(inboundIds, clientInboundIds)
 		}
-		client.NextReset = dt + (int64(client.ResetDays) * 86400)
+		client.NextReset = dt + (clientResetPeriodDays(client.ResetDays) * 86400)
 		client.TotalUp += client.Up
 		client.TotalDown += client.Down
 		client.Up = 0

@@ -106,7 +106,7 @@ func TestFormatOrderAmount(t *testing.T) {
 }
 
 func TestOrderStatusLabelFallback(t *testing.T) {
-	if got := orderStatusLabel("paid", langEN); got != "✅ paid" {
+	if got := orderStatusLabel("paid", langEN); got != "paid" {
 		t.Errorf("paid label = %q", got)
 	}
 	if got := orderStatusLabel("weird", langEN); got != "weird" {

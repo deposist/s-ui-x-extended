@@ -3,6 +3,7 @@
     <kpi-row
       :loading="dashboardLoading"
       :summary="kpiSummary"
+      :status="systemStatus"
       :traffic="trafficSparkSeries"
       :ws-state="ws.state"
     />
@@ -180,7 +181,7 @@ const loadAuditEvents = async () => {
   }
 
   auditLoading.value = true
-  const msg = await HttpUtils.get('api/security/audit', { limit: 6 })
+  const msg = await HttpUtils.get('api/security/audit', { limit: 10 })
 
   if (msg.success) {
     auditEvents.value = mapAuditDisplayItems(auditEventsFromPayload(msg.obj))
@@ -208,6 +209,12 @@ const setOffline = () => {
   sparkSamples.value = []
 }
 
+// Pause the status poll while the browser tab is hidden; refresh immediately
+// when it becomes visible again so the operator never sees stale data.
+const onVisible = () => {
+  if (!document.hidden) void loadStatus()
+}
+
 onMounted(() => {
   if (data.lastLoad === 0) {
     void data.loadData()
@@ -215,15 +222,18 @@ onMounted(() => {
 
   window.addEventListener('online', setOnline)
   window.addEventListener('offline', setOffline)
+  document.addEventListener('visibilitychange', onVisible)
   void loadStatus()
   void loadAuditEvents()
   statusInterval = setInterval(() => {
+    if (document.hidden) return
     void loadStatus()
   }, 10000)
 })
 
 onBeforeUnmount(() => {
   if (statusInterval) clearInterval(statusInterval)
+  document.removeEventListener('visibilitychange', onVisible)
   window.removeEventListener('online', setOnline)
   window.removeEventListener('offline', setOffline)
 })
@@ -242,8 +252,8 @@ onBeforeUnmount(() => {
   min-width: 0;
   grid-template-columns:
     minmax(0, 1.15fr)
-    minmax(0, 1.4fr)
-    minmax(320px, 1fr);
+    minmax(0, 1.25fr)
+    minmax(300px, 1fr);
 }
 
 @media (max-width: 1264px) {

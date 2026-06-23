@@ -6,13 +6,17 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/deposist/s-ui-x-extended/config"
 	"github.com/deposist/s-ui-x-extended/core"
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
+	"github.com/deposist/s-ui-x-extended/ipmonitor"
 	"github.com/deposist/s-ui-x-extended/logger"
 	"github.com/deposist/s-ui-x-extended/realtime"
 	"github.com/deposist/s-ui-x-extended/util/common"
 	"github.com/deposist/s-ui-x-extended/util/redact"
+
+	"gorm.io/gorm"
 )
 
 type ConfigService struct {
@@ -40,6 +44,45 @@ type SingBoxConfig struct {
 	Experimental json.RawMessage   `json:"experimental"`
 }
 
+var restartInboundsAfterSave = func(s *ConfigService, inboundIds []uint) error {
+	return s.InboundService.RestartInbounds(database.GetDB(), inboundIds)
+}
+
+var restartServicesAfterSave = func(s *ConfigService, serviceIds []uint) error {
+	return s.ServicesService.RestartServices(database.GetDB(), serviceIds)
+}
+
+var removeServicesFromCoreAfterSave = func(s *ConfigService, tags []string) error {
+	return s.ServicesService.RemoveServicesFromCore(tags)
+}
+
+var removeInboundsFromCoreAfterSave = func(s *ConfigService, tags []string) error {
+	return s.InboundService.RemoveInboundsFromCore(tags)
+}
+
+var restartOutboundsAfterSave = func(s *ConfigService, outboundIds []uint) error {
+	return s.OutboundService.RestartOutbounds(database.GetDB(), outboundIds)
+}
+
+var removeOutboundsFromCoreAfterSave = func(s *ConfigService, tags []string) error {
+	return s.OutboundService.RemoveOutboundsFromCore(tags)
+}
+
+var restartEndpointsAfterSave = func(s *ConfigService, endpointIds []uint) error {
+	return s.EndpointService.RestartEndpoints(database.GetDB(), endpointIds)
+}
+
+var removeEndpointsFromCoreAfterSave = func(s *ConfigService, tags []string) error {
+	return s.EndpointService.RemoveEndpointsFromCore(tags)
+}
+
+var invalidateClientPolicyCacheAfterSave = ipmonitor.InvalidateAllCache
+var invalidateSubscriptionCacheAfterSave func()
+
+func RegisterSubscriptionCacheInvalidator(fn func()) {
+	invalidateSubscriptionCacheAfterSave = fn
+}
+
 func NewConfigService(core *core.Core) *ConfigService {
 	runtime := NewRuntime(core)
 	SetDefaultRuntime(runtime)
@@ -53,10 +96,10 @@ func NewConfigServiceWithRuntime(runtime *Runtime) *ConfigService {
 		TlsService:      TlsService{Runtime: runtime, InboundService: InboundService{Runtime: runtime, ClientService: ClientService{Runtime: runtime}}, ServicesService: ServicesService{Runtime: runtime}},
 		SettingService:  SettingService{},
 		InboundService:  InboundService{Runtime: runtime, ClientService: ClientService{Runtime: runtime}},
-		OutboundService: OutboundService{},
+		OutboundService: OutboundService{Runtime: runtime},
 		ServicesService: ServicesService{Runtime: runtime},
-		EndpointService: EndpointService{},
-		ProviderService: ProviderService{},
+		EndpointService: EndpointService{Runtime: runtime},
+		ProviderService:  ProviderService{},
 		Runtime:         runtime,
 	}
 }
@@ -172,25 +215,34 @@ func (s *ConfigService) StartCore() error {
 }
 
 // RestartCore is invoked from user actions; it bypasses the cooldown so the
-// caller observes the true start status.
+// caller observes the true start status. It waits for any in-flight core
+// operation instead of being silently skipped.
 func (s *ConfigService) RestartCore() error {
 	manager := s.runtime().restart()
 	if manager == nil {
 		return common.NewError("restart manager not initialized")
 	}
-	return manager.run(func() error {
-		coreInstance := s.coreInstance()
-		if coreInstance == nil {
-			return common.NewError("core not initialized")
-		}
-		if err := s.StopCore(); err != nil {
-			return err
-		}
-		return s.startCoreLocked(true)
-	})
+	return manager.runBlocking(s.restartCoreLocked)
+}
+
+// restartCoreLocked must only run inside a restart-manager section: it calls
+// the lock-free primitives directly and never re-enters the manager.
+func (s *ConfigService) restartCoreLocked() error {
+	if err := s.stopCoreLocked(); err != nil {
+		return err
+	}
+	return s.startCoreLocked(true)
 }
 
 func (s *ConfigService) StopCore() error {
+	manager := s.runtime().restart()
+	if manager == nil {
+		return common.NewError("restart manager not initialized")
+	}
+	return manager.runBlocking(s.stopCoreLocked)
+}
+
+func (s *ConfigService) stopCoreLocked() error {
 	coreInstance := s.coreInstance()
 	if coreInstance == nil {
 		return common.NewError("core not initialized")
@@ -231,8 +283,8 @@ func (s *ConfigService) CheckOutboundWithContext(ctx context.Context, tag string
 }
 
 func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initUsers string, loginUser string, hostname string) (objs []string, err error) {
-	objs = []string{obj}
-	needsCoreRestart := false
+	var plan postCommitCorePlan
+	invalidateClientPolicyCache := false
 	auditTelegramBackupPassphrase, auditTelegramBackupPassphraseConfigured, err := s.telegramBackupPassphraseAuditState(obj, data)
 	if err != nil {
 		return nil, err
@@ -241,6 +293,14 @@ func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initU
 	db := database.GetDB()
 	tx := db.Begin()
 	defer func() {
+		// A panic inside dispatchSave (e.g. a malformed entity blob) leaves the
+		// named return err == nil, which would otherwise take the commit branch
+		// and persist a half-applied transaction. Roll back first, then re-raise
+		// so gin.Recovery still surfaces a 500 but the DB stays consistent.
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		}
 		if err == nil {
 			if commitErr := tx.Commit().Error; commitErr != nil {
 				err = commitErr
@@ -249,70 +309,23 @@ func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initU
 			if auditTelegramBackupPassphrase {
 				s.SettingService.recordTelegramBackupPassphraseChanged(loginUser, auditTelegramBackupPassphraseConfigured)
 			}
+			if invalidateClientPolicyCache {
+				invalidateClientPolicyCacheAfterSave()
+			}
+			if invalidateSubscriptionCacheAfterSave != nil {
+				invalidateSubscriptionCacheAfterSave()
+			}
+			// Advance the change marker only after the tx actually committed,
+			// so a failed commit cannot make CheckChanges report phantom changes.
+			s.setLastUpdate(time.Now().Unix())
 			realtime.Publish(realtime.TopicConfigInvalidated, nil)
-			coreInstance := s.coreInstance()
-			if coreInstance == nil {
-				return
-			}
-			if needsCoreRestart {
-				if coreInstance.IsRunning() {
-					if restartErr := s.RestartCore(); restartErr != nil {
-						logger.Warning("sing-box restart after save failed: ", restartErr)
-					}
-				} else {
-					if startErr := s.startCore(true); startErr != nil {
-						logger.Warning("sing-box start after save failed: ", startErr)
-					}
-				}
-			} else if !coreInstance.IsRunning() {
-				if startErr := s.startCore(true); startErr != nil {
-					logger.Warning("sing-box start after save failed: ", startErr)
-				}
-			}
+			s.applyPostCommitCoreChanges(plan)
 		} else {
 			tx.Rollback()
 		}
 	}()
 
-	switch obj {
-	case "clients":
-		var inboundIds []uint
-		inboundIds, err = s.ClientService.Save(tx, act, data, hostname)
-		if err == nil && len(inboundIds) > 0 {
-			objs = append(objs, "inbounds")
-			needsCoreRestart = true
-		}
-	case "tls":
-		err = s.TlsService.Save(tx, act, data, hostname)
-		objs = append(objs, "clients", "inbounds")
-		needsCoreRestart = true
-	case "inbounds":
-		err = s.InboundService.Save(tx, act, data, initUsers, hostname)
-		objs = append(objs, "clients")
-		needsCoreRestart = true
-	case "outbounds":
-		err = s.OutboundService.Save(tx, act, data)
-		needsCoreRestart = true
-	case "services":
-		err = s.ServicesService.Save(tx, act, data)
-		needsCoreRestart = true
-	case "endpoints":
-		err = s.EndpointService.Save(tx, act, data)
-		needsCoreRestart = true
-	case "providers":
-		err = s.ProviderService.Save(tx, act, data)
-		needsCoreRestart = true
-	case "config":
-		err = s.SettingService.SaveConfig(tx, data)
-		if err != nil {
-			return nil, err
-		}
-		needsCoreRestart = true
-	case "settings":
-		err = s.SettingService.Save(tx, data)
-	default:
-		return nil, common.NewError("unknown object: ", obj)
-	}
+	objs, plan, invalidateClientPolicyCache, err = s.dispatchSave(tx, obj, act, data, initUsers, hostname)
 	if err != nil {
 		return nil, err
 	}
@@ -332,6 +345,120 @@ func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initU
 	s.setLastUpdate(time.Now().Unix())
 
 	return objs, nil
+}
+
+// dispatchSave routes the save to the owning entity service and translates its
+// outcome into the post-commit core plan. The bool result reports whether the
+// client policy cache must be invalidated after commit.
+func (s *ConfigService) dispatchSave(tx *gorm.DB, obj string, act string, data json.RawMessage, initUsers string, hostname string) ([]string, postCommitCorePlan, bool, error) {
+	objs := []string{obj}
+	var plan postCommitCorePlan
+	switch obj {
+	case "clients":
+		inboundIds, err := s.ClientService.Save(tx, act, data, hostname)
+		if err != nil {
+			return nil, plan, false, err
+		}
+		if len(inboundIds) > 0 {
+			objs = append(objs, "inbounds")
+			plan.inboundIds = inboundIds
+		}
+		return objs, plan, true, nil
+	case "tls":
+		inboundIds, serviceIds, err := s.TlsService.Save(tx, act, data, hostname)
+		if err != nil {
+			return nil, plan, false, err
+		}
+		objs = append(objs, "clients", "inbounds")
+		plan.inboundIds = inboundIds
+		plan.serviceIds = serviceIds
+		return objs, plan, false, nil
+	case "inbounds":
+		change, err := s.InboundService.Save(tx, act, data, initUsers, hostname)
+		if err != nil {
+			return nil, plan, false, err
+		}
+		objs = append(objs, "clients")
+		plan.mergeInboundChange(change)
+		return objs, plan, false, nil
+	case "outbounds":
+		change, err := s.OutboundService.Save(tx, act, data)
+		if err != nil {
+			return nil, plan, false, err
+		}
+		plan.mergeOutboundChange(change)
+		return objs, plan, false, nil
+	case "services":
+		change, err := s.ServicesService.Save(tx, act, data)
+		if err != nil {
+			return nil, plan, false, err
+		}
+		plan.mergeServiceChange(change)
+		return objs, plan, false, nil
+	case "endpoints":
+		change, err := s.EndpointService.Save(tx, act, data)
+		if err != nil {
+			return nil, plan, false, err
+		}
+		plan.mergeEndpointChange(change)
+		return objs, plan, false, nil
+	case "providers":
+		err := s.ProviderService.Save(tx, act, data)
+		if err != nil {
+			return nil, plan, false, err
+		}
+		return objs, plan, false, nil
+	case "config":
+		if err := validateConfigLogOutput(data); err != nil {
+			return nil, plan, false, err
+		}
+		changed, err := s.SettingService.ConfigBlobChanged(tx, data)
+		if err != nil {
+			return nil, plan, false, err
+		}
+		if err := s.SettingService.SaveConfig(tx, data); err != nil {
+			return nil, plan, false, err
+		}
+		// A byte-identical re-save keeps the audit trail but must not drop
+		// every active connection through a pointless core restart.
+		plan.needsCoreRestart = changed
+		return objs, plan, false, nil
+	case "settings":
+		err := s.SettingService.Save(tx, data)
+		if err != nil {
+			return nil, plan, false, err
+		}
+		return objs, plan, false, nil
+	default:
+		return nil, plan, false, common.NewError("unknown object: ", obj)
+	}
+}
+
+// validateConfigLogOutput rejects unsafe sing-box log.output paths before the
+// config blob is persisted, so the core (often running as root) cannot be
+// pointed at an arbitrary file on disk. See config.IsSafeLogOutputPath.
+func validateConfigLogOutput(data json.RawMessage) error {
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(data, &top); err != nil {
+		// Not a JSON object: it cannot carry a log.output value, so there is
+		// nothing to validate; the existing save/assembly path handles
+		// malformed config.
+		return nil
+	}
+	logRaw, ok := top["log"]
+	if !ok {
+		return nil
+	}
+	var logBlock struct {
+		Output string `json:"output"`
+	}
+	if err := json.Unmarshal(logRaw, &logBlock); err != nil {
+		return err
+	}
+	if !config.IsSafeLogOutputPath(logBlock.Output) {
+		return common.NewError("log.output must be a relative path within the panel directory; absolute paths and '..' are not allowed")
+	}
+	return nil
 }
 
 func (s *ConfigService) coreInstance() *core.Core {

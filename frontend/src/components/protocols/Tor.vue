@@ -21,13 +21,12 @@
         <v-icon @click="del_torrc_option(index)" color="error" icon="mdi-delete" />
       </v-col>
       <v-col cols="12" sm="6" md="4">
-        <v-combobox
+        <v-text-field
           :label="$t('objects.key')"
-          :items="torrcKeys"
           hide-details
           @input="update_key(index,$event.target.value)"
           v-model="torrc.name">
-        </v-combobox>
+        </v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4">
         <v-text-field
@@ -42,7 +41,6 @@
 </template>
 
 <script lang="ts">
-import { torrcKeys } from '@/types/recommended'
 type torrc_option = {
   name: string
   value: string
@@ -50,7 +48,7 @@ type torrc_option = {
 export default {
   props: ['data'],
   data() {
-    return { torrcKeys }
+    return {}
   },
     methods: {
     add_torrc_option() {

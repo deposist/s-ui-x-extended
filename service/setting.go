@@ -97,6 +97,7 @@ var defaultValueMap = map[string]string{
 	"ipShowRaw":                   "false",
 	"ipHistoryRetentionDays":      "30",
 	"observabilityMemoryCapMB":    "32",
+	"updateChannel":               "main",
 	"telegramEnabled":             "false",
 	"telegramBotToken":            "",
 	"telegramChatID":              "",
@@ -145,11 +146,47 @@ var defaultValueMap = map[string]string{
 	"paidSubOrderTTLMinutes":      "30",
 	"paidSubGreeting":             "",
 	"paidSubRefundRevoke":         "true",
-	"config":                      defaultConfig,
-	"version":                     "",
+	// IP TLS certificate (Let's Encrypt shortlived profile, RFC 8738) issued
+	// in-process via go-acme/lego. User-editable controls + machine-managed
+	// state (account key, issued paths, expiry). See IpCertificateService.
+	"ipCertEnabled":             "false",
+	"ipCertTargetIP":            "",
+	"ipCertEmail":               "",
+	"ipCertChallengePort":       "80",
+	"ipCertApplyTarget":         "panel",
+	"ipCertAccountKey":          "",
+	"ipCertAccountRegistration": "",
+	"ipCertLastIP":              "",
+	"ipCertCertPath":            "",
+	"ipCertKeyPath":             "",
+	"ipCertNotAfter":            "",
+	"ipCertLastIssue":           "",
+	"config":                    defaultConfig,
+	"version":                   "",
+}
+
+// ipCertInternalSettingKeys are machine-managed: written only by
+// IpCertificateService, never by the settings UI. They are stripped from
+// GetAllSetting and rejected by isEditableSettingKey.
+var ipCertInternalSettingKeys = []string{
+	"ipCertAccountKey",
+	"ipCertAccountRegistration",
+	"ipCertLastIP",
+	"ipCertCertPath",
+	"ipCertKeyPath",
+	"ipCertNotAfter",
+	"ipCertLastIssue",
 }
 
 type SettingService struct {
+}
+
+type PanelLoadSettings struct {
+	Config      string
+	SubURI      string
+	SubJsonURI  string
+	SubClashURI string
+	TrafficAge  int
 }
 
 func (s *SettingService) GetAllSetting() (*map[string]string, error) {
@@ -180,13 +217,32 @@ func (s *SettingService) GetAllSetting() (*map[string]string, error) {
 	delete(allSetting, "config")
 	delete(allSetting, "version")
 	delete(allSetting, "paidSubUpdateOffset") // internal bot cursor, not user-facing
+	for _, key := range ipCertInternalSettingKeys {
+		delete(allSetting, key)             // machine-managed IP cert state, not user-facing
+		delete(allSetting, key+"HasSecret") // and its encrypted-marker, if any
+	}
 
 	return &allSetting, nil
 }
 
 func (s *SettingService) ensureDefaultSettings(db *gorm.DB) error {
+	keys := defaultSettingKeys()
+	// Fast path: once every default key is present, skip the seed transaction
+	// entirely so GetAllSetting stays a pure read on the steady-state hot path
+	// (e.g. GET /load). Previously this opened a ~90-statement write
+	// transaction (INSERT ... WHERE NOT EXISTS per default key) on every call,
+	// which serializes on SQLite's single writer and dominated /load CPU under
+	// concurrency. The seed below is unchanged and still idempotent, so the
+	// concurrent first-init path (issue #19) keeps its exactly-once semantics.
+	var present int64
+	if err := db.Model(model.Setting{}).Where("key IN ?", keys).Count(&present).Error; err != nil {
+		return err
+	}
+	if int(present) == len(keys) {
+		return nil
+	}
 	return db.Transaction(func(tx *gorm.DB) error {
-		for _, key := range defaultSettingKeys() {
+		for _, key := range keys {
 			value, _ := defaultSettingValue(key)
 			if err := insertSettingIfMissing(tx, key, value); err != nil {
 				return err
@@ -217,6 +273,22 @@ func insertSettingIfMissing(tx *gorm.DB, key string, value string) error {
 func (s *SettingService) ResetSettings() error {
 	db := database.GetDB()
 	return db.Where("1 = 1").Delete(model.Setting{}).Error
+}
+
+// GetUpdateChannel returns the persisted self-update channel, defaulting to
+// "main" when unset or invalid. Channel constants and validation live in the
+// config package (config.UpdateChannelMain / config.NormalizeUpdateChannel).
+func (s *SettingService) GetUpdateChannel() string {
+	value, err := s.getString("updateChannel")
+	if err != nil {
+		return config.UpdateChannelMain
+	}
+	return config.NormalizeUpdateChannel(value)
+}
+
+// SetUpdateChannel persists the self-update channel after validating it.
+func (s *SettingService) SetUpdateChannel(channel string) error {
+	return s.setString("updateChannel", config.NormalizeUpdateChannel(channel))
 }
 
 func (s *SettingService) getSetting(key string) (*model.Setting, error) {
@@ -445,6 +517,56 @@ func (s *SettingService) GetTrafficAge() (int, error) {
 	return s.getInt("trafficAge")
 }
 
+func (s *SettingService) LoadPanelSettingsForData(host string) (PanelLoadSettings, error) {
+	keys := []string{"config", "subURI", "subKeyFile", "subCertFile", "subDomain", "subPort", "subPath", "subJsonURI", "subClashURI", "trafficAge"}
+	values, err := s.getSettingsSnapshot(keys...)
+	if err != nil {
+		return PanelLoadSettings{}, err
+	}
+	trafficAge, err := strconv.Atoi(values["trafficAge"])
+	if err != nil {
+		return PanelLoadSettings{}, err
+	}
+	return PanelLoadSettings{
+		Config:      values["config"],
+		SubURI:      finalSubURIFromSettings(host, values),
+		SubJsonURI:  values["subJsonURI"],
+		SubClashURI: values["subClashURI"],
+		TrafficAge:  trafficAge,
+	}, nil
+}
+
+func (s *SettingService) getSettingsSnapshot(keys ...string) (map[string]string, error) {
+	db := database.GetDB()
+	if db == nil {
+		return nil, common.NewError("database is not initialized")
+	}
+	settings := make([]model.Setting, 0, len(keys))
+	if err := db.Model(model.Setting{}).Where("key IN ?", keys).Find(&settings).Error; err != nil {
+		return nil, err
+	}
+	values := make(map[string]string, len(keys))
+	for _, key := range keys {
+		value, ok := defaultSettingValue(key)
+		if !ok {
+			return nil, common.NewErrorf("key <%v> not in defaultValueMap", key)
+		}
+		values[key] = value
+	}
+	for _, setting := range settings {
+		if isEncryptedSettingKey(setting.Key) {
+			value, err := s.decryptSettingValue(setting.Key, setting.Value)
+			if err != nil {
+				return nil, err
+			}
+			values[setting.Key] = value
+			continue
+		}
+		values[setting.Key] = setting.Value
+	}
+	return values, nil
+}
+
 func (s *SettingService) GetAuditRetentionDays() (int, error) {
 	return s.getInt("auditRetentionDays")
 }
@@ -621,18 +743,22 @@ func (s *SettingService) GetFinalSubURI(host string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	SubURI := (*allSetting)["subURI"]
+	return finalSubURIFromSettings(host, *allSetting), nil
+}
+
+func finalSubURIFromSettings(host string, settings map[string]string) string {
+	SubURI := settings["subURI"]
 	if SubURI != "" {
-		return SubURI, nil
+		return SubURI
 	}
 	protocol := "http"
-	if (*allSetting)["subKeyFile"] != "" && (*allSetting)["subCertFile"] != "" {
+	if settings["subKeyFile"] != "" && settings["subCertFile"] != "" {
 		protocol = "https"
 	}
-	if (*allSetting)["subDomain"] != "" {
-		host = (*allSetting)["subDomain"]
+	if settings["subDomain"] != "" {
+		host = settings["subDomain"]
 	}
-	portValue := (*allSetting)["subPort"]
+	portValue := settings["subPort"]
 	authority := hostForURL(host)
 	if (portValue == "80" && protocol == "http") || (portValue == "443" && protocol == "https") {
 		portValue = ""
@@ -640,7 +766,7 @@ func (s *SettingService) GetFinalSubURI(host string) (string, error) {
 	if portValue != "" {
 		authority = net.JoinHostPort(host, portValue)
 	}
-	return protocol + "://" + authority + (*allSetting)["subPath"], nil
+	return protocol + "://" + authority + settings["subPath"]
 }
 
 func hostForURL(host string) string {
@@ -671,6 +797,26 @@ func (s *SettingService) SaveConfig(tx *gorm.DB, config json.RawMessage) error {
 		return tx.Create(&model.Setting{Key: "config", Value: string(configs)}).Error
 	}
 	return nil
+}
+
+// ConfigBlobChanged reports whether saving the given config would change the
+// stored blob. It compares against the exact persisted representation
+// (SaveConfig's MarshalIndent form), so a byte-identical re-save is detected
+// reliably and any doubt counts as changed.
+func (s *SettingService) ConfigBlobChanged(tx *gorm.DB, config json.RawMessage) (bool, error) {
+	configs, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return false, err
+	}
+	var stored model.Setting
+	result := tx.Model(model.Setting{}).Where("key = ?", "config").Limit(1).Find(&stored)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return true, nil
+	}
+	return stored.Value != string(configs), nil
 }
 
 func (s *SettingService) Save(tx *gorm.DB, data json.RawMessage) error {
@@ -757,9 +903,13 @@ func isEditableSettingKey(key string) bool {
 	switch key {
 	case "secret", "installSalt", "sessionGeneration", "config", "version", "paidSubUpdateOffset":
 		return false
-	default:
-		return true
 	}
+	for _, internal := range ipCertInternalSettingKeys {
+		if key == internal {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *SettingService) validateAll(settings map[string]string) error {
@@ -786,6 +936,9 @@ func (s *SettingService) validateAll(settings map[string]string) error {
 			return err
 		}
 		if err := validatePaidSubSettingInput(key, obj); err != nil {
+			return err
+		}
+		if err := validateIpCertSettingInput(key, obj); err != nil {
 			return err
 		}
 		if key == "forceCookieSecure" || key == "sessionSameSiteStrict" {
@@ -1281,6 +1434,50 @@ func validatePaidSubSettingInput(key string, value string) error {
 		if len([]rune(value)) > 4096 {
 			return common.NewError("paidSubGreeting is too long (max 4096)")
 		}
+	}
+	return nil
+}
+
+func validateIpCertSettingInput(key string, value string) error {
+	switch key {
+	case "ipCertEnabled":
+		if _, err := strconv.ParseBool(value); err != nil {
+			return common.NewError("invalid boolean setting: ", key)
+		}
+	case "ipCertTargetIP":
+		if value == "" {
+			return nil
+		}
+		if err := validateIssuableIP(value); err != nil {
+			return err
+		}
+	case "ipCertEmail":
+		if err := validateIpCertEmail(value, false); err != nil {
+			return err
+		}
+	case "ipCertChallengePort":
+		if err := validateIntRange(key, value, 1, 65535); err != nil {
+			return err
+		}
+	case "ipCertApplyTarget":
+		if err := validateIpCertApplyTarget(value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateIpCertApplyTarget accepts "panel" or "inbound:<numericTlsId>".
+func validateIpCertApplyTarget(value string) error {
+	if value == "" || value == "panel" {
+		return nil
+	}
+	rest, ok := strings.CutPrefix(value, "inbound:")
+	if !ok {
+		return common.NewError("ipCertApplyTarget must be 'panel' or 'inbound:<id>'")
+	}
+	if id, err := strconv.Atoi(rest); err != nil || id <= 0 {
+		return common.NewError("ipCertApplyTarget inbound id must be a positive integer")
 	}
 	return nil
 }

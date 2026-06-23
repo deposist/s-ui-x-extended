@@ -61,31 +61,6 @@ func TestCompareVersionsUsesSemverPrecedence(t *testing.T) {
 	}
 }
 
-func TestIsGenuinelyNewer(t *testing.T) {
-	tests := []struct {
-		existing string
-		current  string
-		want     bool
-	}{
-		// Legacy upstream / stale versions are NOT genuinely newer than the
-		// reset 1.0.0-betaN line — the build is authoritative and stamps them.
-		{existing: "1.4.3", current: "1.0.0-beta1", want: false},
-		{existing: "1.7.0", current: "1.0.0-beta3", want: false},
-		{existing: "1.0.0", current: "1.0.0-beta1", want: false},
-		{existing: "1.0.0-beta1", current: "1.0.0-beta3", want: false},
-		// A strictly higher MAJOR is a genuinely-future release: do not touch it.
-		{existing: "99.0.0", current: "1.0.0-beta1", want: true},
-		{existing: "2.0.0", current: "1.0.0", want: true},
-		// Unparseable existing version: the build wins (not newer).
-		{existing: "not-a-version", current: "1.0.0-beta1", want: false},
-	}
-	for _, tt := range tests {
-		if got := IsGenuinelyNewer(tt.existing, tt.current); got != tt.want {
-			t.Fatalf("IsGenuinelyNewer(%q, %q) = %v; want %v", tt.existing, tt.current, got, tt.want)
-		}
-	}
-}
-
 func TestReleasePolicyDocCoversVersionRules(t *testing.T) {
 	doc, err := os.ReadFile("../docs/release-policy.md")
 	if err != nil {

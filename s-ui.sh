@@ -9,6 +9,7 @@ yellow='\033[0;33m'
 plain='\033[0m'
 
 LANG_FILE="/etc/s-ui/lang"
+SECRETBOX_ENV_FILE="/etc/s-ui/secretbox.env"
 SECRETBOX_DROPIN_DIR="/etc/systemd/system/s-ui.service.d"
 SECRETBOX_DROPIN_FILE="${SECRETBOX_DROPIN_DIR}/10-secretbox-env.conf"
 
@@ -109,6 +110,7 @@ t() {
             ssl_revoke)          echo "吊销证书"; return ;;
             ssl_force_renew)     echo "强制续签"; return ;;
             ssl_self_signed)     echo "自签名证书"; return ;;
+            ssl_ip)              echo "为 IP 地址签发证书 (Let's Encrypt)"; return ;;
 
             menu_title)          echo "S-UI 管理脚本"; return ;;
             menu_exit)           echo "退出"; return ;;
@@ -134,8 +136,17 @@ t() {
             menu_ssl)            echo "SSL 证书管理"; return ;;
             menu_ssl_cf)         echo "Cloudflare SSL 证书"; return ;;
             menu_language)       echo "语言"; return ;;
-            enter_choice_range)  echo "请输入你的选择 [0-22]："; return ;;
-            enter_valid_number)  echo "请输入正确的数字 [0-22]"; return ;;
+            menu_cookie_key)     echo "生成会话 Cookie 密钥（SUI_COOKIE_KEY）"; return ;;
+            cookie_key_exists)   echo "已存在 SUI_COOKIE_KEY（当前：$2）"; return ;;
+            cookie_key_rotate_q) echo "轮换密钥？新密钥将签发新会话，旧密钥保留用于平滑过渡，现有会话不会被注销"; return ;;
+            cookie_key_none)     echo "尚未设置 SUI_COOKIE_KEY，将生成新密钥。"; return ;;
+            cookie_key_generated) echo "已生成 SUI_COOKIE_KEY（仅显示一次）："; return ;;
+            cookie_key_file)     echo "密钥文件：$2"; return ;;
+            cookie_key_keep)     echo "请保持该文件私密，并在更新与恢复时保留同一个值。"; return ;;
+            cookie_key_restart_rollover) echo "密钥在服务重启后生效。旧密钥已保留用于平滑过渡，现有会话保持有效。"; return ;;
+            cookie_key_restart_fresh) echo "密钥在服务重启后生效。使用旧后备密钥签发的会话将被注销一次，需要重新登录。"; return ;;
+            enter_choice_range)  echo "请输入你的选择 [0-23]："; return ;;
+            enter_valid_number)  echo "请输入正确的数字 [0-23]"; return ;;
             lang_select)         echo "Select language / Выберите язык / 请选择语言"; return ;;
             lang_set_to)         echo "语言已设置为：$2"; return ;;
 
@@ -298,6 +309,8 @@ t() {
         ru:ssl_force_renew)     echo "Принудительно продлить";;
         en:ssl_self_signed)     echo "Self-signed certificate";;
         ru:ssl_self_signed)     echo "Самоподписанный сертификат";;
+        en:ssl_ip)              echo "Issue a certificate for an IP address (Let's Encrypt)";;
+        ru:ssl_ip)              echo "Выпустить сертификат для IP-адреса (Let's Encrypt)";;
 
         en:menu_title)          echo "S-UI management script";;
         ru:menu_title)          echo "Скрипт управления S-UI";;
@@ -347,10 +360,28 @@ t() {
         ru:menu_ssl_cf)         echo "SSL-сертификат Cloudflare";;
         en:menu_language)       echo "Language";;
         ru:menu_language)       echo "Язык";;
-        en:enter_choice_range)  echo "Enter your choice [0-22]: ";;
-        ru:enter_choice_range)  echo "Введите ваш выбор [0-22]: ";;
-        en:enter_valid_number)  echo "Enter a valid number [0-22]";;
-        ru:enter_valid_number)  echo "Введите корректное число [0-22]";;
+        en:menu_cookie_key)     echo "Generate session cookie key (SUI_COOKIE_KEY)";;
+        ru:menu_cookie_key)     echo "Сгенерировать ключ сессионных cookie (SUI_COOKIE_KEY)";;
+        en:cookie_key_exists)   echo "SUI_COOKIE_KEY already exists (current: $2)";;
+        ru:cookie_key_exists)   echo "SUI_COOKIE_KEY уже существует (текущий: $2)";;
+        en:cookie_key_rotate_q) echo "Rotate it? A new key will sign new sessions; the previous key is kept for rollover, so active sessions are not signed out";;
+        ru:cookie_key_rotate_q) echo "Ротировать его? Новый ключ будет подписывать новые сессии; прежний ключ сохранится для плавного перехода, активные сессии не разлогинятся";;
+        en:cookie_key_none)     echo "SUI_COOKIE_KEY is not set yet; a new key will be generated.";;
+        ru:cookie_key_none)     echo "SUI_COOKIE_KEY еще не задан; будет сгенерирован новый ключ.";;
+        en:cookie_key_generated) echo "Generated SUI_COOKIE_KEY (shown once):";;
+        ru:cookie_key_generated) echo "Сгенерирован SUI_COOKIE_KEY (показывается один раз):";;
+        en:cookie_key_file)     echo "Key file: $2";;
+        ru:cookie_key_file)     echo "Файл ключа: $2";;
+        en:cookie_key_keep)     echo "Keep this file private and preserve the same value across updates and restores.";;
+        ru:cookie_key_keep)     echo "Держите этот файл в секрете и сохраняйте то же значение при обновлениях и восстановлении.";;
+        en:cookie_key_restart_rollover) echo "The key takes effect after a service restart. The previous key is kept for rollover, so active sessions stay signed in.";;
+        ru:cookie_key_restart_rollover) echo "Ключ вступит в силу после перезапуска службы. Прежний ключ сохранен для плавной ротации. Активные сессии останутся в силе.";;
+        en:cookie_key_restart_fresh) echo "The key takes effect after a service restart. Sessions signed with the previous fallback key will be signed out once; log in again afterwards.";;
+        ru:cookie_key_restart_fresh) echo "Ключ вступит в силу после перезапуска службы. Сессии, подписанные прежним fallback-ключом, будут разлогинены один раз. Потребуется повторный вход.";;
+        en:enter_choice_range)  echo "Enter your choice [0-23]: ";;
+        ru:enter_choice_range)  echo "Введите ваш выбор [0-23]: ";;
+        en:enter_valid_number)  echo "Enter a valid number [0-23]";;
+        ru:enter_valid_number)  echo "Введите корректное число [0-23]";;
         en:lang_select)         echo "Select language / Выберите язык / 请选择语言";;
         ru:lang_select)         echo "Select language / Выберите язык / 请选择语言";;
         en:lang_set_to)         echo "Language set to: $2";;
@@ -576,6 +607,102 @@ clear_domain() {
     before_show_menu
 }
 
+read_env_value() {
+    local var="$1"
+    [[ -f "${SECRETBOX_ENV_FILE}" ]] || return 1
+    local line value
+    while IFS= read -r line; do
+        case "${line}" in
+            "${var}="*)
+                value="${line#"${var}"=}"
+                if [[ -n "${value}" ]]; then
+                    printf '%s' "${value}"
+                    return 0
+                fi
+                ;;
+        esac
+    done <"${SECRETBOX_ENV_FILE}"
+    return 1
+}
+
+write_env_value() {
+    local var="$1" value="$2"
+    mkdir -p "$(dirname "${SECRETBOX_ENV_FILE}")"
+    if [[ -f "${SECRETBOX_ENV_FILE}" ]]; then
+        if grep -q "^${var}=" "${SECRETBOX_ENV_FILE}"; then
+            local tmp="${SECRETBOX_ENV_FILE}.tmp"
+            (umask 077 && awk -v var="${var}" -v val="${value}" \
+                'index($0, var"=") == 1 { print var "=" val; next } { print }' \
+                "${SECRETBOX_ENV_FILE}" >"${tmp}") && mv "${tmp}" "${SECRETBOX_ENV_FILE}"
+        else
+            printf '%s=%s\n' "${var}" "${value}" >>"${SECRETBOX_ENV_FILE}"
+        fi
+    else
+        (umask 077 && printf '%s=%s\n' "${var}" "${value}" >"${SECRETBOX_ENV_FILE}")
+    fi
+    chmod 600 "${SECRETBOX_ENV_FILE}"
+}
+
+ensure_env_dropin() {
+    mkdir -p "${SECRETBOX_DROPIN_DIR}"
+    if [[ ! -f "${SECRETBOX_DROPIN_FILE}" ]]; then
+        printf '[Service]\nEnvironmentFile=-%s\n' "${SECRETBOX_ENV_FILE}" >"${SECRETBOX_DROPIN_FILE}"
+        chmod 644 "${SECRETBOX_DROPIN_FILE}"
+        systemctl daemon-reload
+    fi
+}
+
+generate_cookie_key() {
+    local existing=""
+    existing=$(read_env_value SUI_COOKIE_KEY) || existing=""
+
+    local new_key
+    new_key=$(head -c 32 /dev/urandom | base64 | tr -d '\r\n')
+    local value="${new_key}"
+    local restart_note="cookie_key_restart_fresh"
+
+    if [[ -n "${existing}" ]]; then
+        LOGI "$(t cookie_key_exists "${existing:0:8}...")"
+        confirm "$(t cookie_key_rotate_q)" "n"
+        if [[ $? != 0 ]]; then
+            LOGI "$(t cancelled)"
+            before_show_menu
+            return 0
+        fi
+        # Rollover: the new key goes first (it signs new session cookies) and up
+        # to two previous keys stay accepted, so rotating the key does not sign
+        # out active sessions. The backend reads SUI_COOKIE_KEY as a
+        # comma-separated key list.
+        local kept
+        kept=$(printf '%s' "${existing}" | awk -F'[,;]' \
+            '{ out=""; for (i = 1; i <= NF && i <= 2; i++) { gsub(/^[ \t]+|[ \t]+$/, "", $i); if ($i != "") out = out (out == "" ? "" : ",") $i }; print out }')
+        if [[ -n "${kept}" ]]; then
+            value="${new_key},${kept}"
+            restart_note="cookie_key_restart_rollover"
+        fi
+    else
+        LOGI "$(t cookie_key_none)"
+    fi
+
+    write_env_value SUI_COOKIE_KEY "${value}"
+    ensure_env_dropin
+
+    echo -e "###############################################"
+    echo -e "${yellow}$(t cookie_key_generated)${plain}"
+    echo -e "${green}SUI_COOKIE_KEY: ${value}${plain}"
+    echo -e "$(t cookie_key_file "${SECRETBOX_ENV_FILE}")"
+    echo -e "${red}$(t cookie_key_keep)${plain}"
+    echo -e "###############################################"
+    LOGI "$(t "${restart_note}")"
+
+    confirm "$(t restart_service_q "s-ui")" "y"
+    if [[ $? == 0 ]]; then
+        restart s-ui
+    else
+        before_show_menu
+    fi
+}
+
 view_uri() {
     info=$(/usr/local/s-ui/sui uri)
     if [[ $? != 0 ]]; then
@@ -683,13 +810,22 @@ show_log() {
 }
 
 update_shell() {
-    wget -O /usr/bin/s-ui -N --no-check-certificate https://github.com/deposist/s-ui-x-extended/raw/main/s-ui.sh
-    if [[ $? != 0 ]]; then
+    local tmp_script
+    tmp_script="$(mktemp)"
+    # Keep TLS validation ON (github.com presents a valid certificate, so the
+    # transport is the integrity anchor) and download to a temp file first, then
+    # swap it into the root-executed path atomically only after a fully successful
+    # fetch. A failed/partial transfer must never leave a broken root script in
+    # /usr/bin/s-ui.
+    wget --timeout=20 --tries=5 --retry-connrefused -O "${tmp_script}" https://github.com/deposist/s-ui-x-extended/raw/main/s-ui.sh
+    if [[ $? != 0 || ! -s "${tmp_script}" ]]; then
+        rm -f "${tmp_script}"
         echo ""
         LOGE "$(t download_fail)"
         before_show_menu
     else
-        chmod +x /usr/bin/s-ui
+        chmod +x "${tmp_script}"
+        mv -f "${tmp_script}" /usr/bin/s-ui
         LOGI "$(t script_updated)" && exit 0
     fi
 }
@@ -828,7 +964,11 @@ enable_bbr() {
 install_acme() {
     cd ~
     LOGI "$(t installing_acme)"
-    curl https://get.acme.sh | sh
+    # Fail closed: -f rejects HTTP error bodies (a 404/partial page must never be
+    # piped into a root shell), --proto '=https' forbids a downgrade/redirect to
+    # plain http, and --tlsv1.2 sets a TLS floor. get.acme.sh is the vendor's
+    # canonical installer; this only hardens how it is fetched.
+    curl -fsS --proto '=https' --tlsv1.2 https://get.acme.sh | sh
     if [ $? -ne 0 ]; then
         LOGE "$(t acme_install_fail)"
         return 1
@@ -843,6 +983,7 @@ ssl_cert_issue_main() {
     echo -e "${green}\t2.${plain} $(t ssl_revoke)"
     echo -e "${green}\t3.${plain} $(t ssl_force_renew)"
     echo -e "${green}\t4.${plain} $(t ssl_self_signed)"
+    echo -e "${green}\t5.${plain} $(t ssl_ip)"
     read -p "$(t select_option)" choice
     case "$choice" in
         1) ssl_cert_issue ;;
@@ -857,8 +998,76 @@ ssl_cert_issue_main() {
             read -p "Domain to force-renew / Введите домен SSL-сертификата для принудительного продления: " domain
             ~/.acme.sh/acme.sh --renew -d "${domain}" --force ;;
         4) generate_self_signed_cert ;;
+        5) ssl_cert_issue_ip ;;
         *) echo "$(t invalid_choice)" ;;
     esac
+}
+
+# ssl_cert_issue_ip drives the in-process IP-address certificate issuance exposed
+# by the panel binary (`sui ip-cert`). Unlike the acme.sh flows above this needs
+# no external tooling: lego is embedded in the binary. The panel is stopped so
+# the HTTP-01 challenge port is free and so the binary has exclusive DB access,
+# then restarted to load the new certificate into the web listener.
+ssl_cert_issue_ip() {
+    local bin="/usr/local/s-ui/sui"
+    if [[ ! -x "${bin}" ]]; then
+        LOGE "S-UI binary not found at ${bin}; install S-UI first / Бинарник S-UI не найден, сначала установите S-UI."
+        before_show_menu
+        return 1
+    fi
+
+    local ip=""
+    read -p "IP address / IP-адрес: " ip
+    ip="$(echo -n "${ip}" | tr -d '[:space:]')"
+    if [[ -z "${ip}" ]]; then
+        LOGE "No IP address entered / IP-адрес не введён."
+        before_show_menu
+        return 1
+    fi
+
+    local email=""
+    read -p "ACME account email (optional) / Email для ACME-аккаунта (необязательно): " email
+
+    local WebPort=80
+    read -p "HTTP-01 challenge port (default 80) / Порт проверки HTTP-01 (по умолчанию 80): " WebPort
+    [[ -z "${WebPort}" ]] && WebPort=80
+    if [[ ! "${WebPort}" =~ ^[0-9]+$ ]] || (( WebPort < 1 || WebPort > 65535 )); then
+        LOGE "Invalid port; using 80 / Некорректный порт, используется 80."
+        WebPort=80
+    fi
+
+    echo -e "${yellow}The panel is stopped to free port ${WebPort} during validation, then restarted."
+    echo -e "Панель будет остановлена для освобождения порта ${WebPort} на время проверки, затем перезапущена.${plain}"
+
+    # Load the panel's secretbox key so the CLI reads/writes the encrypted ACME
+    # account exactly as the running panel does.
+    if [[ -f "${SECRETBOX_ENV_FILE}" ]]; then
+        set -a
+        # shellcheck disable=SC1090
+        . "${SECRETBOX_ENV_FILE}"
+        set +a
+    fi
+
+    # Restore the panel to its prior run state afterwards.
+    local was_running=1
+    check_status s-ui
+    [[ $? == 0 ]] && was_running=0
+
+    stop s-ui 0
+
+    "${bin}" ip-cert issue -ip "${ip}" -email "${email}" -port "${WebPort}"
+    local rc=$?
+
+    if [[ ${was_running} == 0 ]]; then
+        start s-ui 0
+    fi
+
+    if [[ ${rc} == 0 ]]; then
+        LOGI "IP certificate issued and applied to the panel HTTPS listener / Сертификат для IP выпущен и применён к HTTPS-панели."
+    else
+        LOGE "IP certificate issuance failed (exit ${rc}) / Не удалось выпустить сертификат для IP (код ${rc})."
+    fi
+    before_show_menu
 }
 
 ssl_cert_issue() {
@@ -924,7 +1133,7 @@ ssl_cert_issue() {
     ~/.acme.sh/acme.sh --installcert -d "${domain}" \
         --key-file "/root/cert/${domain}/privkey.pem" \
         --fullchain-file "/root/cert/${domain}/fullchain.pem"
-    ~/.acme.sh/acme.sh --upgrade --auto-upgrade
+    ~/.acme.sh/acme.sh --upgrade
     chmod 755 "$certPath"/*
     ls -lah "$certPath"/*
 }
@@ -966,7 +1175,7 @@ ssl_cert_issue_CF() {
             ~/.acme.sh/acme.sh --installcert -d "${CF_Domain}" -d "*.${CF_Domain}" \
                 --fullchain-file "${certPath}/${CF_Domain}/fullchain.pem" \
                 --key-file "${certPath}/${CF_Domain}/privkey.pem"
-            ~/.acme.sh/acme.sh --upgrade --auto-upgrade
+            ~/.acme.sh/acme.sh --upgrade
             chmod 755 "${certPath}/${CF_Domain}"
             ls -lah "${certPath}/${CF_Domain}"
             show_menu
@@ -1083,6 +1292,7 @@ show_menu() {
   ${green}20.${plain} $(t menu_ssl)
   ${green}21.${plain} $(t menu_ssl_cf)
   ${green}22.${plain} $(t menu_language)
+  ${green}23.${plain} $(t menu_cookie_key)
 ---------------------------------------------------------------
  "
     show_status s-ui
@@ -1112,6 +1322,7 @@ show_menu() {
     20) ssl_cert_issue_main ;;
     21) ssl_cert_issue_CF ;;
     22) choose_language ;;
+    23) check_install && generate_cookie_key ;;
     *) LOGE "$(t enter_valid_number)" ;;
     esac
 }

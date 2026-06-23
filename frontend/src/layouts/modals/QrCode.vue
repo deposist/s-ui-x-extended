@@ -1,9 +1,9 @@
 <template>
-  <v-dialog transition="dialog-bottom-transition" width="400">
+  <v-dialog transition="dialog-bottom-transition" width="680">
     <v-card class="rounded-lg" id="qrcode-modal" :loading="loading">
       <v-card-title>
         <v-row>
-          <v-col>QrCode</v-col>
+          <v-col>{{ $t('delivery.title') }}</v-col>
           <v-spacer></v-spacer>
           <v-col cols="auto"><v-icon icon="mdi-close-box" @click="$emit('close')" /></v-col>
         </v-row>
@@ -15,50 +15,109 @@
           type="text, image, divider, text, image"
           v-if="loading"
         ></v-skeleton-loader>
-      <v-card-text style="overflow-y: auto; padding: 0" :hidden="loading">
+      <v-card-text style="overflow-y: auto;" :hidden="loading">
         <v-tabs
           v-model="tab"
           density="compact"
-          fixed-tabs
+          show-arrows
           align-tabs="center"
         >
-          <v-tab value="sub">{{ $t('setting.sub') }}</v-tab>
-          <v-tab value="link">{{ $t('client.links') }}</v-tab>
+          <v-tab value="singbox">Sing-box</v-tab>
+          <v-tab value="clash">Clash/Mihomo</v-tab>
+          <v-tab value="hiddify">Hiddify</v-tab>
+          <v-tab value="raw">{{ $t('delivery.rawLinks') }}</v-tab>
         </v-tabs>
-        <v-window v-model="tab" style="margin-top: 10px;">
-          <v-window-item value="sub">
-            <v-row>
-              <v-col style="text-align: center;">
-                <v-chip>{{ $t('setting.sub') }}</v-chip><br />
-                <QrcodeVue :value="clientSub" :size="size" @click="copyToClipboard(clientSub)" :margin="1" style="border-radius: 1rem; cursor: copy;" />
-              </v-col>
-            </v-row>
-            <v-row>
-              <v-col style="text-align: center;">
-                <v-chip>{{ $t('setting.jsonSub') }}</v-chip><br />
-                <QrcodeVue :value="clientJsonSub" :size="size" @click="copyToClipboard(clientJsonSub)" :margin="1" style="border-radius: 1rem; cursor: copy;" />
-              </v-col>
-            </v-row>
-            <v-row>
-              <v-col style="text-align: center;">
-                <v-chip>{{ $t('setting.clashSub') }}</v-chip><br />
-                <QrcodeVue :value="clientClashSub" :size="size" @click="copyToClipboard(clientClashSub)" :margin="1" style="border-radius: 1rem; cursor: copy;" />
-              </v-col>
-            </v-row>
-            <v-row>
-              <v-col style="text-align: center;">
-                <v-chip>SING-BOX (scan only)</v-chip><br />
-                <QrcodeVue :value="singbox" :size="size" :margin="1" style="border-radius: .8rem; cursor: not-allowed;" />
-              </v-col>
-            </v-row>
+        <v-window v-model="tab" class="delivery-window">
+          <v-window-item
+            v-for="platform in deliveryPlatforms"
+            :key="platform.value"
+            :value="platform.value"
+          >
+            <div class="delivery-pane">
+              <div class="delivery-qr">
+                <v-chip>{{ platform.title }}</v-chip>
+                <QrcodeVue
+                  :value="platform.qr"
+                  :size="size"
+                  :margin="1"
+                  class="delivery-qr__code"
+                  @click="copyToClipboard(platform.copy)"
+                />
+              </div>
+              <div class="delivery-details">
+                <v-text-field
+                  readonly
+                  :label="$t('delivery.subscriptionUrl')"
+                  :model-value="platform.copy"
+                  variant="outlined"
+                >
+                  <template #append-inner>
+                    <v-btn
+                      density="comfortable"
+                      icon="lucide:copy"
+                      size="small"
+                      variant="text"
+                      @click="copyToClipboard(platform.copy)"
+                    />
+                  </template>
+                </v-text-field>
+                <v-text-field
+                  v-if="platform.importUrl && platform.importUrl !== platform.copy"
+                  readonly
+                  :label="$t('delivery.importUrl')"
+                  :model-value="platform.importUrl"
+                  variant="outlined"
+                >
+                  <template #append-inner>
+                    <v-btn
+                      density="comfortable"
+                      icon="lucide:copy"
+                      size="small"
+                      variant="text"
+                      @click="copyToClipboard(platform.importUrl)"
+                    />
+                  </template>
+                </v-text-field>
+                <v-btn
+                  color="primary"
+                  prepend-icon="lucide:activity"
+                  variant="tonal"
+                  @click="testUrl(platform.copy)"
+                >
+                  {{ $t('delivery.testUrl') }}
+                </v-btn>
+              </div>
+            </div>
           </v-window-item>
-          <v-window-item value="link">
-            <v-row v-for="l in clientLinks">
-              <v-col style="text-align: center;">
-                <v-chip>{{ l.remark?? $t('client.' + l.type) }}</v-chip><br />
-                <QrcodeVue :value="l.uri" :size="size" @click="copyToClipboard(l.uri)" :margin="1" style="border-radius: .5rem; cursor: copy;" />
-              </v-col>
-            </v-row>
+          <v-window-item value="raw">
+            <div class="delivery-raw">
+              <v-alert v-if="clientLinks.length === 0" density="compact" type="warning" variant="tonal">
+                {{ $t('delivery.noRawLinks') }}
+              </v-alert>
+              <div v-for="l in clientLinks" :key="l.uri" class="delivery-raw__item">
+                <div class="delivery-raw__qr">
+                  <v-chip>{{ l.remark ?? $t('client.' + l.type) }}</v-chip>
+                  <QrcodeVue
+                    :value="l.uri"
+                    :size="rawQrSize"
+                    :margin="1"
+                    class="delivery-qr__code"
+                    @click="copyToClipboard(l.uri)"
+                  />
+                </div>
+                <v-text-field readonly :model-value="l.uri" variant="outlined">
+                  <template #append-inner>
+                    <v-btn
+                      density="comfortable"
+                      icon="lucide:copy"
+                      size="small"
+                      variant="text"
+                      @click="copyToClipboard(l.uri)"
+                    />
+                  </template>
+                </v-text-field>
+              </div>
+            </div>
           </v-window-item>
         </v-window>
       </v-card-text>
@@ -77,7 +136,7 @@ export default {
   props: ['id', 'visible'],
   data() {
     return {
-      tab: "sub",
+      tab: "singbox",
       client: <any>{},
       loading: false,
     }
@@ -88,6 +147,20 @@ export default {
       const newData = await Data().loadClients(this.$props.id)
       this.client = newData
       this.loading = false
+    },
+    async testUrl(url: string) {
+      try {
+        await fetch(url, { method: 'GET', mode: 'no-cors', credentials: 'omit', cache: 'no-store' })
+        push.success({
+          message: i18n.global.t('delivery.testOk'),
+          duration: 5000,
+        })
+      } catch {
+        push.error({
+          message: i18n.global.t('delivery.testFailed'),
+          duration: 5000,
+        })
+      }
     },
     copyToClipboard(txt:string) {
       const hiddenButton = document.createElement('button')
@@ -145,19 +218,48 @@ export default {
     singbox() {
       return "sing-box://import-remote-profile?url=" +  encodeURIComponent(this.clientJsonSub) + "#" + this.client.name
     },
+    deliveryPlatforms() {
+      return [
+        {
+          value: 'singbox',
+          title: 'Sing-box',
+          copy: this.clientJsonSub,
+          importUrl: this.singbox,
+          qr: this.singbox,
+        },
+        {
+          value: 'clash',
+          title: 'Clash/Mihomo',
+          copy: this.clientClashSub,
+          importUrl: this.clientClashSub,
+          qr: this.clientClashSub,
+        },
+        {
+          value: 'hiddify',
+          title: 'Hiddify',
+          copy: this.clientSub,
+          importUrl: this.clientSub,
+          qr: this.clientSub,
+        },
+      ]
+    },
     clientLinks() {
       return this.client.links?? []
     },
     size() {
-      if (window.innerWidth > 380) return 300
-      if (window.innerWidth > 330) return 280
-      return 250
+      if (window.innerWidth > 640) return 260
+      if (window.innerWidth > 380) return 240
+      return 210
+    },
+    rawQrSize() {
+      if (window.innerWidth > 640) return 180
+      return 150
     }
   },
   watch: {
     visible(v) {
       if (v) {
-        this.tab = "sub"
+        this.tab = "singbox"
         this.load()
       }
     },
@@ -165,3 +267,55 @@ export default {
   components: { QrcodeVue }
 }
 </script>
+
+<style scoped>
+.delivery-window {
+  margin-top: 12px;
+}
+
+.delivery-pane {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-width: 0;
+}
+
+.delivery-qr,
+.delivery-raw__qr {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+}
+
+.delivery-qr__code {
+  border-radius: 0.75rem;
+  cursor: copy;
+}
+
+.delivery-details {
+  align-content: start;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.delivery-raw {
+  display: grid;
+  gap: 14px;
+}
+
+.delivery-raw__item {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .delivery-pane,
+  .delivery-raw__item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+</style>

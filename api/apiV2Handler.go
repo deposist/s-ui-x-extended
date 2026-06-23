@@ -88,7 +88,7 @@ var apiV2ActionScopes = map[string][]string{
 	"inbounds":  {"read", "write"},
 	"outbounds": {"read", "write"},
 	"endpoints": {"read", "write"},
-	"providers": {"read", "write"},
+	"providers":  {"read", "write"},
 	"services":  {"read", "write"},
 	"tls":       {"read", "write"},
 	"clients":   {"read", "write"},

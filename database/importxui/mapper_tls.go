@@ -34,7 +34,7 @@ type xuiRealitySetting struct {
 
 	// Outbound (client) reality fields. On an Xray *outbound* the panel stores
 	// the peer's public key, single short id, server name and fingerprint at the
-	// top level of realitySettings — there is no private key. These tags do not
+	// top level of realitySettings - there is no private key. These tags do not
 	// collide with the inbound array/sub-block fields above.
 	PublicKey   string `json:"publicKey"`
 	ShortID     string `json:"shortId"`

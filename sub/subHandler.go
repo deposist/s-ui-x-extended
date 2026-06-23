@@ -1,6 +1,7 @@
 package sub
 
 import (
+	"sync"
 	"time"
 
 	"github.com/deposist/s-ui-x-extended/database"
@@ -10,6 +11,65 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// --- /sub enumeration detection (D-1, MITRE T1190) ---
+// The /sub surface is semi-public and previously had zero audit coverage, so
+// subscription-token scraping / sub-id guessing left no trace. Invalid sub-id
+// lookups are counted per source IP; crossing a threshold within a window emits
+// a single throttled warn audit event (debounced so a scanner cannot flood the
+// audit log itself).
+const (
+	subEnumWindow    = 15 * time.Minute
+	subEnumThreshold = 10
+	subEnumMaxKeys   = 4096
+)
+
+type subEnumState struct {
+	count     int
+	windowAt  time.Time
+	alertedAt time.Time
+}
+
+var (
+	subEnumMu   sync.Mutex
+	subEnumByIP = map[string]subEnumState{}
+)
+
+func noteSubNotFound(ip string) {
+	if ip == "" {
+		return
+	}
+	subEnumMu.Lock()
+	now := time.Now()
+	st := subEnumByIP[ip]
+	if st.windowAt.IsZero() || now.Sub(st.windowAt) > subEnumWindow {
+		st = subEnumState{windowAt: now}
+	}
+	st.count++
+	alert := st.count >= subEnumThreshold && now.Sub(st.alertedAt) > subEnumWindow
+	if alert {
+		st.alertedAt = now
+	}
+	// Crude bound on map growth (a flood of distinct spoofed IPs): reset wholesale
+	// rather than track LRU - the counter is best-effort detection, not security.
+	if len(subEnumByIP) > subEnumMaxKeys {
+		subEnumByIP = map[string]subEnumState{}
+	}
+	subEnumByIP[ip] = st
+	count := st.count
+	subEnumMu.Unlock()
+
+	if alert {
+		_ = (&service.AuditService{}).Record(service.AuditEvent{
+			Actor:    "anonymous",
+			Event:    "sub_enumeration",
+			Resource: "sub",
+			Severity: service.AuditSeverityWarn,
+			IP:       ip,
+			Details:  map[string]any{"invalidLookups": count, "windowMinutes": int(subEnumWindow.Minutes())},
+		})
+	}
+}
 
 type SubHandler struct {
 	service.SettingService
@@ -144,6 +204,7 @@ func (s *SubHandler) writeResult(c *gin.Context, result *string, headers []strin
 
 func (s *SubHandler) writeError(c *gin.Context, err error) {
 	if database.IsNotFound(err) {
+		noteSubNotFound(c.ClientIP())
 		c.String(404, "Not Found")
 		return
 	}

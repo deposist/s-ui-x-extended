@@ -89,8 +89,11 @@ test('websocket survives repeated offline/online chaos and returns to connected'
 
   await waitForFreshE2ECredentials()
   await login(page)
+  // The router-guard connect() can lose the CSRF-token race on a slow runner and
+  // drop to the degraded fallback, which only retries every fallbackPollMs (10s).
+  // Poll long enough to clear one fallback cycle so the initial connect is not flaky.
   await expect.poll(async () => page.evaluate(() => (window as any).__SUI_WS_STATE__), {
-    timeout: 10_000,
+    timeout: 25_000,
   }).toBe('connected')
   await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined)
 

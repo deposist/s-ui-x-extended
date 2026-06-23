@@ -79,7 +79,7 @@ func TestMapXrayDNS_DomainServerGetsResolver(t *testing.T) {
 	// A domain-addressed DNS server must get a domain_resolver pointing at an
 	// IP-addressed bootstrap, or sing-box refuses to start ("missing domain
 	// resolver for domain server address"). With an IP server present (1.1.1.1),
-	// it is reused as the bootstrap — no extra server is added — and the s-ui tls
+	// it is reused as the bootstrap - no extra server is added - and the s-ui tls
 	// block is attached, matching a natively-created server.
 	raw := map[string]any{"servers": []any{"1.1.1.1", "https://dns.google/dns-query", "tls://dns.adguard.com"}}
 	ruleSets := []any{}
@@ -114,7 +114,7 @@ func TestMapXrayDNS_DomainServerGetsResolver(t *testing.T) {
 		host, _ := m["server"].(string)
 		if strings.TrimSpace(host) != "" && net.ParseIP(strings.TrimSpace(host)) == nil {
 			if _, has := m["domain_resolver"]; !has {
-				t.Errorf("domain server %q has no domain_resolver — sing-box would refuse to start: %#v", host, m)
+				t.Errorf("domain server %q has no domain_resolver - sing-box would refuse to start: %#v", host, m)
 			}
 		}
 	}

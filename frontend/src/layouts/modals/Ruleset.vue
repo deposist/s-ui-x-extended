@@ -1,11 +1,11 @@
 <template>
-  <v-dialog transition="dialog-bottom-transition" width="800">
-    <v-card class="rounded-lg">
-      <v-card-title>
-        {{ $t('actions.' + title) + " " + $t('objects.ruleset') }}
-      </v-card-title>
-      <v-divider></v-divider>
-      <v-card-text style="padding: 0 16px;">
+  <form-shell
+    :dirty="dirty"
+    :loading="loading"
+    :title="$t('actions.' + title) + ' ' + $t('objects.ruleset')"
+    @close="closeModal"
+    @save="saveChanges"
+  >
         <v-row>
           <v-col cols="12" sm="6" md="4">
             <v-select
@@ -65,33 +65,14 @@
             @delete="rule_set.rules?.splice(index, 1)"
           />
         </template>
-      </v-card-text>
-      <v-card-actions>
-        <v-spacer></v-spacer>
-        <v-btn
-          color="primary"
-          variant="outlined"
-          @click="closeModal"
-        >
-          {{ $t('actions.close') }}
-        </v-btn>
-        <v-btn
-          color="primary"
-          variant="tonal"
-          :loading="loading"
-          @click="saveChanges"
-        >
-          {{ $t('actions.save') }}
-        </v-btn>
-      </v-card-actions>
-    </v-card>
-  </v-dialog>
+  </form-shell>
 </template>
 
 <script lang="ts">
 import RandomUtil from '@/plugins/randomUtil'
 import { ruleset } from '@/types/rules'
 import HeadlessRule from '@/components/HeadlessRule.vue'
+import FormShell from '@/components/nexus/drawers/FormShell.vue'
 export default {
   props: ['visible', 'data', 'index', 'outTags'],
   emits: ['close', 'save'],
@@ -99,6 +80,7 @@ export default {
     return {
       title: "add",
       loading: false,
+      snapshot: '',
       rule_set: <ruleset>{},
     }
   },
@@ -114,6 +96,7 @@ export default {
         this.title = "add"
         this.rule_set = <ruleset>{type: 'local', tag: "rs-" + RandomUtil.randomSeq(3), format: 'binary'}
       }
+      this.snapshot = JSON.stringify(this.rule_set)
     },
     updateType(t:string) {
       if (t == 'inline') {
@@ -157,6 +140,9 @@ export default {
     }
   },
   computed: {
+    dirty(): boolean {
+      return this.snapshot !== '' && JSON.stringify(this.rule_set) !== this.snapshot
+    },
     update_intervals: {
       get() { return this.rule_set.update_interval != undefined ? parseInt(this.rule_set.update_interval.replace('d','')) : 0 },
       set(v:number) { this.rule_set.update_interval = v>0 ?  v + 'd' : undefined }
@@ -169,6 +155,6 @@ export default {
       }
     },
   },
-  components: { HeadlessRule },
+  components: { FormShell, HeadlessRule },
 }
 </script>

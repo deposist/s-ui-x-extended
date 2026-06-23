@@ -611,7 +611,13 @@ func toBase64(d []byte) string {
 }
 
 func addParams(uri string, params []LinkParam, remark string) string {
-	URL, _ := url.Parse(uri)
+	URL, err := url.Parse(uri)
+	if err != nil || URL == nil {
+		// uri is assembled from operator-controlled inbound metadata (server addr);
+		// a stray control byte / bad escape makes url.Parse return (nil, err). Bail
+		// out instead of dereferencing nil and panicking the link-generation path.
+		return uri
+	}
 	var q []string
 	for _, p := range params {
 		switch p.Key {

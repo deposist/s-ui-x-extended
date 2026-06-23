@@ -1,11 +1,11 @@
 <template>
-  <v-dialog transition="dialog-bottom-transition" width="800">
-    <v-card class="rounded-lg">
-      <v-card-title>
-        {{ $t('actions.' + title) + " " + $t('objects.rule') }}
-      </v-card-title>
-      <v-divider></v-divider>
-      <v-card-text style="padding: 0 16px;">
+  <form-shell
+    :dirty="dirty"
+    :loading="loading"
+    :title="$t('actions.' + title) + ' ' + $t('objects.rule')"
+    @close="closeModal"
+    @save="saveChanges"
+  >
         <v-row>
           <v-col cols="12" sm="6" md="4">
             <v-switch color="primary" v-model="logical" :label="$t('rule.logical')" hide-details></v-switch>
@@ -15,7 +15,7 @@
             <v-btn color="primary" @click="ruleData.rules.push(<rule>{})" hide-details>{{ $t('actions.add') + " " + $t('objects.rule') }}</v-btn>
           </v-col>
         </v-row>
-        <v-card style="background-color: inherit; margin-bottom: 5px;" v-for="(r, index) in ruleData.rules" v-if="ruleData.type == 'logical'">
+        <v-card style="background-color: inherit; margin-bottom: 5px;" v-for="(r, index) in ruleData.rules" :key="ruleObjectKey(r)" v-if="ruleData.type == 'logical'">
           <v-card-subtitle>{{ $t('objects.rule') + ' ' + (Number(index)+1) }}
             <v-icon @click="ruleData.rules.splice(index,1)" icon="mdi-delete" v-if="ruleData.rules.length>1" />
           </v-card-subtitle>
@@ -56,7 +56,7 @@
             <v-switch color="primary" v-model="ruleData.invert" :label="$t('rule.invert')" hide-details></v-switch>
           </v-col>
         </v-row>
-        <v-card :subtitle="ruleData.action == 'bypass' ? 'Bypass' : 'Route'" v-if="['route', 'bypass'].includes(ruleData.action)">
+        <v-card :subtitle="ruleData.action == 'bypass' ? $t('rule.action.bypass') : $t('rule.action.route')" v-if="['route', 'bypass'].includes(ruleData.action)">
           <v-row>
             <v-col cols="12" sm="6" md="4">
               <v-select
@@ -70,7 +70,7 @@
             </v-col>
           </v-row>
         </v-card>
-        <v-card subtitle="Route Option" v-if="['route', 'route-options', 'bypass'].includes(ruleData.action)">
+        <v-card :subtitle="$t('rule.action.routeOption')" v-if="['route', 'route-options', 'bypass'].includes(ruleData.action)">
           <v-row>
             <v-col cols="12" sm="6" md="4">
               <v-text-field v-model="ruleData.override_address" :label="$t('types.direct.overrideAddr')" hide-details></v-text-field>
@@ -92,7 +92,7 @@
               <v-switch v-model="ruleData.udp_connect" :label="$t('rule.udpConnect')" hide-details></v-switch>
             </v-col>
             <v-col cols="12" sm="6" md="4">
-              <v-combobox v-model="ruleData.udp_timeout" :items="durationPresets" :label="$t('rule.udpTimeout')" hide-details></v-combobox>
+              <v-text-field v-model="ruleData.udp_timeout" :label="$t('rule.udpTimeout')" hide-details></v-text-field>
             </v-col>
             <v-col cols="12" sm="6" md="4">
               <v-select
@@ -121,17 +121,16 @@
               <v-switch v-model="tlsFragment" :label="$t('singbox.tlsFragment')" hide-details></v-switch>
             </v-col>
             <v-col cols="12" sm="6" md="4" v-if="ruleData.tls_fragment">
-              <v-combobox
+              <v-text-field
                 v-model="ruleData.tls_fragment_fallback_delay"
-                :items="durationPresets"
                 :label="$t('singbox.tlsFragmentFallbackDelay')"
                 placeholder="500ms"
                 hide-details>
-              </v-combobox>
+              </v-text-field>
             </v-col>
           </v-row>
         </v-card>
-        <v-card subtitle="Reject" v-if="ruleData.action == 'reject'">
+        <v-card :subtitle="$t('rule.action.reject')" v-if="ruleData.action == 'reject'">
           <v-row>
             <v-col cols="12" sm="6" md="4">
               <v-select
@@ -148,7 +147,7 @@
             </v-col>
           </v-row>
         </v-card>
-        <v-card subtitle="Sniff" v-if="ruleData.action == 'sniff'">
+        <v-card :subtitle="$t('rule.action.sniff')" v-if="ruleData.action == 'sniff'">
           <v-row>
             <v-col cols="12" sm="6" md="4">
               <v-select
@@ -161,11 +160,11 @@
               </v-select>
             </v-col>
             <v-col cols="12" sm="6" md="4">
-              <v-combobox v-model="ruleData.timeout" :items="durationPresets" :label="$t('rule.timeout')" hide-details></v-combobox>
+              <v-text-field v-model="ruleData.timeout" :label="$t('rule.timeout')" hide-details></v-text-field>
             </v-col>
           </v-row>
         </v-card>
-        <v-card subtitle="Resolve" v-if="ruleData.action == 'resolve'">
+        <v-card :subtitle="$t('rule.action.resolve')" v-if="ruleData.action == 'resolve'">
           <v-row>
             <v-col cols="12" sm="6" md="4">
               <v-select
@@ -182,41 +181,29 @@
             </v-col>
           </v-row>
         </v-card>
-      </v-card-text>
-      <v-card-actions>
-        <v-spacer></v-spacer>
-        <v-btn
-          color="primary"
-          variant="outlined"
-          @click="closeModal"
-        >
-          {{ $t('actions.close') }}
-        </v-btn>
-        <v-btn
-          color="primary"
-          variant="tonal"
-          :loading="loading"
-          @click="saveChanges"
-        >
-          {{ $t('actions.save') }}
-        </v-btn>
-      </v-card-actions>
-    </v-card>
-  </v-dialog>
+  </form-shell>
 </template>
 
 <script lang="ts">
 import { logicalRule, rule, actionKeys } from '@/types/rules'
-import { durationPresets } from '@/types/recommended'
 import RuleOptions from '@/components/Rule.vue'
+import FormShell from '@/components/nexus/drawers/FormShell.vue'
+
+// Stable identity key for each sub-rule object so the v-for is not keyed by array
+// index. Splicing out a middle rule then re-binds the remaining RuleOptions
+// instances by object identity (not position), avoiding stale child widget state.
+// A WeakMap keeps it off the rule object, so nothing leaks into the saved config.
+const ruleObjectKeys = new WeakMap<object, number>()
+let ruleObjectKeySeq = 0
+
 export default {
   props: ['visible', 'data', 'index', 'clients', 'inTags', 'outTags', 'rsTags'],
   emits: ['close', 'save'],
   data() {
     return {
-      durationPresets,
       title: 'add',
       loading: false,
+      snapshot: '',
       ruleData: <any>{
         type: 'logical',
         mode: 'and',
@@ -259,6 +246,15 @@ export default {
     }
   },
   methods: {
+    ruleObjectKey(r: any): number {
+      if (r == null || typeof r !== 'object') return -1
+      let k = ruleObjectKeys.get(r)
+      if (k === undefined) {
+        k = ++ruleObjectKeySeq
+        ruleObjectKeys.set(r, k)
+      }
+      return k
+    },
     updateData() {
       if (this.$props.index != -1) {
         const newData = JSON.parse(this.$props.data)
@@ -291,6 +287,7 @@ export default {
           }
         this.title = 'add'
       }
+      this.snapshot = JSON.stringify(this.ruleData)
     },
     closeModal() {
       this.updateData() // reset
@@ -358,6 +355,9 @@ export default {
     }
   },
   computed: {
+    dirty(): boolean {
+      return this.snapshot !== '' && JSON.stringify(this.ruleData) !== this.snapshot
+    },
     logical: {
       get() { return this.ruleData.type == 'logical' },
       set(v:boolean) {
@@ -390,7 +390,7 @@ export default {
       }
     },
   },
-  components: { RuleOptions }
+  components: { FormShell, RuleOptions }
 }
 
 </script>

@@ -6,7 +6,7 @@
 </template>
 
 <script lang="ts" setup>
-type StatusBadgeTone = 'info' | 'success' | 'warning' | 'error'
+type StatusBadgeTone = 'info' | 'success' | 'warning' | 'error' | 'neutral'
 
 defineProps<{
   label: string
@@ -18,25 +18,27 @@ const toneClasses: Record<StatusBadgeTone, string> = {
   success: 'nexus-status-badge--success',
   warning: 'nexus-status-badge--warning',
   error: 'nexus-status-badge--error',
+  neutral: 'nexus-status-badge--neutral',
 }
 </script>
 
 <style scoped>
 .nexus-status-badge {
   align-items: center;
-  background: color-mix(in srgb, var(--nexus-status-badge-tone) 14%, var(--nexus-surface-1));
-  border: 1px solid color-mix(in srgb, var(--nexus-status-badge-tone) 40%, var(--nexus-border));
+  /* Reference .status-badge: rgba(tone, 0.1) tint, no border, 12px/500, dot + label.
+   * color-mix(... 10%, transparent) == rgba(tone, 0.1) exactly. */
+  background: color-mix(in srgb, var(--nexus-status-badge-tone) 10%, transparent);
   border-radius: var(--nexus-radius-sm);
   color: var(--nexus-status-badge-tone);
   display: inline-flex;
-  font-size: 0.72rem;
-  font-weight: 650;
+  font-size: 0.75rem;
+  font-weight: 500;
   gap: var(--nexus-gap-1);
   letter-spacing: 0;
   line-height: 1.25;
   max-width: 100%;
   min-width: 0;
-  padding: 3px 6px;
+  padding: 4px var(--nexus-gap-2);
 }
 
 .nexus-status-badge__dot {
@@ -66,5 +68,9 @@ const toneClasses: Record<StatusBadgeTone, string> = {
 
 .nexus-status-badge--error {
   --nexus-status-badge-tone: var(--nexus-status-error);
+}
+
+.nexus-status-badge--neutral {
+  --nexus-status-badge-tone: var(--nexus-text-muted);
 }
 </style>

@@ -24,8 +24,6 @@ export const DnsTypes = {
   FakeIP: 'fakeip',
   Tailscale: 'tailscale',
   Resolved: 'resolved',
-  SDNS: 'sdns',
-  Fallback: 'fallback',
 }
 
 export type DnsType = typeof DnsTypes[keyof typeof DnsTypes]
@@ -44,17 +42,15 @@ const defaultValues: Record<DnsType, DnsServer> = {
   hosts: { type: 'hosts', path: ['/etc/hosts'] },
   tcp: { type: 'tcp', server_port: 53 },
   udp: { type: 'udp', server_port: 53 },
-  tls: { type: 'tls', server_port: 853, tls: { enabled: true } },
-  quic: { type: 'quic', server_port: 853, tls: { enabled: true } },
-  https: { type: 'https', server_port: 443, tls: { enabled: true }, headers: {} },
-  h3: { type: 'h3', server_port: 443, tls: { enabled: true }, headers: {} },
+  tls: { type: 'tls', server_port: 853, tls: {} },
+  quic: { type: 'quic', server_port: 853, tls: {} },
+  https: { type: 'https', server_port: 443, tls: {}, headers: {} },
+  h3: { type: 'h3', server_port: 443, tls: {}, headers: {} },
   predefined: { type: 'predefined', rcode: 'NOERROR' },
   dhcp: { type: 'dhcp' },
   fakeip: { type: 'fakeip', inet4_range: '198.18.0.0/15', inet6_range: 'fc00::/18' },
   tailscale: { type: 'tailscale' },
   resolved: { type: 'resolved' },
-  sdns: { type: 'sdns', stamp: '' },
-  fallback: { type: 'fallback', servers: [], strategy: 'sequential' },
 }
 export function createDnsServer<T extends DnsServer>(type: string, json?: Partial<T>): DnsServer {
   const defaultObject: DnsServer = { ...defaultValues[type], ...(json || {}) }

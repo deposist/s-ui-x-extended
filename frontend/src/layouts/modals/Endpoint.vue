@@ -1,11 +1,11 @@
 <template>
-  <v-dialog transition="dialog-bottom-transition" width="800">
-    <v-card class="rounded-lg">
-      <v-card-title>
-        {{ $t('actions.' + title) + " " + $t('objects.endpoint') }}
-      </v-card-title>
-      <v-divider></v-divider>
-      <v-card-text style="padding: 0 16px; overflow-y: scroll;">
+  <form-shell
+    :dirty="dirty"
+    :loading="loading"
+    :title="$t('actions.' + title) + ' ' + $t('objects.endpoint')"
+    @close="closeModal"
+    @save="saveChanges"
+  >
         <v-row>
           <v-col cols="12" sm="6" md="4">
             <v-select
@@ -30,31 +30,8 @@
           @refreshPeerKey="refreshWgPeerKey" />
         <Warp v-if="endpoint.type == epTypes.Warp" :data="endpoint" />
         <TailscaleVue v-if="endpoint.type == epTypes.Tailscale" :data="endpoint" />
-        <VpnServer v-if="endpoint.type == epTypes.VpnServer" :data="endpoint" />
-        <VpnClient v-if="endpoint.type == epTypes.VpnClient" :data="endpoint" />
-        <Dial v-if="!noDial.includes(endpoint.type)" :dial="endpoint" />
-      </v-card-text>
-      <v-card-actions>
-        <v-spacer></v-spacer>
-        <v-btn
-          color="primary"
-          variant="outlined"
-          @click="closeModal"
-        >
-          {{ $t('actions.close') }}
-        </v-btn>
-        <v-btn
-          color="primary"
-          variant="tonal"
-          :loading="loading"
-          :disabled="loading"
-          @click="saveChanges"
-        >
-          {{ $t('actions.save') }}
-        </v-btn>
-      </v-card-actions>
-    </v-card>
-  </v-dialog>
+        <Dial :dial="endpoint" />
+  </form-shell>
 </template>
 
 <script lang="ts">
@@ -64,12 +41,11 @@ import Dial from '@/components/Dial.vue'
 import Wireguard from '@/components/protocols/Wireguard.vue'
 import Warp from '@/components/protocols/Warp.vue'
 import TailscaleVue from '@/components/protocols/Tailscale.vue'
-import VpnServer from '@/components/protocols/VpnServer.vue'
-import VpnClient from '@/components/protocols/VpnClient.vue'
 import HttpUtils from '@/plugins/httputil'
 import { push } from 'notivue'
 import { i18n } from '@/locales'
 import Data from '@/store/modules/data'
+import FormShell from '@/components/nexus/drawers/FormShell.vue'
 export default {
   props: ['visible', 'data', 'id', 'tags'],
   emits: ['close'],
@@ -80,8 +56,13 @@ export default {
       tab: "t1",
       loading: false,
       epTypes: EpTypes,
-      noDial: [EpTypes.VpnServer, EpTypes.VpnClient],
+      snapshot: '',
     }
+  },
+  computed: {
+    dirty(): boolean {
+      return this.snapshot !== '' && JSON.stringify(this.endpoint) !== this.snapshot
+    },
   },
   methods: {
     async updateData(id: number) {
@@ -97,6 +78,7 @@ export default {
         this.title = "add"
       }
       this.tab = "t1"
+      this.snapshot = JSON.stringify(this.endpoint)
     },
     async changeType() {
       // Tag change only in add endpoint
@@ -127,22 +109,6 @@ export default {
           break
         case EpTypes.Tailscale:
           prevConfig = { tag: tag }
-          break
-        case EpTypes.VpnServer:
-          prevConfig = {
-            tag: tag,
-            address: '10.0.0.1',
-            users: [{ address: '10.0.0.2', key: RandomUtil.randomUUID() }],
-            inbounds: [],
-          }
-          break
-        case EpTypes.VpnClient:
-          prevConfig = {
-            tag: tag,
-            address: '10.0.0.2',
-            key: RandomUtil.randomUUID(),
-            outbound: {},
-          }
           break
       }
       this.endpoint = createEndpoint(this.endpoint.type, prevConfig)
@@ -247,6 +213,6 @@ export default {
       }
     },
   },
-  components: { Dial, Wireguard, Warp, TailscaleVue, VpnServer, VpnClient }
+  components: { FormShell, Dial, Wireguard, Warp, TailscaleVue }
 }
 </script>

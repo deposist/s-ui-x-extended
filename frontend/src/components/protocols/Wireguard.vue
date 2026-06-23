@@ -65,9 +65,9 @@
         </v-text-field>
       </v-col>
     </v-row>
-    <v-row>
+    <v-row v-if="data.ext">
       <v-col cols="12" sm="8">
-        <v-combobox v-model="data.ext.dns" :items="wireguardDns" :label="$t('dns.title') + ' ' + $t('commaSeparated')" hide-details></v-combobox>
+        <v-text-field v-model="data.ext.dns" :label="$t('dns.title') + ' ' + $t('commaSeparated')" hide-details></v-text-field>
       </v-col>
     </v-row>
     <v-row>
@@ -103,7 +103,6 @@
         </v-card>
       </v-menu>
     </v-card-actions>
-    <Amnezia :data="data" :full="true" />
   </v-card>
   <v-card v-if="data.peers != undefined">
     <v-card-subtitle>
@@ -123,8 +122,6 @@
 
 <script lang="ts">
 import Peer from '@/components/WgPeer.vue'
-import Amnezia from '@/components/protocols/Amnezia.vue'
-import { wireguardDns } from '@/types/recommended'
 
 export default {
   props: ['data'],
@@ -132,7 +129,6 @@ export default {
   data() {
     return {
       menu: false,
-      wireguardDns,
     }
   },
   methods: {
@@ -196,6 +192,6 @@ export default {
       set(v:string) { this.$props.data.ext.public_key = v }
     }
   },
-  components: { Peer, Amnezia }
+  components: { Peer }
 }
 </script>

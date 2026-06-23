@@ -52,33 +52,57 @@ func backupTables() []backupTable {
 }
 
 func GetDb(exclude string) ([]byte, error) {
+	backupPath, cleanup, err := PrepareDbBackup(exclude)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
+	// Encrypted backup/envelope callers still need a contiguous plaintext buffer
+	// because the current authenticated envelope API seals the whole payload at
+	// once. Plain HTTP export uses PrepareDbBackup and streams the file instead.
+	// #nosec G304 -- backupPath is a freshly-created local backup file path.
+	file, err := os.Open(backupPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	return io.ReadAll(file)
+}
+
+func PrepareDbBackup(exclude string) (backupPath string, cleanup func(), err error) {
 	excludedTables := parseBackupExcludes(exclude)
 
 	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	tmpFile, err := os.CreateTemp(dir, "s-ui-backup-*.db")
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	dbPath := tmpFile.Name()
+	cleanup = func() { cleanupBackupTempFiles(dbPath) }
 	if err := tmpFile.Close(); err != nil {
-		cleanupBackupTempFiles(dbPath)
-		return nil, err
+		cleanup()
+		return "", nil, err
 	}
 	if backupTempPathHook != nil {
 		backupTempPathHook(dbPath)
 	}
-	defer cleanupBackupTempFiles(dbPath)
+	defer func() {
+		if err != nil {
+			cleanup()
+		}
+	}()
 
 	backupDb, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	backupSQLDB, err := backupDb.DB()
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	defer func() { _ = backupSQLDB.Close() }()
 
@@ -88,7 +112,7 @@ func GetDb(exclude string) ([]byte, error) {
 		models = append(models, table.model)
 	}
 	if err = backupDb.AutoMigrate(models...); err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
 	for _, table := range tables {
@@ -104,14 +128,14 @@ func GetDb(exclude string) ([]byte, error) {
 			sourceDB = db.Where("id <> ?", 0)
 		}
 		if err := copyBackupTable(sourceDB, backupDb, table.model); err != nil {
-			return nil, err
+			return "", nil, err
 		}
 	}
 	// A no-TLS inbound points at tls.id=0. GORM treats a zero primary key as
 	// unset during row copies, so the sentinel must be restored explicitly in
 	// the backup or PRAGMA foreign_key_check will reject the restore.
 	if err := ensureNoTLSRowOn(backupDb); err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
 	// Update WAL with TRUNCATE for compactness; fall back to FULL on failure
@@ -124,25 +148,10 @@ func GetDb(exclude string) ([]byte, error) {
 	}
 
 	if err := backupSQLDB.Close(); err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	cleanupBackupSidecars(dbPath)
-
-	// Open the file for reading
-	// #nosec G304 -- dbPath is the operator-configured database path.
-	file, err := os.Open(dbPath)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	// Read the file contents
-	fileContents, err := io.ReadAll(file)
-	if err != nil {
-		return nil, err
-	}
-
-	return fileContents, nil
+	return dbPath, cleanup, nil
 }
 
 func parseBackupExcludes(exclude string) map[string]bool {
@@ -330,8 +339,13 @@ func ImportDB(file multipart.File) error {
 }
 
 func closeLiveDB() {
+	// Swap the global pointer under dbMu (mirrors OpenDB), so concurrent
+	// GetDB() readers — e.g. a cron job firing mid-import — never race the write.
+	// The actual Close() is done outside the lock (I/O, touches no global).
+	dbMu.Lock()
 	current := db
 	db = nil
+	dbMu.Unlock()
 	if current == nil {
 		return
 	}

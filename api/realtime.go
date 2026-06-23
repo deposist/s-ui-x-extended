@@ -206,7 +206,13 @@ func (a *ApiService) realtimeWS(c *gin.Context, config realtimeConfig) {
 	for {
 		select {
 		case event := <-sendCh:
-			payload, _ := json.Marshal(event)
+			// Broadcast events carry a frame the hub marshalled once for all
+			// subscribers; only per-connection events (e.g. "connected") fall back
+			// to marshalling here.
+			payload := event.Frame()
+			if payload == nil {
+				payload, _ = json.Marshal(event)
+			}
 			writeCtx, cancel := context.WithTimeout(wsCtx, 5*time.Second)
 			err := conn.Write(writeCtx, websocket.MessageText, payload)
 			cancel()

@@ -27,12 +27,26 @@ export default defineConfig({
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
       output: {
-        entryFileNames: 'assets/entry-[hash].js',
+        // Prefix the bare Rolldown hash so a filename can never START with "_".
+        // The hash uses URL-safe base64 (A-Za-z0-9-_), so a bare "[hash].js"
+        // occasionally begins with "_", and Go's `//go:embed` excludes files
+        // whose names start with "_" or "." (unless the `all:` prefix is used).
+        // Such a chunk was silently dropped from the embedded binary -> 404 on a
+        // dynamically imported module -> blank panel. (web/web.go also uses
+        // `all:` now as a belt-and-suspenders safeguard.)
+        entryFileNames: 'assets/app-[hash].js',
         chunkFileNames: 'assets/chunk-[hash].js',
         assetFileNames: (assetInfo) => {
           if (assetInfo.names.some(name => name.endsWith('.css')))
             return 'assets/style-[hash].css'
-          return 'assets/asset-[name][extname]'
+          return 'assets/[name][extname]'
+        },
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('/vue/') || id.includes('/vue-router/') || id.includes('/pinia/') || id.includes('/vue-i18n/')) return 'vendor-vue'
+          if (id.includes('/vuetify/')) return 'vendor-vuetify'
+          if (id.includes('/axios/')) return 'vendor-http'
+          return undefined
         },
       },
     }

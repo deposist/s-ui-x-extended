@@ -20,7 +20,7 @@
       hide-details
       clearable
       @click:clear="delete transport.method"
-      :items="httpMethods"
+      :items="methodList"
       v-model="transport.method">
       </v-select>
     </v-col>
@@ -52,18 +52,13 @@
 
 <script lang="ts">
 import { HTTP } from '../../types/transport'
-import { httpMethods, RECOMMENDED } from '@/types/recommended'
 import Headers from '../Headers.vue'
 export default {
   props: ['transport'],
   data() {
     return {
-      httpMethods
+      methodList: ['POST', 'GET', 'PUT', 'PATCH', 'DELETE']
     }
-  },
-  mounted() {
-    this.$props.transport.path ??= RECOMMENDED.wsPath
-    this.$props.transport.method ??= RECOMMENDED.httpMethod
   },
   computed: {
     Http(): HTTP {

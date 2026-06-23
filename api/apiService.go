@@ -9,6 +9,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -23,6 +24,7 @@ import (
 	"github.com/deposist/s-ui-x-extended/util/redact"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/sync/errgroup"
 )
 
 type ApiService struct {
@@ -44,6 +46,8 @@ type ApiService struct {
 	service.ObservabilityService
 	service.TelegramService
 	service.VersionService
+	service.PanelUpdateService
+	service.DoctorService
 }
 
 type Option func(*ApiService)
@@ -93,6 +97,8 @@ func (a *ApiService) bindRuntime() {
 		ServerService: service.ServerService{Runtime: runtime},
 	}
 	a.TelegramService = service.TelegramService{Runtime: runtime}
+	a.PanelUpdateService = service.PanelUpdateService{Runtime: runtime}
+	a.DoctorService = service.DoctorService{Runtime: runtime}
 }
 
 const maxDatabaseImportBytes = 64 << 20
@@ -135,70 +141,62 @@ func (a *ApiService) getData(c *gin.Context) (interface{}, error) {
 		return "", err
 	}
 	if isUpdated {
-		config, err := a.SettingService.GetConfig()
-		if err != nil {
+		var loadSettings service.PanelLoadSettings
+		var clients, tlsConfigs, inbounds, outbounds, endpoints, services any
+		var group errgroup.Group
+		group.Go(func() error {
+			settings, err := a.SettingService.LoadPanelSettingsForData(getHostname(c))
+			loadSettings = settings
+			return err
+		})
+		group.Go(func() error {
+			result, err := a.ClientService.GetAll()
+			clients = result
+			return err
+		})
+		group.Go(func() error {
+			result, err := a.TlsService.GetAll()
+			tlsConfigs = result
+			return err
+		})
+		group.Go(func() error {
+			result, err := a.InboundService.GetAll()
+			inbounds = result
+			return err
+		})
+		group.Go(func() error {
+			result, err := a.OutboundService.GetAll()
+			outbounds = result
+			return err
+		})
+		group.Go(func() error {
+			result, err := a.EndpointService.GetAll()
+			endpoints = result
+			return err
+		})
+		group.Go(func() error {
+			result, err := a.ServicesService.GetAll()
+			services = result
+			return err
+		})
+		if err := group.Wait(); err != nil {
 			return "", err
 		}
-		clients, err := a.ClientService.GetAll()
-		if err != nil {
-			return "", err
-		}
-		tlsConfigs, err := a.TlsService.GetAll()
-		if err != nil {
-			return "", err
-		}
-		inbounds, err := a.InboundService.GetAll()
-		if err != nil {
-			return "", err
-		}
-		outbounds, err := a.OutboundService.GetAll()
-		if err != nil {
-			return "", err
-		}
-		endpoints, err := a.EndpointService.GetAll()
-		if err != nil {
-			return "", err
-		}
-		providers, err := a.ProviderService.GetAll()
-		if err != nil {
-			return "", err
-		}
-		services, err := a.ServicesService.GetAll()
-		if err != nil {
-			return "", err
-		}
-		subURI, err := a.SettingService.GetFinalSubURI(getHostname(c))
-		if err != nil {
-			return "", err
-		}
-		subJsonURI, err := a.SettingService.GetSubJsonURI()
-		if err != nil {
-			return "", err
-		}
-		subClashURI, err := a.SettingService.GetSubClashURI()
-		if err != nil {
-			return "", err
-		}
-		trafficAge, err := a.SettingService.GetTrafficAge()
-		if err != nil {
-			return "", err
-		}
-		data["config"] = json.RawMessage(config)
+		data["config"] = json.RawMessage(loadSettings.Config)
 		data["clients"] = clients
 		data["tls"] = tlsConfigs
 		data["inbounds"] = inbounds
 		data["outbounds"] = outbounds
 		data["endpoints"] = endpoints
-		data["providers"] = providers
 		data["services"] = services
-		data["subURI"] = subURI
-		if subJsonURI != "" {
-			data["subJsonURI"] = subJsonURI
+		data["subURI"] = loadSettings.SubURI
+		if loadSettings.SubJsonURI != "" {
+			data["subJsonURI"] = loadSettings.SubJsonURI
 		}
-		if subClashURI != "" {
-			data["subClashURI"] = subClashURI
+		if loadSettings.SubClashURI != "" {
+			data["subClashURI"] = loadSettings.SubClashURI
 		}
-		data["enableTraffic"] = trafficAge > 0
+		data["enableTraffic"] = loadSettings.TrafficAge > 0
 		data["onlines"] = onlines
 	} else {
 		data["onlines"] = onlines
@@ -328,11 +326,6 @@ func (a *ApiService) GetOnlines(c *gin.Context) {
 	jsonObj(c, onlines, err)
 }
 
-// GetCapabilities returns the protocol capability view (per-inbound UI flags and
-// build-availability) plus the compiled build-tag booleans. Mounted on the
-// admin-authenticated /api group; the payload is bool flags only (no paths,
-// versions or secrets) so it cannot aid fingerprinting beyond the operator's own
-// feature set.
 func (a *ApiService) GetCapabilities(c *gin.Context) {
 	jsonObj(c, capabilities.BuildAPIView(), nil)
 }
@@ -370,7 +363,7 @@ func (a *ApiService) GetKeypairs(c *gin.Context) {
 }
 
 func (a *ApiService) GetDb(c *gin.Context) {
-	if !a.requireTokenScopeAny(c, "database", "database", "admin") {
+	if !a.requireTokenScopeAny(c, "database", "admin") {
 		return
 	}
 	exclude := c.Query("exclude")
@@ -378,7 +371,7 @@ func (a *ApiService) GetDb(c *gin.Context) {
 		a.getEncryptedDb(c, exclude)
 		return
 	}
-	db, err := database.GetDb(exclude)
+	backupPath, cleanup, err := database.PrepareDbBackup(exclude)
 	if err != nil {
 		a.recordAudit(c, requestActor(c), "db_export_failed", "database", service.AuditSeverityWarn, map[string]any{
 			"channel": "download",
@@ -386,13 +379,30 @@ func (a *ApiService) GetDb(c *gin.Context) {
 		jsonMsg(c, "", err)
 		return
 	}
+	defer cleanup()
+	// #nosec G304 -- backupPath is a freshly-created local backup file path.
+	backupFile, err := os.Open(backupPath)
+	if err != nil {
+		a.recordAudit(c, requestActor(c), "db_export_failed", "database", service.AuditSeverityWarn, map[string]any{
+			"channel": "download",
+		})
+		jsonMsg(c, "", err)
+		return
+	}
+	defer backupFile.Close()
 	a.recordAudit(c, requestActor(c), "db_exported", "database", service.AuditSeverityWarn, map[string]any{
 		"channel": "download",
 		"exclude": exclude,
 	})
+	// Real-time alert on config exfiltration (T1530): a full DB export is one of
+	// the highest-signal admin-compromise events.
+	a.TelegramService.NotifyTelegramEvent("db_exported", map[string]string{
+		"actor": requestActor(c),
+		"ip":    getRemoteIp(c),
+	})
 	c.Header("Content-Type", "application/octet-stream")
 	c.Header("Content-Disposition", "attachment; filename=s-ui_"+time.Now().Format("20060102-150405")+".db")
-	_, _ = c.Writer.Write(db)
+	_, _ = io.Copy(c.Writer, backupFile)
 }
 
 func (a *ApiService) getEncryptedDb(c *gin.Context, exclude string) {
@@ -478,15 +488,22 @@ func (a *ApiService) Login(c *gin.Context) {
 		a.recordAudit(c, username, "login_blocked", "auth", service.AuditSeverityWarn, map[string]any{
 			"reason": "rate_limit_ip",
 		})
+		// Real-time alert on the lockout transition (T1110): brute-force reaching
+		// the per-IP block is a high-signal admin-compromise indicator.
+		a.TelegramService.NotifyTelegramEvent("login_blocked", telegramRequestFields(c))
 		jsonMsg(c, "", err)
 		return
 	}
-	if err := checkLoginRateLimit(userKey); err != nil {
-		a.recordAudit(c, username, "login_blocked", "auth", service.AuditSeverityWarn, map[string]any{
-			"reason": "rate_limit_user",
-		})
-		jsonMsg(c, "", err)
-		return
+	// Per-username throttle is a tarpit (escalating, capped delay), never a hard
+	// block — so a distributed attacker burning failures from rotating IPs
+	// cannot lock a known admin out of their own panel. The per-IP hard block
+	// above remains the primary brute-force defence.
+	if delay := loginUsernameTarpitDelay(userKey); delay > 0 {
+		select {
+		case <-time.After(delay):
+		case <-c.Request.Context().Done():
+			return
+		}
 	}
 	loginUser, err := a.UserService.Login(username, c.Request.FormValue("pass"), remoteIP)
 	if err != nil {
@@ -543,6 +560,18 @@ func (a *ApiService) ChangePass(c *gin.Context) {
 		a.recordAudit(c, currentUser, "admin_credentials_changed", "admin", service.AuditSeverityWarn, map[string]any{
 			"newUsername": newUsername,
 		})
+		// Rotate the session generation so every OTHER web session and all WS
+		// tokens (including any minted under the old credentials) are invalidated,
+		// then re-establish only THIS session under the new generation so the
+		// admin who changed the password is not logged out of their own session.
+		if newGen, rerr := a.SettingService.RotateSessionGeneration(); rerr != nil {
+			logger.Warning("session rotation after credential change failed:", rerr)
+		} else {
+			sessionMaxAge, _ := a.SettingService.GetSessionMaxAge()
+			if serr := SetLoginUser(c, newUsername, sessionMaxAge, newGen); serr != nil {
+				logger.Warning("re-establishing session after credential change failed:", serr)
+			}
+		}
 		jsonMsg(c, "save", nil)
 	} else {
 		logger.Warning("change user credentials failed:", err)
@@ -792,7 +821,7 @@ func (a *ApiService) SubConvert(c *gin.Context) {
 }
 
 func (a *ApiService) ImportDb(c *gin.Context) {
-	if !a.requireTokenScopeAny(c, "database", "database", "admin") {
+	if !a.requireTokenScopeAny(c, "database", "admin") {
 		return
 	}
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxDatabaseImportBytes)

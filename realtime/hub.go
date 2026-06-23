@@ -1,6 +1,7 @@
 package realtime
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 )
@@ -106,6 +107,14 @@ func (h *hub) Publish(topic Topic, payload interface{}) {
 		Payload: payload,
 	}
 	clients := h.snapshot(topic)
+	if len(clients) == 0 {
+		return
+	}
+	// Marshal the event once and share the frame across every subscriber of this
+	// topic, instead of having each connection re-serialize the identical event.
+	if data, err := json.Marshal(event); err == nil {
+		event.frame = data
+	}
 	for _, c := range clients {
 		select {
 		case c.sendCh <- event:
@@ -132,11 +141,20 @@ func (h *hub) CloseAll(reason string) {
 func (h *hub) release(user string, ip string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	// Delete the key when its counter reaches zero so the maps stay proportional
+	// to currently-active reservations instead of accumulating a permanent
+	// entry per distinct user/IP ever seen.
 	if h.byUser[user] > 0 {
 		h.byUser[user]--
 	}
+	if h.byUser[user] <= 0 {
+		delete(h.byUser, user)
+	}
 	if h.byIP[ip] > 0 {
 		h.byIP[ip]--
+	}
+	if h.byIP[ip] <= 0 {
+		delete(h.byIP, ip)
 	}
 }
 

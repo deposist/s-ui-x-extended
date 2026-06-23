@@ -392,14 +392,13 @@ func (s *ServerService) GetDatabaseInfo() map[string]int64 {
 		return nil
 	}
 
-	var clientsCount, inboundsCount, outboundsCount, servicesCount, endpointsCount, providersCount, clientUp, clientDown int64
+	var clientsCount, inboundsCount, outboundsCount, servicesCount, endpointsCount, clientUp, clientDown int64
 
 	db.Model(&model.Client{}).Count(&clientsCount)
 	db.Model(&model.Inbound{}).Count(&inboundsCount)
 	db.Model(&model.Outbound{}).Count(&outboundsCount)
 	db.Model(&model.Service{}).Count(&servicesCount)
 	db.Model(&model.Endpoint{}).Count(&endpointsCount)
-	db.Model(&model.Provider{}).Count(&providersCount)
 	db.Model(&model.Client{}).Select("COALESCE(SUM(up+total_up),0)").Scan(&clientUp)
 	db.Model(&model.Client{}).Select("COALESCE(SUM(down+total_down),0)").Scan(&clientDown)
 
@@ -408,7 +407,6 @@ func (s *ServerService) GetDatabaseInfo() map[string]int64 {
 	info["outbounds"] = outboundsCount
 	info["services"] = servicesCount
 	info["endpoints"] = endpointsCount
-	info["providers"] = providersCount
 	info["clientUp"] = clientUp
 	info["clientDown"] = clientDown
 

@@ -87,12 +87,11 @@
                 </v-text-field>
               </v-col>
               <v-col cols="12" sm="6" md="4">
-                <v-combobox
+                <v-text-field
                 :label="$t('transport.host')"
                 hide-details
-                :items="sniFrontHosts"
                 v-model="mesh.host">
-                </v-combobox>
+                </v-text-field>
               </v-col>
             </v-row>
             <Dial :dial="mesh" />     
@@ -175,14 +174,12 @@
 import Dial from '@/components/Dial.vue'
 import OutTLS from '../tls/OutTLS.vue'
 import Listen from '../Listen.vue'
-import { sniFrontHosts } from '@/types/recommended'
 export default {
   props: ['data', 'tsTags', 'inTags'],
   data() {
     return {
       menu: false,
       usePskText: this.$props.data.mesh_psk == undefined ? 1 : 0,
-      sniFrontHosts,
     }
   },
   computed: {

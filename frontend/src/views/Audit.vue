@@ -1,7 +1,10 @@
 <template>
-  <v-card :loading="loading">
-    <v-card-title>{{ $t('audit.title') }}</v-card-title>
-    <v-divider></v-divider>
+  <page-header v-if="nexus" :title="$t('audit.title')" />
+  <v-card :loading="loading" :flat="nexus">
+    <template v-if="!nexus">
+      <v-card-title>{{ $t('audit.title') }}</v-card-title>
+      <v-divider></v-divider>
+    </template>
     <v-card-text>
       <v-row align="center">
         <v-col cols="12" sm="4" md="3">
@@ -26,7 +29,7 @@
             id="audit-since-filter"
             :label="$t('audit.since')"
             :model-value="formatFilterDate(sinceFilter)"
-            prepend-inner-icon="mdi-calendar-start"
+            prepend-inner-icon="lucide:calendar"
             readonly
             hide-details
           />
@@ -53,7 +56,7 @@
             id="audit-until-filter"
             :label="$t('audit.until')"
             :model-value="formatFilterDate(untilFilter)"
-            prepend-inner-icon="mdi-calendar-end"
+            prepend-inner-icon="lucide:calendar"
             readonly
             hide-details
           />
@@ -84,19 +87,56 @@
           />
         </v-col>
         <v-col cols="auto">
-          <v-btn icon="mdi-refresh" variant="tonal" :loading="loading" @click="resetAndLoad">
+          <v-btn
+            :aria-label="$t('actions.update')"
+            icon="lucide:rotate-cw"
+            :title="$t('actions.update')"
+            variant="tonal"
+            :loading="loading"
+            @click="resetAndLoad"
+          >
             <v-icon />
             <v-tooltip activator="parent" location="top" :text="$t('actions.update')" />
           </v-btn>
         </v-col>
         <v-col cols="auto">
-          <v-btn icon="mdi-filter-remove-outline" variant="text" @click="clearFilters">
+          <v-btn
+            :aria-label="$t('table.clearFilters')"
+            icon="lucide:filter-x"
+            :title="$t('table.clearFilters')"
+            variant="text"
+            @click="clearFilters"
+          >
             <v-icon />
-            <v-tooltip activator="parent" location="top" :text="$t('actions.del')" />
+            <v-tooltip activator="parent" location="top" :text="$t('table.clearFilters')" />
           </v-btn>
         </v-col>
       </v-row>
+      <nexus-data-table
+        v-if="nexus"
+        :columns="nexusColumns"
+        :items="events"
+        :row-key="(item) => item.id"
+        :loading="loading"
+        expandable
+        :paginated="false"
+      >
+        <template #col.dateTime="{ value }">
+          <span dir="ltr">{{ dateFormatted(value as number) }}</span>
+        </template>
+        <template #col.severity="{ value }">
+          <status-badge :label="String(value)" :tone="value === 'warn' ? 'warning' : 'info'" />
+        </template>
+        <template #expand="{ item }">
+          <pre dir="ltr" class="audit-details">{{ formatDetails(item.details) }}</pre>
+        </template>
+        <template #empty>
+          <empty-state icon="lucide:file-text" :title="$t('audit.title')" />
+        </template>
+      </nexus-data-table>
+
       <v-data-table
+        v-else
         :headers="headers"
         :items="events"
         item-value="id"
@@ -125,13 +165,27 @@
       </v-data-table>
       <v-row class="mt-2" align="center" justify="end">
         <v-col cols="auto">
-          <v-btn icon="mdi-chevron-left" variant="text" :disabled="cursorStack.length === 0 || loading" @click="previousPage">
+          <v-btn
+            :aria-label="$t('audit.previous')"
+            icon="lucide:chevron-left"
+            :title="$t('audit.previous')"
+            variant="text"
+            :disabled="cursorStack.length === 0 || loading"
+            @click="previousPage"
+          >
             <v-icon />
             <v-tooltip activator="parent" location="top" :text="$t('audit.previous')" />
           </v-btn>
         </v-col>
         <v-col cols="auto">
-          <v-btn icon="mdi-chevron-right" variant="text" :disabled="nextCursor === 0 || loading" @click="nextPage">
+          <v-btn
+            :aria-label="$t('audit.next')"
+            icon="lucide:chevron-right"
+            :title="$t('audit.next')"
+            variant="text"
+            :disabled="nextCursor === 0 || loading"
+            @click="nextPage"
+          >
             <v-icon />
             <v-tooltip activator="parent" location="top" :text="$t('audit.next')" />
           </v-btn>
@@ -146,6 +200,15 @@ import { i18n, locale } from '@/locales'
 import HttpUtils from '@/plugins/httputil'
 import DatePicker from 'vue3-persian-datetime-picker'
 import { computed, onMounted, ref } from 'vue'
+import type { Column } from '@/components/nexus/data/dataTableColumns'
+import NexusDataTable from '@/components/nexus/data/NexusDataTable.vue'
+import EmptyState from '@/components/nexus/primitives/EmptyState.vue'
+import PageHeader from '@/components/nexus/primitives/PageHeader.vue'
+import StatusBadge from '@/components/nexus/primitives/StatusBadge.vue'
+import { useUiMode } from '@/uiMode/useUiMode'
+
+const { mode } = useUiMode()
+const nexus = computed(() => mode.value === 'nexus')
 
 type AuditEvent = {
   id: number
@@ -183,6 +246,15 @@ const headers = [
   { title: i18n.global.t('audit.event'), key: 'event' },
   { title: i18n.global.t('audit.severity'), key: 'severity' },
   { title: i18n.global.t('audit.resource'), key: 'resource' },
+]
+
+const nexusColumns: Column<AuditEvent>[] = [
+  { key: 'id', labelKey: 'audit.id', sortable: true },
+  { key: 'dateTime', labelKey: 'audit.dateTime', sortable: true },
+  { key: 'actor', labelKey: 'admin.actor', sortable: true },
+  { key: 'event', labelKey: 'audit.event', sortable: true },
+  { key: 'severity', labelKey: 'audit.severity', sortable: true },
+  { key: 'resource', labelKey: 'audit.resource', sortable: true },
 ]
 
 onMounted(() => {

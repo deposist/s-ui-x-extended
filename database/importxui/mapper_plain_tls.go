@@ -13,7 +13,7 @@ import (
 )
 
 // flexStringList unmarshals an Xray PEM field that may be a single string or a
-// list of strings — both forms appear in tlsSettings.certificates entries.
+// list of strings - both forms appear in tlsSettings.certificates entries.
 type flexStringList []string
 
 func (f *flexStringList) UnmarshalJSON(b []byte) error {

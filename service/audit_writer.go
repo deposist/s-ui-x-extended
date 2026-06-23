@@ -14,9 +14,20 @@ const (
 	auditQueueCapacity = 4096
 	auditBatchSize     = 64
 	auditFlushInterval = 200 * time.Millisecond
+
+	// Coverage-gap signal: once this many audit events have been dropped since
+	// the last marker (and the window has elapsed), emit one synchronous warn
+	// event so a sustained drop (overload / tamper attempt) is itself audited.
+	auditDropMarkerThreshold = 100
+	auditDropMarkerWindow    = 60 * time.Second
 )
 
-var auditDroppedTotal atomic.Uint64
+var (
+	auditDroppedTotal   atomic.Uint64
+	auditDropMarkerMu   sync.Mutex
+	auditDropMarkerAt   time.Time
+	auditDropMarkerBase uint64
+)
 
 type auditWriter struct {
 	capacity      int
@@ -76,6 +87,37 @@ func (w *auditWriter) Enqueue(event model.AuditEvent) {
 		return
 	}
 	w.push(event)
+	w.maybeEmitDropMarker()
+}
+
+// maybeEmitDropMarker enqueues a single warn-level "audit_events_dropped" event
+// when drops have crossed the threshold within a window. It is called only from
+// Enqueue (never from push), so it cannot recurse; the marker is warn-priority
+// so the overflow victim logic will not silently drop it (T1070 detection).
+func (w *auditWriter) maybeEmitDropMarker() {
+	total := auditDroppedTotal.Load()
+	auditDropMarkerMu.Lock()
+	since := total - auditDropMarkerBase
+	now := time.Now()
+	if since < auditDropMarkerThreshold || now.Sub(auditDropMarkerAt) < auditDropMarkerWindow {
+		auditDropMarkerMu.Unlock()
+		return
+	}
+	auditDropMarkerBase = total
+	auditDropMarkerAt = now
+	auditDropMarkerMu.Unlock()
+
+	marker, err := buildAuditRecord(AuditEvent{
+		Actor:    "system",
+		Event:    "audit_events_dropped",
+		Resource: "audit",
+		Severity: AuditSeverityWarn,
+		Details:  map[string]any{"droppedTotal": total, "sinceLast": since},
+	})
+	if err != nil {
+		return
+	}
+	w.push(marker)
 }
 
 func (w *auditWriter) push(event model.AuditEvent) {

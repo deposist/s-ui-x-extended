@@ -48,8 +48,8 @@ type xrayWireguardOutboundPeer struct {
 //     wireguard->the endpoint tag, proxy->its own outbound tag),
 //   - warnings for anything skipped or needing review.
 //
-// 3x-ui (Xray) stores every outbound — system ones (freedom/blackhole/dns),
-// WARP, and proxy chains — in this array. s-ui (sing-box) models system
+// 3x-ui (Xray) stores every outbound - system ones (freedom/blackhole/dns),
+// WARP, and proxy chains - in this array. s-ui (sing-box) models system
 // outbounds as routing actions/built-ins, WARP as an *endpoint*, and proxy
 // chains as first-class *outbounds*, so each kind is mapped to its s-ui home
 // instead of being dropped.
@@ -189,7 +189,7 @@ func warpEndpointFromOutbound(tag string, rawSettings json.RawMessage) (*model.E
 }
 
 // validReserved reports whether a WireGuard reserved value is exactly 3 bytes,
-// each in 0-255 — the only shape sing-box accepts.
+// each in 0-255 - the only shape sing-box accepts.
 func validReserved(reserved []int) bool {
 	if len(reserved) != 3 {
 		return false

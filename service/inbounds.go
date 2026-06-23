@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/deposist/s-ui-x-extended/core/capabilities"
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
 	"github.com/deposist/s-ui-x-extended/util"
@@ -157,71 +156,96 @@ func (s *InboundService) FromIds(ids []uint) ([]*model.Inbound, error) {
 	return inbounds, nil
 }
 
-func (s *InboundService) Save(tx *gorm.DB, act string, data json.RawMessage, initUserIds string, hostname string) error {
-	var err error
-
+func (s *InboundService) Save(tx *gorm.DB, act string, data json.RawMessage, initUserIds string, hostname string) (*entityCoreChange, error) {
 	switch act {
 	case "new", "edit":
-		var inbound model.Inbound
-		err = inbound.UnmarshalJSON(data)
-		if err != nil {
-			return err
-		}
-		if inbound.TlsId > 0 {
-			err = tx.Model(model.Tls{}).Where("id = ?", inbound.TlsId).Find(&inbound.Tls).Error
-			if err != nil {
-				return err
-			}
-		}
-		var oldTag string
-		if act == "edit" {
-			err = tx.Model(model.Inbound{}).Select("tag").Where("id = ?", inbound.Id).Find(&oldTag).Error
-			if err != nil {
-				return err
-			}
-		}
-
-		err = util.FillOutJson(&inbound, hostname)
-		if err != nil {
-			return err
-		}
-
-		err = tx.Save(&inbound).Error
-		if err != nil {
-			return err
-		}
-		switch act {
-		case "new":
-			err = s.ClientService.UpdateClientsOnInboundAdd(tx, initUserIds, inbound.Id, hostname)
-		case "edit":
-			err = s.ClientService.UpdateLinksByInboundChange(tx, &[]model.Inbound{inbound}, hostname, oldTag)
-		}
-		if err != nil {
-			return err
-		}
+		return s.saveInboundUpsert(tx, act, data, initUserIds, hostname)
 	case "del":
-		var tag string
-		err = json.Unmarshal(data, &tag)
-		if err != nil {
-			return err
-		}
-		var id uint
-		err = tx.Model(model.Inbound{}).Select("id").Where("tag = ?", tag).Scan(&id).Error
-		if err != nil {
-			return err
-		}
-		err = s.ClientService.UpdateClientsOnInboundDelete(tx, id, tag)
-		if err != nil {
-			return err
-		}
-		err = tx.Where("tag = ?", tag).Delete(model.Inbound{}).Error
-		if err != nil {
-			return err
-		}
+		return s.saveInboundDelete(tx, data)
 	default:
-		return common.NewErrorf("unknown action: %s", act)
+		return nil, common.NewErrorf("unknown action: %s", act)
 	}
-	return nil
+}
+
+func (s *InboundService) saveInboundUpsert(tx *gorm.DB, act string, data json.RawMessage, initUserIds string, hostname string) (*entityCoreChange, error) {
+	var inbound model.Inbound
+	if err := inbound.UnmarshalJSON(data); err != nil {
+		return nil, err
+	}
+	if inbound.TlsId > 0 {
+		if err := tx.Model(model.Tls{}).Where("id = ?", inbound.TlsId).Find(&inbound.Tls).Error; err != nil {
+			return nil, err
+		}
+	}
+	var oldTag string
+	if act == "edit" {
+		if err := tx.Model(model.Inbound{}).Select("tag").Where("id = ?", inbound.Id).Find(&oldTag).Error; err != nil {
+			return nil, err
+		}
+		if oldTag != "" && oldTag != inbound.Tag {
+			refs, err := inboundTagReferences(tx, oldTag)
+			if err != nil {
+				return nil, err
+			}
+			if len(refs) > 0 {
+				return nil, formatTagReferenceError("inbound", oldTag, refs)
+			}
+		}
+	}
+
+	if err := util.FillOutJson(&inbound, hostname); err != nil {
+		return nil, err
+	}
+	if err := tx.Save(&inbound).Error; err != nil {
+		return nil, err
+	}
+	var err error
+	switch act {
+	case "new":
+		err = s.ClientService.UpdateClientsOnInboundAdd(tx, initUserIds, inbound.Id, hostname)
+	case "edit":
+		err = s.ClientService.UpdateLinksByInboundChange(tx, &[]model.Inbound{inbound}, hostname, oldTag)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	change := &entityCoreChange{reloadIds: []uint{inbound.Id}}
+	if oldTag != "" && oldTag != inbound.Tag {
+		change.removeTags = []string{oldTag}
+	}
+	// ssm-api services capture the managed inbound adapter at construction, so
+	// they must be recreated after the inbound itself was hot-reloaded.
+	change.cascadeServiceIds, err = ssmCascadeServiceIds(tx, inbound.Tag)
+	if err != nil {
+		return nil, err
+	}
+	return change, nil
+}
+
+func (s *InboundService) saveInboundDelete(tx *gorm.DB, data json.RawMessage) (*entityCoreChange, error) {
+	var tag string
+	if err := json.Unmarshal(data, &tag); err != nil {
+		return nil, err
+	}
+	refs, err := inboundTagReferences(tx, tag)
+	if err != nil {
+		return nil, err
+	}
+	if len(refs) > 0 {
+		return nil, formatTagReferenceError("inbound", tag, refs)
+	}
+	var id uint
+	if err := tx.Model(model.Inbound{}).Select("id").Where("tag = ?", tag).Scan(&id).Error; err != nil {
+		return nil, err
+	}
+	if err := s.ClientService.UpdateClientsOnInboundDelete(tx, id, tag); err != nil {
+		return nil, err
+	}
+	if err := tx.Where("tag = ?", tag).Delete(model.Inbound{}).Error; err != nil {
+		return nil, err
+	}
+	return &entityCoreChange{removeTags: []string{tag}}, nil
 }
 
 func (s *InboundService) UpdateOutJsons(tx *gorm.DB, inboundIds []uint, hostname string) error {
@@ -271,18 +295,40 @@ func (s *InboundService) hasUser(inboundType string) bool {
 }
 
 // userJSONField maps an inbound type to the JSON path used inside
-// clients.config to locate per-user data. Derived from the embedded capability
-// manifest (core/capabilities/protocols.json) so it cannot drift from the
-// frontend / link / out_json lists. Do not extend by hand — edit the manifest.
-// It stays a package var (not a func call site) because tests mutate it to probe
-// the SQL-injection guard in fetchUsersByCondition.
-var userJSONField = capabilities.UserJSONFields()
+// clients.config to locate per-user data. Do not extend this map without a
+// positive list for both the inbound type and the JSON field value.
+var userJSONField = map[string]string{
+	"mixed":         "mixed",
+	"socks":         "socks",
+	"http":          "http",
+	"shadowsocks":   "shadowsocks",
+	"shadowsocks16": "shadowsocks",
+	"vmess":         "vmess",
+	"trojan":        "trojan",
+	"naive":         "naive",
+	"hysteria":      "hysteria",
+	"shadowtls":     "shadowtls",
+	"tuic":          "tuic",
+	"hysteria2":     "hysteria2",
+	"vless":         "vless",
+	"anytls":        "anytls",
+}
 
-// allowedUserJSONFields is the second-layer allow-list of JSON field values that
-// may be interpolated into the user-lookup SQL path. Derived independently from
-// the same embedded (build-time-constant) manifest; mutating userJSONField at
-// runtime can never widen it.
-var allowedUserJSONFields = capabilities.AllowedUserJSONFields()
+var allowedUserJSONFields = map[string]struct{}{
+	"mixed":       {},
+	"socks":       {},
+	"http":        {},
+	"shadowsocks": {},
+	"vmess":       {},
+	"trojan":      {},
+	"naive":       {},
+	"hysteria":    {},
+	"shadowtls":   {},
+	"tuic":        {},
+	"hysteria2":   {},
+	"vless":       {},
+	"anytls":      {},
+}
 
 func (s *InboundService) addUsers(db *gorm.DB, inboundJson []byte, inboundId uint, inboundType string) ([]byte, error) {
 	if !s.hasUser(inboundType) {
@@ -361,18 +407,34 @@ func (s *InboundService) fetchUsersByCondition(db *gorm.DB, inboundType string, 
 	}
 	var usersJson []json.RawMessage
 	for _, user := range users {
-		// Clients created before a new protocol field was added lack
-		// clients.config.$.<field>; json_extract yields NULL/empty. Skip those
-		// rather than emit an invalid user object that breaks the whole inbound.
-		if user == "" || user == "null" {
-			continue
-		}
 		if stripVisionFlow {
 			user = strings.Replace(user, "xtls-rprx-vision", "", -1)
 		}
 		usersJson = append(usersJson, json.RawMessage(user))
 	}
 	return usersJson, nil
+}
+
+// RemoveInboundsFromCore removes the given inbound tags from the running core
+// and closes their tracked connections. Missing tags are tolerated so
+// removals stay idempotent; with no running core there is nothing to remove.
+func (s *InboundService) RemoveInboundsFromCore(tags []string) error {
+	coreInstance := s.runtime().Core()
+	if coreInstance == nil || !coreInstance.IsRunning() {
+		return nil
+	}
+	for _, tag := range tags {
+		if err := coreInstance.RemoveInbound(tag); err != nil && err != os.ErrInvalid {
+			return err
+		}
+		// The core may have been stopped concurrently, so guard the instance.
+		if instance := coreInstance.GetInstance(); instance != nil {
+			if tracker := instance.ConnTracker(); tracker != nil {
+				tracker.CloseConnByInbound(tag)
+			}
+		}
+	}
+	return nil
 }
 
 func (s *InboundService) RestartInbounds(tx *gorm.DB, ids []uint) error {

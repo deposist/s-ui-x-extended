@@ -3,9 +3,17 @@ package importxui
 import (
 	"fmt"
 	"net/netip"
+	"regexp"
 	"strconv"
 	"strings"
 )
+
+// geoCodeAllowed restricts a normalised geoip/geosite code to the lowercase
+// token charset the meta-rules-dat repo actually uses. A code originates from an
+// untrusted (possibly attacker-crafted) x-ui DB and is interpolated into a
+// persisted remote rule-set URL, so anything outside this set is dropped rather
+// than allowed to inject path/URL fragments.
+var geoCodeAllowed = regexp.MustCompile(`^[a-z0-9_-]+$`)
 
 // applyRuleMatchers translates an Xray routing rule's matcher fields into
 // sing-box route-rule fields on next. It returns whether at least one matcher
@@ -13,7 +21,7 @@ import (
 // fields that can only be partially represented.
 //
 // Caller handles the un-representable matchers (attrs, balancerTag) by marking
-// the whole rule manual before calling this — dropping them would silently
+// the whole rule manual before calling this. Dropping them would silently
 // broaden the match.
 func applyRuleMatchers(index int, rule, next map[string]any, ruleSets *[]any, seen map[string]struct{}) (bool, []string) {
 	added := false
@@ -41,7 +49,7 @@ func applyRuleMatchers(index int, rule, next map[string]any, ruleSets *[]any, se
 		// the rule's IP-CIDR rule sets match the source instead.
 		next["rule_set_ip_cidr_match_source"] = true
 		if destGeoip {
-			warnings = append(warnings, fmt.Sprintf("routing rule %d mixes source and destination geoip; rule_set_ip_cidr_match_source applies to all of them — review manually", index))
+			warnings = append(warnings, fmt.Sprintf("routing rule %d mixes source and destination geoip; rule_set_ip_cidr_match_source applies to all of them. Review manually", index))
 		}
 	}
 	if mapPortMatchers(rule["port"], next, "port", "port_range") {
@@ -112,7 +120,7 @@ func mapDomainMatchers(domains []string, dst map[string]any, ruleSets *[]any, se
 
 // Remote rule-set sources. sing-box removed the inline geoip/geosite route
 // matchers in 1.12, so a geoip/geosite match is migrated to a remote rule set
-// pointing at the MetaCubeX meta-rules-dat repository — the same source s-ui's
+// pointing at the MetaCubeX meta-rules-dat repository, the same source s-ui's
 // own subscription/rule-set tooling uses.
 const (
 	geositeRuleSetURLFmt = "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/%s.srs"
@@ -124,7 +132,7 @@ const (
 // rule; a literal IP/CIDR becomes an ip_cidr (or source_ip_cidr) matcher, with a
 // bare IP normalised to a host prefix (/32 or /128). Anything that is neither a
 // geoip code nor a parseable IP/CIDR is dropped with a warning rather than
-// written verbatim — sing-box's ip_cidr parser rejects non-prefix values, so a
+// written verbatim. sing-box's ip_cidr parser rejects non-prefix values, so a
 // stray value (e.g. an unrecognised ext: reference) would make the whole config
 // fail to load. Returns whether anything was added, whether a geoip rule set was
 // used (so the caller can set source matching) and warnings.
@@ -153,7 +161,7 @@ func mapIPMatchers(index int, value any, next map[string]any, ruleSets *[]any, s
 			// file's categories are assumed to follow the geoip-<code> convention.
 			code := extGeoCode(ip)
 			if code == "" {
-				warnings = append(warnings, fmt.Sprintf("routing rule %d: could not map external geoip %s matcher %q — recreate manually", index, field, ip))
+				warnings = append(warnings, fmt.Sprintf("routing rule %d: could not map external geoip %s matcher %q. Recreate manually", index, field, ip))
 				continue
 			}
 			tag := "geoip-" + code
@@ -161,13 +169,13 @@ func mapIPMatchers(index int, value any, next map[string]any, ruleSets *[]any, s
 			registerRemoteRuleSet(ruleSets, seen, tag, fmt.Sprintf(geoipRuleSetURLFmt, code))
 			added = true
 			geoipUsed = true
-			warnings = append(warnings, fmt.Sprintf("routing rule %d: external geoip %q mapped to rule set %q — verify it matches your custom file", index, ip, tag))
+			warnings = append(warnings, fmt.Sprintf("routing rule %d: external geoip %q mapped to rule set %q. Verify it matches your custom file", index, ip, tag))
 		default:
 			if cidr, ok := normalizeCIDR(ip); ok {
 				next[cidrKey] = appendString(next[cidrKey], cidr)
 				added = true
 			} else {
-				warnings = append(warnings, fmt.Sprintf("routing rule %d: dropped %s matcher %q — not a geoip code or a valid IP/CIDR", index, field, ip))
+				warnings = append(warnings, fmt.Sprintf("routing rule %d: dropped %s matcher %q. It is not a geoip code or a valid IP/CIDR", index, field, ip))
 			}
 		}
 	}
@@ -230,7 +238,14 @@ func geoRuleSetCode(raw string) string {
 	if i := strings.IndexByte(code, '@'); i >= 0 {
 		code = code[:i]
 	}
-	return strings.TrimSpace(code)
+	code = strings.TrimSpace(code)
+	// Reject anything outside the rule-set repo's token charset so an untrusted
+	// code can never inject into the URL built from it (callers treat "" as a
+	// skip-with-warning).
+	if !geoCodeAllowed.MatchString(code) {
+		return ""
+	}
+	return code
 }
 
 // mapPortMatchers splits Xray port specs (a number, an "a-b" range, or a list/

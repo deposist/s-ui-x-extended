@@ -109,6 +109,39 @@ func TestGetAllSettingConcurrentDefaultInitializationIssue19(t *testing.T) {
 	}
 }
 
+// TestGetAllSettingDoesNotReseedOnSteadyState pins the GET /load hot-path
+// optimization: once every default key exists, GetAllSetting must not re-run
+// the seed transaction. It previously issued an INSERT ... WHERE NOT EXISTS for
+// every default key on every call (~90 writes), serializing the read path on
+// SQLite's single writer; a CPU profile attributed ~85% of /load to it.
+func TestGetAllSettingDoesNotReseedOnSteadyState(t *testing.T) {
+	s := initSettingTestDB(t)
+	if _, err := s.GetAllSetting(); err != nil { // first call seeds defaults
+		t.Fatal(err)
+	}
+
+	db := database.GetDB()
+	const cbName = "test_count_seed_inserts"
+	var inserts int
+	if err := db.Callback().Raw().Before("gorm:raw").Register(cbName, func(tx *gorm.DB) {
+		if strings.Contains(strings.ToUpper(tx.Statement.SQL.String()), "INSERT") {
+			inserts++
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Callback().Raw().Remove(cbName) })
+
+	for i := 0; i < 3; i++ {
+		if _, err := s.GetAllSetting(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if inserts != 0 {
+		t.Fatalf("GetAllSetting issued %d INSERT statement(s) after defaults were seeded; the read path must not re-seed", inserts)
+	}
+}
+
 func TestSaveConfigCreatesMissingConfigSetting(t *testing.T) {
 	settingService := initSettingTestDB(t)
 	tx := database.GetDB().Begin()
@@ -131,6 +164,66 @@ func TestSaveConfigCreatesMissingConfigSetting(t *testing.T) {
 	}
 	if !strings.Contains(saved, `"dns"`) || !strings.Contains(saved, `"route"`) {
 		t.Fatalf("saved config does not contain DNS and route data: %s", saved)
+	}
+}
+
+func TestLoadPanelSettingsForDataUsesDefaultsForMissingRows(t *testing.T) {
+	settingService := initSettingTestDB(t)
+	if err := database.GetDB().Where("key IN ?", []string{"config", "subURI", "subPort", "subPath", "trafficAge"}).Delete(&model.Setting{}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	settings, err := settingService.LoadPanelSettingsForData("example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.Config != defaultConfig {
+		t.Fatalf("config default mismatch: %q", settings.Config)
+	}
+	if settings.SubURI != "http://example.com:2096/sub/" {
+		t.Fatalf("unexpected default sub URI: %s", settings.SubURI)
+	}
+	if settings.TrafficAge != 30 {
+		t.Fatalf("traffic age default = %d, want 30", settings.TrafficAge)
+	}
+}
+
+func TestLoadPanelSettingsForDataMatchesFinalSubURI(t *testing.T) {
+	settingService := initSettingTestDB(t)
+	if _, err := settingService.GetAllSetting(); err != nil {
+		t.Fatal(err)
+	}
+	updates := map[string]string{
+		"subPort":     "443",
+		"subCertFile": "/tmp/cert.pem",
+		"subKeyFile":  "/tmp/key.pem",
+		"subPath":     "/sub/",
+		"subJsonURI":  "https://json.example/sub/",
+		"subClashURI": "https://clash.example/sub/",
+		"trafficAge":  "0",
+	}
+	for key, value := range updates {
+		if err := database.GetDB().Model(model.Setting{}).Where("key = ?", key).Update("value", value).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	settings, err := settingService.LoadPanelSettingsForData("example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	finalURI, err := settingService.GetFinalSubURI("example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.SubURI != finalURI {
+		t.Fatalf("SubURI = %q, want %q", settings.SubURI, finalURI)
+	}
+	if settings.SubJsonURI != updates["subJsonURI"] || settings.SubClashURI != updates["subClashURI"] {
+		t.Fatalf("sub extension URIs not preserved: %#v", settings)
+	}
+	if settings.TrafficAge != 0 {
+		t.Fatalf("traffic age = %d, want 0", settings.TrafficAge)
 	}
 }
 

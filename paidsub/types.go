@@ -2,7 +2,7 @@ package paidsub
 
 import "encoding/json"
 
-// Minimal Telegram Bot API types — only the fields this module consumes. The
+// Minimal Telegram Bot API types - only the fields this module consumes. The
 // bot trusts only updates fetched from the official API over its own token.
 
 type tgUser struct {
