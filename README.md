@@ -1,7 +1,7 @@
 ## S-UI-X Extended
 
 <p align="center">
-  <img width="492" height="450" alt="s-ui-x logo" src="https://raw.githubusercontent.com/deposist/s-ui-x-extended/refs/heads/main/docs/592996937-cfc9da97-f8ea-4c68-961c-2bf164932272.png" />
+  <img width="492" height="450" alt="S-UI-X Extended logo" src="https://raw.githubusercontent.com/deposist/s-ui-x-extended/refs/heads/main/docs/592996937-cfc9da97-f8ea-4c68-961c-2bf164932272.png" />
 </p>
 <p align="center">
   <a href="https://github.com/deposist/s-ui-x-extended/releases/latest">
@@ -19,16 +19,16 @@
 </p>
 
 <p align="center">
-  <img width="1024" alt="s-ui-x panel screenshots" src="https://github.com/deposist/s-ui-x-extended/blob/main/docs/screen1.png" />
+  <img width="1024" alt="S-UI-X Extended panel screenshots" src="https://github.com/deposist/s-ui-x-extended/blob/main/docs/screen1.png" />
 </p>
 
 <p align="center">
-  <img width="1024" alt="Support S-UI-X development" src="docs/support-s-ui-x.png" />
+  <img width="1024" alt="Support S-UI-X Extended development" src="docs/support-s-ui-x.png" />
 </p>
 
-## Support S-UI-X
+## Support S-UI-X Extended
 
-S-UI-X is maintained as an open-source project. Donations help fund continued
+S-UI-X Extended is maintained as an open-source project. Donations help fund continued
 development, security hardening, testing, and release work.
 
 - WEB: [https://web.tribute.tg/d/LRJ](https://web.tribute.tg/d/LRJ)
@@ -46,7 +46,7 @@ development, security hardening, testing, and release work.
 
 Web panel built on the [`sing-box-extended`](https://github.com/shtorm-7/sing-box-extended) core (the shtorm-7 fork of `SagerNet/sing-box`).
 
-**Note:** this repository is based on `alireza0/s-ui` starting from `v1.4.1`, with security and reliability hardening applied on top. This extended fork achieves functional parity with s-ui-x `v1.5.10-beta3` while running on the `sing-box-extended` core.
+**Note:** this repository is based on `alireza0/s-ui` starting from `v1.4.1`, with security and reliability hardening applied on top. This extended fork achieves functional parity with upstream s-ui-x `v1.5.10-beta3` while running on the `sing-box-extended` core.
 
 **This fork keeps the original project structure and maintains the documentation and install links for this repository. You can use these scripts directly, or fork the repository and build it yourself.**
 
@@ -128,7 +128,7 @@ Use the stable build for normal installations. Use the beta only if you want to 
 | Channel | Version | Notes |
 |---|---|---|
 | Stable | not yet released | The first stable release will follow after the beta cycle completes. |
-| Beta | `v1.0.0-beta7` | Pre-release build. Based on s-ui-x v1.5.10-beta3 with sing-box-extended core. Release notes: [`docs/releases/v1.0.0-beta7.md`](docs/releases/v1.0.0-beta7.md). |
+| Beta | `v1.0.0-beta7` | Pre-release build. Includes upstream s-ui-x v1.5.10-beta3 features with the sing-box-extended core. Release notes: [`docs/releases/v1.0.0-beta7.md`](docs/releases/v1.0.0-beta7.md). |
 
 ### Linux/macOS, beta
 
@@ -156,12 +156,12 @@ Existing installations keep their settings, users, inbounds, outbounds, clients,
 
 ### Linux/macOS
 
-1. Download the latest S-UI version for your system and architecture from GitHub: [https://github.com/deposist/s-ui-x-extended/releases/latest](https://github.com/deposist/s-ui-x-extended/releases/latest)
+1. Download the latest S-UI-X Extended version for your system and architecture from GitHub: [https://github.com/deposist/s-ui-x-extended/releases/latest](https://github.com/deposist/s-ui-x-extended/releases/latest)
 2. **Optional:** download the latest `s-ui.sh`: [https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/s-ui.sh](https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/s-ui.sh)
 3. **Optional:** copy `s-ui.sh` to `/usr/bin/` and run `chmod +x /usr/bin/s-ui`.
-4. Extract the s-ui tar.gz archive to your chosen directory and enter the extracted folder.
+4. Extract the S-UI-X Extended tar.gz archive to your chosen directory and enter the extracted folder.
 5. Copy the `*.service` files to `/etc/systemd/system/`, then run `systemctl daemon-reload`.
-6. Run `systemctl enable s-ui --now` to enable autostart and start the S-UI service.
+6. Run `systemctl enable s-ui --now` to enable autostart and start the `s-ui` service used by S-UI-X Extended.
 7. Run `systemctl enable sing-box --now` to start the sing-box service.
 
 ### Windows
@@ -173,7 +173,7 @@ Existing installations keep their settings, users, inbounds, outbounds, clients,
 5. Follow the installation wizard.
 6. Open the panel: http://localhost:2095/app
 
-## Uninstall S-UI
+## Uninstall S-UI-X Extended
 
 ```sh
 sudo -i
@@ -200,7 +200,7 @@ rm /usr/bin/s-ui
 curl -fsSL https://get.docker.com | sh
 ```
 
-**Step 2:** install S-UI
+**Step 2:** install S-UI-X Extended
 
 > Docker Compose option
 
@@ -208,8 +208,8 @@ curl -fsSL https://get.docker.com | sh
 services:
   s-ui:
     image: ghcr.io/deposist/s-ui-x-extended
-    container_name: s-ui
-    hostname: "s-ui"
+    container_name: s-ui-x-extended
+    hostname: "s-ui-x-extended"
     network_mode: host
     volumes:
       - "./db:/app/db"
@@ -224,13 +224,13 @@ services:
 > Direct Docker run
 
 ```shell
-mkdir s-ui && cd s-ui
+mkdir s-ui-x-extended && cd s-ui-x-extended
 
 docker run -itd \
     --network host \
     -v $PWD/db/:/app/db/ \
     -v $PWD/cert/:/root/cert/ \
-    --name s-ui \
+    --name s-ui-x-extended \
     --restart=unless-stopped \
     ghcr.io/deposist/s-ui-x-extended
 ```
@@ -239,7 +239,7 @@ docker run -itd \
 
 ```shell
 git clone https://github.com/deposist/s-ui-x-extended
-docker build -t s-ui .
+docker build -t s-ui-x-extended .
 ```
 
 </details>
@@ -339,7 +339,7 @@ Run the backend from the repository root:
 | SUI_ALLOW_PRIVATE_SUB_URLS | `boolean` | `false` |
 | SUI_SECRETBOX_KEY | `string` | - (falls back to `settings.secret`) |
 
-For systemd installs run by `install.sh`, S-UI generates a stable
+For systemd installs run by `install.sh`, S-UI-X Extended generates a stable
 `SUI_SECRETBOX_KEY` once in `/etc/s-ui/secretbox.env`, shows the generated
 value once, and loads the file through a systemd drop-in. Keep that file
 private and preserve the same key across updates and restores.
@@ -371,7 +371,7 @@ certbot certonly --standalone --register-unsafely-without-email --non-interactiv
 
 Web-панель на базе [`sing-box-extended`](https://github.com/shtorm-7/sing-box-extended) (форк shtorm-7 от `SagerNet/sing-box`).
 
-**Примечание:** этот репозиторий основан на `alireza0/s-ui`, начиная с `v1.4.1`, с применённым набором исправлений по безопасности и надёжности. Этот extended-форк достигает функционального паритета с s-ui-x `v1.5.10-beta3` при работе на ядре `sing-box-extended`.
+**Примечание:** этот репозиторий основан на `alireza0/s-ui`, начиная с `v1.4.1`, с применённым набором исправлений по безопасности и надёжности. Этот extended-форк достигает функционального паритета с upstream s-ui-x `v1.5.10-beta3` при работе на ядре `sing-box-extended`.
 
 **Этот fork сохраняет структуру оригинального проекта и поддерживает документацию и ссылки установки для этого репозитория. Можно использовать эти скрипты напрямую или сделать fork и собрать проект самостоятельно.**
 
@@ -453,7 +453,7 @@ README оставляет только установку и общий обзо
 | Канал | Версия | Заметки |
 |---|---|---|
 | Stable | ещё не выпущена | Первый стабильный релиз выйдет после завершения beta-цикла. |
-| Beta | `v1.0.0-beta7` | Pre-release сборка. Базируется на s-ui-x v1.5.10-beta3 с ядром sing-box-extended. Release notes: [`docs/releases/v1.0.0-beta7.md`](docs/releases/v1.0.0-beta7.md). |
+| Beta | `v1.0.0-beta7` | Pre-release сборка. Включает функции upstream s-ui-x v1.5.10-beta3 с ядром sing-box-extended. Release notes: [`docs/releases/v1.0.0-beta7.md`](docs/releases/v1.0.0-beta7.md). |
 
 ### Linux/macOS, beta
 
@@ -481,12 +481,12 @@ sudo bash install.sh v1.0.0-beta7
 
 ### Linux/macOS
 
-1. Скачайте последнюю версию S-UI для вашей системы и архитектуры из GitHub: [https://github.com/deposist/s-ui-x-extended/releases/latest](https://github.com/deposist/s-ui-x-extended/releases/latest)
+1. Скачайте последнюю версию S-UI-X Extended для вашей системы и архитектуры из GitHub: [https://github.com/deposist/s-ui-x-extended/releases/latest](https://github.com/deposist/s-ui-x-extended/releases/latest)
 2. **Необязательно:** скачайте последнюю версию `s-ui.sh`: [https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/s-ui.sh](https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/s-ui.sh)
 3. **Необязательно:** скопируйте `s-ui.sh` в `/usr/bin/` и выполните `chmod +x /usr/bin/s-ui`.
-4. Распакуйте tar.gz-архив s-ui в выбранный каталог и перейдите в распакованную папку.
+4. Распакуйте tar.gz-архив S-UI-X Extended в выбранный каталог и перейдите в распакованную папку.
 5. Скопируйте файлы `*.service` в `/etc/systemd/system/`, затем выполните `systemctl daemon-reload`.
-6. Выполните `systemctl enable s-ui --now`, чтобы включить автозапуск и запустить службу S-UI.
+6. Выполните `systemctl enable s-ui --now`, чтобы включить автозапуск и запустить службу `s-ui`, используемую S-UI-X Extended.
 7. Выполните `systemctl enable sing-box --now`, чтобы запустить службу sing-box.
 
 ### Windows
@@ -498,7 +498,7 @@ sudo bash install.sh v1.0.0-beta7
 5. Следуйте инструкциям мастера установки.
 6. Откройте панель: http://localhost:2095/app
 
-## Удаление S-UI
+## Удаление S-UI-X Extended
 
 ```sh
 sudo -i
@@ -525,7 +525,7 @@ rm /usr/bin/s-ui
 curl -fsSL https://get.docker.com | sh
 ```
 
-**Шаг 2:** установите S-UI
+**Шаг 2:** установите S-UI-X Extended
 
 > Вариант с Docker Compose
 
@@ -533,8 +533,8 @@ curl -fsSL https://get.docker.com | sh
 services:
   s-ui:
     image: ghcr.io/deposist/s-ui-x-extended
-    container_name: s-ui
-    hostname: "s-ui"
+    container_name: s-ui-x-extended
+    hostname: "s-ui-x-extended"
     network_mode: host
     volumes:
       - "./db:/app/db"
@@ -549,13 +549,13 @@ services:
 > Прямой запуск через Docker
 
 ```shell
-mkdir s-ui && cd s-ui
+mkdir s-ui-x-extended && cd s-ui-x-extended
 
 docker run -itd \
     --network host \
     -v $PWD/db/:/app/db/ \
     -v $PWD/cert/:/root/cert/ \
-    --name s-ui \
+    --name s-ui-x-extended \
     --restart=unless-stopped \
     ghcr.io/deposist/s-ui-x-extended
 ```
@@ -564,7 +564,7 @@ docker run -itd \
 
 ```shell
 git clone https://github.com/deposist/s-ui-x-extended
-docker build -t s-ui .
+docker build -t s-ui-x-extended .
 ```
 
 </details>
@@ -664,7 +664,7 @@ go build -o sui main.go
 | SUI_ALLOW_PRIVATE_SUB_URLS | `boolean` | `false` |
 | SUI_SECRETBOX_KEY | `string` | - (fallback на `settings.secret`) |
 
-Для systemd-установок через `install.sh` S-UI один раз генерирует стабильный
+Для systemd-установок через `install.sh` S-UI-X Extended один раз генерирует стабильный
 `SUI_SECRETBOX_KEY` в `/etc/s-ui/secretbox.env`, один раз показывает
 сгенерированное значение и подключает файл через systemd drop-in. Держите
 этот файл в секрете и сохраняйте тот же ключ при обновлениях и
