@@ -363,7 +363,10 @@ certbot certonly --standalone --register-unsafely-without-email --non-interactiv
 
 </details>
 
-#### Credits to the original author: alireza0
+#### Credits
+
+- Original panel project: [alireza0/s-ui](https://github.com/alireza0/s-ui)
+- Extended core: [shtorm-7/sing-box-extended](https://github.com/shtorm-7/sing-box-extended)
 
 ---
 
@@ -689,7 +692,10 @@ certbot certonly --standalone --register-unsafely-without-email --non-interactiv
 
 </details>
 
-#### Благодарность автору оригинального проекта: alireza0
+#### Благодарности
+
+- Автор оригинальной панели: [alireza0/s-ui](https://github.com/alireza0/s-ui)
+- Extended-ядро: [shtorm-7/sing-box-extended](https://github.com/shtorm-7/sing-box-extended)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=deposist/s-ui-x-extended&type=date&theme=dark" />
