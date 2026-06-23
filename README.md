@@ -5,16 +5,16 @@
 </p>
 <p align="center">
   <a href="https://github.com/deposist/s-ui-x-extended/releases/latest">
-    <img src="https://img.shields.io/github/v/release/deposist/s-ui-x?style=for-the-badge&label=release" alt="Release">
+    <img src="https://img.shields.io/github/v/release/deposist/s-ui-x-extended?style=for-the-badge&label=release" alt="Release">
   </a>
   <a href="https://github.com/deposist/s-ui-x-extended/releases">
     <img src="https://img.shields.io/github/downloads/deposist/s-ui-x-extended/total?style=for-the-badge&label=downloads" alt="Total downloads">
   </a>
   <a href="https://github.com/deposist/s-ui-x-extended/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/deposist/s-ui-x?style=for-the-badge" alt="License">
+    <img src="https://img.shields.io/github/license/deposist/s-ui-x-extended?style=for-the-badge" alt="License">
   </a>
   <a href="https://github.com/deposist/s-ui-x-extended/stargazers">
-    <img src="https://img.shields.io/github/stars/deposist/s-ui-x?style=for-the-badge" alt="Stars">
+    <img src="https://img.shields.io/github/stars/deposist/s-ui-x-extended?style=for-the-badge" alt="Stars">
   </a>
 </p>
 
@@ -46,7 +46,7 @@ development, security hardening, testing, and release work.
 
 Web panel built on the [`sing-box-extended`](https://github.com/shtorm-7/sing-box-extended) core (the shtorm-7 fork of `SagerNet/sing-box`).
 
-**Note:** this repository is based on `alireza0/s-ui` starting from `v1.4.1`, with security and reliability hardening applied on top (current stable: `v1.5.9`. This extended fork achieves functional parity with s-ui-x `v1.5.10-beta3` while running on the `sing-box-extended` core).
+**Note:** this repository is based on `alireza0/s-ui` starting from `v1.4.1`, with security and reliability hardening applied on top. This extended fork achieves functional parity with s-ui-x `v1.5.10-beta3` while running on the `sing-box-extended` core.
 
 **This fork keeps the original project structure and maintains the documentation and install links for this repository. You can use these scripts directly, or fork the repository and build it yourself.**
 
@@ -59,8 +59,8 @@ The full per-release notes live in the language-specific changelog files:
 - English: [`CHANGELOG-EN.md`](CHANGELOG-EN.md)
 - Русский: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - 简体中文: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
-- Latest stable release notes: [`docs/releases/v1.5.9.md`](docs/releases/v1.5.9.md)
-- Latest pre-release notes: [`docs/releases/v1.5.10-beta3.md`](docs/releases/v1.5.10-beta3.md)
+- Latest pre-release notes: [`docs/releases/v1.0.0-beta6.md`](docs/releases/v1.0.0-beta6.md)
+- Upstream parity reference: [`docs/releases/v1.5.10-beta3.md`](docs/releases/v1.5.10-beta3.md)
 
 The README keeps installation and project overview short. For full release
 history, breaking notes, upgrade guidance, and rollback notes, open the
@@ -127,41 +127,28 @@ Use the stable build for normal installations. Use the beta only if you want to 
 
 | Channel | Version | Notes |
 |---|---|---|
-| Stable | `v1.5.9` | Recommended for production. Release notes: [`docs/releases/v1.5.9.md`](docs/releases/v1.5.9.md). |
-| Beta | `v1.5.10-beta1` | Newer than stable. Pre-release build for testing. Release notes: [`docs/releases/v1.5.10-beta1.md`](docs/releases/v1.5.10-beta1.md). |
-
-### Linux/macOS, stable
-
-```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh)
-```
-
-The command above installs the latest stable release. To pin the current stable version explicitly:
-
-```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.5.9
-```
+| Stable | not yet released | The first stable release will follow after the beta cycle completes. |
+| Beta | `v1.0.0-beta6` | Pre-release build. Based on s-ui-x v1.5.10-beta3 with sing-box-extended core. Release notes: [`docs/releases/v1.0.0-beta6.md`](docs/releases/v1.0.0-beta6.md). |
 
 ### Linux/macOS, beta
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.5.10-beta1
+bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta6
 ```
+
+The command above installs the latest beta release. Once a stable release is published, the command without a version argument will install stable by default.
 
 ### Local clone
 
 ```sh
-git clone https://github.com/deposist/s-ui-x.git
-cd s-ui-x
-sudo bash install.sh v1.5.9
+git clone https://github.com/deposist/s-ui-x-extended.git
+cd s-ui-x-extended
+sudo bash install.sh v1.0.0-beta6
 ```
-
-For the beta build, replace `v1.5.9` with `v1.5.10-beta1`.
 
 ### Windows
 
-- Stable: download from [GitHub Releases](https://github.com/deposist/s-ui-x-extended/releases/latest), extract the ZIP, and run `install-windows.bat` as Administrator.
-- Beta: download `v1.5.10-beta1` from [its release page](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.5.10-beta1), extract the ZIP, and run `install-windows.bat` as Administrator.
+- Beta: download `v1.0.0-beta6` from [its release page](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta6), extract the ZIP, and run `install-windows.bat` as Administrator.
 
 Existing installations keep their settings, users, inbounds, outbounds, clients, TLS, services, and tokens. Database migrations run automatically on first start. Upgrade and rollback notes are in the changelog files: [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), [中文](CHANGELOG-ZH.md).
 
@@ -384,7 +371,7 @@ certbot certonly --standalone --register-unsafely-without-email --non-interactiv
 
 Web-панель на базе [`sing-box-extended`](https://github.com/shtorm-7/sing-box-extended) (форк shtorm-7 от `SagerNet/sing-box`).
 
-**Примечание:** этот репозиторий основан на `alireza0/s-ui`, начиная с `v1.4.1`, с применённым набором исправлений по безопасности и надёжности (текущая стабильная версия: `v1.5.9`).
+**Примечание:** этот репозиторий основан на `alireza0/s-ui`, начиная с `v1.4.1`, с применённым набором исправлений по безопасности и надёжности. Этот extended-форк достигает функционального паритета с s-ui-x `v1.5.10-beta3` при работе на ядре `sing-box-extended`.
 
 **Этот fork сохраняет структуру оригинального проекта и поддерживает документацию и ссылки установки для этого репозитория. Можно использовать эти скрипты напрямую или сделать fork и собрать проект самостоятельно.**
 
@@ -397,8 +384,8 @@ Web-панель на базе [`sing-box-extended`](https://github.com/shtorm-7
 - English: [`CHANGELOG-EN.md`](CHANGELOG-EN.md)
 - Русский: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - 简体中文: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
-- Последние stable release notes: [`docs/releases/v1.5.9.md`](docs/releases/v1.5.9.md)
-- Последние pre-release notes: [`docs/releases/v1.5.10-beta1.md`](docs/releases/v1.5.10-beta1.md)
+- Последние pre-release notes: [`docs/releases/v1.0.0-beta6.md`](docs/releases/v1.0.0-beta6.md)
+- Реферс паритета с upstream: [`docs/releases/v1.5.10-beta3.md`](docs/releases/v1.5.10-beta3.md)
 
 README оставляет только установку и общий обзор проекта. Полная история
 релизов, breaking-заметки, гайд по обновлению и инструкции по откату находятся
@@ -465,41 +452,28 @@ README оставляет только установку и общий обзо
 
 | Канал | Версия | Заметки |
 |---|---|---|
-| Stable | `v1.5.9` | Рекомендуется для production. Release notes: [`docs/releases/v1.5.9.md`](docs/releases/v1.5.9.md). |
-| Beta | `v1.5.10-beta1` | Новее stable. Pre-release для тестирования. Release notes: [`docs/releases/v1.5.10-beta1.md`](docs/releases/v1.5.10-beta1.md). |
-
-### Linux/macOS, stable
-
-```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh)
-```
-
-Эта команда ставит последнюю stable-версию. Чтобы явно закрепить текущую stable:
-
-```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.5.9
-```
+| Stable | ещё не выпущена | Первый стабильный релиз выйдет после завершения beta-цикла. |
+| Beta | `v1.0.0-beta6` | Pre-release сборка. Базируется на s-ui-x v1.5.10-beta3 с ядром sing-box-extended. Release notes: [`docs/releases/v1.0.0-beta6.md`](docs/releases/v1.0.0-beta6.md). |
 
 ### Linux/macOS, beta
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.5.10-beta1
+bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta6
 ```
+
+Эта команда ставит последнюю beta-версию. Когда выйдет stable-релиз, команда без указания версии будет ставить stable по умолчанию.
 
 ### Локальный clone
 
 ```sh
-git clone https://github.com/deposist/s-ui-x.git
-cd s-ui-x
-sudo bash install.sh v1.5.9
+git clone https://github.com/deposist/s-ui-x-extended.git
+cd s-ui-x-extended
+sudo bash install.sh v1.0.0-beta6
 ```
-
-Для beta-сборки замените `v1.5.9` на `v1.5.10-beta1`.
 
 ### Windows
 
-- Stable: скачайте архив из [GitHub Releases](https://github.com/deposist/s-ui-x-extended/releases/latest), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
-- Beta: скачайте `v1.5.10-beta1` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.5.10-beta1), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
+- Beta: скачайте `v1.0.0-beta6` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta6), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
 
 Существующие установки сохраняют settings, users, inbounds, outbounds, clients, TLS, services и tokens. Миграции базы запускаются автоматически при первом старте. Заметки по обновлению и откату находятся в changelog: [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), [中文](CHANGELOG-ZH.md).
 
@@ -718,7 +692,7 @@ certbot certonly --standalone --register-unsafely-without-email --non-interactiv
 #### Благодарность автору оригинального проекта: alireza0
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=deposist/s-ui-x&type=date&theme=dark" />
-  <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=deposist/s-ui-x&type=date" />
-  <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=deposist/s-ui-x&type=date" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=deposist/s-ui-x-extended&type=date&theme=dark" />
+  <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=deposist/s-ui-x-extended&type=date" />
+  <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=deposist/s-ui-x-extended&type=date" />
 </picture>
