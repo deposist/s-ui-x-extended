@@ -5,6 +5,8 @@ import router from '@/router'
 import { push } from 'notivue'
 import { clearCSRFToken } from '@/store/csrf'
 
+let invalidLoginHandled = false
+
 export interface Msg {
   success: boolean
   msg: string
@@ -17,10 +19,13 @@ function _handleMsg(msg: any): void {
   }
   if(msg.msg){
     if (!msg.success && msg.msg == "Invalid login") {
-      push.error({
-        title: i18n.global.t('invalidLogin'),
-      })
-      logout()
+      if (!invalidLoginHandled) {
+        invalidLoginHandled = true
+        push.error({
+          title: i18n.global.t('invalidLogin'),
+        })
+        localLogout()
+      }
       return
     }
     if (msg.success) {
@@ -34,6 +39,15 @@ function _handleMsg(msg: any): void {
       })
     }
   }
+}
+
+export const localLogout = () => {
+  clearCSRFToken()
+  router.push('/login')
+}
+
+export const resetInvalidLoginHandling = () => {
+  invalidLoginHandled = false
 }
 
 export const logout = async () => {
@@ -68,6 +82,9 @@ function _errorToMsg(error: any): Msg {
   }
   if (error?.response?.data) {
     return _respToMsg(error.response)
+  }
+  if (error?.message === 'Invalid login') {
+    return { success: false, msg: 'Invalid login', obj: null }
   }
   return { success: false, msg: error.toString(), obj: null }
 }

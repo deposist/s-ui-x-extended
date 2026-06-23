@@ -56,3 +56,8 @@
 См. [SECURITY.md](SECURITY.md): форки зависимостей (`replace`), транзитивный
 `redis/go-redis`, `with_profiler` как dev-only тег, закрепление cronet по sha256,
 запуск от root и отложенные пункты харденинга.
+
+## Журнал ошибок и исправлений
+- [2026-06-23] Проблема: Invalid login запускал remote POST /api/logout, а при потерянной сессии этот POST пытался получить CSRF и порождал цикл Invalid login / CSRF token was not returned → Решение: Invalid login теперь выполняет локальный logout без POST /api/logout, CSRF store передаёт backend-ошибку Invalid login без подмены на missing-token, добавлен guard от повторных уведомлений.
+- [2026-06-23] Проблема: на Windows web session-store тест иногда падал при t.TempDir cleanup из-за SQLite WAL/SHM файлов после закрытия DB → Решение: тестовый helper теперь создаёт tempdir вручную, закрывает SQLite с WAL checkpoint и удаляет каталог с retry.
+- [2026-06-23] Проблема: веб-панель проверяла обновления через GitHub API старого репозитория deposist/s-ui-x, хотя downloads уже указывали на s-ui-x-extended → Решение: githubAPIBase переключён на https://api.github.com/repos/deposist/s-ui-x-extended и добавлен тест на API/download координаты self-update.

@@ -10,6 +10,15 @@ import (
 	"github.com/deposist/s-ui-x-extended/config"
 )
 
+func TestVersionUpdateEndpointsUseExtendedRepository(t *testing.T) {
+	if githubAPIBase != "https://api.github.com/repos/deposist/s-ui-x-extended" {
+		t.Fatalf("githubAPIBase = %q", githubAPIBase)
+	}
+	if githubDownloadBase != "https://github.com/deposist/s-ui-x-extended/releases/download" {
+		t.Fatalf("githubDownloadBase = %q", githubDownloadBase)
+	}
+}
+
 func TestVersionInfoFetchesAndCachesLatestRelease(t *testing.T) {
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

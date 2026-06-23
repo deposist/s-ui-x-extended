@@ -58,7 +58,7 @@ import { ref } from "vue"
 import { useLocale,useTheme } from 'vuetify'
 import { i18n, languages, setI18nLocale } from '@/locales'
 import { useRouter } from 'vue-router'
-import HttpUtil from '@/plugins/httputil'
+import HttpUtil, { resetInvalidLoginHandling } from '@/plugins/httputil'
 
 
 const theme = useTheme()
@@ -96,6 +96,7 @@ const login = async () => {
   loading.value=true
   const response = await HttpUtil.post('api/login',{user: username.value, pass: password.value})
   if(response.success){
+    resetInvalidLoginHandling()
     loading.value=false
     router.push('/')
   } else {

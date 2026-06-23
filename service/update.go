@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	githubAPIBase       = "https://api.github.com/repos/deposist/s-ui-x"
+	githubAPIBase       = "https://api.github.com/repos/deposist/s-ui-x-extended"
 	githubDownloadBase  = "https://github.com/deposist/s-ui-x-extended/releases/download"
 	versionCheckCache   = time.Hour
 	versionCheckTimeout = 3 * time.Second

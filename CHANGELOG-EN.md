@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 `CHANGELOG-ZH.md` for Simplified Chinese.
 
+## [1.0.0-beta7] - 2026-06-23 - session handling and extended UI coverage
+
+Pre-release. Follow-up to v1.0.0-beta6. No manual database migration is required.
+
+- Fixed a frontend loop that could keep showing `Invalid login` and `Error: CSRF token was not returned` after a lost or expired session. Invalid sessions now trigger a local logout, clear the cached CSRF token, and return the user to the login page without first calling the CSRF-protected logout endpoint.
+- CSRF token loading now preserves backend errors such as `Invalid login` instead of replacing them with a missing-token message.
+- Repeated invalid-session responses from polling or parallel requests are collapsed into one notification until the next successful login.
+- The panel self-update checker now queries `deposist/s-ui-x-extended`, not the old `deposist/s-ui-x` repository.
+- Extended protocol editors are available in both Classic and Nexus interfaces.
+
+Full release notes: [`.github/RELEASE_NOTES_v1.0.0-beta7.md`](.github/RELEASE_NOTES_v1.0.0-beta7.md).
+
 ## [1.0.0-beta6] - 2026-06-23 - rebase onto s-ui-x v1.5.10-beta3 with extended core
 
 Pre-release. Rebases the panel onto s-ui-x v1.5.10-beta3 while keeping the sing-box-extended core. Every upstream feature is now available on the extended core, alongside the existing extended-protocol set.

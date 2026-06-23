@@ -4,6 +4,18 @@
 
 这是中文版更新日志。英文版请见 `CHANGELOG-EN.md`，俄文版请见 `CHANGELOG-RU.md`。
 
+## [1.0.0-beta7] - 2026-06-23 - 会话处理与两个界面的 extended 协议覆盖
+
+预发布版本。此版本是 v1.0.0-beta6 的后续修复。无需手动迁移数据库。
+
+- 修复了会话丢失或过期后前端可能持续显示 `Invalid login` 和 `Error: CSRF token was not returned` 的循环。无效会话现在会执行本地 logout，清除缓存的 CSRF token，并返回登录页，不会先调用受 CSRF 保护的 logout endpoint。
+- CSRF token 加载现在保留后端返回的错误，例如 `Invalid login`，不会把它替换成缺少 token 的提示。
+- polling 或并行请求产生的重复 invalid-session 响应会合并成一次提示，直到下一次成功登录。
+- Web 面板的更新检查现在查询 `deposist/s-ui-x-extended`，不再查询旧的 `deposist/s-ui-x` 仓库。
+- Classic 和 Nexus 两个界面都已提供 extended 协议编辑器。
+
+完整发布说明：[`.github/RELEASE_NOTES_v1.0.0-beta7.md`](.github/RELEASE_NOTES_v1.0.0-beta7.md)。
+
 ## [1.0.0-beta6] - 2026-06-23 - 基于 s-ui-x v1.5.10-beta3 重新构建，保留 extended 内核
 
 预发布版本。将面板重新基于 s-ui-x v1.5.10-beta3 构建，同时保留 sing-box-extended 内核。所有上游功能现在都可以在 extended 内核上使用，同时保留已有的扩展协议集合。

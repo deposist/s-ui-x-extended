@@ -81,21 +81,49 @@ describe('HttpUtils regression anchors', () => {
     })
   })
 
-  it('clears CSRF and navigates to login on Invalid login responses', async () => {
+  it('clears CSRF and navigates to login locally on Invalid login responses', async () => {
     const { default: HttpUtils } = await loadHttpUtils()
-    // logout() is now a CSRF-protected POST (no longer a forgeable GET), so the
-    // auto-logout consumes apiPost, not apiGet.
     mocks.apiGet.mockResolvedValueOnce({ data: { success: false, msg: 'Invalid login', obj: null } })
-    mocks.apiPost.mockResolvedValueOnce({ data: { success: true, msg: '', obj: null } })
 
     await HttpUtils.get('api/load')
-    await Promise.resolve()
     await Promise.resolve()
 
     expect(mocks.pushError).toHaveBeenCalledWith({ title: 'invalidLogin' })
     expect(mocks.clearCSRFToken).toHaveBeenCalledTimes(1)
-    expect(mocks.apiPost).toHaveBeenLastCalledWith('api/logout', null, undefined)
     expect(mocks.routerPush).toHaveBeenCalledWith('/login')
+    expect(mocks.apiPost).not.toHaveBeenCalled()
+  })
+
+  it('handles Invalid login errors from CSRF loading as a local logout', async () => {
+    const { default: HttpUtils } = await loadHttpUtils()
+    mocks.apiPost.mockRejectedValueOnce(new Error('Invalid login'))
+
+    const msg = await HttpUtils.post('api/save', { key: 'value' })
+
+    expect(msg).toEqual({ success: false, msg: 'Invalid login', obj: null })
+    expect(mocks.pushError).toHaveBeenCalledWith({ title: 'invalidLogin' })
+    expect(mocks.clearCSRFToken).toHaveBeenCalledTimes(1)
+    expect(mocks.routerPush).toHaveBeenCalledWith('/login')
+  })
+
+  it('handles repeated Invalid login responses only once until reset', async () => {
+    const mod = await loadHttpUtils()
+    const HttpUtils = mod.default
+    mocks.apiGet.mockResolvedValue({ data: { success: false, msg: 'Invalid login', obj: null } })
+
+    await HttpUtils.get('api/load')
+    await HttpUtils.get('api/status')
+
+    expect(mocks.pushError).toHaveBeenCalledTimes(1)
+    expect(mocks.clearCSRFToken).toHaveBeenCalledTimes(1)
+    expect(mocks.routerPush).toHaveBeenCalledTimes(1)
+
+    mod.resetInvalidLoginHandling()
+    await HttpUtils.get('api/load')
+
+    expect(mocks.pushError).toHaveBeenCalledTimes(2)
+    expect(mocks.clearCSRFToken).toHaveBeenCalledTimes(2)
+    expect(mocks.routerPush).toHaveBeenCalledTimes(2)
   })
 
   it('does not retry HTTP 401 responses in the current axios-based contract', async () => {

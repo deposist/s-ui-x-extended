@@ -17,6 +17,9 @@ export const getCSRFToken = async () => {
         'X-Requested-With': 'XMLHttpRequest',
       },
     }).then((response) => {
+      if (response.data?.success === false && typeof response.data?.msg === 'string' && response.data.msg.length > 0) {
+        throw new Error(response.data.msg)
+      }
       const token = response.data?.obj?.token
       if (typeof token !== 'string' || token.length === 0) {
         throw new Error('CSRF token was not returned')

@@ -3,9 +3,11 @@ package web
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/deposist/s-ui-x-extended/database"
 	ginsessions "github.com/gin-contrib/sessions"
@@ -144,17 +146,24 @@ func BenchmarkSQLiteSessionStoreProtectedRequest(b *testing.B) {
 
 func initSQLiteSessionTestDB(tb testing.TB) *gorm.DB {
 	tb.Helper()
-	tempDir := tb.TempDir()
+	tempDir, err := os.MkdirTemp("", "sui-session-test-*")
+	if err != nil {
+		tb.Fatal(err)
+	}
 	tb.Setenv("SUI_DB_FOLDER", tempDir)
 	closeSQLiteSessionTestDB(database.GetDB())
 	if err := database.InitDB(filepath.Join(tempDir, "s-ui.db")); err != nil {
+		removeSQLiteSessionTestDir(tb, tempDir)
 		if strings.Contains(err.Error(), "go-sqlite3 requires cgo") {
 			tb.Skip(err)
 		}
 		tb.Fatal(err)
 	}
 	db := database.GetDB()
-	tb.Cleanup(func() { closeSQLiteSessionTestDB(db) })
+	tb.Cleanup(func() {
+		closeSQLiteSessionTestDB(db)
+		removeSQLiteSessionTestDir(tb, tempDir)
+	})
 	return db
 }
 
@@ -162,9 +171,23 @@ func closeSQLiteSessionTestDB(db *gorm.DB) {
 	if db == nil {
 		return
 	}
+	_ = db.Exec("PRAGMA wal_checkpoint(TRUNCATE)").Error
 	if sqlDB, err := db.DB(); err == nil {
 		_ = sqlDB.Close()
 	}
+}
+
+func removeSQLiteSessionTestDir(tb testing.TB, tempDir string) {
+	tb.Helper()
+	var err error
+	for attempt := 0; attempt < 20; attempt++ {
+		err = os.RemoveAll(tempDir)
+		if err == nil {
+			return
+		}
+		time.Sleep(time.Duration(attempt+1) * 25 * time.Millisecond)
+	}
+	tb.Fatalf("remove sqlite session test dir %s: %v", tempDir, err)
 }
 
 func newSQLiteSessionTestRouter(tb testing.TB, db *gorm.DB) *gin.Engine {

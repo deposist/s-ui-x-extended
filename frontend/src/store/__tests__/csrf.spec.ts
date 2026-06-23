@@ -83,6 +83,13 @@ describe('csrf store regression anchors', () => {
     expect(mocks.axiosGet).toHaveBeenCalledTimes(1)
   })
 
+  it('rejects Invalid login responses without reporting a missing CSRF token', async () => {
+    const { getCSRFToken } = await loadCSRFStore()
+    mocks.axiosGet.mockResolvedValueOnce({ data: { success: false, msg: 'Invalid login', obj: null } })
+
+    await expect(getCSRFToken()).rejects.toThrow('Invalid login')
+  })
+
   it('rejects empty token responses', async () => {
     const { getCSRFToken } = await loadCSRFStore()
     mocks.axiosGet.mockResolvedValueOnce({ data: { obj: { token: '' } } })
