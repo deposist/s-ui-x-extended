@@ -1,10 +1,11 @@
 <template>
-  <v-dialog transition="dialog-bottom-transition" width="800">
-    <v-card class="rounded-lg" :loading="loading">
-      <v-card-title>
-        {{ $t('actions.' + title) + " " + $t('objects.client') }}
-      </v-card-title>
-      <v-divider></v-divider>
+  <FormShell
+    :loading="loading"
+    :save-disabled="loading"
+    :title="$t('actions.' + title) + ' ' + $t('objects.client')"
+    @close="closeModal"
+    @save="saveChanges"
+  >
       <v-skeleton-loader
           class="mx-auto border"
           width="95%"
@@ -225,27 +226,7 @@
           </v-window>
         </v-container>
       </v-card-text>
-      <v-card-actions>
-        <v-spacer></v-spacer>
-        <v-btn
-          color="primary"
-          variant="outlined"
-          @click="closeModal"
-        >
-          {{ $t('actions.close') }}
-        </v-btn>
-        <v-btn
-          color="primary"
-          variant="tonal"
-          :loading="loading"
-          :disabled="loading"
-          @click="saveChanges"
-        >
-          {{ $t('actions.save') }}
-        </v-btn>
-      </v-card-actions>
-    </v-card>
-  </v-dialog>
+  </FormShell>
 </template>
 
 <script lang="ts">
@@ -255,6 +236,7 @@ import { HumanReadable } from '@/plugins/utils'
 import Data from '@/store/modules/data'
 import { locale } from '@/locales'
 import { vlessFlows } from '@/types/recommended'
+import FormShell from '@/components/nexus/drawers/FormShell.vue'
 
 export default {
   props: ['visible', 'id', 'inboundTags', 'groups'],
@@ -398,7 +380,7 @@ export default {
       }
     },
   },
-  components: { DatePick },
+  components: { DatePick, FormShell },
 }
 
 </script>

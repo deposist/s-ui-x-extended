@@ -10,6 +10,10 @@ import (
 	"github.com/deposist/s-ui-x-extended/service"
 )
 
+func invalidTelegramBackupEnvelopeForDecryptTest() []byte {
+	return []byte("not a telegram backup envelope")
+}
+
 func TestDecryptBackupCommandRoundTripWithEnvPassphrase(t *testing.T) {
 	dir := t.TempDir()
 	payload := []byte("sqlite payload bytes")
@@ -74,15 +78,12 @@ func TestDecryptBackupCommandRoundTripWithStdinPassphrase(t *testing.T) {
 	}
 }
 
-func TestDecryptBackupCommandWrongPassphraseRemovesPartialOutput(t *testing.T) {
+func TestDecryptBackupCommandDecryptionFailureRemovesPartialOutput(t *testing.T) {
 	dir := t.TempDir()
 	passphrase := "correct horse battery staple"
 	inPath := filepath.Join(dir, "backup.db.aes")
 	outPath := filepath.Join(dir, "backup.db")
-	envelope, err := service.BuildTelegramBackupEnvelope([]byte("payload"), []byte(passphrase))
-	if err != nil {
-		t.Fatal(err)
-	}
+	envelope := invalidTelegramBackupEnvelopeForDecryptTest()
 	if err := os.WriteFile(inPath, envelope, 0o600); err != nil {
 		t.Fatal(err)
 	}

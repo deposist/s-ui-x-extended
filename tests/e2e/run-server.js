@@ -12,6 +12,7 @@ const statePath = path.join(serverDir, 'state.json')
 
 fs.mkdirSync(serverDir, { recursive: true })
 fs.mkdirSync(appDataDir, { recursive: true })
+fs.rmSync(statePath, { force: true })
 fs.rmSync(dbDir, { recursive: true, force: true })
 fs.mkdirSync(dbDir, { recursive: true })
 
@@ -96,6 +97,13 @@ const main = async () => {
 
   const password = await waitForFile(path.join(dbDir, 'initial-admin.txt'), 120000)
   await waitForURL('http://127.0.0.1:2095/app/login', 120000)
+  fs.writeFileSync(statePath, JSON.stringify({
+    baseURL: 'http://127.0.0.1:3000/app/',
+    backendURL: 'http://127.0.0.1:2095/app/',
+    username: 'admin',
+    password,
+    dbDir,
+  }, null, 2))
 
   const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
   spawnLogged('frontend', npmCommand, ['run', 'dev', '--', '--host', '127.0.0.1', '--port', '3000', '--strictPort'], {
@@ -110,14 +118,6 @@ const main = async () => {
   for (const modulePath of ['Home.vue', 'MigrateXui.vue', 'Settings.vue', 'Audit.vue']) {
     await waitForURL(`http://127.0.0.1:3000/src/views/${modulePath}`, 120000)
   }
-
-  fs.writeFileSync(statePath, JSON.stringify({
-    baseURL: 'http://127.0.0.1:3000/app/',
-    backendURL: 'http://127.0.0.1:2095/app/',
-    username: 'admin',
-    password,
-    dbDir,
-  }, null, 2))
 
   setInterval(() => {}, 2147483647)
 }

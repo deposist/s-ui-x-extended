@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowLeft,
+  ArrowRight,
   ArrowUp,
   ArrowUpRight,
   Calendar,
@@ -171,6 +172,7 @@ export const iconMap: Record<string, Component> = {
   'x-circle': XCircle,
   info: Info,
   'arrow-left': ArrowLeft,
+  'arrow-right': ArrowRight,
 }
 
 const LucideNexusIcon = defineComponent({

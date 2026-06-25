@@ -1,6 +1,6 @@
 import { readonly, ref } from 'vue'
 
-export const UI_PALETTES = ['technical', 'navy'] as const
+export const UI_PALETTES = ['technical', 'navy', 'emerald', 'dracula'] as const
 
 export type UiPalette = (typeof UI_PALETTES)[number]
 

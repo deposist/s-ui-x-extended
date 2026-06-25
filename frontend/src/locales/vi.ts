@@ -277,6 +277,8 @@ export default {
       options: {
         technical: "Kỹ thuật",
         navy: "Xanh navy",
+        emerald: "Emerald Minimal",
+        dracula: "Dracula Cyberpunk",
       },
     },
     mode: {
@@ -312,6 +314,8 @@ export default {
       kpi: {
         liveTraffic: "Lưu lượng trực tiếp",
         liveTrafficDelta: "tải xuống + tải lên",
+        trafficStats: "Thống kê lưu lượng",
+        trafficStatsDelta: "Tải xuống {download} · Tải lên {upload}",
         trafficTrend: "Xu hướng lịch sử lưu lượng",
         onlineClients: "Client trực tuyến",
         clientSignal: "Tín hiệu hiện diện client hiện tại.",
@@ -350,6 +354,7 @@ export default {
         empty: "Chưa có lưu lượng client.",
         state: "Trạng thái",
         total: "Tổng",
+        viewAll: "Xem tất cả client",
       },
       events: {
         title: "Sự kiện gần đây",

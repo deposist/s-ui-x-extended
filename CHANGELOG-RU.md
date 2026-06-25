@@ -5,6 +5,14 @@
 Это русскоязычный changelog. Английская версия - в `CHANGELOG-EN.md`,
 китайская - в `CHANGELOG-ZH.md`.
 
+## [Unreleased]
+
+- Перенесены изменения upstream s-ui-x с `v1.5.10-beta5` по `v1.5.10-beta7` с сохранением sing-box-extended core, редакторов extended-протоколов и release-линейки `s-ui-x-extended`.
+- Добавлен API для сводки трафика Dashboard, `GET /api/stats/traffic`, и индекс `stats(resource, date_time)` для запроса по всем inbound за выбранный период.
+- Обновлены Nexus Dashboard, KPI истории трафика, карточки Top clients и Recent events, Settings layout, палитры Nexus и вывод CPU/RAM в sidebar status.
+- `config/version` оставлен на `1.0.0-beta7`; до upstream frontend `1.5.10-beta7` обновлены только package metadata фронтенда.
+- Формы Client, Add Bulk и Edit Bulk переведены на общий `FormShell`: в Nexus они открываются как drawers, а select-menu закрываются по click-away. Classic mode продолжает использовать dialog-ветку того же shell.
+
 ## [1.0.0-beta7] - 2026-06-23 - сессии и extended-протоколы в обоих интерфейсах
 
 Pre-release. Дополнение к v1.0.0-beta6. Ручная миграция базы не требуется.
@@ -16,6 +24,44 @@ Pre-release. Дополнение к v1.0.0-beta6. Ручная миграция
 - Редакторы extended-протоколов доступны в обоих интерфейсах, Classic и Nexus.
 
 Полные release notes: [`.github/RELEASE_NOTES_v1.0.0-beta7.md`](.github/RELEASE_NOTES_v1.0.0-beta7.md).
+
+## [1.5.10-beta7] - 2026-06-25 - точные totals трафика на Dashboard
+
+Седьмая beta в ветке 1.5.10. Это обновление исправляет KPI Traffic statistics в Nexus Dashboard. Ручная миграция не требуется.
+
+- Добавлен `GET /api/stats/traffic` для сводной статистики трафика на Dashboard с точными суммами по bucket'ам.
+- KPI Traffic statistics теперь читает новый summary endpoint, а не объединяет в браузере ответы `/api/stats` по отдельным inbound'ам.
+- Totals для download и upload теперь считаются через `SUM(traffic)` за выбранный период, поэтому длинные периоды больше не используют average-downsampled строки `/api/stats`.
+- Сводка Dashboard учитывает весь исторический inbound-трафик за выбранный период, включая трафик inbound'ов, которые позже отключили или удалили.
+- Добавлен индекс `stats(resource, date_time)` для запроса по всем inbound'ам за период.
+
+Полные release notes: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md).
+
+## [1.5.10-beta6] - 2026-06-24 - высоты карточек Dashboard и история трафика
+
+Шестая beta в ветке 1.5.10. Это обновление Nexus Dashboard. Миграция базы данных, API или конфигурации sing-box не требуется.
+
+- Top clients теперь показывает до 10 клиентов и прокручивает таблицу внутри карточки с фиксированной высотой, выровненной по System status.
+- Recent events использует ту же высоту карточки и прокручивает список событий внутри блока, если строк больше, чем помещается на экран.
+- System status стал ниже и рассчитан под 8 текущих значений.
+- Первый KPI Dashboard теперь показывает Traffic statistics вместо Live traffic. Он читает существующие данные `/api/stats` по включённым inbound tags и рисует download и upload отдельными кривыми.
+- Переключатель периода трафика поддерживает 1 час, 6 часов, 12 часов, 24 часа, 7 дней и 30 дней.
+- История трафика по-прежнему зависит от Traffic Maximum Age. Значение больше `0` включает сохранение stats; `0` отключает историческую статистику.
+Полные release notes: [`docs/releases/v1.5.10-beta6.md`](docs/releases/v1.5.10-beta6.md).
+
+## [1.5.10-beta5] - 2026-06-24 - обновление Nexus Dashboard и Settings
+
+Пятая бета линейки 1.5.10. Это frontend-релиз. Миграция базы данных, API или конфигурации sing-box не требуется.
+
+- Обновлены отступы и выравнивание Nexus Dashboard: KPI cards, overview panels, protocol summaries, recent events, system status и dense tables стали плотнее и ровнее.
+- Top clients получил реальные сводные значения, число online-клиентов, общее число клиентов, компактные traffic-колонки и ссылку на страницу Clients.
+- В KPI live traffic добавлен локальный выбор окна от 1 минуты до 24 часов на основе существующих realtime samples.
+- В Nexus sidebar имя обновлено до S-UI-X, а нижний server status теперь показывает CPU/RAM в процентах, когда status API возвращает эти метрики.
+- Добавлены палитры Emerald и Dracula для Nexus в тёмном и светлом вариантах, улучшена читаемость светлых тем.
+- Nexus Settings переведены на карточную раскладку, а sing-box Basics перенесён внутрь Settings как вкладка Basics (Singbox). `/basics` открывает эту вкладку, старый пункт Basics удалён из Nexus и Classic navigation.
+- Исправлено состояние кнопки Save в перенесённой вкладке Basics, loading state теперь сбрасывается и после неудачного сохранения config.
+
+Полные заметки о релизе: [`docs/releases/v1.5.10-beta5.md`](docs/releases/v1.5.10-beta5.md).
 
 ## [1.0.0-beta6] - 2026-06-23 - ребейз на s-ui-x v1.5.10-beta3 с extended-ядром
 

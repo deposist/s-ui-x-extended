@@ -54,6 +54,47 @@ type clientTrafficDelta struct {
 	down int64
 }
 
+type TrafficBucket struct {
+	StartTime int64 `json:"startTime"`
+	EndTime   int64 `json:"endTime"`
+	Download  int64 `json:"download"`
+	Upload    int64 `json:"upload"`
+}
+
+type TrafficSummary struct {
+	StartTime int64           `json:"startTime"`
+	EndTime   int64           `json:"endTime"`
+	Range     int             `json:"range"`
+	Buckets   []TrafficBucket `json:"buckets"`
+	Download  int64           `json:"download"`
+	Upload    int64           `json:"upload"`
+}
+
+type trafficSummaryWindow struct {
+	LimitHours  int
+	BucketCount int
+	StartTime   int64
+	EndTime     int64
+	BucketSpan  int64
+}
+
+type trafficAggregateRow struct {
+	Bucket    int
+	Direction bool
+	Traffic   int64
+}
+
+const (
+	defaultTrafficSummaryHours = 24
+	maxTrafficSummaryHours     = 24 * 366
+	defaultTrafficBucketCount  = 48
+	maxTrafficBucketCount      = 720
+
+	inboundTrafficBucketSelect = "CASE WHEN CAST((date_time - ?) / ? AS INTEGER) >= ? " +
+		"THEN ? ELSE CAST((date_time - ?) / ? AS INTEGER) END AS bucket, " +
+		"direction, SUM(traffic) AS traffic"
+)
+
 func (s *StatsService) SaveStats(enableTraffic bool) (err error) {
 	coreInstance := s.runtime().Core()
 	if coreInstance == nil || !coreInstance.IsRunning() {
@@ -265,6 +306,111 @@ func (s *StatsService) GetStats(resource string, tag string, limit int) ([]model
 
 	result = s.downsampleStats(result, 60) // 60 rows for 30 buckets
 	return result, nil
+}
+
+func (s *StatsService) GetInboundTrafficSummary(limitHours int, bucketCount int, endTime int64) (TrafficSummary, error) {
+	window := newTrafficSummaryWindow(limitHours, bucketCount, endTime)
+	buckets := newTrafficBuckets(window)
+	rows, err := queryInboundTrafficBuckets(window)
+	if err != nil {
+		return TrafficSummary{}, err
+	}
+	download, upload := applyTrafficAggregateRows(buckets, rows)
+
+	return TrafficSummary{
+		StartTime: window.StartTime,
+		EndTime:   window.EndTime,
+		Range:     window.LimitHours,
+		Buckets:   buckets,
+		Download:  download,
+		Upload:    upload,
+	}, nil
+}
+
+func newTrafficSummaryWindow(limitHours int, bucketCount int, endTime int64) trafficSummaryWindow {
+	if limitHours <= 0 {
+		limitHours = defaultTrafficSummaryHours
+	}
+	if limitHours > maxTrafficSummaryHours {
+		limitHours = maxTrafficSummaryHours
+	}
+	if bucketCount <= 0 {
+		bucketCount = defaultTrafficBucketCount
+	}
+	if bucketCount > maxTrafficBucketCount {
+		bucketCount = maxTrafficBucketCount
+	}
+	if endTime <= 0 {
+		endTime = time.Now().Unix()
+	}
+
+	startTime := endTime - int64(limitHours)*3600
+	if startTime < 0 {
+		startTime = 0
+	}
+	span := endTime - startTime
+	if span <= 0 {
+		span = 1
+	}
+	bucketSpan := (span + int64(bucketCount) - 1) / int64(bucketCount)
+	if bucketSpan <= 0 {
+		bucketSpan = 1
+	}
+
+	return trafficSummaryWindow{
+		LimitHours:  limitHours,
+		BucketCount: bucketCount,
+		StartTime:   startTime,
+		EndTime:     endTime,
+		BucketSpan:  bucketSpan,
+	}
+}
+
+func newTrafficBuckets(window trafficSummaryWindow) []TrafficBucket {
+	buckets := make([]TrafficBucket, window.BucketCount)
+	for i := range buckets {
+		bucketStart := window.StartTime + int64(i)*window.BucketSpan
+		if bucketStart > window.EndTime {
+			bucketStart = window.EndTime
+		}
+		bucketEnd := bucketStart + window.BucketSpan
+		if bucketEnd > window.EndTime {
+			bucketEnd = window.EndTime
+		}
+		buckets[i] = TrafficBucket{StartTime: bucketStart, EndTime: bucketEnd}
+	}
+	return buckets
+}
+
+func queryInboundTrafficBuckets(window trafficSummaryWindow) ([]trafficAggregateRow, error) {
+	var rows []trafficAggregateRow
+	err := database.GetDB().Model(model.Stats{}).
+		Select(
+			inboundTrafficBucketSelect,
+			window.StartTime, window.BucketSpan, window.BucketCount, window.BucketCount-1, window.StartTime, window.BucketSpan,
+		).
+		Where("resource = ? AND date_time >= ? AND date_time <= ?", "inbound", window.StartTime, window.EndTime).
+		Group("bucket, direction").
+		Scan(&rows).Error
+	return rows, err
+}
+
+func applyTrafficAggregateRows(buckets []TrafficBucket, rows []trafficAggregateRow) (int64, int64) {
+	var download int64
+	var upload int64
+	for _, row := range rows {
+		if row.Bucket < 0 || row.Bucket >= len(buckets) {
+			continue
+		}
+		if row.Direction {
+			buckets[row.Bucket].Upload += row.Traffic
+			upload += row.Traffic
+		} else {
+			buckets[row.Bucket].Download += row.Traffic
+			download += row.Traffic
+		}
+	}
+	return download, upload
 }
 
 // downsampleStats reduces stats to maxRows rows.

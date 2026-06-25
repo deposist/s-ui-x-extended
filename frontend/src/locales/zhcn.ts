@@ -277,6 +277,8 @@ export default {
       options: {
         technical: "技术",
         navy: "藏青",
+        emerald: "Emerald Minimal",
+        dracula: "Dracula Cyberpunk",
       },
     },
     mode: {
@@ -312,6 +314,8 @@ export default {
       kpi: {
         liveTraffic: "实时流量",
         liveTrafficDelta: "下行 + 上行",
+        trafficStats: "流量统计",
+        trafficStatsDelta: "下行 {download} · 上行 {upload}",
         trafficTrend: "流量历史趋势",
         onlineClients: "在线客户端",
         clientSignal: "当前客户端在线信号。",
@@ -350,6 +354,7 @@ export default {
         empty: "暂时没有客户端流量。",
         state: "状态",
         total: "总计",
+        viewAll: "查看所有客户端",
       },
       events: {
         title: "最近事件",

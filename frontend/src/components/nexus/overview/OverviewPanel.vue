@@ -26,9 +26,11 @@ defineProps<{
   background: var(--nexus-surface-1);
   border: 1px solid var(--nexus-border);
   border-radius: var(--nexus-radius-lg);
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--nexus-gap-3);
   min-width: 0;
   padding: var(--nexus-gap-4);
+  height: 100%;
 }
 </style>

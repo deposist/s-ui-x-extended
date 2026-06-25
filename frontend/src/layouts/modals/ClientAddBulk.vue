@@ -1,11 +1,11 @@
 <template>
-  <v-dialog transition="dialog-bottom-transition" width="800">
-    <v-card class="rounded-lg">
-      <v-card-title>
-        {{ $t('actions.addbulk') }}
-      </v-card-title>
-      <v-divider></v-divider>
-      <v-card-text style="padding: 0 16px; overflow-y: scroll;">
+  <FormShell
+    :loading="loading"
+    :save-disabled="loading"
+    :title="$t('actions.addbulk')"
+    @close="closeModal"
+    @save="saveChanges"
+  >
         <v-container style="padding: 0;">
           <v-row>
             <v-col cols="12" sm="6" md="4">
@@ -78,28 +78,7 @@
             </v-col>
           </v-row>
         </v-container>
-      </v-card-text>
-      <v-card-actions>
-        <v-spacer></v-spacer>
-        <v-btn
-          color="primary"
-          variant="outlined"
-          @click="closeModal"
-        >
-          {{ $t('actions.close') }}
-        </v-btn>
-        <v-btn
-          color="primary"
-          variant="tonal"
-          :loading="loading"
-          :disabled="loading"
-          @click="saveChanges"
-        >
-          {{ $t('actions.save') }}
-        </v-btn>
-      </v-card-actions>
-    </v-card>
-  </v-dialog>
+  </FormShell>
 </template>
 
 <script lang="ts">
@@ -109,6 +88,7 @@ import RandomUtil from '@/plugins/randomUtil'
 import { Client, createClient, randomConfigs } from '@/types/clients'
 import { i18n } from '@/locales'
 import Data from '@/store/modules/data'
+import FormShell from '@/components/nexus/drawers/FormShell.vue'
 
 export default {
   props: ['visible', 'inboundTags', 'groups'],
@@ -227,7 +207,7 @@ export default {
       }
     },
   },
-  components: { DatePick },
+  components: { DatePick, FormShell },
 }
 
 </script>

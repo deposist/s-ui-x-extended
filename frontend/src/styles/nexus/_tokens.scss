@@ -65,13 +65,13 @@ html[data-ui-mode='nexus'][data-ui-palette='technical'],
 }
 
 .v-theme--technicalLight {
-  --nexus-surface-0: #f5f6f7;
+  --nexus-surface-0: #f0f2f5;
   --nexus-surface-1: #ffffff;
-  --nexus-surface-2: #ffffff;
-  --nexus-elevated: #f0f1f3;
-  --nexus-surface-hover: #eceef0;
-  --nexus-border: #e2e4e7;
-  --nexus-border-strong: #cdd0d4;
+  --nexus-surface-2: #f7f8fa;
+  --nexus-elevated: #eef0f3;
+  --nexus-surface-hover: #e8ecef;
+  --nexus-border: #dce0e6;
+  --nexus-border-strong: #c4c9d0;
 
   --nexus-accent-primary: #0091b3;
   --nexus-accent-secondary: #2f6fd1;
@@ -82,9 +82,9 @@ html[data-ui-mode='nexus'][data-ui-palette='technical'],
   --nexus-status-info: #2f6fd1;
 
   --nexus-text-primary: #0a0a0a;
-  --nexus-text-secondary: #555555;
-  --nexus-text-muted: #777777;
-  --nexus-text-disabled: #aaaaaa;
+  --nexus-text-secondary: #1a202c;
+  --nexus-text-muted: #2d3748;
+  --nexus-text-disabled: #4a5568;
 
   --nexus-chart-1: #0091b3;
   --nexus-chart-2: #2f6fd1;
@@ -130,13 +130,13 @@ html[data-ui-mode='nexus'],
 }
 
 .v-theme--nexusLight {
-  --nexus-surface-0: #f4fafb;
+  --nexus-surface-0: #edf5f7;
   --nexus-surface-1: #ffffff;
-  --nexus-surface-2: #eaf4f6;
-  --nexus-elevated: #d9e9ed;
-  --nexus-surface-hover: #e2f0f3;
-  --nexus-border: rgb(16 72 88 / 16%);
-  --nexus-border-strong: rgb(16 72 88 / 30%);
+  --nexus-surface-2: #f2f8fa;
+  --nexus-elevated: #e0edf0;
+  --nexus-surface-hover: #e6f0f3;
+  --nexus-border: #cce0e6;
+  --nexus-border-strong: #a8c4cc;
 
   --nexus-accent-primary: #007d87;
   --nexus-accent-secondary: #007d74;
@@ -147,9 +147,9 @@ html[data-ui-mode='nexus'],
   --nexus-status-info: #0069a8;
 
   --nexus-text-primary: #0b2730;
-  --nexus-text-secondary: #3f5a64;
-  --nexus-text-muted: #6b828b;
-  --nexus-text-disabled: #9bb0b8;
+  --nexus-text-secondary: #1a2733;
+  --nexus-text-muted: #374b54;
+  --nexus-text-disabled: #5a717c;
 
   --nexus-chart-1: #007d87;
   --nexus-chart-2: #0069a8;
@@ -157,4 +157,126 @@ html[data-ui-mode='nexus'],
   --nexus-chart-4: #a85700;
   --nexus-chart-5: #b92d4b;
   --nexus-chart-6: #087f50;
+}
+
+/* Emerald palette: minimal modern slate-green design. */
+.v-theme--emeraldDark {
+  --nexus-surface-0: #0c0f12;
+  --nexus-surface-1: #12171c;
+  --nexus-surface-2: #182026;
+  --nexus-elevated: #1e2830;
+  --nexus-surface-hover: #24303a;
+  --nexus-border: #1f2937;
+  --nexus-border-strong: #374151;
+
+  --nexus-accent-primary: #10b981;
+  --nexus-accent-secondary: #34d399;
+  --nexus-accent-muted: #047857;
+  --nexus-status-success: #10b981;
+  --nexus-status-warn: #f59e0b;
+  --nexus-status-error: #ef4444;
+  --nexus-status-info: #3b82f6;
+
+  --nexus-text-primary: #f3f4f6;
+  --nexus-text-secondary: #9ca3af;
+  --nexus-text-muted: #6b7280;
+  --nexus-text-disabled: #4b5563;
+
+  --nexus-chart-1: #10b981;
+  --nexus-chart-2: #34d399;
+  --nexus-chart-3: #60a5fa;
+  --nexus-chart-4: #fb7185;
+  --nexus-chart-5: #fbb724;
+  --nexus-chart-6: #a78bfa;
+}
+
+.v-theme--emeraldLight {
+  --nexus-surface-0: #edf7f1;
+  --nexus-surface-1: #ffffff;
+  --nexus-surface-2: #f2f9f5;
+  --nexus-elevated: #e0eede;
+  --nexus-surface-hover: #e6f3e8;
+  --nexus-border: #cde0d2;
+  --nexus-border-strong: #a8c4af;
+
+  --nexus-accent-primary: #059669;
+  --nexus-accent-secondary: #10b981;
+  --nexus-accent-muted: #047857;
+  --nexus-status-success: #059669;
+  --nexus-status-warn: #d97706;
+  --nexus-status-error: #dc2626;
+  --nexus-status-info: #2563eb;
+
+  --nexus-text-primary: #111827;
+  --nexus-text-secondary: #1f2937;
+  --nexus-text-muted: #374151;
+  --nexus-text-disabled: #6b7280;
+
+  --nexus-chart-1: #059669;
+  --nexus-chart-2: #10b981;
+  --nexus-chart-3: #3b82f6;
+  --nexus-chart-4: #ef4444;
+  --nexus-chart-5: #f59e0b;
+  --nexus-chart-6: #8b5cf6;
+}
+
+/* Dracula Cyberpunk palette: vibrant neon accents on Dracula dark. */
+.v-theme--draculaDark {
+  --nexus-surface-0: #1e1f29;
+  --nexus-surface-1: #282a36;
+  --nexus-surface-2: #343746;
+  --nexus-elevated: #44475a;
+  --nexus-surface-hover: #4d5167;
+  --nexus-border: #44475a;
+  --nexus-border-strong: #6272a4;
+
+  --nexus-accent-primary: #bd93f9;
+  --nexus-accent-secondary: #ff79c6;
+  --nexus-accent-muted: #8be9fd;
+  --nexus-status-success: #50fa7b;
+  --nexus-status-warn: #f1fa8c;
+  --nexus-status-error: #ff5555;
+  --nexus-status-info: #8be9fd;
+
+  --nexus-text-primary: #f8f8f2;
+  --nexus-text-secondary: #a9b7e6;
+  --nexus-text-muted: #6272a4;
+  --nexus-text-disabled: #44475a;
+
+  --nexus-chart-1: #bd93f9;
+  --nexus-chart-2: #ff79c6;
+  --nexus-chart-3: #8be9fd;
+  --nexus-chart-4: #50fa7b;
+  --nexus-chart-5: #ffb86c;
+  --nexus-chart-6: #ff5555;
+}
+
+.v-theme--draculaLight {
+  --nexus-surface-0: #f0f0ea;
+  --nexus-surface-1: #ffffff;
+  --nexus-surface-2: #f5f5f0;
+  --nexus-elevated: #e8e8e0;
+  --nexus-surface-hover: #ecece6;
+  --nexus-border: #d4d4c8;
+  --nexus-border-strong: #a0a0a8;
+
+  --nexus-accent-primary: #6272a4;
+  --nexus-accent-secondary: #bd93f9;
+  --nexus-accent-muted: #44475a;
+  --nexus-status-success: #26a269;
+  --nexus-status-warn: #b58900;
+  --nexus-status-error: #cc241d;
+  --nexus-status-info: #0069a8;
+
+  --nexus-text-primary: #282a36;
+  --nexus-text-secondary: #2e303e;
+  --nexus-text-muted: #3d3f50;
+  --nexus-text-disabled: #6a6c7a;
+
+  --nexus-chart-1: #6272a4;
+  --nexus-chart-2: #bd93f9;
+  --nexus-chart-3: #ff79c6;
+  --nexus-chart-4: #26a269;
+  --nexus-chart-5: #ffb86c;
+  --nexus-chart-6: #cc241d;
 }

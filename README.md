@@ -46,7 +46,7 @@ development, security hardening, testing, and release work.
 
 Web panel built on the [`sing-box-extended`](https://github.com/shtorm-7/sing-box-extended) core (the shtorm-7 fork of `SagerNet/sing-box`).
 
-**Note:** this repository is based on `alireza0/s-ui` starting from `v1.4.1`, with security and reliability hardening applied on top. This extended fork achieves functional parity with upstream s-ui-x `v1.5.10-beta3` while running on the `sing-box-extended` core.
+**Note:** this repository is based on `alireza0/s-ui` starting from `v1.4.1`, with security and reliability hardening applied on top. This extended fork achieves functional parity with upstream s-ui-x `v1.5.10-beta7` while running on the `sing-box-extended` core.
 
 **This fork keeps the original project structure and maintains the documentation and install links for this repository. You can use these scripts directly, or fork the repository and build it yourself.**
 
@@ -60,7 +60,7 @@ The full per-release notes live in the language-specific changelog files:
 - Русский: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - 简体中文: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
 - Latest pre-release notes: [`docs/releases/v1.0.0-beta7.md`](docs/releases/v1.0.0-beta7.md)
-- Upstream parity reference: [`docs/releases/v1.5.10-beta3.md`](docs/releases/v1.5.10-beta3.md)
+- Upstream parity reference: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 The README keeps installation and project overview short. For full release
 history, breaking notes, upgrade guidance, and rollback notes, open the
@@ -128,7 +128,7 @@ Use the stable build for normal installations. Use the beta only if you want to 
 | Channel | Version | Notes |
 |---|---|---|
 | Stable | not yet released | The first stable release will follow after the beta cycle completes. |
-| Beta | `v1.0.0-beta7` | Pre-release build. Includes upstream s-ui-x v1.5.10-beta3 features with the sing-box-extended core. Release notes: [`docs/releases/v1.0.0-beta7.md`](docs/releases/v1.0.0-beta7.md). |
+| Beta | `v1.0.0-beta7` | Pre-release build. Includes upstream s-ui-x v1.5.10-beta7 changes with the sing-box-extended core. Release notes: [`docs/releases/v1.0.0-beta7.md`](docs/releases/v1.0.0-beta7.md). |
 
 ### Linux/macOS, beta
 
@@ -374,7 +374,7 @@ certbot certonly --standalone --register-unsafely-without-email --non-interactiv
 
 Web-панель на базе [`sing-box-extended`](https://github.com/shtorm-7/sing-box-extended) (форк shtorm-7 от `SagerNet/sing-box`).
 
-**Примечание:** этот репозиторий основан на `alireza0/s-ui`, начиная с `v1.4.1`, с применённым набором исправлений по безопасности и надёжности. Этот extended-форк достигает функционального паритета с upstream s-ui-x `v1.5.10-beta3` при работе на ядре `sing-box-extended`.
+**Примечание:** этот репозиторий основан на `alireza0/s-ui`, начиная с `v1.4.1`, с применённым набором исправлений по безопасности и надёжности. Этот extended-форк достигает функционального паритета с upstream s-ui-x `v1.5.10-beta7` при работе на ядре `sing-box-extended`.
 
 **Этот fork сохраняет структуру оригинального проекта и поддерживает документацию и ссылки установки для этого репозитория. Можно использовать эти скрипты напрямую или сделать fork и собрать проект самостоятельно.**
 
@@ -388,7 +388,7 @@ Web-панель на базе [`sing-box-extended`](https://github.com/shtorm-7
 - Русский: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - 简体中文: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
 - Последние pre-release notes: [`docs/releases/v1.0.0-beta7.md`](docs/releases/v1.0.0-beta7.md)
-- Реферс паритета с upstream: [`docs/releases/v1.5.10-beta3.md`](docs/releases/v1.5.10-beta3.md)
+- Реферс паритета с upstream: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 README оставляет только установку и общий обзор проекта. Полная история
 релизов, breaking-заметки, гайд по обновлению и инструкции по откату находятся
@@ -456,7 +456,7 @@ README оставляет только установку и общий обзо
 | Канал | Версия | Заметки |
 |---|---|---|
 | Stable | ещё не выпущена | Первый стабильный релиз выйдет после завершения beta-цикла. |
-| Beta | `v1.0.0-beta7` | Pre-release сборка. Включает функции upstream s-ui-x v1.5.10-beta3 с ядром sing-box-extended. Release notes: [`docs/releases/v1.0.0-beta7.md`](docs/releases/v1.0.0-beta7.md). |
+| Beta | `v1.0.0-beta7` | Pre-release сборка. Включает изменения upstream s-ui-x v1.5.10-beta7 с ядром sing-box-extended. Release notes: [`docs/releases/v1.0.0-beta7.md`](docs/releases/v1.0.0-beta7.md). |
 
 ### Linux/macOS, beta
 

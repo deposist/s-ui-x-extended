@@ -16,7 +16,7 @@ export interface TopClientsSelectorInput {
   } | null
 }
 
-const defaultTopClientLimit = 5
+const defaultTopClientLimit = 10
 
 const sumTraffic = (...values: unknown[]): number => {
   return values.reduce<number>((sum, value) => sum + (nonNegativeNumber(value) ?? 0), 0)

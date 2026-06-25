@@ -552,6 +552,8 @@ export default {
       options: {
         technical: "Технический",
         navy: "Тёмно-синий",
+        emerald: "Emerald Minimal",
+        dracula: "Dracula Cyberpunk",
       },
     },
     mode: {
@@ -587,6 +589,8 @@ export default {
       kpi: {
         liveTraffic: "Текущий трафик",
         liveTrafficDelta: "Загрузка + отправка суммарно",
+        trafficStats: "Статистика трафика",
+        trafficStatsDelta: "Входящий {download} · Исходящий {upload}",
         trafficTrend: "Тренд истории трафика",
         onlineClients: "Клиенты онлайн",
         clientSignal: "Текущий сигнал присутствия клиентов.",
@@ -625,6 +629,7 @@ export default {
         empty: "Данных о трафике клиентов пока нет.",
         state: "Состояние",
         total: "Всего",
+        viewAll: "Все клиенты",
       },
       events: {
         title: "Последние события",

@@ -68,6 +68,7 @@ func TestAPIHandlerRegistersLegacyActionRoutesExplicitly(t *testing.T) {
 			"/api/users",
 			"/api/settings",
 			"/api/stats",
+			"/api/stats/traffic",
 			"/api/status",
 			"/api/onlines",
 			"/api/logs",

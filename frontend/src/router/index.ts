@@ -58,8 +58,7 @@ const routes = [
       },
       {
         path: '/basics',
-        name: 'pages.basics',
-        component: () => import('@/views/Basics.vue'),
+        redirect: '/settings?tab=basics',
       },
       {
         path: '/dns',

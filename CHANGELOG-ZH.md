@@ -4,6 +4,14 @@
 
 这是中文版更新日志。英文版请见 `CHANGELOG-EN.md`，俄文版请见 `CHANGELOG-RU.md`。
 
+## [Unreleased]
+
+- 已移植 upstream s-ui-x 从 `v1.5.10-beta5` 到 `v1.5.10-beta7` 的变更，同时保留 sing-box-extended core、extended 协议编辑器和 `s-ui-x-extended` 发布线。
+- 新增 Dashboard 流量汇总 API `GET /api/stats/traffic`，并添加 `stats(resource, date_time)` 索引，用于按时间范围查询全部 inbound 流量。
+- 更新 Nexus Dashboard、流量历史 KPI、Top clients 卡片、Recent events 卡片、Settings layout、Nexus palettes，以及 sidebar 中的 CPU/RAM 状态显示。
+- `config/version` 保持 `1.0.0-beta7`；只有前端 package metadata 更新到 upstream frontend `1.5.10-beta7`。
+- Client、Add Bulk 和 Edit Bulk 表单已迁移到共享 `FormShell`：Nexus 中作为 drawer 打开，select-menu 可通过 click-away 关闭；Classic mode 仍使用同一 shell 的 dialog 分支。
+
 ## [1.0.0-beta7] - 2026-06-23 - 会话处理与两个界面的 extended 协议覆盖
 
 预发布版本。此版本是 v1.0.0-beta6 的后续修复。无需手动迁移数据库。
@@ -15,6 +23,44 @@
 - Classic 和 Nexus 两个界面都已提供 extended 协议编辑器。
 
 完整发布说明：[`.github/RELEASE_NOTES_v1.0.0-beta7.md`](.github/RELEASE_NOTES_v1.0.0-beta7.md)。
+
+## [1.5.10-beta7] - 2026-06-25 - Dashboard 流量 totals 改为精确统计
+
+1.5.10 分支的第七个 beta。此版本修复 Nexus Dashboard 的 Traffic statistics KPI。无需手动迁移。
+
+- 新增 `GET /api/stats/traffic`，用于返回 Dashboard 流量汇总和精确 bucket sums。
+- Traffic statistics KPI 现在读取新的 summary endpoint，不再在浏览器中合并多个 inbound 的 `/api/stats` 响应。
+- Download 和 upload totals 现在按所选时间范围使用 `SUM(traffic)` 计算，长时间范围不再使用 `/api/stats` 的 average-downsampled rows。
+- Dashboard 汇总会统计所选时间范围内的全部历史 inbound 流量，包括之后被禁用或删除的 inbound 已产生的流量。
+- 新增 `stats(resource, date_time)` 索引，用于按全部 inbound 查询时间范围统计。
+
+完整 release notes: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)。
+
+## [1.5.10-beta6] - 2026-06-24 - Dashboard 卡片高度与流量历史
+
+1.5.10 分支的第六个 beta。此版本更新 Nexus Dashboard。无需迁移数据库、API 或 sing-box 配置。
+
+- Top clients 现在最多显示 10 个客户端，并在与 System status 对齐的固定高度卡片内滚动。
+- Recent events 使用相同的卡片高度，事件列表过长时在卡片内滚动。
+- System status 高度降低，并按当前 8 个状态值调整尺寸。
+- Dashboard 第一个 KPI 现在显示 Traffic statistics，而不是 Live traffic。它读取已有的 `/api/stats` 数据，按启用的 inbound tags 汇总，并分别绘制 download 和 upload 曲线。
+- 流量时间范围现在支持 1 小时、6 小时、12 小时、24 小时、7 天和 30 天。
+- 流量历史仍由 Traffic Maximum Age 控制。大于 `0` 时保存 stats；`0` 会关闭历史统计。
+完整 release notes: [`docs/releases/v1.5.10-beta6.md`](docs/releases/v1.5.10-beta6.md)。
+
+## [1.5.10-beta5] - 2026-06-24 - Nexus 仪表盘与设置页面布局调整
+
+1.5.10 线的第五个 beta。此版本仅涉及前端。无需数据库、API 或 sing-box 配置迁移。
+
+- 调整 Nexus 仪表盘的间距和卡片对齐方式，覆盖 KPI 卡片、概览面板、协议摘要、最近事件、系统状态和紧凑表格。
+- Top clients 现在显示真实汇总流量、在线数量、客户端总数、紧凑流量列，并提供到 Clients 页面的入口。
+- Live traffic KPI 新增本地时间窗口选择，范围从 1 分钟到 24 小时，使用现有 realtime samples。
+- Nexus 侧边栏名称更新为 S-UI-X。左下角 server status 在 status API 返回数据时显示 CPU/RAM 百分比。
+- 新增 Emerald 和 Dracula 两组 Nexus 调色板，均包含深色和浅色版本，并改善浅色主题对比度。
+- Nexus Settings 改为卡片式布局，sing-box Basics 移入 Settings，作为 Basics (Singbox) 标签页。`/basics` 会打开该标签页，旧 Basics 菜单项已从 Nexus 和 Classic navigation 中移除。
+- 修复迁移后的 Basics 保存按钮状态，并确保配置保存失败后也会清除 loading 状态。
+
+完整发布说明：[`docs/releases/v1.5.10-beta5.md`](docs/releases/v1.5.10-beta5.md)。
 
 ## [1.0.0-beta6] - 2026-06-23 - 基于 s-ui-x v1.5.10-beta3 重新构建，保留 extended 内核
 

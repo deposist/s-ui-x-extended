@@ -1,6 +1,7 @@
 <template>
   <div
     class="nexus-area-series"
+    :class="{ 'nexus-area-series--compact': compact }"
     :aria-label="ariaLabel"
     :role="ariaLabel ? 'img' : undefined"
   >
@@ -49,9 +50,11 @@ const props = withDefaults(defineProps<{
   series?: Series[]
   ariaLabel?: string
   valueFormatter?: (value: number) => string
+  compact?: boolean
 }>(), {
   labels: () => [],
   series: () => [],
+  compact: false,
 })
 
 const SERIES_COLORS: SeriesColor[] = [
@@ -268,6 +271,7 @@ const chartOptions = computed<ChartOptions<'line'>>(() => ({
       border: {
         display: false,
       },
+      display: !props.compact,
       grid: {
         display: false,
       },
@@ -280,6 +284,7 @@ const chartOptions = computed<ChartOptions<'line'>>(() => ({
       border: {
         display: false,
       },
+      display: !props.compact,
       grid: {
         color: context => resolveToken(
           context.chart,
@@ -306,6 +311,10 @@ const chartOptions = computed<ChartOptions<'line'>>(() => ({
 
 .nexus-area-series :deep(canvas) {
   display: block;
+}
+
+.nexus-area-series--compact {
+  min-block-size: 64px;
 }
 
 .nexus-area-series__empty {

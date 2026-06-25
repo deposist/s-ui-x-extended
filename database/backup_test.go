@@ -416,7 +416,7 @@ VALUES
 }
 
 func TestGetDbHandlesLargeTablesWithoutVariableLimit(t *testing.T) {
-	dbDir := t.TempDir()
+	dbDir := makeDBTempDir(t, "s-ui-large-backup-live-")
 	dbPath := filepath.Join(dbDir, "s-ui.db")
 	t.Setenv("SUI_DB_FOLDER", dbDir)
 	if err := InitDB(dbPath); err != nil {
@@ -493,7 +493,8 @@ func TestGetDbHandlesLargeTablesWithoutVariableLimit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDb failed on large dataset: %v", err)
 	}
-	backupPath := filepath.Join(t.TempDir(), "backup.db")
+	backupDir := makeDBTempDir(t, "s-ui-large-backup-copy-")
+	backupPath := filepath.Join(backupDir, "backup.db")
 	if err := os.WriteFile(backupPath, backup, 0600); err != nil {
 		t.Fatal(err)
 	}

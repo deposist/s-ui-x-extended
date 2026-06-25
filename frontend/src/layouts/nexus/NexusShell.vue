@@ -79,6 +79,14 @@ const nexusThemeName = computed(() => {
     return isDark ? 'nexusDark' : 'nexusLight'
   }
 
+  if (palette.value === 'emerald') {
+    return isDark ? 'emeraldDark' : 'emeraldLight'
+  }
+
+  if (palette.value === 'dracula') {
+    return isDark ? 'draculaDark' : 'draculaLight'
+  }
+
   return isDark ? 'technicalDark' : 'technicalLight'
 })
 

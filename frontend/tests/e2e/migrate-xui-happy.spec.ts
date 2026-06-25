@@ -1,5 +1,15 @@
 import { expect, test, type Page } from '@playwright/test'
 
+const uploadSyntheticDb = async (page: Page) => {
+  const input = page.getByTestId('migrate-xui-db-file').locator('input[type="file"]')
+  await expect(input).toBeAttached()
+  await input.setInputFiles({
+    name: 'x-ui.db',
+    mimeType: 'application/octet-stream',
+    buffer: Buffer.from('SQLite format 3\0'),
+  })
+}
+
 const mockAuthenticatedShell = async (page: Page) => {
   await page.addInitScript(() => {
     window.localStorage.setItem('locale', 'en')
@@ -25,6 +35,12 @@ const mockAuthenticatedShell = async (page: Page) => {
   }))
   await page.route('**/api/realtime/ws-token', async route => route.fulfill({
     json: { success: true, msg: '', obj: { token: 'cluster-h-ws-token' } },
+  }))
+  await page.route(/\/api\/status\?(.*&)?r=cpu%2Cmem(&.*)?$/, async route => route.fulfill({
+    json: { success: true, msg: '', obj: { cpu: 0, mem: { current: 0, total: 0 } } },
+  }))
+  await page.route(/\/api\/status\?(.*&)?r=cpu,mem(&.*)?$/, async route => route.fulfill({
+    json: { success: true, msg: '', obj: { cpu: 0, mem: { current: 0, total: 0 } } },
   }))
   await page.route('**/api/logout', async route => route.fulfill({
     json: { success: true, msg: '', obj: null },
@@ -64,13 +80,9 @@ test('Issue43 shows inline apply failure on review step', async ({ page }) => {
   await page.goto('migrate-xui')
   await expect(page).toHaveURL(/\/migrate-xui$/)
   await expect(page.getByText('Migrate from 3x-ui')).toBeVisible()
-  await page.locator('input[type="file"]').setInputFiles({
-    name: 'x-ui.db',
-    mimeType: 'application/octet-stream',
-    buffer: Buffer.from('SQLite format 3\0'),
-  })
-  await page.getByRole('button', { name: 'Build plan' }).click()
-  await page.getByRole('button', { name: 'Apply plan' }).click()
+  await uploadSyntheticDb(page)
+  await page.getByTestId('migrate-xui-build-plan').click()
+  await page.getByTestId('migrate-xui-apply-plan').click()
 
   await expect(page.getByTestId('migrate-xui-apply-error')).toBeVisible()
   await expect(page.getByTestId('migrate-xui-apply-error')).toContainText('synthetic apply failed')
@@ -124,13 +136,9 @@ test('Issue44 waits for rollback database health before reload', async ({ page }
   await page.goto('migrate-xui')
   await expect(page).toHaveURL(/\/migrate-xui$/)
   await expect(page.getByText('Migrate from 3x-ui')).toBeVisible()
-  await page.locator('input[type="file"]').setInputFiles({
-    name: 'x-ui.db',
-    mimeType: 'application/octet-stream',
-    buffer: Buffer.from('SQLite format 3\0'),
-  })
-  await page.getByRole('button', { name: 'Build plan' }).click()
-  await page.getByRole('button', { name: 'Apply plan' }).click()
+  await uploadSyntheticDb(page)
+  await page.getByTestId('migrate-xui-build-plan').click()
+  await page.getByTestId('migrate-xui-apply-plan').click()
   await expect(page.getByText('Migration result')).toBeVisible()
   await page.getByRole('button', { name: 'Restore previous database' }).click()
 
@@ -187,13 +195,9 @@ test('Issue45 hides generated admin passwords until reveal and auto-clears them'
   await page.goto('migrate-xui')
   await expect(page).toHaveURL(/\/migrate-xui$/)
   await expect(page.getByText('Migrate from 3x-ui')).toBeVisible()
-  await page.locator('input[type="file"]').setInputFiles({
-    name: 'x-ui.db',
-    mimeType: 'application/octet-stream',
-    buffer: Buffer.from('SQLite format 3\0'),
-  })
-  await page.getByRole('button', { name: 'Build plan' }).click()
-  await page.getByRole('button', { name: 'Apply plan' }).click()
+  await uploadSyntheticDb(page)
+  await page.getByTestId('migrate-xui-build-plan').click()
+  await page.getByTestId('migrate-xui-apply-plan').click()
   await expect(page.getByText('Migration result')).toBeVisible()
   await expect(page.locator('body')).not.toContainText('issue45-secret-password')
   await expect(page.getByTestId('migrate-xui-generated-admins-hidden')).toBeVisible()
@@ -235,16 +239,11 @@ test('Issue46 sends reset_required adminMode when building a plan', async ({ pag
 
   await page.goto('migrate-xui')
   await expect(page).toHaveURL(/\/migrate-xui$/)
-  await page.locator('input[type="file"]').setInputFiles({
-    name: 'x-ui.db',
-    mimeType: 'application/octet-stream',
-    buffer: Buffer.from('SQLite format 3\0'),
-  })
-  await page.getByLabel('Admin import').click({ force: true })
+  await uploadSyntheticDb(page)
+  await page.getByTestId('migrate-xui-admin-mode').click({ force: true })
   await page.getByRole('option', { name: 'Require password reset' }).click()
-  await page.getByRole('button', { name: 'Build plan' }).click()
+  await page.getByTestId('migrate-xui-build-plan').click()
 
   await expect.poll(() => planRequestBody).toContain('adminMode')
   expect(planRequestBody).toContain('reset_required')
 })
-

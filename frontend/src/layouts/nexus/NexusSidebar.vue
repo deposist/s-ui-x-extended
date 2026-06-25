@@ -18,8 +18,8 @@
         type="button"
         :aria-label="$t('menu.navigation')"
         @click="emit('toggle-rail')"
-      >S</button>
-      <div v-else aria-hidden="true" class="nexus-sidebar__logo">S</div>
+      >X</button>
+      <div v-else aria-hidden="true" class="nexus-sidebar__logo">X</div>
 
       <span v-if="!collapsed" class="nexus-sidebar__brand-text">S-UI-X Extended</span>
       <v-spacer v-if="!collapsed" />
@@ -242,7 +242,8 @@ const badgeCount = (item: NexusMenuItem): number => {
   min-height: 40px;
   padding-block: 0;
   padding-inline: var(--nexus-gap-4);
-  transition: background var(--nexus-transition-fast), color var(--nexus-transition-fast);
+  transition: background var(--nexus-transition-fast), color var(--nexus-transition-fast), opacity var(--nexus-transition-fast);
+  opacity: 0.72;
 }
 
 /* Compact rows (reference 40px) — drop Vuetify's extra content padding. */
@@ -268,12 +269,14 @@ const badgeCount = (item: NexusMenuItem): number => {
 .nexus-sidebar__item:hover {
   background: var(--nexus-surface-hover);
   color: var(--nexus-text-primary);
+  opacity: 1;
 }
 
 .nexus-sidebar__item.nexus-sidebar__item--active {
   background: var(--nexus-surface-hover);
   box-shadow: inset 3px 0 0 var(--nexus-accent-primary);
   color: var(--nexus-accent-primary);
+  opacity: 1;
 }
 
 .nexus-sidebar__badge {

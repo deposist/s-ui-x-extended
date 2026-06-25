@@ -38,7 +38,7 @@ test('nexus light theme keeps layout tokens after switching from classic', async
   expect(layout).toMatchObject({
     gap4: '16px',
     radiusLg: '8px',
-    surface0: '#f5f6f7',
+    surface0: '#f0f2f5',
     themeClass: 'v-theme--technicalLight',
     sidebarWidth: 240,
   })

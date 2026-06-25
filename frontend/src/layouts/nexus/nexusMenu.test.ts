@@ -10,7 +10,6 @@ describe('nexus sing-box settings route parity', () => {
       '/endpoints',
       '/services',
       '/tls',
-      '/basics',
       '/rules',
       '/dns',
     ]))
@@ -36,9 +35,9 @@ describe('nexus grouped navigation integrity', () => {
     expect(paths).toEqual(expect.arrayContaining([
       '/', '/inbounds', '/clients', '/outbounds', '/endpoints', '/services',
       '/tls', '/rules', '/dns', '/telegram', '/paid-subscriptions',
-      '/admins', '/audit', '/basics', '/settings', '/donations',
+      '/admins', '/audit', '/settings', '/donations',
     ]))
-    expect(paths).toHaveLength(16)
+    expect(paths).toHaveLength(15)
   })
 
   it('labels every non-dashboard group with a nav.groups.* key', () => {

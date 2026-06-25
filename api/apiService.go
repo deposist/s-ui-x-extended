@@ -315,6 +315,18 @@ func (a *ApiService) GetStats(c *gin.Context) {
 	jsonObj(c, data, err)
 }
 
+func (a *ApiService) GetTrafficStats(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	buckets, _ := strconv.Atoi(c.Query("buckets"))
+	endTime, _ := strconv.ParseInt(c.Query("end"), 10, 64)
+	data, err := a.StatsService.GetInboundTrafficSummary(limit, buckets, endTime)
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	jsonObj(c, data, err)
+}
+
 func (a *ApiService) GetStatus(c *gin.Context) {
 	request := c.Query("r")
 	result := a.ServerService.GetStatus(request)

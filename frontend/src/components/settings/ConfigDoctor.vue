@@ -2,10 +2,10 @@
   <section class="settings-config-doctor">
     <div class="settings-config-doctor__header">
       <div class="settings-config-doctor__heading">
-        <v-icon color="primary" icon="lucide:activity" />
+        <v-icon color="primary" icon="lucide:activity" class="me-2" />
         <div>
           <h3>{{ $t('doctor.title') }}</h3>
-          <p>{{ report?.summary ?? $t('doctor.idle') }}</p>
+          <p class="settings-config-doctor__desc">{{ report?.summary ?? $t('doctor.idle') }}</p>
         </div>
       </div>
       <div class="settings-config-doctor__actions">
@@ -87,6 +87,8 @@
       icon="lucide:activity"
       :text="$t('doctor.noReport')"
       :title="$t('doctor.notRun')"
+      class="settings-config-doctor__empty"
+      size="small"
     />
   </section>
 </template>
@@ -157,12 +159,13 @@ const runDoctor = async () => {
 
 <style scoped>
 .settings-config-doctor {
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
-  border-radius: 8px;
-  display: grid;
+  border: 0;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
   min-width: 0;
-  padding: 16px;
+  padding: var(--nexus-gap-4);
+  height: 100%;
 }
 
 .settings-config-doctor__header {
@@ -178,6 +181,12 @@ const runDoctor = async () => {
   display: flex;
   gap: 12px;
   min-width: 0;
+}
+
+.settings-config-doctor__desc {
+  border-bottom: 1px solid var(--nexus-border);
+  padding-bottom: var(--nexus-gap-2);
+  margin-bottom: var(--nexus-gap-2) !important;
 }
 
 .settings-config-doctor__heading h3,
@@ -274,6 +283,37 @@ const runDoctor = async () => {
 
 .settings-config-doctor__skeleton {
   background: transparent;
+}
+
+.settings-config-doctor__empty {
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+}
+
+.settings-config-doctor__empty :deep(.v-empty-state) {
+  padding: 0 !important;
+  min-height: auto !important;
+  justify-content: center;
+  align-items: center;
+}
+
+.settings-config-doctor__empty :deep(.v-empty-state__content) {
+  padding: 0 !important;
+}
+
+.settings-config-doctor__empty :deep(.v-empty-state__headline),
+.settings-config-doctor__empty :deep(.v-empty-state__title) {
+  margin-top: 8px !important;
+  font-size: 0.95rem !important;
+  text-align: center;
+}
+
+.settings-config-doctor__empty :deep(.v-empty-state__text) {
+  font-size: 0.825rem !important;
+  text-align: center;
 }
 
 @media (max-width: 600px) {

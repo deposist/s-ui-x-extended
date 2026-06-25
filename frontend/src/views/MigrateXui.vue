@@ -40,6 +40,7 @@
               <v-file-input
                 v-model="file"
                 accept=".db"
+                data-testid="migrate-xui-db-file"
                 prepend-icon="mdi-database-import"
                 :label="$t('migrateXui.chooseFile')"
                 :disabled="loading"
@@ -58,6 +59,7 @@
             <v-col cols="12" sm="6" md="4">
               <v-select
                 v-model="adminMode"
+                data-testid="migrate-xui-admin-mode"
                 :items="adminModeItems"
                 :label="$t('migrateXui.adminMode')"
                 :disabled="loading"
@@ -92,6 +94,7 @@
             <v-col cols="12" md="auto" align-self="center">
               <v-btn
                 color="primary"
+                data-testid="migrate-xui-build-plan"
                 prepend-icon="mdi-clipboard-search"
                 :loading="loading"
                 :disabled="!selectedFile"
@@ -216,7 +219,7 @@
             </v-col>
             <v-spacer></v-spacer>
             <v-col cols="auto">
-              <v-btn color="primary" prepend-icon="mdi-database-check" :disabled="selectedCount === 0" @click="applyPlan">
+              <v-btn color="primary" data-testid="migrate-xui-apply-plan" prepend-icon="mdi-database-check" :disabled="selectedCount === 0" @click="applyPlan">
                 {{ $t('migrateXui.apply') }}
               </v-btn>
             </v-col>

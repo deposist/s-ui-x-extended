@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 `CHANGELOG-ZH.md` for Simplified Chinese.
 
+## [Unreleased]
+
+- Ported upstream s-ui-x changes from `v1.5.10-beta5` through `v1.5.10-beta7` while keeping the sing-box-extended core, extended protocol editors, and `s-ui-x-extended` release line.
+- Added the dashboard traffic summary API, `GET /api/stats/traffic`, plus the `stats(resource, date_time)` index used by the all-inbound time-range query.
+- Updated the Nexus dashboard, traffic history KPI, Top clients card, Recent events card, Settings layout, Nexus palettes, and sidebar CPU/RAM status display.
+- Kept `config/version` on `1.0.0-beta7`; only the frontend package metadata moved to upstream frontend `1.5.10-beta7`.
+- Moved Client, Add Bulk, and Edit Bulk forms onto the shared `FormShell`, so Nexus opens them as drawers and select menus close on click-away. Classic mode still uses the dialog branch of the same shell.
+
 ## [1.0.0-beta7] - 2026-06-23 - session handling and extended UI coverage
 
 Pre-release. Follow-up to v1.0.0-beta6. No manual database migration is required.
@@ -16,6 +24,44 @@ Pre-release. Follow-up to v1.0.0-beta6. No manual database migration is required
 - Extended protocol editors are available in both Classic and Nexus interfaces.
 
 Full release notes: [`.github/RELEASE_NOTES_v1.0.0-beta7.md`](.github/RELEASE_NOTES_v1.0.0-beta7.md).
+
+## [1.5.10-beta7] - 2026-06-25 - exact dashboard traffic totals
+
+Seventh beta of the 1.5.10 line. This update fixes the Nexus Dashboard Traffic statistics KPI. No manual migration is required.
+
+- Added `GET /api/stats/traffic` for dashboard traffic summaries with exact bucket sums.
+- The Traffic statistics KPI now reads the new summary endpoint instead of combining per-inbound `/api/stats` responses in the browser.
+- Download and upload totals now come from `SUM(traffic)` over the selected period, so long ranges no longer use average-downsampled `/api/stats` rows.
+- The dashboard summary covers all historical inbound traffic for the selected period, including traffic from inbounds that were later disabled or removed.
+- Added an index on `stats(resource, date_time)` for the all-inbound time-range query.
+
+Full release notes: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md).
+
+## [1.5.10-beta6] - 2026-06-24 - dashboard card heights and traffic history
+
+Sixth beta of the 1.5.10 line. This is a Nexus dashboard update. No database, API, or sing-box configuration migration is required.
+
+- Top clients now shows up to 10 clients and scrolls inside a fixed-height card aligned with System status.
+- Recent events now uses the same fixed card height and scrolls inside the card when the event list is longer.
+- System status is shorter and sized around its 8 current values.
+- The first dashboard KPI now shows Traffic statistics instead of Live traffic. It reads existing `/api/stats` data for enabled inbound tags and plots download and upload separately.
+- The traffic timeline selector now supports 1 hour, 6 hours, 12 hours, 24 hours, 7 days, and 30 days.
+- Traffic history still depends on Traffic Maximum Age. Set it above `0` to save stats; `0` disables historical stats.
+Full release notes: [`docs/releases/v1.5.10-beta6.md`](docs/releases/v1.5.10-beta6.md).
+
+## [1.5.10-beta5] - 2026-06-24 - Nexus dashboard and Settings layout refresh
+
+Fifth beta of the 1.5.10 line. This is a frontend release. No database, API, or sing-box configuration migration is required.
+
+- Reworked the Nexus dashboard spacing and card alignment across KPI cards, overview panels, protocol summaries, recent events, system status, and dense tables.
+- Updated Top clients with real summary totals, online count, total client count, compact traffic columns, and a link to the Clients page.
+- Added a local time-window selector to the live traffic KPI for 1 minute through 24 hours, using existing realtime samples.
+- Updated the Nexus sidebar branding to S-UI-X and added CPU/RAM percentages to the lower-left server status block when the status API returns those metrics.
+- Added Emerald and Dracula Nexus palettes in dark and light variants, with better light-theme contrast.
+- Redesigned Nexus Settings into card-based sections and moved sing-box Basics into Settings as the Basics (Singbox) tab. `/basics` now opens that tab, and the old Basics menu item was removed from Nexus and Classic navigation.
+- Fixed the migrated Basics Save button state and ensured the loading state clears after failed config saves.
+
+Full release notes: [`docs/releases/v1.5.10-beta5.md`](docs/releases/v1.5.10-beta5.md).
 
 ## [1.0.0-beta6] - 2026-06-23 - rebase onto s-ui-x v1.5.10-beta3 with extended core
 

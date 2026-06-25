@@ -79,6 +79,7 @@ func (a *APIHandler) registerGroupedRoutes(g *gin.RouterGroup) {
 	g.GET("/users", a.ApiService.GetUsers)
 	g.GET("/settings", a.ApiService.GetSettings)
 	g.GET("/stats", a.ApiService.GetStats)
+	g.GET("/stats/traffic", a.ApiService.GetTrafficStats)
 	g.GET("/status", a.ApiService.GetStatus)
 	g.GET("/onlines", a.ApiService.GetOnlines)
 	g.GET("/logs", a.ApiService.GetLogs)

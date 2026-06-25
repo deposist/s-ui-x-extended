@@ -552,6 +552,8 @@ export default {
       options: {
         technical: "Technical",
         navy: "Navy",
+        emerald: "Emerald Minimal",
+        dracula: "Dracula Cyberpunk",
       },
     },
     mode: {
@@ -587,6 +589,8 @@ export default {
       kpi: {
         liveTraffic: "Live traffic",
         liveTrafficDelta: "Combined down + up rate",
+        trafficStats: "Traffic statistics",
+        trafficStatsDelta: "Down {download} · Up {upload}",
         trafficTrend: "Traffic history trend",
         onlineClients: "Online clients",
         clientSignal: "Current client presence signal.",
@@ -625,6 +629,7 @@ export default {
         empty: "No client traffic is available yet.",
         state: "State",
         total: "Total",
+        viewAll: "View all clients",
       },
       events: {
         title: "Recent events",

@@ -16,6 +16,11 @@
   min-width: 0;
   scrollbar-width: thin;
   overflow-x: auto;
+  transition: border-color var(--nexus-transition-base);
+}
+
+.nexus-dense-table:hover {
+  border-color: var(--nexus-border-strong);
 }
 
 .nexus-dense-table__table {
@@ -27,13 +32,13 @@
 .nexus-dense-table__table :deep(th),
 .nexus-dense-table__table :deep(td) {
   border-block-end: 1px solid var(--nexus-border);
-  font-size: 0.875rem;
-  height: 44px;
+  font-size: 0.8125rem;
+  height: 40px;
   letter-spacing: 0;
   line-height: 1.4;
   min-width: 0;
   overflow-wrap: anywhere;
-  padding: var(--nexus-gap-3);
+  padding: var(--nexus-gap-2) var(--nexus-gap-3);
   text-align: start;
   vertical-align: middle;
 }

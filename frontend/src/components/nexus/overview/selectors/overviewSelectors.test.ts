@@ -170,6 +170,58 @@ describe('overview selectors', () => {
     ])
   })
 
+  it('uses exact traffic summary buckets from the dashboard stats endpoint', () => {
+    expect(selectTrafficSeries({
+      range: '24h',
+      summary: {
+        startTime: 1710000000,
+        endTime: 1710003600,
+        download: 40,
+        upload: 9,
+        buckets: [
+          { startTime: 1710000000, endTime: 1710001800, download: 10, upload: 4 },
+          { startTime: 1710001800, endTime: 1710003600, download: 30, upload: 5 },
+        ],
+      },
+      bucketCount: 48,
+      stats: [
+        { dateTime: 1710000000, direction: false, traffic: 999 },
+      ],
+    })).toEqual({
+      labels: [
+        '2024-03-09T16:00:00.000Z',
+        '2024-03-09T16:30:00.000Z',
+      ],
+      download: [10, 30],
+      upload: [4, 5],
+      range: '24h',
+    })
+  })
+
+  it('buckets legacy traffic stats into the selected dashboard range', () => {
+    expect(selectTrafficSeries({
+      range: '1h',
+      bucketCount: 4,
+      nowMs: 1710003600 * 1000,
+      stats: [
+        { dateTime: 1710000060, direction: false, traffic: 10 },
+        { dateTime: 1710000120, direction: true, traffic: 4 },
+        { dateTime: 1710001800, direction: false, traffic: 6 },
+        { dateTime: 1709999900, direction: false, traffic: 99 },
+      ],
+    })).toEqual({
+      labels: [
+        '2024-03-09T16:00:00.000Z',
+        '2024-03-09T16:15:00.000Z',
+        '2024-03-09T16:30:00.000Z',
+        '2024-03-09T16:45:00.000Z',
+      ],
+      download: [10, 0, 6, 0],
+      upload: [4, 0, 0, 0],
+      range: '1h',
+    })
+  })
+
   it('maps known and unknown audit or partial API payloads to plain display data', () => {
     expect(mapAuditDisplayItem({
       id: 12,

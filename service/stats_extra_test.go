@@ -100,6 +100,64 @@ func TestStatsServiceSaveStatsCommitFailureAuditsAndReturnsIssue26(t *testing.T)
 	}
 }
 
+func TestStatsServiceGetInboundTrafficSummaryUsesExactBucketSums(t *testing.T) {
+	initSettingTestDB(t)
+	statsService := &StatsService{}
+	const endTime int64 = 3600
+
+	rows := make([]model.Stats, 0, 164)
+	var wantDownload int64
+	var wantUpload int64
+	for i := 0; i < 80; i++ {
+		stamp := int64(30 + i*40)
+		down := int64(i + 1)
+		up := int64((i + 1) * 2)
+		rows = append(rows,
+			model.Stats{DateTime: stamp, Resource: "inbound", Tag: "in-a", Direction: false, Traffic: down},
+			model.Stats{DateTime: stamp, Resource: "inbound", Tag: "in-b", Direction: true, Traffic: up},
+		)
+		wantDownload += down
+		wantUpload += up
+	}
+	rows = append(rows,
+		model.Stats{DateTime: 120, Resource: "user", Tag: "alice", Direction: false, Traffic: 999999},
+		model.Stats{DateTime: 120, Resource: "outbound", Tag: "direct", Direction: true, Traffic: 999999},
+		model.Stats{DateTime: endTime + 1, Resource: "inbound", Tag: "late", Direction: false, Traffic: 999999},
+		model.Stats{DateTime: endTime, Resource: "inbound", Tag: "edge", Direction: true, Traffic: 7},
+	)
+	wantUpload += 7
+	if err := database.GetDB().Create(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := statsService.GetInboundTrafficSummary(1, 4, endTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.StartTime != 0 || got.EndTime != endTime || got.Range != 1 {
+		t.Fatalf("unexpected window metadata: %#v", got)
+	}
+	if len(got.Buckets) != 4 {
+		t.Fatalf("expected 4 buckets, got %d", len(got.Buckets))
+	}
+	if got.Download != wantDownload || got.Upload != wantUpload {
+		t.Fatalf("unexpected totals: download=%d upload=%d want download=%d upload=%d", got.Download, got.Upload, wantDownload, wantUpload)
+	}
+
+	var bucketDownload int64
+	var bucketUpload int64
+	for _, bucket := range got.Buckets {
+		bucketDownload += bucket.Download
+		bucketUpload += bucket.Upload
+	}
+	if bucketDownload != got.Download || bucketUpload != got.Upload {
+		t.Fatalf("bucket totals do not match summary: buckets down/up=%d/%d summary down/up=%d/%d", bucketDownload, bucketUpload, got.Download, got.Upload)
+	}
+	if got.Buckets[3].Upload < 7 {
+		t.Fatalf("end boundary traffic should be included in the last bucket: %#v", got.Buckets[3])
+	}
+}
+
 func TestStatsServiceDownsampleStatsSmallInputUnchangedExtra(t *testing.T) {
 	statsService := &StatsService{}
 	input := []model.Stats{

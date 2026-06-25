@@ -2,10 +2,10 @@
   <section class="panel-update">
     <div class="panel-update__header">
       <div class="panel-update__heading">
-        <v-icon color="primary" icon="mdi-cloud-download-outline" />
+        <v-icon color="primary" icon="mdi-cloud-download-outline" class="me-2" />
         <div>
           <h3>{{ $t('update.title') }}</h3>
-          <p>{{ $t('update.subtitle') }}</p>
+          <p class="panel-update__desc">{{ $t('update.subtitle') }}</p>
         </div>
       </div>
     </div>
@@ -305,12 +305,13 @@ onUnmounted(stopPolling)
 
 <style scoped>
 .panel-update {
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
-  border-radius: 8px;
-  display: grid;
+  border: 0;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
   min-width: 0;
-  padding: 16px;
+  padding: var(--nexus-gap-4);
+  height: 100%;
 }
 
 .panel-update__heading {
@@ -330,6 +331,12 @@ onUnmounted(stopPolling)
   color: rgba(var(--v-theme-on-surface), 0.72);
   font-size: 0.875rem;
   margin: 2px 0 0;
+}
+
+.panel-update__desc {
+  border-bottom: 1px solid var(--nexus-border);
+  padding-bottom: var(--nexus-gap-2);
+  margin-bottom: var(--nexus-gap-2) !important;
 }
 
 .panel-update__row {

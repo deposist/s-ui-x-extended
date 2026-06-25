@@ -25,16 +25,16 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="summary in summaries" :key="summary.type">
-          <td>{{ summary.type }}</td>
+        <tr v-for="summary in summaries" :key="summary.type" class="nexus-dense-table__row-hoverable">
+          <td class="nexus-mono font-weight-bold">{{ summary.type }}</td>
           <td>
             <status-badge
               :label="summary.activeInbounds > 0 ? $t('nexus.status.online') : $t('nexus.status.idle')"
               :tone="summary.activeInbounds > 0 ? 'success' : 'info'"
             />
           </td>
-          <td>{{ summary.activeInbounds }}</td>
-          <td>{{ summary.totalInbounds }}</td>
+          <td class="nexus-mono">{{ summary.activeInbounds }}</td>
+          <td class="nexus-mono">{{ summary.totalInbounds }}</td>
           <td>
             <span class="nexus-protocol-row__tags">
               <span v-if="summary.tags.length === 0" class="nexus-protocol-row__no-tag">
@@ -44,13 +44,13 @@
                 <span
                   v-for="tag in visibleTags(summary)"
                   :key="tag"
-                  class="nexus-protocol-row__tag"
+                  class="nexus-protocol-row__tag nexus-mono"
                 >
                   {{ tag }}
                 </span>
                 <span
                   v-if="overflowCount(summary) > 0"
-                  class="nexus-protocol-row__tag nexus-protocol-row__tag--overflow"
+                  class="nexus-protocol-row__tag nexus-protocol-row__tag--overflow nexus-mono"
                 >
                   +{{ overflowCount(summary) }}
                 </span>
@@ -98,6 +98,11 @@ const overflowCount = (summary: ProtocolSummary): number => {
   flex-wrap: wrap;
   gap: var(--nexus-gap-1);
   min-width: 0;
+}
+
+:deep(.nexus-dense-table tbody tr.nexus-dense-table__row-hoverable:hover td) {
+  background: var(--nexus-surface-hover);
+  cursor: pointer;
 }
 
 .nexus-protocol-row__tag,
