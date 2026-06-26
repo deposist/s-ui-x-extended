@@ -54,6 +54,10 @@ Web panel built on the [`sing-box-extended`](https://github.com/shtorm-7/sing-bo
 
 ## Releases
 
+Detailed configuration and usage guides are available:
+- **English Guide:** [`docs/INSTRUCTIONS-EN.md`](docs/INSTRUCTIONS-EN.md)
+- **Русское руководство:** [`docs/INSTRUCTIONS-RU.md`](docs/INSTRUCTIONS-RU.md)
+
 The full per-release notes live in the language-specific changelog files:
 
 - English: [`CHANGELOG-EN.md`](CHANGELOG-EN.md)

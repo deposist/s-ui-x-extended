@@ -78,3 +78,10 @@ test-db/
 
 # Local recovery snapshots (corrupt backups from rename-module incident)
 .tools-recovery/
+
+# Internal upstream-sync notes and root-level local instruction drafts
+/UPSTREAM-SYNC.md
+docs/UPSTREAM-SYNC.md
+/INBOUNDS-*.md
+/INSTRUCTIONS-*.md
+/MENUS-*.md
