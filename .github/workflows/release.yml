@@ -20,6 +20,9 @@ env:
   CRONET_GO_VERSION: "2faf34666c2cc8234f10f2ab6d4c4d6104d34ae2"
   CRONET_GO_REPO: https://github.com/sagernet/cronet-go.git
   BOOTLIN_BASE_URL: https://toolchains.bootlin.com/downloads/releases/toolchains
+  # Full extended tags that do not need the cronet/naive toolchain. The build
+  # step appends with_naive_outbound only for matrix.naive platforms.
+  RELEASE_BUILD_TAGS: "with_quic,with_grpc,with_utls,with_acme,with_gvisor,badlinkname,tfogo_checklinkname0,with_tailscale,with_dhcp,with_wireguard,with_masque,with_mtproxy,with_openvpn,with_sudoku,with_trusttunnel,with_ccm,with_ocm,with_oomkiller"
 
 jobs:
   build-frontend:
@@ -166,7 +169,7 @@ jobs:
       - name: Build s-ui
         run: |
           set -e
-          BUILD_TAGS="with_quic,with_grpc,with_utls,with_acme,with_gvisor,badlinkname,tfogo_checklinkname0,with_tailscale"
+          BUILD_TAGS="${{ env.RELEASE_BUILD_TAGS }}"
           [ "${{ matrix.naive }}" = "true" ] && BUILD_TAGS="${BUILD_TAGS},with_naive_outbound,with_musl"
           go build -ldflags="-w -s -checklinkname=0 -linkmode external -extldflags '-static' -X github.com/deposist/s-ui-x-extended/config.ArtifactPlatform=${{ matrix.platform }}" -tags "$BUILD_TAGS" -o sui main.go
           file sui

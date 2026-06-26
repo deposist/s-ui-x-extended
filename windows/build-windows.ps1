@@ -96,7 +96,8 @@ if ($NoCGO) {
 }
 
 # Build command
-$buildCmd = "go build -ldflags `"-w -s`" -tags `"with_quic,with_grpc,with_utls,with_acme,with_gvisor,with_tailscale`" -o sui.exe main.go"
+$buildTags = "with_quic,with_grpc,with_utls,with_acme,with_gvisor,with_naive_outbound,with_purego,badlinkname,tfogo_checklinkname0,with_tailscale,with_dhcp,with_wireguard,with_masque,with_mtproxy,with_openvpn,with_sudoku,with_trusttunnel,with_ccm,with_ocm,with_oomkiller"
+$buildCmd = "go build -ldflags `"-w -s -checklinkname=0`" -tags `"$buildTags`" -o sui.exe main.go"
 
 try {
     Invoke-Expression $buildCmd

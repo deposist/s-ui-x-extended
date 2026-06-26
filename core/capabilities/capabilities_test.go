@@ -1,8 +1,13 @@
 package capabilities
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
+	"regexp"
+	"runtime"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -201,6 +206,122 @@ func TestGroupCapabilitiesDocumentPanelFailoverBoundary(t *testing.T) {
 		if group.SessionRecovery {
 			t.Fatalf("core-backed group %q must not claim session recovery", groupType)
 		}
+	}
+}
+
+func TestReleaseBuildTagsCoverManifestProtocolCapabilities(t *testing.T) {
+	manifestTags := manifestProtocolBuildTagSet()
+	if len(manifestTags) == 0 {
+		t.Fatal("manifest exposes no build-tagged protocol capabilities")
+	}
+
+	releaseTags := parseTagSet(t, parseQuotedAssignment(t, readRepoFile(t, ".github/workflows/release.yml"), `(?m)^\s*RELEASE_BUILD_TAGS:\s*"([^"]+)"\s*$`))
+	for _, extra := range parseQuotedAssignmentAll(t, readRepoFile(t, ".github/workflows/release.yml"), `(?m)BUILD_TAGS="\$\{BUILD_TAGS\},([^"]+)"`) {
+		addTags(releaseTags, extra)
+	}
+	assertContainsAllTags(t, "release.yml effective build tags", releaseTags, manifestTags)
+
+	windowsTags := parseTagSet(t, parseQuotedAssignment(t, readRepoFile(t, ".github/workflows/windows.yml"), `(?m)^\s*TAGS:\s*"([^"]+)"\s*$`))
+	assertContainsAllTags(t, "windows.yml TAGS", windowsTags, manifestTags)
+
+	batTags := parseTagSet(t, parseQuotedAssignment(t, readRepoFile(t, "windows/build-windows.bat"), `(?m)^set BUILD_TAGS=([^\r\n]+)`))
+	assertContainsAllTags(t, "windows/build-windows.bat BUILD_TAGS", batTags, manifestTags)
+
+	psTags := parseTagSet(t, parseQuotedAssignment(t, readRepoFile(t, "windows/build-windows.ps1"), `(?m)^\$buildTags = "([^"]+)"\s*$`))
+	assertContainsAllTags(t, "windows/build-windows.ps1 buildTags", psTags, manifestTags)
+
+	buildScriptTags := parseTagSet(t, parseQuotedAssignment(t, readRepoFile(t, "build.sh"), `(?m)^BUILD_TAGS="([^"]+)"\s*$`))
+	assertContainsAllTags(t, "build.sh BUILD_TAGS", buildScriptTags, manifestTags)
+
+	dockerfileTags := parseTagSet(t, parseQuotedAssignment(t, readRepoFile(t, "Dockerfile"), `(?m)-tags "([^"]+)"`))
+	assertContainsAllTags(t, "Dockerfile build tags", dockerfileTags, manifestTags)
+}
+
+func manifestProtocolBuildTagSet() map[string]struct{} {
+	tags := map[string]struct{}{}
+	for _, in := range Inbounds() {
+		if in.BuildTag != "" {
+			tags[in.BuildTag] = struct{}{}
+		}
+	}
+	for _, out := range Outbounds() {
+		if out.BuildTag != "" {
+			tags[out.BuildTag] = struct{}{}
+		}
+	}
+	for _, endpoint := range Endpoints() {
+		if endpoint.BuildTag != "" {
+			tags[endpoint.BuildTag] = struct{}{}
+		}
+	}
+	for _, provider := range Providers() {
+		if provider.BuildTag != "" {
+			tags[provider.BuildTag] = struct{}{}
+		}
+	}
+	return tags
+}
+
+func readRepoFile(t *testing.T, rel string) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot resolve test file path")
+	}
+	path := filepath.Join(filepath.Dir(file), "..", "..", rel)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", rel, err)
+	}
+	return string(data)
+}
+
+func parseQuotedAssignment(t *testing.T, text, pattern string) string {
+	t.Helper()
+	matches := regexp.MustCompile(pattern).FindStringSubmatch(text)
+	if matches == nil {
+		t.Fatalf("pattern %q not found", pattern)
+	}
+	return matches[1]
+}
+
+func parseQuotedAssignmentAll(t *testing.T, text, pattern string) []string {
+	t.Helper()
+	matches := regexp.MustCompile(pattern).FindAllStringSubmatch(text, -1)
+	out := make([]string, 0, len(matches))
+	for _, match := range matches {
+		out = append(out, match[1])
+	}
+	return out
+}
+
+func parseTagSet(t *testing.T, raw string) map[string]struct{} {
+	t.Helper()
+	tags := map[string]struct{}{}
+	addTags(tags, raw)
+	return tags
+}
+
+func addTags(tags map[string]struct{}, raw string) {
+	for _, tag := range strings.Split(raw, ",") {
+		tag = strings.TrimSpace(tag)
+		if tag != "" {
+			tags[tag] = struct{}{}
+		}
+	}
+}
+
+func assertContainsAllTags(t *testing.T, label string, got, want map[string]struct{}) {
+	t.Helper()
+	var missing []string
+	for tag := range want {
+		if _, ok := got[tag]; !ok {
+			missing = append(missing, tag)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		t.Fatalf("%s missing manifest build tags: %v", label, missing)
 	}
 }
 
