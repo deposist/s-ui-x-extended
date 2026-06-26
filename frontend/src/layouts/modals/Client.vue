@@ -182,6 +182,12 @@
                     v-model="clientConfig[key].auth_str"
                     hide-details>
                   </v-text-field>
+                  <v-text-field
+                    v-if="clientConfig[key].secret != undefined"
+                    label="Secret"
+                    v-model="clientConfig[key].secret"
+                    hide-details>
+                  </v-text-field>
                 </v-col>
               </v-row>
             </v-window-item>

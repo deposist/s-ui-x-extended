@@ -10,15 +10,32 @@
 
 
 
-## [1.0.0-hotfix3] - 2026-06-26 - 稳定版 hotfix
+## [1.0.0-hotfix4] - 2026-06-26 - 稳定版 hotfix
 
 首个稳定版的 hotfix。无需手动迁移数据库。
 
-- 修复扩展协议 inbound（Mieru、TrustTunnel、SSH、MTProxy 等）在现有客户端缺少协议凭据时报 `users is empty` 的问题。后端现在在客户端绑定到 inbound 时自动补齐缺失的 config 块。
-- 加固凭据生成的错误处理：UUID、shadowsocks 密码和 mtproxy secret 生成错误现在会传播，而非静默使用空值。
+- 修复客户端配置编辑器中 MTProxy `secret` 字段不显示的问题。通用配置循环只渲染了 `password`、`uuid` 和 `auth_str`，导致 MTProxy 凭据在 UI 中不可见且无法编辑。
 
-完整发布说明：[`.github/RELEASE_NOTES_v1.0.0-hotfix3.md`](.github/RELEASE_NOTES_v1.0.0-hotfix3.md)。
+完整发布说明：[`.github/RELEASE_NOTES_v1.0.0-hotfix4.md`](.github/RELEASE_NOTES_v1.0.0-hotfix4.md)。
 
+## [1.0.0-hotfix3] - 2026-06-26 - 稳定版 hotfix
+
+
+
+首个稳定版的 hotfix。无需手动迁移数据库。
+
+
+
+- 修复扩展协议 inbound（Mieru、TrustTunnel、SSH、MTProxy 等）在现有客户端缺少协议凭据时报 `users is empty` 的问题。后端现在在客户端绑定到 inbound 时自动补齐缺失的 config 块。
+
+- 加固凭据生成的错误处理：UUID、shadowsocks 密码和 mtproxy secret 生成错误现在会传播，而非静默使用空值。
+
+
+
+完整发布说明：[`.github/RELEASE_NOTES_v1.0.0-hotfix3.md`](.github/RELEASE_NOTES_v1.0.0-hotfix3.md)。
+
+
+
 ## [1.0.0-hotfix2] - 2026-06-26 - 稳定版 hotfix
 
 首个稳定版的 hotfix。无需手动迁移数据库。
