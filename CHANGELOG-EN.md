@@ -9,6 +9,19 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+
+## [1.0.0-beta9] - 2026-06-26 - full protocol tags in release builds
+
+Pre-release. Follow-up to v1.0.0-beta8. No manual database migration is required.
+
+- Updated Linux release builds to include the supported protocol tags declared by the panel capability manifest, including Sudoku, TrustTunnel, MASQUE, OpenVPN, MTProxy, WireGuard/WARP endpoints, and DHCP DNS transport.
+- Updated Windows release builds and local Windows build scripts to use the same supported protocol tag set.
+- Added a regression test that checks release workflows, local build scripts, `build.sh`, and the Dockerfile against `core/capabilities/protocols.json`.
+- Kept `with_naive_outbound` conditional on Linux targets that prepare the cronet/naive toolchain.
+- Kept `shtorm-7/sing-box-extended` unchanged; this release only fixes build and release packaging for the panel repository.
+
+Full release notes: [`.github/RELEASE_NOTES_v1.0.0-beta9.md`](.github/RELEASE_NOTES_v1.0.0-beta9.md).
+
 ## [1.0.0-beta8] - 2026-06-26 - panel control plane and option coverage
 
 Pre-release. Follow-up to v1.0.0-beta7. No manual database migration is required.

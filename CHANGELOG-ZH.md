@@ -8,6 +8,19 @@
 
 - 暂无未发布变更。
 
+
+## [1.0.0-beta9] - 2026-06-26 - 发布构建使用完整协议标签
+
+预发布版本。此版本是 v1.0.0-beta8 的后续修复。无需手动迁移数据库。
+
+- Linux release builds 现在包含面板 capability manifest 中声明的受支持 protocol tags，包括 Sudoku、TrustTunnel、MASQUE、OpenVPN、MTProxy、WireGuard/WARP endpoints 和 DHCP DNS transport。
+- Windows release builds 和本地 Windows build scripts 现在使用同一组受支持的 protocol tags。
+- 新增 regression test，用于检查 release workflows、本地 build scripts、`build.sh` 和 Dockerfile 是否覆盖 `core/capabilities/protocols.json` 中声明的 tags。
+- Linux 上的 `with_naive_outbound` 仍只在准备 cronet/naive toolchain 的目标上启用。
+- 未修改 `shtorm-7/sing-box-extended`；此版本只修复 panel repository 的 build 和 release packaging。
+
+完整发布说明：[`.github/RELEASE_NOTES_v1.0.0-beta9.md`](.github/RELEASE_NOTES_v1.0.0-beta9.md)。
+
 ## [1.0.0-beta8] - 2026-06-26 - 面板控制面与选项覆盖
 
 预发布版本。此版本是 v1.0.0-beta7 的后续更新。无需手动迁移数据库。

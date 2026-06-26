@@ -59,7 +59,7 @@ The full per-release notes live in the language-specific changelog files:
 - English: [`CHANGELOG-EN.md`](CHANGELOG-EN.md)
 - Русский: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - 简体中文: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
-- Latest pre-release notes: [`docs/releases/v1.0.0-beta8.md`](docs/releases/v1.0.0-beta8.md)
+- Latest pre-release notes: [`docs/releases/v1.0.0-beta9.md`](docs/releases/v1.0.0-beta9.md)
 - Upstream parity reference: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 The README keeps installation and project overview short. For full release
@@ -128,12 +128,12 @@ Use the stable build for normal installations. Use the beta only if you want to 
 | Channel | Version | Notes |
 |---|---|---|
 | Stable | not yet released | The first stable release will follow after the beta cycle completes. |
-| Beta | `v1.0.0-beta8` | Pre-release build. Adds panel control-plane groups, provider health, failover policy handling, and full option coverage checks while keeping upstream s-ui-x v1.5.10-beta7 parity on the sing-box-extended core. Release notes: [`docs/releases/v1.0.0-beta8.md`](docs/releases/v1.0.0-beta8.md). |
+| Beta | `v1.0.0-beta9` | Pre-release build. Rebuilds official artifacts with the full supported protocol tag set, including Sudoku, TrustTunnel, MASQUE, and OpenVPN. Release notes: [`docs/releases/v1.0.0-beta9.md`](docs/releases/v1.0.0-beta9.md). |
 
 ### Linux/macOS, beta
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta8
+bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta9
 ```
 
 The command above installs the latest beta release. Once a stable release is published, the command without a version argument will install stable by default.
@@ -143,12 +143,12 @@ The command above installs the latest beta release. Once a stable release is pub
 ```sh
 git clone https://github.com/deposist/s-ui-x-extended.git
 cd s-ui-x-extended
-sudo bash install.sh v1.0.0-beta8
+sudo bash install.sh v1.0.0-beta9
 ```
 
 ### Windows
 
-- Beta: download `v1.0.0-beta8` from [its release page](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta8), extract the ZIP, and run `install-windows.bat` as Administrator.
+- Beta: download `v1.0.0-beta9` from [its release page](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta9), extract the ZIP, and run `install-windows.bat` as Administrator.
 
 Existing installations keep their settings, users, inbounds, outbounds, clients, TLS, services, and tokens. Database migrations run automatically on first start. Upgrade and rollback notes are in the changelog files: [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), [中文](CHANGELOG-ZH.md).
 
@@ -387,7 +387,7 @@ Web-панель на базе [`sing-box-extended`](https://github.com/shtorm-7
 - English: [`CHANGELOG-EN.md`](CHANGELOG-EN.md)
 - Русский: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - 简体中文: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
-- Последние pre-release notes: [`docs/releases/v1.0.0-beta8.md`](docs/releases/v1.0.0-beta8.md)
+- Последние pre-release notes: [`docs/releases/v1.0.0-beta9.md`](docs/releases/v1.0.0-beta9.md)
 - Реферс паритета с upstream: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 README оставляет только установку и общий обзор проекта. Полная история
@@ -456,12 +456,12 @@ README оставляет только установку и общий обзо
 | Канал | Версия | Заметки |
 |---|---|---|
 | Stable | ещё не выпущена | Первый стабильный релиз выйдет после завершения beta-цикла. |
-| Beta | `v1.0.0-beta8` | Pre-release сборка. Добавляет control-plane группы, provider health, политики failover и проверки покрытия опций при сохранении паритета с upstream s-ui-x v1.5.10-beta7 на ядре sing-box-extended. Release notes: [`docs/releases/v1.0.0-beta8.md`](docs/releases/v1.0.0-beta8.md). |
+| Beta | `v1.0.0-beta9` | Pre-release сборка. Собирает официальные artifacts с полным набором protocol build tags, включая Sudoku, TrustTunnel, MASQUE и OpenVPN. Release notes: [`docs/releases/v1.0.0-beta9.md`](docs/releases/v1.0.0-beta9.md). |
 
 ### Linux/macOS, beta
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta8
+bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta9
 ```
 
 Эта команда ставит последнюю beta-версию. Когда выйдет stable-релиз, команда без указания версии будет ставить stable по умолчанию.
@@ -471,12 +471,12 @@ bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/
 ```sh
 git clone https://github.com/deposist/s-ui-x-extended.git
 cd s-ui-x-extended
-sudo bash install.sh v1.0.0-beta8
+sudo bash install.sh v1.0.0-beta9
 ```
 
 ### Windows
 
-- Beta: скачайте `v1.0.0-beta8` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta8), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
+- Beta: скачайте `v1.0.0-beta9` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta9), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
 
 Существующие установки сохраняют settings, users, inbounds, outbounds, clients, TLS, services и tokens. Миграции базы запускаются автоматически при первом старте. Заметки по обновлению и откату находятся в changelog: [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), [中文](CHANGELOG-ZH.md).
 

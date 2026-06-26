@@ -9,6 +9,19 @@
 
 - Нет незарелизенных изменений.
 
+
+## [1.0.0-beta9] - 2026-06-26 - полный набор protocol tags в релизных сборках
+
+Pre-release. Дополнение к v1.0.0-beta8. Ручная миграция базы не требуется.
+
+- Linux release builds теперь включают поддерживаемые protocol tags из capability manifest панели, включая Sudoku, TrustTunnel, MASQUE, OpenVPN, MTProxy, WireGuard/WARP endpoints и DHCP DNS transport.
+- Windows release builds и локальные Windows build scripts теперь используют тот же поддерживаемый набор protocol tags.
+- Добавлен regression test, который сверяет release workflows, локальные build scripts, `build.sh` и Dockerfile с `core/capabilities/protocols.json`.
+- `with_naive_outbound` остаётся условным для Linux targets, где готовится cronet/naive toolchain.
+- `shtorm-7/sing-box-extended` не изменялся; релиз исправляет только build и release packaging в panel repository.
+
+Полные release notes: [`.github/RELEASE_NOTES_v1.0.0-beta9.md`](.github/RELEASE_NOTES_v1.0.0-beta9.md).
+
 ## [1.0.0-beta8] - 2026-06-26 - control plane панели и покрытие опций
 
 Pre-release. Дополнение к v1.0.0-beta7. Ручная миграция базы не требуется.
