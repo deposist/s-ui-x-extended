@@ -1,0 +1,99 @@
+name: Release Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to smoke test"
+        required: true
+        default: "v1.0.0-beta9"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  linux-amd64-runtime:
+    name: linux-amd64 runtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Download release artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --repo "$REPO" --pattern 's-ui-linux-amd64.tar.gz*'
+          sha256sum -c s-ui-linux-amd64.tar.gz.sha256
+          tar -xzf s-ui-linux-amd64.tar.gz
+          test -x s-ui/sui
+          ./s-ui/sui -v | tee version.txt
+          grep -q "${TAG#v}" version.txt
+          go version -m ./s-ui/sui | tee buildinfo.txt
+          for tag in with_sudoku with_trusttunnel with_masque with_openvpn; do
+            grep -q "$tag" buildinfo.txt
+          done
+
+      - name: Run panel and check /api/capabilities
+        env:
+          SUI_DB_FOLDER: ${{ runner.temp }}/s-ui-smoke-db
+          SUI_LOG_LEVEL: warn
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$SUI_DB_FOLDER"
+          ./s-ui/sui setting -port 31995
+          ./s-ui/sui admin -username admin -password 'SmokeTest-ChangeMe-123456!'
+          ./s-ui/sui >server.log 2>&1 &
+          pid=$!
+          cleanup() {
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+            echo '--- server log tail ---'
+            tail -n 120 server.log || true
+          }
+          trap cleanup EXIT
+
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:31995/app/ >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+            if [ "$i" = 45 ]; then
+              echo 'server did not start' >&2
+              exit 1
+            fi
+          done
+
+          cookiejar="$RUNNER_TEMP/s-ui-smoke-cookies.txt"
+          curl -fsS -c "$cookiejar" \
+            -d 'user=admin' \
+            --data-urlencode 'pass=SmokeTest-ChangeMe-123456!' \
+            http://127.0.0.1:31995/app/api/login | tee login.json
+
+          curl -fsS -b "$cookiejar" http://127.0.0.1:31995/app/api/capabilities > capabilities.json
+
+          python3 - <<'PY'
+          import json
+          data = json.load(open('capabilities.json', encoding='utf-8'))
+          if 'obj' in data:
+              data = data['obj']
+          build_tags = data.get('buildTags') or {}
+          for tag in ['with_sudoku', 'with_trusttunnel', 'with_masque', 'with_openvpn']:
+              if build_tags.get(tag) is not True:
+                  raise SystemExit(f'{tag} is not true')
+          available = {}
+          for row in data.get('inbounds', []):
+              if row.get('type') in ('sudoku', 'trusttunnel'):
+                  available['inbound:' + row['type']] = row.get('available')
+          for row in data.get('outbounds', []):
+              if row.get('type') in ('sudoku', 'trusttunnel', 'masque', 'openvpn'):
+                  available['outbound:' + row['type']] = row.get('available')
+          for key in ['inbound:sudoku', 'inbound:trusttunnel', 'outbound:sudoku', 'outbound:trusttunnel', 'outbound:masque', 'outbound:openvpn']:
+              if available.get(key) is not True:
+                  raise SystemExit(f'{key} is not available')
+          print('linux artifact capabilities smoke ok')
+          PY
