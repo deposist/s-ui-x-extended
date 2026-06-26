@@ -2,10 +2,15 @@ package service
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
 	"time"
+
+	"github.com/gofrs/uuid/v5"
 
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
@@ -316,13 +321,25 @@ func (s *ClientService) updateLinksWithFixedInbounds(tx *gorm.DB, clients []*mod
 			// Zero inbounds means removing local links only.
 			if len(inboundIds) > 0 {
 				if err := tx.Model(model.Inbound{}).Preload("Tls").
-					Where("id in ? and type in ?", inboundIds, util.InboundTypeWithLink).
+					Where("id in ?", inboundIds).
 					Find(&inbounds).Error; err != nil {
 					return err
 				}
 			}
 			inboundCache[cacheKey] = inbounds
 		}
+
+		for _, inbound := range inbounds {
+			config, backfilled, err := backfillClientProtocol(client.Config, inbound.Type, client.Name)
+			if err != nil {
+				return err
+			}
+			if backfilled {
+				clients[index].Config = config
+				client.Config = config
+			}
+		}
+
 		// Keep links that aren't locally generated; regenerate the local ones for
 		// this client's own fixed inbounds.
 		links, ok, err := rebuildClientLinks(client.Id, client.Config, client.Links, inbounds, hostname, func(link map[string]string) bool {
@@ -338,6 +355,90 @@ func (s *ClientService) updateLinksWithFixedInbounds(tx *gorm.DB, clients []*mod
 		clients[index].Links = links
 	}
 	return nil
+}
+
+var mtProtoFrontHosts = []string{
+	"www.microsoft.com", "www.apple.com", "www.cloudflare.com", "www.amazon.com",
+	"aws.amazon.com", "dl.google.com", "www.icloud.com", "www.bing.com", "www.tesla.com",
+}
+
+func randomMTProtoSecret() (string, error) {
+	key := make([]byte, 16)
+	if _, err := rand.Read(key); err != nil {
+		return "", err
+	}
+	host := mtProtoFrontHosts[int(key[0])%len(mtProtoFrontHosts)]
+	return "ee" + hex.EncodeToString(key) + hex.EncodeToString([]byte(host)), nil
+}
+
+func randomSSPassword(n int) (string, error) {
+	buf := make([]byte, n)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(buf), nil
+}
+
+// backfillClientProtocol injects a missing per-protocol credentials block into a
+// client's JSON config. It is safe to call on existing or malformed configs; it
+// returns ok=true only if a new block was added.
+func backfillClientProtocol(config json.RawMessage, inboundType string, clientName string) (json.RawMessage, bool, error) {
+	field, ok := userJSONField[inboundType]
+	if !ok {
+		return config, false, nil // Protocol has no user config
+	}
+
+	var cfg map[string]map[string]any
+	if len(bytes.TrimSpace(config)) == 0 {
+		cfg = make(map[string]map[string]any)
+	} else if err := json.Unmarshal(config, &cfg); err != nil {
+		return config, false, nil // Malformed config, skip backfill
+	}
+
+	if _, exists := cfg[field]; exists {
+		return config, false, nil
+	}
+
+	mixedPassword := common.Random(10)
+	u, _ := uuid.NewV4()
+	uuidStr := u.String()
+
+	newObj := map[string]any{"password": mixedPassword}
+	switch field {
+	case "mixed", "socks", "http", "naive":
+		newObj["username"] = clientName
+	case "shadowsocks":
+		if inboundType == "shadowsocks16" {
+			ss16, _ := randomSSPassword(16)
+			newObj["password"] = ss16
+		} else {
+			ss32, _ := randomSSPassword(32)
+			newObj["password"] = ss32
+		}
+		newObj["name"] = clientName
+	case "shadowtls":
+		ss32, _ := randomSSPassword(32)
+		newObj["password"] = ss32
+		newObj["name"] = clientName
+	case "vmess":
+		newObj = map[string]any{"name": clientName, "uuid": uuidStr, "alterId": 0}
+	case "vless":
+		newObj = map[string]any{"name": clientName, "uuid": uuidStr, "flow": "xtls-rprx-vision"}
+	case "tuic":
+		newObj["name"] = clientName
+		newObj["uuid"] = uuidStr
+	case "hysteria":
+		newObj = map[string]any{"name": clientName, "auth_str": mixedPassword}
+	case "mtproxy":
+		mtSecret, _ := randomMTProtoSecret()
+		newObj = map[string]any{"name": clientName, "secret": mtSecret}
+	default:
+		newObj["name"] = clientName
+	}
+
+	cfg[field] = newObj
+	marshaled, err := json.MarshalIndent(cfg, "", "  ")
+	return marshaled, true, err
 }
 
 func (s *ClientService) UpdateClientsOnInboundAdd(tx *gorm.DB, initIds string, inboundId uint, hostname string) error {
@@ -363,6 +464,18 @@ func (s *ClientService) UpdateClientsOnInboundAdd(tx *gorm.DB, initIds string, i
 		if err != nil {
 			return err
 		}
+
+		// SR-019: guarantee per-protocol credentials exist before rebuilding links
+		// and generating core users, to prevent `users is empty` validation errors
+		// on newly supported protocols or legacy clients.
+		config, backfilled, err := backfillClientProtocol(client.Config, inbound.Type, client.Name)
+		if err != nil {
+			return err
+		}
+		if backfilled {
+			client.Config = config
+		}
+
 		// Regenerate the added inbound's links; keep links for other inbounds.
 		links, decoded, lerr := rebuildClientLinks(client.Id, client.Config, client.Links, []model.Inbound{inbound}, hostname, func(link map[string]string) bool {
 			return link["remark"] != inbound.Tag
@@ -451,6 +564,16 @@ func (s *ClientService) UpdateLinksByInboundChange(tx *gorm.DB, inbounds *[]mode
 			return err
 		}
 		for _, client := range clients {
+			// SR-019: guarantee per-protocol credentials exist before rebuilding links
+			// and generating core users, to prevent `users is empty` validation errors.
+			config, backfilled, err := backfillClientProtocol(client.Config, inbound.Type, client.Name)
+			if err != nil {
+				return err
+			}
+			if backfilled {
+				client.Config = config
+			}
+
 			// Regenerate this inbound's links; keep non-local links and local
 			// links for other inbounds (neither the new tag nor the old tag).
 			links, decoded, lerr := rebuildClientLinks(client.Id, client.Config, client.Links, []model.Inbound{inbound}, hostname, func(link map[string]string) bool {
