@@ -60,10 +60,16 @@ export interface WireGuard extends EndpointBasics, Dial {
   udp_timeout?: string
   workers?: number
   amnezia?: WireGuardAmnezia
+  disable_pauses?: boolean
+  preallocated_buffers_per_pool?: number
   ext: any
 }
 
-export interface Warp extends WireGuard {}
+export interface Warp extends WireGuard {
+  persistent_keepalive_interval?: number
+  profile?: string
+  reserved?: number[]
+}
 
 export interface Tailscale extends EndpointBasics, Dial {
   state_directory?: string

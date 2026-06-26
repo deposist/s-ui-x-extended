@@ -26,17 +26,33 @@ const (
 	// DefaultHysteresis is the default consecutive-healthy-sample count required
 	// before failing back to a higher-priority member.
 	DefaultHysteresis = 2
+
+	// All-down policy values. The default is conservative: hold the current
+	// member rather than silently routing through direct.
+	AllDownPolicyHoldCurrent = "hold_current"
+	AllDownPolicyBlock       = "block"
+	AllDownPolicyDirect      = "direct"
 )
+
+// validAllDownPolicy reports whether s is a recognised all-down policy.
+func validAllDownPolicy(s string) bool {
+	switch s {
+	case AllDownPolicyHoldCurrent, AllDownPolicyBlock, AllDownPolicyDirect, "":
+		return true
+	}
+	return false
+}
 
 // FailoverGroupConfig is the manager-facing view of a failover group: its
 // ordered members plus the resolved probe settings.
 type FailoverGroupConfig struct {
-	Tag         string
-	Members     []string
-	ProbeTarget string
-	Interval    time.Duration
-	Hysteresis  int
-	Enabled     bool
+	Tag           string
+	Members       []string
+	ProbeTarget   string
+	Interval      time.Duration
+	Hysteresis    int
+	Enabled       bool
+	AllDownPolicy string
 }
 
 // LoadFailoverGroups returns every Type:"failover" group with its resolved probe
@@ -53,12 +69,13 @@ func LoadFailoverGroups(db *gorm.DB) ([]FailoverGroupConfig, error) {
 			continue
 		}
 		groups = append(groups, FailoverGroupConfig{
-			Tag:         row.Tag,
-			Members:     opts.Outbounds,
-			ProbeTarget: opts.Failover.resolvedTarget(),
-			Interval:    opts.Failover.resolvedInterval(),
-			Hysteresis:  opts.Failover.resolvedHysteresis(),
-			Enabled:     opts.Failover.ProbeEnabled(),
+			Tag:           row.Tag,
+			Members:       opts.Outbounds,
+			ProbeTarget:   opts.Failover.resolvedTarget(),
+			Interval:      opts.Failover.resolvedInterval(),
+			Hysteresis:    opts.Failover.resolvedHysteresis(),
+			Enabled:       opts.Failover.ProbeEnabled(),
+			AllDownPolicy: opts.Failover.resolvedAllDownPolicy(),
 		})
 	}
 	return groups, nil

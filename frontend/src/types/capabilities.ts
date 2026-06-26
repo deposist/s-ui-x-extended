@@ -3,8 +3,45 @@
 // Derived from core/capabilities/protocols.json (shared with the Go backend).
 // Each list is used as a set membership test; order is not significant.
 
+export type OutboundGroupCapability = {
+  type: string
+  coreType?: string
+  assembledAs?: string
+  panelManaged?: boolean
+  sessionRecovery: boolean
+  notes?: string
+}
+
 export const inboundWithUsers: string[] = ['socks', 'http', 'mixed', 'shadowsocks', 'vmess', 'vless', 'trojan', 'naive', 'hysteria', 'hysteria2', 'tuic', 'anytls', 'shadowtls', 'mieru', 'trusttunnel', 'ssh', 'mtproxy']
 export const HasInData: string[] = ['socks', 'http', 'mixed', 'shadowsocks', 'vmess', 'vless', 'trojan', 'naive', 'hysteria', 'hysteria2', 'tuic', 'anytls', 'shadowtls', 'mieru', 'sudoku', 'trusttunnel', 'ssh']
 export const HasTls: string[] = ['http', 'vmess', 'vless', 'trojan', 'naive', 'hysteria', 'hysteria2', 'tuic', 'anytls', 'trusttunnel']
 export const MuxAvailable: string[] = ['shadowsocks', 'vmess', 'vless', 'trojan']
 export const OnlyTLS: string[] = ['naive', 'hysteria', 'hysteria2', 'tuic', 'anytls']
+export const outboundGroupCapabilities: OutboundGroupCapability[] = [
+  {
+    "type": "selector",
+    "coreType": "selector",
+    "sessionRecovery": false,
+    "notes": "Manual operator-selected group backed directly by the core selector outbound."
+  },
+  {
+    "type": "urltest",
+    "coreType": "urltest",
+    "sessionRecovery": false,
+    "notes": "Latency-based group backed directly by the core urltest outbound."
+  },
+  {
+    "type": "fallback",
+    "coreType": "fallback",
+    "sessionRecovery": false,
+    "notes": "Dial-time fallback group backed directly by the core fallback outbound."
+  },
+  {
+    "type": "failover",
+    "assembledAs": "selector",
+    "panelManaged": true,
+    "sessionRecovery": false,
+    "notes": "Panel-managed priority failover assembled as a core selector. Switches new connections only; existing sessions may break."
+  }
+]
+export const providerTypes: string[] = ['inline', 'local', 'remote']

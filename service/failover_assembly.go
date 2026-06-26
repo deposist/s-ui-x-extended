@@ -12,10 +12,11 @@ import (
 // "failover" key of a Type:"failover" outbound's Options blob. It drives only
 // the failover manager and never reaches the core (stripped at assembly).
 type failoverProbe struct {
-	Enabled     *bool  `json:"enabled,omitempty"`
-	ProbeTarget string `json:"probe_target,omitempty"`
-	Interval    string `json:"interval,omitempty"`
-	Hysteresis  int    `json:"hysteresis,omitempty"`
+	Enabled       *bool  `json:"enabled,omitempty"`
+	ProbeTarget   string `json:"probe_target,omitempty"`
+	Interval      string `json:"interval,omitempty"`
+	Hysteresis    int    `json:"hysteresis,omitempty"`
+	AllDownPolicy string `json:"all_down_policy,omitempty"`
 }
 
 // failoverOptions is the Options blob of a Type:"failover" outbound. Outbounds
@@ -69,11 +70,22 @@ func (p failoverProbe) resolvedTarget() string {
 	return p.ProbeTarget
 }
 
+// resolvedAllDownPolicy returns the configured all-down policy, defaulting to
+// hold_current when unset. This is the conservative default: the panel holds the
+// senior member instead of silently routing through direct.
+func (p failoverProbe) resolvedAllDownPolicy() string {
+	if p.AllDownPolicy == "" {
+		return AllDownPolicyHoldCurrent
+	}
+	return p.AllDownPolicy
+}
+
 // assembleFailoverForCore turns a persisted Type:"failover" row into the clean
 // sing-box "selector" JSON the core accepts: the failover metadata is stripped
 // (sing-box rejects unknown option keys via badjson DisallowUnknownFields), the
-// direct fallback member is appended when available, and default is pinned to
-// the primary so a cold start before the manager's first tick is deterministic.
+// direct fallback member is appended only when the all-down policy is "direct",
+// and default is pinned to the primary so a cold start before the manager's
+// first tick is deterministic.
 func assembleFailoverForCore(o model.Outbound, directTag string) (json.RawMessage, error) {
 	opts, err := parseFailoverOptions(o.Options)
 	if err != nil {
@@ -83,7 +95,7 @@ func assembleFailoverForCore(o model.Outbound, directTag string) (json.RawMessag
 		return nil, common.NewErrorf("failover group %q has no members", o.Tag)
 	}
 	members := append([]string(nil), opts.Outbounds...)
-	if directTag != "" && !stringSliceContains(members, directTag) {
+	if opts.Failover.resolvedAllDownPolicy() == AllDownPolicyDirect && directTag != "" && !stringSliceContains(members, directTag) {
 		members = append(members, directTag)
 	}
 	selector := map[string]any{

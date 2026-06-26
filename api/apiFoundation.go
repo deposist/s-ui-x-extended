@@ -455,6 +455,7 @@ func (a *ApiService) CheckOutbounds(c *gin.Context) {
 		}(i, tag)
 	}
 	wg.Wait()
+	service.RefreshProviderHealth(time.Now())
 	jsonObj(c, gin.H{
 		"target":  target,
 		"results": results,

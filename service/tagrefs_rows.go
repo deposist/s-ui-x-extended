@@ -83,7 +83,7 @@ func scanOutboundRowsForTag(rows []model.Outbound, tag string, excludeId uint) [
 				Locator: fmt.Sprintf("outbound %q (detour)", row.Tag),
 			})
 		}
-		if row.Type != "selector" && row.Type != "urltest" && row.Type != FailoverType {
+		if !isGroupType(row.Type) {
 			continue
 		}
 		if members, _ := opts["outbounds"].([]any); containsTag(members, tag) {
@@ -96,6 +96,38 @@ func scanOutboundRowsForTag(rows []model.Outbound, tag string, excludeId uint) [
 			refs = append(refs, TagReference{
 				Kind:    "group default",
 				Locator: fmt.Sprintf("%s %q (default)", row.Type, row.Tag),
+			})
+		}
+	}
+	return refs
+}
+
+// isGroupType reports whether the outbound type is a group that references
+// member outbounds by tag.
+func isGroupType(t string) bool {
+	return t == "selector" || t == "urltest" || t == "fallback" || t == "bond" || t == FailoverType || t == CoreFailoverType
+}
+
+// scanOutboundRowsForProviderTag finds outbound groups that reference a
+// provider tag through their "providers" list or use_all_providers flag.
+// use_all_providers groups reference every provider implicitly.
+func scanOutboundRowsForProviderTag(rows []model.Outbound, providerTag string, excludeId uint) []TagReference {
+	var refs []TagReference
+	for _, row := range rows {
+		if row.Id == excludeId {
+			continue
+		}
+		if !isGroupType(row.Type) {
+			continue
+		}
+		opts := optionsMapOf(row.Options)
+		if opts == nil {
+			continue
+		}
+		if providers, _ := opts["providers"].([]any); containsTag(providers, providerTag) {
+			refs = append(refs, TagReference{
+				Kind:    "group provider",
+				Locator: fmt.Sprintf("%s %q (providers list)", row.Type, row.Tag),
 			})
 		}
 	}

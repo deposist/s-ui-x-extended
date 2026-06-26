@@ -173,3 +173,40 @@ func expectNoString(t *testing.T, ch <-chan string) {
 	case <-time.After(25 * time.Millisecond):
 	}
 }
+
+// TestHubPublishesHealthEvents verifies that health-related core_state events
+// with failover all-down warnings are delivered to admin and observability
+// scopes, while read scope also receives them (core_state is not security-gated).
+func TestHubPublishesHealthEvents(t *testing.T) {
+	h := newHub()
+	adminCh := make(chan Event, 2)
+	obsCh := make(chan Event, 2)
+	readCh := make(chan Event, 2)
+	defer h.Register(&ClientHandle{User: "admin", Scope: ScopeAdmin, SendCh: adminCh})()
+	defer h.Register(&ClientHandle{User: "obs", Scope: ScopeObservability, SendCh: obsCh})()
+	defer h.Register(&ClientHandle{User: "reader", Scope: ScopeRead, SendCh: readCh})()
+
+	h.Publish(TopicCoreState, map[string]any{
+		"warning":       "failover_all_down",
+		"group":         "auto-us",
+		"allDownPolicy": "hold_current",
+		"members":       []string{"us-1", "us-2"},
+	})
+
+	for _, ch := range []chan Event{adminCh, obsCh, readCh} {
+		event := <-ch
+		if event.Type != TopicCoreState {
+			t.Fatalf("expected TopicCoreState, got %s", event.Type)
+		}
+		payload, ok := event.Payload.(map[string]any)
+		if !ok {
+			t.Fatal("payload is not a map")
+		}
+		if payload["warning"] != "failover_all_down" {
+			t.Fatalf("warning = %v, want failover_all_down", payload["warning"])
+		}
+		if payload["allDownPolicy"] != "hold_current" {
+			t.Fatalf("allDownPolicy = %v, want hold_current", payload["allDownPolicy"])
+		}
+	}
+}

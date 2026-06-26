@@ -96,13 +96,16 @@ func (j *FailoverJob) runGroup(coreInst *core.Core, group service.FailoverGroupC
 	j.mu.Lock()
 	for _, member := range group.Members {
 		h := st.health[member]
-		if results[member] {
+		probe := results[member]
+		if probe.Status == "healthy" || probe.Status == "unknown" {
 			h.ConsecutiveUp++
 			h.ConsecutiveDown = 0
 		} else {
 			h.ConsecutiveDown++
 			h.ConsecutiveUp = 0
 		}
+		h.LastDelayMs = probe.DelayMs
+		h.LastError = probe.Error
 		st.health[member] = h
 	}
 	st.lastProbe = j.now()
@@ -117,7 +120,7 @@ func (j *FailoverJob) runGroup(coreInst *core.Core, group service.FailoverGroupC
 	current, _ := j.now0(coreInst, group.Tag)
 
 	fallback := ""
-	if directTag != "" && !memberListContains(group.Members, directTag) {
+	if group.AllDownPolicy == service.AllDownPolicyDirect && directTag != "" && !memberListContains(group.Members, directTag) {
 		fallback = directTag
 	}
 
@@ -127,6 +130,7 @@ func (j *FailoverJob) runGroup(coreInst *core.Core, group service.FailoverGroupC
 		Current:        current,
 		Hysteresis:     group.Hysteresis,
 		DirectFallback: fallback,
+		AllDownPolicy:  group.AllDownPolicy,
 	})
 
 	active := current
@@ -142,6 +146,7 @@ func (j *FailoverJob) runGroup(coreInst *core.Core, group service.FailoverGroupC
 	// Publish the live status every due cycle (not only on a switch) so the UI
 	// reflects per-member health without a dedicated poll.
 	j.publishLiveStatus(group, snapshot, active, decision.AllDown)
+	service.RefreshProviderHealth(time.Now())
 
 	// Edge-triggered all-down alert: fire once on the down->all-down transition.
 	j.mu.Lock()

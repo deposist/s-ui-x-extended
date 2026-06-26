@@ -4,6 +4,8 @@ package service
 type MemberHealth struct {
 	ConsecutiveUp   int
 	ConsecutiveDown int
+	LastDelayMs     uint16
+	LastError       string
 }
 
 // FailoverDecisionInput is the pure input to the failover selection decision.
@@ -12,7 +14,8 @@ type FailoverDecisionInput struct {
 	Health         map[string]MemberHealth // keyed by member tag (priority members only)
 	Current        string                  // current active member (= GroupNow()); "" if unknown
 	Hysteresis     int                     // >= 1; consecutive-up samples required for failback
-	DirectFallback string                  // direct outbound tag used when all members are down; "" if none
+	DirectFallback string                  // direct outbound tag used when all members are down and policy is "direct"; "" if none
+	AllDownPolicy  string                  // hold_current | block | direct
 }
 
 // FailoverDecision is the pure output: which member should be active and why.
@@ -20,7 +23,7 @@ type FailoverDecision struct {
 	Target       string
 	ShouldSwitch bool
 	AllDown      bool
-	Reason       string // priority | failover | failback | sticky | all_down_direct | all_down_hold
+	Reason       string // priority | failover | failback | sticky | all_down_direct | all_down_hold | all_down_block
 }
 
 // SelectFailoverMember decides the active member for a failover group from a
@@ -65,12 +68,23 @@ func SelectFailoverMember(in FailoverDecisionInput) FailoverDecision {
 		}
 	}
 
-	// All members down → direct fallback if available, else hold the senior.
+	// All members down → follow the configured all-down policy.
 	if bestUp == "" {
-		if in.DirectFallback != "" {
-			return decide(in.DirectFallback, "all_down_direct", true)
+		policy := in.AllDownPolicy
+		if policy == "" {
+			policy = AllDownPolicyHoldCurrent
 		}
-		return decide(in.Members[0], "all_down_hold", true)
+		switch policy {
+		case AllDownPolicyDirect:
+			if in.DirectFallback != "" {
+				return decide(in.DirectFallback, "all_down_direct", true)
+			}
+			return decide(in.Members[0], "all_down_hold", true)
+		case AllDownPolicyBlock:
+			return decide(in.Members[0], "all_down_block", true)
+		default: // hold_current
+			return decide(in.Members[0], "all_down_hold", true)
+		}
 	}
 
 	// Cold start: nothing selected yet → highest-priority up member.

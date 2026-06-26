@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { inboundWithUsers, HasInData, HasTls, MuxAvailable, OnlyTLS } from './capabilities'
+import {
+  inboundWithUsers,
+  HasInData,
+  HasTls,
+  MuxAvailable,
+  OnlyTLS,
+  outboundGroupCapabilities,
+  providerTypes,
+} from './capabilities'
 
 // Frozen copies of the hand-maintained lists that lived inline in
 // layouts/modals/Inbound.vue BEFORE the manifest was introduced. Proves the
@@ -35,6 +43,20 @@ type InboundRow = {
   onlyTls?: boolean
 }
 
+type GroupRow = {
+  type: string
+  coreType?: string
+  assembledAs?: string
+  panelManaged?: boolean
+  sessionRecovery: boolean
+  notes?: string
+}
+
+type ProviderRow = {
+  type: string
+  buildTag?: string
+}
+
 describe('capabilities generated from protocols.json', () => {
   it('reproduces the legacy inline Inbound.vue lists (set-wise)', () => {
     expect(asSet(inboundWithUsers)).toEqual(asSet(legacyInboundWithUsers))
@@ -56,5 +78,32 @@ describe('capabilities generated from protocols.json', () => {
     expect(asSet(HasTls)).toEqual(asSet(pick((i) => i.hasTlsTemplate)))
     expect(asSet(MuxAvailable)).toEqual(asSet(pick((i) => i.muxAvailable)))
     expect(asSet(OnlyTLS)).toEqual(asSet(pick((i) => i.onlyTls)))
+  })
+
+  it('keeps provider types in sync with the manifest', () => {
+    const entries = Object.values(rawManifest)
+    expect(entries.length, 'manifest must be readable from the test').toBe(1)
+    const providers = (JSON.parse(entries[0]).providers as ProviderRow[]) ?? []
+    expect(asSet(providerTypes)).toEqual(asSet(providers.map((p) => p.type)))
+    expect(asSet(providerTypes)).toEqual(['inline', 'local', 'remote'])
+  })
+
+  it('documents panel-managed failover boundary in group metadata', () => {
+    const byType = new Map(outboundGroupCapabilities.map((g) => [g.type, g]))
+
+    for (const groupType of ['selector', 'urltest', 'fallback', 'failover']) {
+      expect(byType.has(groupType), `missing group capability ${groupType}`).toBe(true)
+    }
+
+    const failover = byType.get('failover')!
+    expect(failover.panelManaged, 'panel failover must be marked panelManaged').toBe(true)
+    expect(failover.assembledAs, 'panel failover must assemble as selector').toBe('selector')
+    expect(failover.sessionRecovery, 'panel failover must not claim generic session recovery').toBe(false)
+
+    for (const groupType of ['selector', 'urltest', 'fallback']) {
+      const group = byType.get(groupType)!
+      expect(group.panelManaged, `core-backed group ${groupType} must not be panelManaged`).toBeFalsy()
+      expect(group.sessionRecovery, `core-backed group ${groupType} must not claim session recovery`).toBe(false)
+    }
   })
 })

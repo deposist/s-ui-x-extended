@@ -41,11 +41,13 @@
         <v-switch v-model="data.authenticated_length" color="primary" :label="$t('types.vmess.authLen')" hide-details></v-switch>
       </v-col>
     </v-row>
+    <InboundAdvanced :data="data" />
   </v-card>
 </template>
 
 <script lang="ts">
 import Network from '@/components/Network.vue'
+import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
   props: ['data'],
@@ -67,6 +69,6 @@ export default {
       set(newValue:string) { this.$props.data.packet_encoding = newValue != "none" ? newValue : undefined }
     },
   },
-  components: { Network }
+  components: {Network, InboundAdvanced}
 }
 </script>

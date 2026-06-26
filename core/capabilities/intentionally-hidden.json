@@ -1,0 +1,55 @@
+{
+  "hidden": {
+    "SocksInboundOptions": {
+      "users": "managed by panel client/user system, not directly in inbound type"
+    },
+    "HTTPMixedInboundOptions": {
+      "users": "managed by panel client/user system, not directly in inbound type"
+    },
+    "ShadowsocksInboundOptions": {
+      "users": "managed by panel client/user system, not directly in inbound type"
+    },
+    "VMessInboundOptions": {
+      "users": "managed by panel client/user system, not directly in inbound type"
+    },
+    "VLESSInboundOptions": {
+      "users": "managed by panel client/user system, not directly in inbound type"
+    },
+    "TrojanInboundOptions": {
+      "users": "managed by panel client/user system, not directly in inbound type"
+    },
+    "NaiveInboundOptions": {
+      "users": "managed by panel client/user system, not directly in inbound type"
+    },
+    "HysteriaInboundOptions": {
+      "users": "managed by panel client/user system, not directly in inbound type"
+    },
+    "Hysteria2InboundOptions": {
+      "users": "managed by panel client/user system, not directly in inbound type"
+    },
+    "TUICInboundOptions": {
+      "users": "managed by panel client/user system, not directly in inbound type"
+    },
+    "AnyTLSInboundOptions": {
+      "users": "managed by panel client/user system, not directly in inbound type"
+    },
+    "ShadowTLSInboundOptions": {
+      "users": "managed by panel client/user system, not directly in inbound type",
+      "handshake": "server-side handshake server definition, not for client delivery"
+    },
+    "MieruInboundOptions": {
+      "users": "managed by panel client/user system, not directly in inbound type"
+    },
+    "TrustTunnelInboundOptions": {
+      "users": "managed by panel client/user system, not directly in inbound type"
+    },
+    "SSHInboundOptions": {
+      "users": "managed by panel client/user system, not directly in inbound type",
+      "host_key": "server-only private key, must not appear in client config",
+      "host_key_path": "server-only private key path, must not appear in client config"
+    },
+    "MTProxyInboundOptions": {
+      "users": "managed by panel client/user system, not directly in inbound type"
+    }
+  }
+}

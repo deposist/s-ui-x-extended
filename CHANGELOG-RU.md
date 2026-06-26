@@ -7,11 +7,22 @@
 
 ## [Unreleased]
 
-- Перенесены изменения upstream s-ui-x с `v1.5.10-beta5` по `v1.5.10-beta7` с сохранением sing-box-extended core, редакторов extended-протоколов и release-линейки `s-ui-x-extended`.
-- Добавлен API для сводки трафика Dashboard, `GET /api/stats/traffic`, и индекс `stats(resource, date_time)` для запроса по всем inbound за выбранный период.
-- Обновлены Nexus Dashboard, KPI истории трафика, карточки Top clients и Recent events, Settings layout, палитры Nexus и вывод CPU/RAM в sidebar status.
-- `config/version` оставлен на `1.0.0-beta7`; до upstream frontend `1.5.10-beta7` обновлены только package metadata фронтенда.
-- Формы Client, Add Bulk и Edit Bulk переведены на общий `FormShell`: в Nexus они открываются как drawers, а select-menu закрываются по click-away. Classic mode продолжает использовать dialog-ветку того же shell.
+- Нет незарелизенных изменений.
+
+## [1.0.0-beta8] - 2026-06-26 - control plane панели и покрытие опций
+
+Pre-release. Дополнение к v1.0.0-beta7. Ручная миграция базы не требуется.
+
+- Добавлены panel-managed outbound-группы с provider-backed участниками, preview группы, проверкой ссылок на tags и capability metadata.
+- Добавлены runtime state для failover, outbound health, provider health, ограниченные realtime payloads и виджет operational health на Nexus Overview.
+- Добавлена явная политика all-down для failover. По умолчанию панель удерживает текущего участника; direct fallback включается только администратором.
+- Добавлена поддержка outbound `block`, native core failover outbound, inbound `bond` и native core failover inbound.
+- Добавлены shared inbound advanced options, outbound `domain_strategy`, advanced-поля endpoint'ов и protocol-specific option coverage в TypeScript и UI там, где поле безопасно редактировать.
+- Добавлены provider entries в `/api/capabilities` и generated frontend capability types.
+- Добавлена generated option coverage matrix и drift test по sing-box-extended option structs. В текущей матрице нет необъяснённых `missing` entries.
+- `shtorm-7/sing-box-extended` не изменялся; новая логика реализована в panel layer.
+
+Полные release notes: [`.github/RELEASE_NOTES_v1.0.0-beta8.md`](.github/RELEASE_NOTES_v1.0.0-beta8.md).
 
 ## [1.0.0-beta7] - 2026-06-23 - сессии и extended-протоколы в обоих интерфейсах
 

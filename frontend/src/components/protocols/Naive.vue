@@ -85,6 +85,7 @@
       </v-row>
       <Headers :data="extra_headers" />
     </template>
+    <InboundAdvanced :data="data" />
   </v-card>
 </template>
 
@@ -92,6 +93,7 @@
 import Network from '@/components/Network.vue'
 import Headers from '@/components/Headers.vue'
 import UoT from '@/components/UoT.vue'
+import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
   props: ['data', 'direction'],
@@ -137,6 +139,6 @@ export default {
       })
     },
   },
-  components: { Network, Headers, UoT }
+  components: {Network, Headers, UoT, InboundAdvanced}
 }
 </script>

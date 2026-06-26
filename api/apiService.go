@@ -1079,5 +1079,18 @@ func (a *ApiService) GetCheckOutbound(c *gin.Context) {
 		}
 	}
 	result := a.ConfigService.CheckOutbound(tag, link)
+	service.RefreshProviderHealth(time.Now())
 	jsonObj(c, result, nil)
+}
+
+// GetGroupPreview resolves the static and provider-backed members of a group
+// outbound for the UI's group editor preview. It does not modify anything.
+func (a *ApiService) GetGroupPreview(c *gin.Context) {
+	tag := c.Query("tag")
+	if tag == "" {
+		jsonMsg(c, "groupPreview", common.NewError("missing query parameter: tag"))
+		return
+	}
+	preview, err := a.ConfigService.GroupPreview(tag)
+	jsonObj(c, preview, err)
 }

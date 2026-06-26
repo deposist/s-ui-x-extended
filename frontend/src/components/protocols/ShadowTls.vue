@@ -101,12 +101,14 @@
       </v-row>
       <Dial :dial="value" />
     </v-card>
+    <InboundAdvanced :data="data" />
   </v-card>
 </template>
 
 <script lang="ts">
 import { ShadowTLS } from '@/types/inbounds'
 import Dial from '../Dial.vue'
+import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
   props: ['direction', 'data'],
@@ -180,6 +182,6 @@ export default {
       set(newValue: any) { this.Inbound.handshake.server_port = newValue.length == 0 || newValue == 0 ? 443 : parseInt(newValue) }
     },
   },
-  components: { Dial }
+  components: {Dial, InboundAdvanced}
 }
 </script>

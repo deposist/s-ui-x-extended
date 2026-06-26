@@ -167,6 +167,33 @@ func (s *InboundService) Save(tx *gorm.DB, act string, data json.RawMessage, ini
 	}
 }
 
+// validateBondOrFailoverInbound validates that the inbounds list for a bond or
+// native core-failover inbound references existing inbound tags.
+func validateBondOrFailoverInbound(tx *gorm.DB, inbound model.Inbound) error {
+	opts := optionsMapOf(inbound.Options)
+	members, _ := opts["inbounds"].([]any)
+	if len(members) == 0 {
+		return common.NewErrorf("%s inbound needs at least one inbound", inbound.Type)
+	}
+	for _, item := range members {
+		tag, _ := item.(string)
+		if tag == "" {
+			return common.NewErrorf("%s inbound member must be a string tag", inbound.Type)
+		}
+		if tag == inbound.Tag {
+			return common.NewErrorf("a %s inbound cannot reference itself", inbound.Type)
+		}
+		var member model.Inbound
+		if err := tx.Model(model.Inbound{}).Where("tag = ?", tag).First(&member).Error; err != nil {
+			return common.NewErrorf("%s inbound member %q does not exist", inbound.Type, tag)
+		}
+		if member.Type == "bond" || member.Type == CoreFailoverType {
+			return common.NewErrorf("%s inbound member %q must be a plain inbound, not group type %q", inbound.Type, tag, member.Type)
+		}
+	}
+	return nil
+}
+
 func (s *InboundService) saveInboundUpsert(tx *gorm.DB, act string, data json.RawMessage, initUserIds string, hostname string) (*entityCoreChange, error) {
 	var inbound model.Inbound
 	if err := inbound.UnmarshalJSON(data); err != nil {
@@ -195,6 +222,11 @@ func (s *InboundService) saveInboundUpsert(tx *gorm.DB, act string, data json.Ra
 
 	if err := util.FillOutJson(&inbound, hostname); err != nil {
 		return nil, err
+	}
+	if inbound.Type == "bond" || inbound.Type == "core-failover" {
+		if err := validateBondOrFailoverInbound(tx, inbound); err != nil {
+			return nil, err
+		}
 	}
 	if err := tx.Save(&inbound).Error; err != nil {
 		return nil, err
@@ -275,12 +307,15 @@ func (s *InboundService) GetAllConfig(db *gorm.DB) ([]json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
+	nestedTags, err := nestedInboundMemberTags(inbounds)
+	if err != nil {
+		return nil, err
+	}
 	for _, inbound := range inbounds {
-		inboundJson, err := inbound.MarshalJSON()
-		if err != nil {
-			return nil, err
+		if nestedTags[inbound.Tag] {
+			continue
 		}
-		inboundJson, err = s.addUsers(db, inboundJson, inbound.Id, inbound.Type)
+		inboundJson, err := inboundCoreJSON(s, db, *inbound)
 		if err != nil {
 			return nil, err
 		}

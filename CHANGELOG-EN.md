@@ -7,11 +7,22 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 ## [Unreleased]
 
-- Ported upstream s-ui-x changes from `v1.5.10-beta5` through `v1.5.10-beta7` while keeping the sing-box-extended core, extended protocol editors, and `s-ui-x-extended` release line.
-- Added the dashboard traffic summary API, `GET /api/stats/traffic`, plus the `stats(resource, date_time)` index used by the all-inbound time-range query.
-- Updated the Nexus dashboard, traffic history KPI, Top clients card, Recent events card, Settings layout, Nexus palettes, and sidebar CPU/RAM status display.
-- Kept `config/version` on `1.0.0-beta7`; only the frontend package metadata moved to upstream frontend `1.5.10-beta7`.
-- Moved Client, Add Bulk, and Edit Bulk forms onto the shared `FormShell`, so Nexus opens them as drawers and select menus close on click-away. Classic mode still uses the dialog branch of the same shell.
+- No unreleased changes.
+
+## [1.0.0-beta8] - 2026-06-26 - panel control plane and option coverage
+
+Pre-release. Follow-up to v1.0.0-beta7. No manual database migration is required.
+
+- Added panel-managed outbound groups with provider-backed membership, group preview, tag reference validation, and capability metadata.
+- Added failover runtime state, outbound health, provider health, bounded realtime payloads, and a Nexus overview widget for operational health.
+- Added explicit all-down failover policy handling. The default keeps the current member; direct fallback must be selected by an admin.
+- Added panel support for outbound `block`, native core failover outbound, inbound `bond`, and native core failover inbound.
+- Added shared inbound advanced options, outbound `domain_strategy`, endpoint advanced fields, and protocol-specific option coverage in panel TypeScript and UI where safe to edit.
+- Added provider entries to `/api/capabilities` and generated frontend capability types.
+- Added a generated option coverage matrix and drift test against sing-box-extended option structs. The matrix now has zero unexplained `missing` entries.
+- Kept `shtorm-7/sing-box-extended` unchanged; all new behavior is implemented in the panel layer.
+
+Full release notes: [`.github/RELEASE_NOTES_v1.0.0-beta8.md`](.github/RELEASE_NOTES_v1.0.0-beta8.md).
 
 ## [1.0.0-beta7] - 2026-06-23 - session handling and extended UI coverage
 

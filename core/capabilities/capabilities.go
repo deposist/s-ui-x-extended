@@ -49,11 +49,27 @@ type SimpleCapability struct {
 	Notes    string `json:"notes"`
 }
 
+// GroupCapability describes panel/core outbound group modes. Some group modes
+// are direct core types (selector/urltest/fallback), while panel-managed modes
+// can assemble into a different core type. In particular, panel failover is a
+// priority policy over a core selector and must not be presented as generic
+// session recovery.
+type GroupCapability struct {
+	Type            string `json:"type"`
+	CoreType        string `json:"coreType,omitempty"`
+	AssembledAs     string `json:"assembledAs,omitempty"`
+	PanelManaged    bool   `json:"panelManaged,omitempty"`
+	SessionRecovery bool   `json:"sessionRecovery"`
+	Notes           string `json:"notes"`
+}
+
 type manifest struct {
 	Version   int                 `json:"version"`
 	Inbounds  []InboundCapability `json:"inbounds"`
 	Outbounds []SimpleCapability  `json:"outbounds"`
+	Groups    []GroupCapability   `json:"groups"`
 	Endpoints []SimpleCapability  `json:"endpoints"`
+	Providers []SimpleCapability  `json:"providers"`
 	Services  []SimpleCapability  `json:"services"`
 }
 
@@ -114,6 +130,34 @@ func validate() error {
 			return fmt.Errorf("inbound %q is clientDelivery=none but declares outJsonBuilder %q", in.Type, in.OutJSONBuilder)
 		}
 	}
+
+	seenGroups := map[string]struct{}{}
+	for _, group := range loaded.Groups {
+		if group.Type == "" {
+			return fmt.Errorf("group entry with empty type")
+		}
+		if _, dup := seenGroups[group.Type]; dup {
+			return fmt.Errorf("duplicate group type %q", group.Type)
+		}
+		seenGroups[group.Type] = struct{}{}
+		if group.CoreType == "" && group.AssembledAs == "" {
+			return fmt.Errorf("group %q must declare coreType or assembledAs", group.Type)
+		}
+		if group.PanelManaged && group.AssembledAs == "" {
+			return fmt.Errorf("panel-managed group %q must declare assembledAs", group.Type)
+		}
+		if group.Type == "failover" {
+			if !group.PanelManaged {
+				return fmt.Errorf("panel failover group must be panelManaged")
+			}
+			if group.AssembledAs != "selector" {
+				return fmt.Errorf("panel failover group must assemble as selector")
+			}
+			if group.SessionRecovery {
+				return fmt.Errorf("panel failover group must not claim session recovery")
+			}
+		}
+	}
 	return nil
 }
 
@@ -124,10 +168,18 @@ func Inbounds() []InboundCapability {
 	return out
 }
 
-// Outbounds, Endpoints and Services expose the light rows for the matrix generator.
+// Outbounds, Endpoints, Providers and Services expose the light rows for the matrix generator.
 func Outbounds() []SimpleCapability { return cloneSimple(loaded.Outbounds) }
 func Endpoints() []SimpleCapability { return cloneSimple(loaded.Endpoints) }
+func Providers() []SimpleCapability { return cloneSimple(loaded.Providers) }
 func Services() []SimpleCapability  { return cloneSimple(loaded.Services) }
+
+// Groups returns panel/core outbound group capability rows in manifest order.
+func Groups() []GroupCapability {
+	out := make([]GroupCapability, len(loaded.Groups))
+	copy(out, loaded.Groups)
+	return out
+}
 
 func cloneSimple(in []SimpleCapability) []SimpleCapability {
 	out := make([]SimpleCapability, len(in))

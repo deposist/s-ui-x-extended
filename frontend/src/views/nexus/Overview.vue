@@ -25,6 +25,10 @@
         :unavailable="statusUnavailable"
         :ws-state="ws.state"
       />
+      <operational-health
+        :failover="data.onlines?.failover"
+        :providers="data.onlines?.providerHealth"
+      />
     </div>
 
     <protocol-summaries
@@ -38,6 +42,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import KpiRow from '@/components/nexus/overview/KpiRow.vue'
+import OperationalHealth from '@/components/nexus/overview/OperationalHealth.vue'
 import ProtocolSummaries from '@/components/nexus/overview/ProtocolSummaries.vue'
 import RecentEvents from '@/components/nexus/overview/RecentEvents.vue'
 import SystemStatus from '@/components/nexus/overview/SystemStatus.vue'

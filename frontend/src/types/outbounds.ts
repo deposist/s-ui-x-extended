@@ -34,6 +34,8 @@ export const OutTypes = {
   ConnectionLimiter: 'connection-limiter',
   TrafficLimiter: 'traffic-limiter',
   RateLimiter: 'rate-limiter',
+  Block: 'block',
+  CoreFailover: 'core-failover',
 }
 
 type OutType = typeof OutTypes[keyof typeof OutTypes]
@@ -53,7 +55,11 @@ export interface WgPeer {
   reserved?: number[]
 }
 
-export interface Direct extends OutboundBasics, Dial {}
+export interface Direct extends OutboundBasics, Dial {
+  override_address?: string
+  override_port?: number
+  proxy_protocol?: boolean
+}
 
 export interface SOCKS extends OutboundBasics, Dial {
   server: string
@@ -146,6 +152,7 @@ export interface Hysteria extends OutboundBasics, Dial {
   down_mbps: number
   obfs?: string
   auth_str?: string
+  auth?: string
   recv_window_conn?: number
   recv_window?: number
   disable_mtu_discovery?: boolean
@@ -362,6 +369,11 @@ export interface Parser extends OutboundBasics, Dial {
 
 export interface Selector extends OutboundBasics {
   outbounds: string[]
+  default?: string
+  providers?: string[]
+  use_all_providers?: boolean
+  include?: string
+  exclude?: string
   url?: string
   interval?: string
   tolerance?: number
@@ -371,6 +383,14 @@ export interface Selector extends OutboundBasics {
 
 export interface URLTest extends OutboundBasics {
   outbounds: string[]
+  idle_timeout?: string
+  interval?: string
+  tolerance?: number
+  url?: string
+  providers?: string[]
+  use_all_providers?: boolean
+  include?: string
+  exclude?: string
   default?: string
   interrupt_exist_connections?: boolean
 }
@@ -394,6 +414,7 @@ export interface Failover extends OutboundBasics {
     probe_target?: string
     interval?: string
     hysteresis?: number
+    all_down_policy?: string
   }
 }
 
@@ -401,17 +422,28 @@ export interface FailoverMemberStatus {
   tag: string
   healthy: boolean
   priority: number
+  delayMs?: number
+  error?: string
 }
 
 export interface FailoverStatusEntry {
   tag: string
   active: string
   allDown: boolean
+  allDownPolicy?: string
   members?: FailoverMemberStatus[]
 }
 
 export interface Fallback extends OutboundBasics {
   outbounds: string[]
+}
+
+export interface Block extends OutboundBasics {}
+
+export interface CoreFailover extends OutboundBasics {
+  outbounds: string[]
+  strategy?: string
+  delay?: string
 }
 
 export interface LimiterRoute {
@@ -528,6 +560,8 @@ const defaultValues: Record<OutType, Outbound> = {
   'connection-limiter': { type: OutTypes.ConnectionLimiter, strategy: 'connection', connection_type: 'hwid', count: 5, route: { final: 'direct' } },
   'traffic-limiter': { type: OutTypes.TrafficLimiter, strategy: 'global', mode: 'bidirectional', total: '10GB', route: { final: 'direct' } },
   'rate-limiter': { type: OutTypes.RateLimiter, strategy: 'leaky-bucket', count: 10, interval: '1s', route: { final: 'direct' } },
+  block: { type: OutTypes.Block },
+  'core-failover': { type: OutTypes.CoreFailover, outbounds: [], strategy: 'sequential', delay: '' },
 }
 
 export function createOutbound<T extends Outbound>(type: string,json?: Partial<T>): Outbound {

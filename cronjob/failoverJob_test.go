@@ -55,7 +55,7 @@ func TestFailoverJobAllDownToDirect(t *testing.T) {
 	active := "a"
 	var switches []string
 	j := newTestFailoverJob(func() time.Time { return cur }, func(string) bool { return false }, &active, &switches)
-	group := service.FailoverGroupConfig{Tag: "g", Members: []string{"a", "b"}, ProbeTarget: "x", Interval: 30 * time.Second, Hysteresis: 2, Enabled: true}
+	group := service.FailoverGroupConfig{Tag: "g", Members: []string{"a", "b"}, ProbeTarget: "x", Interval: 30 * time.Second, Hysteresis: 2, Enabled: true, AllDownPolicy: service.AllDownPolicyDirect}
 
 	j.runGroup(nil, group, "direct")
 
@@ -76,7 +76,7 @@ func TestFailoverJobAllDownEdgeAlertsOnce(t *testing.T) {
 
 	j := newTestFailoverJob(func() time.Time { return cur }, func(tag string) bool { return health[tag] }, &active, &switches)
 	j.alert = func(service.FailoverGroupConfig) { alerts++ }
-	group := service.FailoverGroupConfig{Tag: "g", Members: []string{"a", "b"}, ProbeTarget: "x", Interval: 30 * time.Second, Hysteresis: 2, Enabled: true}
+	group := service.FailoverGroupConfig{Tag: "g", Members: []string{"a", "b"}, ProbeTarget: "x", Interval: 30 * time.Second, Hysteresis: 2, Enabled: true, AllDownPolicy: service.AllDownPolicyHoldCurrent}
 
 	tick := func() {
 		j.runGroup(nil, group, "")
@@ -104,11 +104,32 @@ func TestFailoverJobDisabledGroupIsSkipped(t *testing.T) {
 	active := "a"
 	var switches []string
 	j := newTestFailoverJob(func() time.Time { return cur }, func(string) bool { return false }, &active, &switches)
-	group := service.FailoverGroupConfig{Tag: "g", Members: []string{"a", "b"}, ProbeTarget: "x", Interval: 30 * time.Second, Hysteresis: 2, Enabled: false}
+	group := service.FailoverGroupConfig{Tag: "g", Members: []string{"a", "b"}, ProbeTarget: "x", Interval: 30 * time.Second, Hysteresis: 2, Enabled: false, AllDownPolicy: service.AllDownPolicyHoldCurrent}
 
 	j.runGroup(nil, group, "direct")
 
 	if len(switches) != 0 {
 		t.Fatalf("disabled group must not switch, got %v", switches)
+	}
+}
+
+func TestFailoverProbeRecordsOutboundHealthSnapshot(t *testing.T) {
+	t.Cleanup(service.ResetHealthSnapshots)
+	j := NewFailoverJob()
+	now := time.Now()
+	j.now = func() time.Time { return now }
+	group := service.FailoverGroupConfig{Tag: "g", Members: []string{"missing"}, ProbeTarget: "https://example.com", Interval: time.Second, Enabled: true}
+
+	results := j.probeMembers(group)
+	got := results["missing"]
+	if got.Status != "down" || got.Error == "" {
+		t.Fatalf("probe result = %+v, want down with error", got)
+	}
+	stored, ok := service.OutboundHealthSnapshotFor("missing")
+	if !ok {
+		t.Fatal("outbound health snapshot was not recorded")
+	}
+	if stored.Status != got.Status || stored.Error != got.Error {
+		t.Fatalf("stored snapshot = %+v, probe result = %+v", stored, got)
 	}
 }

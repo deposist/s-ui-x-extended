@@ -21,11 +21,13 @@
         </v-text-field>
       </v-col>
     </v-row>
+    <InboundAdvanced :data="data" />
   </v-card>
 </template>
 
 <script lang="ts">
 import Network from '@/components/Network.vue'
+import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
   props: ['data'],
@@ -38,6 +40,6 @@ export default {
         set(newValue: any) { this.$props.data.override_port = newValue.length == 0 || newValue == 0 ? undefined : parseInt(newValue) }
     },
   },
-  components: { Network }
+  components: {Network, InboundAdvanced}
 }
 </script>

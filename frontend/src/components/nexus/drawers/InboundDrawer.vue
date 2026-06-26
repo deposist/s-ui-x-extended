@@ -87,6 +87,8 @@
           <TrustTunnel v-if="inbound.type == inTypes.TrustTunnel" direction="in" :data="inbound" />
           <SshInbound v-if="inbound.type == inTypes.SSH" :data="inbound" />
           <MTProxy v-if="inbound.type == inTypes.MTProxy" :data="inbound" />
+          <BondInbound v-if="inbound.type == inTypes.Bond" :data="inbound" :inTags="inTags" />
+          <CoreFailoverInbound v-if="inbound.type == inTypes.CoreFailover" :data="inbound" :inTags="inTags" />
           <Transport v-if="Object.hasOwn(inbound,'transport')" :data="inbound" />
           <Users v-if="hasUser" :clients="clients" :data="initUsers" />
           <InTls v-if="HasTls.includes(inbound.type)"  :inbound="inbound" :tlsConfigs="tlsConfigs" :tls_id="inbound.tls_id" />
@@ -138,6 +140,8 @@ import Sudoku from '@/components/protocols/Sudoku.vue'
 import TrustTunnel from '@/components/protocols/TrustTunnel.vue'
 import SshInbound from '@/components/protocols/SshInbound.vue'
 import MTProxy from '@/components/protocols/MTProxy.vue'
+import BondInbound from '@/components/protocols/BondInbound.vue'
+import CoreFailoverInbound from '@/components/protocols/CoreFailoverInbound.vue'
 import InTls from '@/components/tls/InTLS.vue'
 import TProxy from '@/components/protocols/TProxy.vue'
 import Multiplex from '@/components/Multiplex.vue'
@@ -312,7 +316,7 @@ export default {
     Listen, InTls, Hysteria2, Naive, Direct, Shadowsocks,
     Users, Hysteria, ShadowTls, TProxy, Multiplex, Tuic, Tun,
     Trojan, AnyTls, Transport, AddrVue, OutJsonVue, Dial, DomainResolver,
-    VlessInbound, Mieru, Sudoku, TrustTunnel, SshInbound, MTProxy
+    VlessInbound, Mieru, Sudoku, TrustTunnel, SshInbound, MTProxy, BondInbound, CoreFailoverInbound
   }
 }
 </script>

@@ -244,7 +244,9 @@
       "clientDelivery": "none",
       "skipOutJson": true,
       "uiEditor": "TProxy"
-    }
+    },
+    { "type": "bond", "hasUsers": false, "clientDelivery": "none", "skipOutJson": true, "uiEditor": "BondInbound", "notes": "native core bond inbound" },
+    { "type": "core-failover", "hasUsers": false, "clientDelivery": "none", "skipOutJson": true, "uiEditor": "CoreFailoverInbound", "notes": "native core failover inbound" }
   ],
   "outbounds": [
     { "type": "direct" },
@@ -268,13 +270,44 @@
     { "type": "hysteria", "buildTag": "with_quic" },
     { "type": "hysteria2", "buildTag": "with_quic" },
     { "type": "tuic", "buildTag": "with_quic" },
-    { "type": "bond", "notes": "inbound registered in core but absent from the UI InTypes (GAP)" },
-    { "type": "failover", "notes": "inbound registered in core but absent from the UI InTypes (GAP)" }
+    { "type": "core-failover", "notes": "native core failover outbound (dial-time)" }
+  ],
+  "groups": [
+    {
+      "type": "selector",
+      "coreType": "selector",
+      "sessionRecovery": false,
+      "notes": "Manual operator-selected group backed directly by the core selector outbound."
+    },
+    {
+      "type": "urltest",
+      "coreType": "urltest",
+      "sessionRecovery": false,
+      "notes": "Latency-based group backed directly by the core urltest outbound."
+    },
+    {
+      "type": "fallback",
+      "coreType": "fallback",
+      "sessionRecovery": false,
+      "notes": "Dial-time fallback group backed directly by the core fallback outbound."
+    },
+    {
+      "type": "failover",
+      "assembledAs": "selector",
+      "panelManaged": true,
+      "sessionRecovery": false,
+      "notes": "Panel-managed priority failover assembled as a core selector. Switches new connections only; existing sessions may break."
+    }
   ],
   "endpoints": [
     { "type": "wireguard", "buildTag": "with_wireguard", "notes": "warp maps to a wireguard endpoint" },
     { "type": "tailscale", "buildTag": "with_tailscale" },
     { "type": "vpn", "notes": "warp/vpn client+server endpoint" }
+  ],
+  "providers": [
+    { "type": "inline" },
+    { "type": "local" },
+    { "type": "remote" }
   ],
   "services": [
     { "type": "resolved" },

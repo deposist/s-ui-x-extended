@@ -75,17 +75,20 @@
         </v-row>
       </v-card-text>
     </v-card>
+    <InboundAdvanced :data="data" />
   </v-card>
 </template>
 
 <script lang="ts">
 import { mtproxyPreferIp, sniFrontHosts, durationPresets } from '@/types/recommended'
+import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
   props: { data: { type: Object, required: true } },
   data() {
     return { mtproxyPreferIp, sniFrontHosts, durationPresets }
   },
+  components: {InboundAdvanced},
   methods: {
     setUrls(v: string[]) {
       if (v && v.length > 0) {

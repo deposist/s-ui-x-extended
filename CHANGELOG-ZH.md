@@ -6,11 +6,22 @@
 
 ## [Unreleased]
 
-- 已移植 upstream s-ui-x 从 `v1.5.10-beta5` 到 `v1.5.10-beta7` 的变更，同时保留 sing-box-extended core、extended 协议编辑器和 `s-ui-x-extended` 发布线。
-- 新增 Dashboard 流量汇总 API `GET /api/stats/traffic`，并添加 `stats(resource, date_time)` 索引，用于按时间范围查询全部 inbound 流量。
-- 更新 Nexus Dashboard、流量历史 KPI、Top clients 卡片、Recent events 卡片、Settings layout、Nexus palettes，以及 sidebar 中的 CPU/RAM 状态显示。
-- `config/version` 保持 `1.0.0-beta7`；只有前端 package metadata 更新到 upstream frontend `1.5.10-beta7`。
-- Client、Add Bulk 和 Edit Bulk 表单已迁移到共享 `FormShell`：Nexus 中作为 drawer 打开，select-menu 可通过 click-away 关闭；Classic mode 仍使用同一 shell 的 dialog 分支。
+- 暂无未发布变更。
+
+## [1.0.0-beta8] - 2026-06-26 - 面板控制面与选项覆盖
+
+预发布版本。此版本是 v1.0.0-beta7 的后续更新。无需手动迁移数据库。
+
+- 新增 panel-managed outbound 组，支持 provider-backed 成员、组预览、tag 引用校验和 capability metadata。
+- 新增 failover runtime state、outbound health、provider health、受限 realtime payloads，以及 Nexus Overview 的 operational health 组件。
+- 新增明确的 failover all-down policy。默认保持当前成员；direct fallback 只能由管理员显式启用。
+- 新增 outbound `block`、native core failover outbound、inbound `bond`、native core failover inbound 的面板支持。
+- 新增 shared inbound advanced options、outbound `domain_strategy`、endpoint advanced fields，以及安全可编辑字段的 protocol-specific option coverage。
+- `/api/capabilities` 现在包含 provider entries，前端 generated capability types 也包含 provider types。
+- 新增从 sing-box-extended option structs 生成的 option coverage matrix 和 drift test。当前 matrix 没有未解释的 `missing` entries。
+- 未修改 `shtorm-7/sing-box-extended`；新增逻辑都在 panel layer。
+
+完整发布说明：[`.github/RELEASE_NOTES_v1.0.0-beta8.md`](.github/RELEASE_NOTES_v1.0.0-beta8.md)。
 
 ## [1.0.0-beta7] - 2026-06-23 - 会话处理与两个界面的 extended 协议覆盖
 

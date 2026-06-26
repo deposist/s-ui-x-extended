@@ -56,11 +56,34 @@ type APIInbound struct {
 }
 
 // APIView is the response body for the admin-only /api/capabilities endpoint: the
-// compiled build-tag flags plus, per inbound type, whether it is available in this
-// build. Alias rows (e.g. shadowsocks16) are excluded.
+// compiled build-tag flags plus, per inbound/outbound/group type, whether it is
+// available in this build. Alias rows (e.g. shadowsocks16) are excluded.
 type APIView struct {
 	BuildTags map[string]bool `json:"buildTags"`
 	Inbounds  []APIInbound    `json:"inbounds"`
+	Outbounds []APIOutbound   `json:"outbounds"`
+	Groups    []APIGroup      `json:"groups"`
+	Providers []APIProvider   `json:"providers"`
+}
+
+type APIOutbound struct {
+	Type      string `json:"type"`
+	BuildTag  string `json:"buildTag"`
+	Available bool   `json:"available"`
+}
+
+type APIGroup struct {
+	Type            string `json:"type"`
+	AssembledAs     string `json:"assembledAs,omitempty"`
+	PanelManaged    bool   `json:"panelManaged,omitempty"`
+	SessionRecovery bool   `json:"sessionRecovery"`
+	Available       bool   `json:"available"`
+}
+
+type APIProvider struct {
+	Type      string `json:"type"`
+	BuildTag  string `json:"buildTag,omitempty"`
+	Available bool   `json:"available"`
 }
 
 // BuildAPIView assembles the admin-safe capability view from the manifest and the
@@ -83,6 +106,32 @@ func BuildAPIView() APIView {
 			Available:      tagCompiled(in.BuildTag),
 		})
 	}
+	for _, o := range loaded.Outbounds {
+		view.Outbounds = append(view.Outbounds, APIOutbound{
+			Type:      o.Type,
+			BuildTag:  o.BuildTag,
+			Available: tagCompiled(o.BuildTag),
+		})
+	}
+	for _, g := range loaded.Groups {
+		view.Groups = append(view.Groups, APIGroup{
+			Type:            g.Type,
+			AssembledAs:     g.AssembledAs,
+			PanelManaged:    g.PanelManaged,
+			SessionRecovery: g.SessionRecovery,
+			Available:       true, // group types are always available (assembled from core types)
+		})
+	}
+	for _, p := range loaded.Providers {
+		view.Providers = append(view.Providers, APIProvider{
+			Type:      p.Type,
+			BuildTag:  p.BuildTag,
+			Available: tagCompiled(p.BuildTag),
+		})
+	}
 	sort.SliceStable(view.Inbounds, func(i, j int) bool { return view.Inbounds[i].Type < view.Inbounds[j].Type })
+	sort.SliceStable(view.Outbounds, func(i, j int) bool { return view.Outbounds[i].Type < view.Outbounds[j].Type })
+	sort.SliceStable(view.Groups, func(i, j int) bool { return view.Groups[i].Type < view.Groups[j].Type })
+	sort.SliceStable(view.Providers, func(i, j int) bool { return view.Providers[i].Type < view.Providers[j].Type })
 	return view
 }

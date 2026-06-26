@@ -86,17 +86,20 @@
         </v-row>
       </v-card-text>
     </v-card>
+    <InboundAdvanced :data="data" />
   </v-card>
 </template>
 
 <script lang="ts">
 import { RECOMMENDED } from '@/types/recommended'
+import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
   props: {
     direction: { type: String },
     data: { type: Object, required: true },
   },
+  components: {InboundAdvanced},
   data() {
     return {
       tableTypes: ['prefer_ascii', 'prefer_entropy', 'up_ascii_down_entropy', 'up_entropy_down_ascii'],

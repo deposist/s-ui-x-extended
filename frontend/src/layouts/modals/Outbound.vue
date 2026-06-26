@@ -21,7 +21,11 @@
                   <v-select
                   hide-details
                   :label="$t('type')"
-                  :items="Object.keys(outTypes).map((key,index) => ({title: key, value: Object.values(outTypes)[index]}))"
+                  :items="Object.keys(outTypes).map((key,index) => {
+                    const value = Object.values(outTypes)[index] as string
+                    const unavailable = unavailableOutboundTypes.includes(value)
+                    return { title: unavailable ? key + ' \u2014 not in this build' : key, value, props: { disabled: unavailable } }
+                  })"
                   v-model="outbound.type"
                   @update:modelValue="changeType">
                   </v-select>
@@ -72,6 +76,8 @@
               <UrlTest v-if="outbound.type == outTypes.URLTest" :data="outbound" :tags="tags" />
               <Bond v-if="outbound.type == outTypes.Bond" :data="outbound" />
               <Failover v-if="outbound.type == outTypes.Failover" :data="outbound" />
+              <Block v-if="outbound.type == outTypes.Block" :data="outbound" />
+              <CoreFailover v-if="outbound.type == outTypes.CoreFailover" :data="outbound" :tags="tags" />
               <Fallback v-if="outbound.type == outTypes.Fallback" :data="outbound" :tags="tags" />
               <BandwidthLimiter v-if="outbound.type == outTypes.BandwidthLimiter" :data="outbound" :tags="tags" />
               <ConnectionLimiter v-if="outbound.type == outTypes.ConnectionLimiter" :data="outbound" :tags="tags" />
@@ -151,6 +157,8 @@ import Selector from '@/components/protocols/Selector.vue'
 import UrlTest from '@/components/protocols/UrlTest.vue'
 import Bond from '@/components/protocols/Bond.vue'
 import Failover from '@/components/protocols/Failover.vue'
+import Block from '@/components/protocols/Block.vue'
+import CoreFailover from '@/components/protocols/CoreFailover.vue'
 import Fallback from '@/components/protocols/Fallback.vue'
 import BandwidthLimiter from '@/components/protocols/BandwidthLimiter.vue'
 import ConnectionLimiter from '@/components/protocols/ConnectionLimiter.vue'
@@ -170,9 +178,23 @@ export default {
       link: "",
       loading: false,
       outTypes: OutTypes,
-      NoDial: [OutTypes.Selector, OutTypes.URLTest, OutTypes.Bond, OutTypes.Failover, OutTypes.Fallback, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter],
-      NoServer: [OutTypes.Direct, OutTypes.Selector, OutTypes.URLTest, OutTypes.Tor, OutTypes.OpenVPN, OutTypes.MASQUE, OutTypes.Parser, OutTypes.Bond, OutTypes.Failover, OutTypes.Fallback, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter],
+      unavailableOutboundTypes: <string[]>[],
+      NoDial: [OutTypes.Selector, OutTypes.URLTest, OutTypes.Bond, OutTypes.Failover, OutTypes.Block, OutTypes.CoreFailover, OutTypes.Fallback, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter],
+      NoServer: [OutTypes.Direct, OutTypes.Selector, OutTypes.URLTest, OutTypes.Tor, OutTypes.OpenVPN, OutTypes.MASQUE, OutTypes.Parser, OutTypes.Bond, OutTypes.Failover, OutTypes.Block, OutTypes.CoreFailover, OutTypes.Fallback, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter],
     }
+  },
+  async mounted() {
+    // Query the capabilities API for unavailable outbound types (build-tag
+    // not compiled into this binary). A missing or older endpoint (no
+    // outbounds field) leaves every type available.
+    try {
+      const resp = await HttpUtils.get('api/capabilities')
+      if (resp.success && resp.obj?.outbounds) {
+        this.unavailableOutboundTypes = resp.obj.outbounds
+          .filter((o: any) => o.available === false)
+          .map((o: any) => o.type)
+      }
+    } catch { /* capabilities endpoint optional */ }
   },
   methods: {
     updateData(id: number) {
@@ -238,7 +260,7 @@ export default {
   components: { Dial, Multiplex, Transport, OutTLS,
     Direct, Socks, Http, Shadowsocks, Vmess, Trojan,
     Wireguard, Hysteria, Naive, ShadowTls, Vless, Tuic,
-    Hysteria2, AnyTls, Tor, Ssh, Mieru, Sudoku, TrustTunnel, Masque, OpenVpn, Parser, Selector, UrlTest, Bond, Failover, Fallback,
+    Hysteria2, AnyTls, Tor, Ssh, Mieru, Sudoku, TrustTunnel, Masque, OpenVpn, Parser, Selector, UrlTest, Bond, Failover, Block, CoreFailover, Fallback,
     BandwidthLimiter, ConnectionLimiter, TrafficLimiter, RateLimiter }
 }
 </script>

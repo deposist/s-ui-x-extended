@@ -14,7 +14,11 @@
         <v-col cols="12" sm="6">
           <v-select
             hide-details
-            :items="Object.keys(outTypes).map((key,index) => ({title: key, value: Object.values(outTypes)[index]}))"
+            :items="Object.keys(outTypes).map((key,index) => {
+              const value = Object.values(outTypes)[index] as string
+              const unavailable = unavailableOutboundTypes.includes(value)
+              return { title: unavailable ? key + ' \u2014 not in this build' : key, value, props: { disabled: unavailable } }
+            })"
             :label="$t('type')"
             v-model="outbound.type"
             @update:modelValue="changeType">
@@ -49,6 +53,8 @@
       <Selector v-if="outbound.type == outTypes.Selector" :data="outbound" :tags="tags" />
       <UrlTest v-if="outbound.type == outTypes.URLTest" :data="outbound" :tags="tags" />
       <Failover v-if="outbound.type == outTypes.Failover" :data="outbound" :tags="tags" />
+      <Block v-if="outbound.type == outTypes.Block" :data="outbound" />
+      <CoreFailover v-if="outbound.type == outTypes.CoreFailover" :data="outbound" :tags="tags" />
       <Mieru v-if="outbound.type == outTypes.Mieru" direction="out" :data="outbound" />
       <Sudoku v-if="outbound.type == outTypes.Sudoku" direction="out" :data="outbound" />
       <TrustTunnel v-if="outbound.type == outTypes.TrustTunnel" direction="out" :data="outbound" />
@@ -105,6 +111,8 @@ import Ssh from '@/components/protocols/Ssh.vue'
 import Selector from '@/components/protocols/Selector.vue'
 import UrlTest from '@/components/protocols/UrlTest.vue'
 import Failover from '@/components/protocols/Failover.vue'
+import Block from '@/components/protocols/Block.vue'
+import CoreFailover from '@/components/protocols/CoreFailover.vue'
 import Mieru from '@/components/protocols/Mieru.vue'
 import Sudoku from '@/components/protocols/Sudoku.vue'
 import TrustTunnel from '@/components/protocols/TrustTunnel.vue'
@@ -134,9 +142,20 @@ export default {
       loading: false,
       snapshot: "",
       outTypes: OutTypes,
-      NoDial: [OutTypes.Selector, OutTypes.URLTest, OutTypes.Failover, OutTypes.Bond, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter, OutTypes.Parser, OutTypes.Fallback],
-      NoServer: [OutTypes.Direct, OutTypes.Selector, OutTypes.URLTest, OutTypes.Tor, OutTypes.Failover, OutTypes.Bond, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter, OutTypes.Parser, OutTypes.Fallback],
+      unavailableOutboundTypes: <string[]>[],
+      NoDial: [OutTypes.Selector, OutTypes.URLTest, OutTypes.Failover, OutTypes.Block, OutTypes.CoreFailover, OutTypes.Bond, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter, OutTypes.Parser, OutTypes.Fallback],
+      NoServer: [OutTypes.Direct, OutTypes.Selector, OutTypes.URLTest, OutTypes.Tor, OutTypes.Failover, OutTypes.Block, OutTypes.CoreFailover, OutTypes.Bond, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter, OutTypes.Parser, OutTypes.Fallback],
     }
+  },
+  async mounted() {
+    try {
+      const resp = await HttpUtils.get('api/capabilities')
+      if (resp.success && resp.obj?.outbounds) {
+        this.unavailableOutboundTypes = resp.obj.outbounds
+          .filter((o: any) => o.available === false)
+          .map((o: any) => o.type)
+      }
+    } catch { /* capabilities endpoint optional */ }
   },
   methods: {
     updateData(id: number) {
@@ -206,7 +225,7 @@ export default {
   components: { EntityDrawer, FormSection, Dial, Multiplex, Transport, OutTLS,
     Direct, Socks, Http, Shadowsocks, Vmess, Trojan,
     Wireguard, Hysteria, Naive, ShadowTls, Vless, Tuic,
-    Hysteria2, AnyTls, Tor, Ssh, Selector, UrlTest, Failover,
+    Hysteria2, AnyTls, Tor, Ssh, Selector, UrlTest, Failover, Block, CoreFailover,
     Mieru, Sudoku, TrustTunnel, Masque, OpenVPN, Bond, Parser,
     BandwidthLimiter, ConnectionLimiter, TrafficLimiter, RateLimiter, Fallback }
 }

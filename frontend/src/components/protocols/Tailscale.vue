@@ -8,6 +8,11 @@
         <v-switch color="primary" v-model="data.accept_routes" :label="$t('types.ts.acceptRoutes')"></v-switch>
       </v-col>
     </v-row>
+    <v-row v-if="optionDomainStrategy">
+      <v-col cols="12" sm="6" md="4">
+        <v-select v-model="data.domain_strategy" :items="domainStrategies" clearable :label="$t('types.ts.domainStrategy')" hide-details></v-select>
+      </v-col>
+    </v-row>
     <v-row v-if="optionStateDir">
       <v-col cols="12" sm="8">
         <v-text-field v-model="data.state_directory" :label="$t('types.ts.stateDir')"></v-text-field>
@@ -110,6 +115,9 @@
             <v-list-item>
               <v-switch v-model="optionUdpTimeout" color="primary" :label="$t('types.ts.udpTimeout')" hide-details></v-switch>
             </v-list-item>
+            <v-list-item>
+              <v-switch v-model="optionDomainStrategy" color="primary" :label="$t('types.ts.domainStrategy')" hide-details></v-switch>
+            </v-list-item>
           </v-list>
         </v-card>
       </v-menu>
@@ -126,6 +134,11 @@ export default {
     }
   },
   computed: {
+    domainStrategies() { return ['prefer_ipv4', 'prefer_ipv6', 'ipv4_only', 'ipv6_only'] },
+    optionDomainStrategy: {
+      get() { return this.$props.data?.domain_strategy !== undefined },
+      set(v: boolean) { v ? this.$props.data.domain_strategy = 'prefer_ipv4' : delete this.$props.data.domain_strategy }
+    },
     optionStateDir: {
       get() { return this.$props.data?.state_directory !== undefined },
       set(v: boolean) { this.$props.data.state_directory = v ? "$HOME/.tailscale" : undefined }

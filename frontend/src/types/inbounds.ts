@@ -26,6 +26,8 @@ export const InTypes = {
   Tun: 'tun',
   Redirect: 'redirect',
   TProxy: 'tproxy',
+  Bond: 'bond',
+  CoreFailover: 'core-failover',
 }
 
 type InType = typeof InTypes[keyof typeof InTypes]
@@ -54,6 +56,14 @@ export interface Listen {
   disable_tcp_keep_alive?: boolean
   tcp_keep_alive?: string
   tcp_keep_alive_interval?: string
+  sniff?: boolean
+  sniff_override_destination?: boolean
+  sniff_timeout?: string
+  proxy_protocol?: boolean
+  proxy_protocol_accept_no_header?: boolean
+  domain_strategy?: string
+  domain_resolver?: string
+  udp_disable_domain_unmapping?: boolean
 }
 
 interface InboundBasics extends Listen {
@@ -77,6 +87,7 @@ export interface Direct extends InboundBasics {
 }
 export interface Mixed extends InboundBasics {
   set_system_proxy?: boolean
+  tls?: iTls
 }
 export interface SOCKS extends InboundBasics {}
 export interface HTTP extends InboundBasics {
@@ -88,6 +99,7 @@ export interface Shadowsocks extends InboundBasics {
   network?: "udp" | "tcp"
   multiplex?: iMultiplex
   managed?: boolean
+  destinations?: { server: string, server_port: number, method: string, password: string }[]
 }
 export interface VMess extends InboundBasics {
   tls: iTls
@@ -112,6 +124,7 @@ export interface Trojan extends InboundBasics {
 export interface Naive extends InboundBasics {
   tls: iTls,
   quic_congestion_control?: "" | "bbr" | "bbr2" | "cubic" | "reno"
+  network?: "udp" | "tcp"
 }
 export interface Hysteria extends InboundBasics {
   up_mbps: number
@@ -121,6 +134,9 @@ export interface Hysteria extends InboundBasics {
   recv_window_client?: number
   max_conn_client?: number
   disable_mtu_discovery?: boolean
+  up?: string
+  down?: string
+  tls?: iTls
 }
 export interface ShadowTLS extends InboundBasics {
   version: 1|2|3
@@ -148,6 +164,7 @@ export interface TUIC extends InboundBasics {
   auth_timeout?: string
   zero_rtt_handshake?: boolean
   heartbeat?: string
+  tls?: iTls
 }
 export interface Hysteria2 extends InboundBasics {
   up_mbps?: number
@@ -156,6 +173,7 @@ export interface Hysteria2 extends InboundBasics {
     type?: "salamander"
     password: string
   }
+  tls?: iTls
   ignore_client_bandwidth?: boolean
   masquerade?: string | {
     type: string
@@ -179,6 +197,13 @@ export interface Tun extends InboundBasics {
   strict_route?: boolean
   auto_redirect?: boolean
   exclude_mptcp?: boolean
+  gso?: boolean
+  inet4_address?: string[]
+  inet4_route_address?: string[]
+  inet4_route_exclude_address?: string[]
+  inet6_address?: string[]
+  inet6_route_address?: string[]
+  inet6_route_exclude_address?: string[]
   auto_redirect_reset_mark?: string | number
   auto_redirect_nfqueue?: number
   auto_redirect_iproute2_fallback_rule_index?: number
@@ -214,6 +239,12 @@ export interface Redirect extends InboundBasics {}
 export interface TProxy extends InboundBasics {
   network?: "udp" | "tcp"
 }
+export interface BondInbound extends InboundBasics {
+  inbounds: string[]
+}
+export interface CoreFailoverInbound extends InboundBasics {
+  inbounds: string[]
+}
 export interface Mieru extends InboundBasics {
   listen_ports?: string[]
   transport?: string
@@ -247,6 +278,7 @@ export interface SSH extends InboundBasics {
   host_key_path?: string[]
   server_version?: string
   max_auth_tries?: number
+  fallback?: string
 }
 export interface MTProxy extends InboundBasics {
   concurrency?: number
@@ -330,6 +362,8 @@ const defaultValues: Record<InType, Inbound> = {
   tun: <Tun>{ type: InTypes.Tun, mtu: 9000, stack: 'system', udp_timeout: '5m', auto_route: false },
   redirect: <Redirect>{ type: InTypes.Redirect },
   tproxy: <TProxy>{ type: InTypes.TProxy },
+  bond: { type: InTypes.Bond, inbounds: [] } as unknown as BondInbound,
+  'core-failover': { type: InTypes.CoreFailover, inbounds: [] } as unknown as CoreFailoverInbound,
 }
 
 export function createInbound<T extends Inbound>(type: InType,json?: Partial<T>): Inbound {

@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/deposist/s-ui-x-extended/database"
@@ -9,6 +10,7 @@ import (
 )
 
 func TestAssembleFailoverForCore(t *testing.T) {
+	// Default policy (hold_current) → direct is NOT appended.
 	o := model.Outbound{
 		Type:    FailoverType,
 		Tag:     "g",
@@ -32,13 +34,31 @@ func TestAssembleFailoverForCore(t *testing.T) {
 	if m["default"] != "a" {
 		t.Fatalf("default = %v, want a", m["default"])
 	}
-	wantMembers := []any{"a", "b", "direct"}
+	// hold_current default → no direct appended.
+	wantMembers := []any{"a", "b"}
 	if got := m["outbounds"]; !equalAnySlice(got, wantMembers) {
-		t.Fatalf("outbounds = %v, want %v (direct appended as all-down fallback)", got, wantMembers)
+		t.Fatalf("outbounds = %v, want %v (hold_current default must not append direct)", got, wantMembers)
 	}
 
-	// No direct outbound available → no fallback member appended.
-	got2, err := assembleFailoverForCore(o, "")
+	// Explicit direct policy → direct IS appended.
+	oDirect := model.Outbound{
+		Type:    FailoverType,
+		Tag:     "g",
+		Options: json.RawMessage(`{"outbounds":["a","b"],"failover":{"probe_target":"https://x.example/","interval":"30s","hysteresis":2,"all_down_policy":"direct"}}`),
+	}
+	gotD, err := assembleFailoverForCore(oDirect, "direct")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mD map[string]any
+	_ = json.Unmarshal(gotD, &mD)
+	wantDirect := []any{"a", "b", "direct"}
+	if got := mD["outbounds"]; !equalAnySlice(got, wantDirect) {
+		t.Fatalf("outbounds with direct policy = %v, want %v", got, wantDirect)
+	}
+
+	// No direct outbound available → no fallback member appended even with direct policy.
+	got2, err := assembleFailoverForCore(oDirect, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,17 +103,26 @@ func TestValidateFailoverGroup(t *testing.T) {
 	}
 
 	rejects := map[string]string{
-		"empty":         `{"outbounds":[]}`,
+		"empty":          `{"outbounds":[]}`,
 		"missing member": `{"outbounds":["m1","ghost"]}`,
-		"group member":  `{"outbounds":["m1","sel"]}`,
-		"self ref":      `{"outbounds":["fo"]}`,
-		"duplicate":     `{"outbounds":["m1","m1"]}`,
-		"bad scheme":    `{"outbounds":["m1"],"failover":{"probe_target":"ftp://x.example/"}}`,
-		"tiny interval": `{"outbounds":["m1"],"failover":{"interval":"1s"}}`,
+		"group member":   `{"outbounds":["m1","sel"]}`,
+		"self ref":       `{"outbounds":["fo"]}`,
+		"duplicate":      `{"outbounds":["m1","m1"]}`,
+		"bad scheme":     `{"outbounds":["m1"],"failover":{"probe_target":"ftp://x.example/"}}`,
+		"tiny interval":  `{"outbounds":["m1"],"failover":{"interval":"1s"}}`,
+		"bad policy":     `{"outbounds":["m1"],"failover":{"all_down_policy":"unknown"}}`,
 	}
 	for name, opts := range rejects {
 		if err := validateFailoverGroup(db, fo(opts)); err == nil {
 			t.Fatalf("%s: expected rejection, got nil", name)
+		}
+	}
+
+	// Valid all-down policies must be accepted.
+	for _, policy := range []string{"hold_current", "block", "direct"} {
+		opts := fmt.Sprintf(`{"outbounds":["m1"],"failover":{"all_down_policy":%q}}`, policy)
+		if err := validateFailoverGroup(db, fo(opts)); err != nil {
+			t.Fatalf("valid all_down_policy %q rejected: %v", policy, err)
 		}
 	}
 }

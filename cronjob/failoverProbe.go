@@ -3,6 +3,7 @@ package cronjob
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/logger"
@@ -15,8 +16,8 @@ import (
 // dialers.
 const failoverProbeConcurrency = 4
 
-func (j *FailoverJob) probeMembers(group service.FailoverGroupConfig) map[string]bool {
-	results := make(map[string]bool, len(group.Members))
+func (j *FailoverJob) probeMembers(group service.FailoverGroupConfig) map[string]service.OutboundHealthSnapshot {
+	results := make(map[string]service.OutboundHealthSnapshot, len(group.Members))
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, failoverProbeConcurrency)
@@ -31,13 +32,19 @@ func (j *FailoverJob) probeMembers(group service.FailoverGroupConfig) map[string
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			var ok bool
+			var delay uint16
+			var errMsg string
 			if j.probe != nil {
 				ok = j.probe(ctx, tag, group.ProbeTarget)
 			} else {
-				ok = j.ConfigService.CheckOutboundWithContext(ctx, tag, group.ProbeTarget).OK
+				check := j.ConfigService.CheckOutboundWithContext(ctx, tag, group.ProbeTarget)
+				ok = check.OK
+				delay = check.Delay
+				errMsg = check.Error
 			}
+			snapshot := service.RecordOutboundHealth(tag, ok, delay, errMsg, time.Now())
 			mu.Lock()
-			results[tag] = ok
+			results[tag] = snapshot
 			mu.Unlock()
 		}(member)
 	}
@@ -59,6 +66,8 @@ func (j *FailoverJob) persistState(group service.FailoverGroupConfig, snapshot m
 			ConsecUp:    h.ConsecutiveUp,
 			ConsecDown:  h.ConsecutiveDown,
 			LastProbeAt: nowUnix,
+			LastDelayMs: h.LastDelayMs,
+			LastError:   h.LastError,
 		})
 	}
 	if err := service.WriteFailoverMemberStates(database.GetDB(), states); err != nil {
@@ -72,17 +81,21 @@ func (j *FailoverJob) persistState(group service.FailoverGroupConfig, snapshot m
 func (j *FailoverJob) publishLiveStatus(group service.FailoverGroupConfig, snapshot map[string]service.MemberHealth, active string, allDown bool) {
 	members := make([]service.FailoverMemberStatus, 0, len(group.Members))
 	for i, member := range group.Members {
+		h := snapshot[member]
 		members = append(members, service.FailoverMemberStatus{
 			Tag:      member,
-			Healthy:  snapshot[member].ConsecutiveUp >= 1,
+			Healthy:  h.ConsecutiveUp >= 1,
 			Priority: i,
+			DelayMs:  h.LastDelayMs,
+			Error:    h.LastError,
 		})
 	}
 	service.SetFailoverLiveStatus(service.FailoverStatusEntry{
-		Tag:     group.Tag,
-		Active:  active,
-		AllDown: allDown,
-		Members: members,
+		Tag:           group.Tag,
+		Active:        active,
+		AllDown:       allDown,
+		AllDownPolicy: group.AllDownPolicy,
+		Members:       members,
 	})
 }
 
@@ -99,8 +112,9 @@ func (j *FailoverJob) alertAllDown(group service.FailoverGroupConfig) {
 		Details:  map[string]any{"group": group.Tag, "members": group.Members},
 	})
 	realtime.Publish(realtime.TopicCoreState, map[string]any{
-		"warning": "failover_all_down",
-		"group":   group.Tag,
+		"warning":       "failover_all_down",
+		"group":         group.Tag,
+		"allDownPolicy": group.AllDownPolicy,
+		"members":       group.Members,
 	})
 }
-

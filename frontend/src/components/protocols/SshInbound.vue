@@ -16,14 +16,17 @@
           :model-value="data.host_key_path" @update:model-value="setList('host_key_path', $event)"></v-combobox>
       </v-col>
     </v-row>
+    <InboundAdvanced :data="data" />
   </v-card>
 </template>
 
 <script lang="ts">
 import { sshVersions } from '@/types/recommended'
+import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
   props: ['data'],
+  components: {InboundAdvanced},
   data() {
     return {
       sshVersions,

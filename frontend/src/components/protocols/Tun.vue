@@ -174,14 +174,17 @@
         </template>
       </v-row>
     </template>
+    <InboundAdvanced :data="data" />
   </v-card>
 </template>
 
 <script lang="ts">
 import Data from '@/store/modules/data'
+import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
   props: ['data'],
+  components: {InboundAdvanced},
   data() {
     return {
       menu: false

@@ -58,15 +58,8 @@ func (o *OutboundService) GetAllConfig(db *gorm.DB) ([]json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	directTag := DirectFallbackTag(db)
 	for _, outbound := range outbounds {
-		var outboundJson json.RawMessage
-		var err error
-		if outbound.Type == FailoverType {
-			outboundJson, err = assembleFailoverForCore(*outbound, directTag)
-		} else {
-			outboundJson, err = outbound.MarshalJSON()
-		}
+		outboundJson, err := outboundCoreJSON(db, *outbound)
 		if err != nil {
 			return nil, err
 		}
@@ -93,6 +86,21 @@ func (s *OutboundService) saveOutboundUpsert(tx *gorm.DB, data json.RawMessage) 
 	}
 	if outbound.Type == FailoverType {
 		if err := validateFailoverGroup(tx, outbound); err != nil {
+			return nil, err
+		}
+	}
+	if outbound.Type == "fallback" {
+		if err := validateFallbackGroup(tx, outbound); err != nil {
+			return nil, err
+		}
+	}
+	if outbound.Type == "selector" || outbound.Type == "urltest" {
+		if err := validateSelectorURLTestGroup(tx, outbound); err != nil {
+			return nil, err
+		}
+	}
+	if outbound.Type == "core-failover" {
+		if err := validateCoreFailoverOutbound(tx, outbound); err != nil {
 			return nil, err
 		}
 	}

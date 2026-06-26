@@ -55,6 +55,7 @@
         </v-text-field>
       </v-col>
     </v-row>
+    <InboundAdvanced :data="data" />
   </v-card>
 </template>
 
@@ -62,6 +63,7 @@
 import Network from '@/components/Network.vue'
 import UoT from '@/components/UoT.vue'
 import RandomUtil from '@/plugins/randomUtil'
+import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
   props: ['direction','data'],
@@ -122,6 +124,6 @@ export default {
       }
     }
   },
-  components: { Network, UoT }
+  components: {Network, UoT, InboundAdvanced}
 }
 </script>

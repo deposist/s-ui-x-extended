@@ -59,11 +59,13 @@
         </v-text-field>
       </v-col>
     </v-row>
+    <InboundAdvanced :data="data" />
   </v-card>
 </template>
 
 <script lang="ts">
 import Network from '@/components/Network.vue'
+import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
   props: ['direction', 'data'],
@@ -84,6 +86,6 @@ export default {
       set(newValue:number) { this.$props.data.heartbeat = newValue ? newValue + 's' : '' }
     }
   },
-  components: { Network }
+  components: {Network, InboundAdvanced}
 }
 </script>

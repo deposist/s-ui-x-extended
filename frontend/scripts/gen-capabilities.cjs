@@ -23,18 +23,22 @@ const path = require('path')
 const MANIFEST = path.join(__dirname, '..', '..', 'core', 'capabilities', 'protocols.json')
 const OUT = path.join(__dirname, '..', 'src', 'types', 'capabilities.ts')
 
-function loadInbounds() {
+function loadManifest() {
   const manifest = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'))
   if (!Array.isArray(manifest.inbounds)) {
     throw new Error('protocols.json: missing inbounds array')
   }
-  return manifest.inbounds
+  if (!Array.isArray(manifest.groups)) {
+    throw new Error('protocols.json: missing groups array')
+  }
+  return manifest
 }
 
 /** Derive each list in manifest order. Consumers use them as sets (.includes()),
  *  so order is not significant — but a stable order keeps the generated file
  *  deterministic for the --check / drift test. */
-function derive(inbounds) {
+function derive(manifest) {
+  const inbounds = manifest.inbounds
   const pick = (pred) => inbounds.filter(pred).map((i) => i.type)
   return {
     inboundWithUsers: pick((i) => i.hasUsers && !i.alias),
@@ -42,6 +46,8 @@ function derive(inbounds) {
     HasTls: pick((i) => i.hasTlsTemplate),
     MuxAvailable: pick((i) => i.muxAvailable),
     OnlyTLS: pick((i) => i.onlyTls),
+    outboundGroupCapabilities: manifest.groups,
+    providerTypes: (manifest.providers || []).map((p) => p.type),
   }
 }
 
@@ -56,17 +62,27 @@ function render(lists) {
     `// Regenerate with: node scripts/gen-capabilities.cjs\n` +
     `// Derived from core/capabilities/protocols.json (shared with the Go backend).\n` +
     `// Each list is used as a set membership test; order is not significant.\n\n` +
+    `export type OutboundGroupCapability = {\n` +
+    `  type: string\n` +
+    `  coreType?: string\n` +
+    `  assembledAs?: string\n` +
+    `  panelManaged?: boolean\n` +
+    `  sessionRecovery: boolean\n` +
+    `  notes?: string\n` +
+    `}\n\n` +
     `${arrayLiteral('inboundWithUsers', lists.inboundWithUsers)}\n` +
     `${arrayLiteral('HasInData', lists.HasInData)}\n` +
     `${arrayLiteral('HasTls', lists.HasTls)}\n` +
     `${arrayLiteral('MuxAvailable', lists.MuxAvailable)}\n` +
-    `${arrayLiteral('OnlyTLS', lists.OnlyTLS)}\n`
+    `${arrayLiteral('OnlyTLS', lists.OnlyTLS)}\n` +
+    `export const outboundGroupCapabilities: OutboundGroupCapability[] = ${JSON.stringify(lists.outboundGroupCapabilities, null, 2)}\n` +
+    `${arrayLiteral('providerTypes', lists.providerTypes)}\n`
   )
 }
 
 function main() {
   const check = process.argv.includes('--check')
-  const content = render(derive(loadInbounds()))
+  const content = render(derive(loadManifest()))
 
   if (check) {
     let current = null

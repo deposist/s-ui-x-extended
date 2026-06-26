@@ -68,6 +68,28 @@
       </v-card>
     </template>
     <v-row>
+      <v-col cols="12" sm="6" md="4" v-if="data.profile != undefined">
+        <v-text-field v-model="data.profile" :label="$t('types.wg.profile')" hide-details></v-text-field>
+      </v-col>
+      <v-col cols="12" sm="6" md="4" v-if="data.reserved != undefined">
+        <v-text-field v-model="reserved" :label="$t('types.wg.reserved')" hide-details></v-text-field>
+      </v-col>
+      <v-col cols="12" sm="6" md="4" v-if="data.persistent_keepalive_interval != undefined">
+        <v-text-field v-model.number="data.persistent_keepalive_interval" type="number" min="0" :label="$t('types.wg.persistentKeepalive')" hide-details></v-text-field>
+      </v-col>
+    </v-row>
+    <v-row>
+      <v-col cols="12" sm="6" md="4" v-if="data.disable_pauses != undefined">
+        <v-switch v-model="data.disable_pauses" color="primary" :label="$t('types.wg.disablePauses')" hide-details></v-switch>
+      </v-col>
+      <v-col cols="12" sm="6" md="4" v-if="data.preallocated_buffers_per_pool != undefined">
+        <v-text-field v-model.number="data.preallocated_buffers_per_pool" type="number" min="0" :label="$t('types.wg.preallocatedBuffers')" hide-details></v-text-field>
+      </v-col>
+      <v-col cols="12" sm="6" md="4" v-if="data.domain_strategy != undefined">
+        <v-select v-model="data.domain_strategy" :items="domainStrategies" clearable :label="$t('types.wg.domainStrategy')" hide-details></v-select>
+      </v-col>
+    </v-row>
+    <v-row>
       <v-col cols="12" sm="6" md="4" v-if="data.udp_timeout != undefined">
         <v-text-field
           label="UDP Timeout"
@@ -126,6 +148,24 @@
             <v-list-item>
               <v-switch v-model="optionMtu" color="primary" label="MTU" hide-details></v-switch>
             </v-list-item>
+            <v-list-item>
+              <v-switch v-model="optionProfile" color="primary" :label="$t('types.wg.profile')" hide-details></v-switch>
+            </v-list-item>
+            <v-list-item>
+              <v-switch v-model="optionReserved" color="primary" :label="$t('types.wg.reserved')" hide-details></v-switch>
+            </v-list-item>
+            <v-list-item>
+              <v-switch v-model="optionPersistentKeepalive" color="primary" :label="$t('types.wg.persistentKeepalive')" hide-details></v-switch>
+            </v-list-item>
+            <v-list-item>
+              <v-switch v-model="optionDisablePauses" color="primary" :label="$t('types.wg.disablePauses')" hide-details></v-switch>
+            </v-list-item>
+            <v-list-item>
+              <v-switch v-model="optionPreallocatedBuffers" color="primary" :label="$t('types.wg.preallocatedBuffers')" hide-details></v-switch>
+            </v-list-item>
+            <v-list-item>
+              <v-switch v-model="optionDomainStrategy" color="primary" :label="$t('types.wg.domainStrategy')" hide-details></v-switch>
+            </v-list-item>
           </v-list>
         </v-card>
       </v-menu>
@@ -145,6 +185,7 @@ export default {
   methods: {
   },
   computed: {
+    domainStrategies() { return ['prefer_ipv4', 'prefer_ipv6', 'ipv4_only', 'ipv6_only'] },
     optionUdp: {
       get(): boolean { return this.$props.data.udp_timeout != undefined },
       set(v:boolean) { this.$props.data.udp_timeout = v ? "5m" : undefined }
@@ -156,6 +197,34 @@ export default {
     optionMtu: {
       get(): boolean { return this.$props.data.mtu != undefined },
       set(v:boolean) { this.$props.data.mtu = v ? 1408 : undefined }
+    },
+    optionProfile: {
+      get(): boolean { return this.$props.data.profile != undefined },
+      set(v:boolean) { v ? this.$props.data.profile = '' : delete this.$props.data.profile }
+    },
+    optionReserved: {
+      get(): boolean { return this.$props.data.reserved != undefined },
+      set(v:boolean) { v ? this.$props.data.reserved = [0,0,0] : delete this.$props.data.reserved }
+    },
+    optionPersistentKeepalive: {
+      get(): boolean { return this.$props.data.persistent_keepalive_interval != undefined },
+      set(v:boolean) { v ? this.$props.data.persistent_keepalive_interval = 30 : delete this.$props.data.persistent_keepalive_interval }
+    },
+    optionDisablePauses: {
+      get(): boolean { return this.$props.data.disable_pauses != undefined },
+      set(v:boolean) { v ? this.$props.data.disable_pauses = false : delete this.$props.data.disable_pauses }
+    },
+    optionPreallocatedBuffers: {
+      get(): boolean { return this.$props.data.preallocated_buffers_per_pool != undefined },
+      set(v:boolean) { v ? this.$props.data.preallocated_buffers_per_pool = 0 : delete this.$props.data.preallocated_buffers_per_pool }
+    },
+    optionDomainStrategy: {
+      get(): boolean { return this.$props.data.domain_strategy != undefined },
+      set(v:boolean) { v ? this.$props.data.domain_strategy = 'prefer_ipv4' : delete this.$props.data.domain_strategy }
+    },
+    reserved: {
+      get() { return this.$props.data.reserved?.join(',') ?? '' },
+      set(v:string) { this.$props.data.reserved = v.length > 0 ? v.split(',').map((str:string) => parseInt(str, 10)) : [] }
     },
     ifName: {
       get() { return this.$props.data.name?? '' },

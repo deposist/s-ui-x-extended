@@ -156,6 +156,7 @@
         </v-card>
       </v-menu>
     </v-card-actions>
+    <InboundAdvanced :data="data" />
   </v-card>
 </template>
 
@@ -163,6 +164,7 @@
 import Network from '@/components/Network.vue'
 import Headers from '@/components/Headers.vue'
 import { i18n } from '@/locales'
+import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
   props: ['direction', 'data'],
@@ -227,6 +229,6 @@ export default {
       }
     }
   },
-  components: { Network, Headers }
+  components: {Network, Headers, InboundAdvanced}
 }
 </script>

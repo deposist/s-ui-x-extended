@@ -57,6 +57,34 @@ func endpointPayload(id uint, tag string, mtu int) json.RawMessage {
 		id, tag, testWireguardKey, mtu))
 }
 
+func TestConfigSaveWireGuardEndpointAdvancedFieldsRoundTrip(t *testing.T) {
+	initSettingTestDB(t)
+	configService := NewConfigServiceWithRuntime(NewRuntimeWithCoreProvider(nil))
+	payload := json.RawMessage(fmt.Sprintf(
+		`{"type":"wireguard","tag":"wg-advanced","system":false,"address":["10.0.0.2/32"],"private_key":%q,"peers":[],"mtu":1408,"disable_pauses":true,"preallocated_buffers_per_pool":8,"domain_strategy":"prefer_ipv4"}`,
+		testWireguardKey))
+	if _, err := configService.Save("endpoints", "new", payload, "", "admin", "example.com"); err != nil {
+		t.Fatalf("save endpoint: %v", err)
+	}
+	var row model.Endpoint
+	if err := database.GetDB().Where("tag = ?", "wg-advanced").First(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	var opts map[string]any
+	if err := json.Unmarshal(row.Options, &opts); err != nil {
+		t.Fatal(err)
+	}
+	if opts["disable_pauses"] != true {
+		t.Fatalf("disable_pauses = %#v, want true", opts["disable_pauses"])
+	}
+	if opts["preallocated_buffers_per_pool"] != float64(8) {
+		t.Fatalf("preallocated_buffers_per_pool = %#v, want 8", opts["preallocated_buffers_per_pool"])
+	}
+	if opts["domain_strategy"] != "prefer_ipv4" {
+		t.Fatalf("domain_strategy = %#v, want prefer_ipv4", opts["domain_strategy"])
+	}
+}
+
 func TestConfigSaveEndpointsEditHotReloadsWithoutCoreRestart(t *testing.T) {
 	initSettingTestDB(t)
 	coreInstance := startTestCore(t)

@@ -117,7 +117,7 @@ func TestAllowedFieldsAreExactlyUserFieldValues(t *testing.T) {
 // TestSkipOutJSONTypesMatchesLegacy locks FillOutJson's early-return set
 // (formerly the literal switch case in util/outJson.go).
 func TestSkipOutJSONTypesMatchesLegacy(t *testing.T) {
-	want := map[string]struct{}{"direct": {}, "tun": {}, "redirect": {}, "tproxy": {}}
+	want := map[string]struct{}{"direct": {}, "tun": {}, "redirect": {}, "tproxy": {}, "bond": {}, "core-failover": {}}
 	if got := SkipOutJSONTypes(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("SkipOutJSONTypes drifted.\n got: %v\nwant: %v", got, want)
 	}
@@ -140,6 +140,8 @@ func TestOutJSONBuildersMatchesLegacy(t *testing.T) {
 		"mtproxy": "",
 		// early-return types still appear with empty builder (never reached)
 		"direct": "", "tun": "", "redirect": "", "tproxy": "",
+		// native core inbound types with no client delivery
+		"bond": "", "core-failover": "",
 	}
 	if got := OutJSONBuilders(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("OutJSONBuilders drifted.\n got: %v\nwant: %v", got, want)
@@ -153,6 +155,52 @@ func TestManifestParsesAndValidates(t *testing.T) {
 	}
 	if len(Inbounds()) == 0 {
 		t.Fatal("no inbound capabilities loaded")
+	}
+	if len(Groups()) == 0 {
+		t.Fatal("no group capabilities loaded")
+	}
+}
+
+func TestGroupCapabilitiesDocumentPanelFailoverBoundary(t *testing.T) {
+	groups := Groups()
+	byType := make(map[string]GroupCapability, len(groups))
+	for _, group := range groups {
+		byType[group.Type] = group
+	}
+	for _, groupType := range []string{"selector", "urltest", "fallback", "failover"} {
+		if _, ok := byType[groupType]; !ok {
+			t.Fatalf("missing group capability %q", groupType)
+		}
+	}
+
+	failover := byType["failover"]
+	if !failover.PanelManaged {
+		t.Fatal("panel failover must be marked panelManaged")
+	}
+	if failover.AssembledAs != "selector" {
+		t.Fatalf("panel failover assembledAs = %q, want selector", failover.AssembledAs)
+	}
+	if failover.SessionRecovery {
+		t.Fatal("panel failover must not claim generic session recovery")
+	}
+	if failover.CoreType != "" {
+		t.Fatalf("panel failover coreType = %q, want empty because it is assembled by the panel", failover.CoreType)
+	}
+	if failover.Notes == "" {
+		t.Fatal("panel failover should carry an operator-facing boundary note")
+	}
+
+	for _, groupType := range []string{"selector", "urltest", "fallback"} {
+		group := byType[groupType]
+		if group.PanelManaged {
+			t.Fatalf("core-backed group %q must not be marked panelManaged", groupType)
+		}
+		if group.CoreType != groupType {
+			t.Fatalf("core-backed group %q coreType = %q, want same type", groupType, group.CoreType)
+		}
+		if group.SessionRecovery {
+			t.Fatalf("core-backed group %q must not claim session recovery", groupType)
+		}
 	}
 }
 

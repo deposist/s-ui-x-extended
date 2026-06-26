@@ -59,7 +59,7 @@ The full per-release notes live in the language-specific changelog files:
 - English: [`CHANGELOG-EN.md`](CHANGELOG-EN.md)
 - Русский: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - 简体中文: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
-- Latest pre-release notes: [`docs/releases/v1.0.0-beta7.md`](docs/releases/v1.0.0-beta7.md)
+- Latest pre-release notes: [`docs/releases/v1.0.0-beta8.md`](docs/releases/v1.0.0-beta8.md)
 - Upstream parity reference: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 The README keeps installation and project overview short. For full release
@@ -78,7 +78,7 @@ This fork stays compatible with existing 1.x installations. You can replace the 
 - Network-facing inputs have tighter guardrails. `X-Forwarded-For` is ignored unless trusted proxies are configured. External subscription fetches use URL and IP checks, block private and loopback targets by default, cap responses at 4 MiB, and re-check resolved IPs at dial time.
 - Subscriptions are safer to operate. Per-client subscription secrets are supported for link, JSON, and Clash formats. Legacy name-based subscription URLs still work while `subSecretRequired=false`. Subscription responses sanitize headers, apply per-IP rate limits, support gzip, and use a short output cache for successful responses.
 - The core is managed in-process. sing-box runs as an embedded Go library, not as a subprocess. Saves for clients, TLS, inbounds, outbounds, endpoints, and services hot-apply the affected object where possible. A full restart is used only when the change needs it or when hot apply cannot keep the running config safe.
-- Routing has a panel-managed failover type. A `failover` outbound keeps an ordered list of member outbounds, probes them over HTTPS, switches away from a failed active member, and can fail back after the preferred member is healthy again.
+- Routing has panel-managed outbound groups and provider-backed membership. Selector, URLTest, fallback, and failover groups have tag validation, previews, and capability metadata. The panel-managed `failover` type probes members over HTTPS, switches new connections away from a failed active member, and supports explicit all-down policies.
 - The panel can update itself from the web UI. Admins can check stable or beta releases from Settings, verify the downloaded binary against the release SHA-256, apply the update, and roll back automatically if the new binary repeatedly fails to start. The action is audited and requires password re-entry.
 - Backups and imports are more defensive. Imports enforce a 64 MiB cap, SQLite magic checks, staging, read-only integrity checks, schema migrations, and rollback to the previous DB on failure. Local unencrypted backup export streams the prepared SQLite file instead of buffering the whole backup in memory.
 - Audit and observability are built in. The panel stores audit events with retention cleanup, exposes a scoped and paginated audit API, keeps bounded logs, samples bounded observability buckets, and publishes realtime events over a hardened WebSocket path with single-use tokens and Origin checks.
@@ -128,12 +128,12 @@ Use the stable build for normal installations. Use the beta only if you want to 
 | Channel | Version | Notes |
 |---|---|---|
 | Stable | not yet released | The first stable release will follow after the beta cycle completes. |
-| Beta | `v1.0.0-beta7` | Pre-release build. Includes upstream s-ui-x v1.5.10-beta7 changes with the sing-box-extended core. Release notes: [`docs/releases/v1.0.0-beta7.md`](docs/releases/v1.0.0-beta7.md). |
+| Beta | `v1.0.0-beta8` | Pre-release build. Adds panel control-plane groups, provider health, failover policy handling, and full option coverage checks while keeping upstream s-ui-x v1.5.10-beta7 parity on the sing-box-extended core. Release notes: [`docs/releases/v1.0.0-beta8.md`](docs/releases/v1.0.0-beta8.md). |
 
 ### Linux/macOS, beta
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta7
+bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta8
 ```
 
 The command above installs the latest beta release. Once a stable release is published, the command without a version argument will install stable by default.
@@ -143,12 +143,12 @@ The command above installs the latest beta release. Once a stable release is pub
 ```sh
 git clone https://github.com/deposist/s-ui-x-extended.git
 cd s-ui-x-extended
-sudo bash install.sh v1.0.0-beta7
+sudo bash install.sh v1.0.0-beta8
 ```
 
 ### Windows
 
-- Beta: download `v1.0.0-beta7` from [its release page](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta7), extract the ZIP, and run `install-windows.bat` as Administrator.
+- Beta: download `v1.0.0-beta8` from [its release page](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta8), extract the ZIP, and run `install-windows.bat` as Administrator.
 
 Existing installations keep their settings, users, inbounds, outbounds, clients, TLS, services, and tokens. Database migrations run automatically on first start. Upgrade and rollback notes are in the changelog files: [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), [中文](CHANGELOG-ZH.md).
 
@@ -387,7 +387,7 @@ Web-панель на базе [`sing-box-extended`](https://github.com/shtorm-7
 - English: [`CHANGELOG-EN.md`](CHANGELOG-EN.md)
 - Русский: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - 简体中文: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
-- Последние pre-release notes: [`docs/releases/v1.0.0-beta7.md`](docs/releases/v1.0.0-beta7.md)
+- Последние pre-release notes: [`docs/releases/v1.0.0-beta8.md`](docs/releases/v1.0.0-beta8.md)
 - Реферс паритета с upstream: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 README оставляет только установку и общий обзор проекта. Полная история
@@ -406,7 +406,7 @@ README оставляет только установку и общий обзо
 - Входные сетевые данные проверяются жёстче. `X-Forwarded-For` игнорируется без настроенных trusted proxies. Загрузка внешних подписок проверяет URL и IP, по умолчанию блокирует private и loopback targets, ограничивает ответ 4 MiB и повторно проверяет resolved IP во время dial.
 - Подписки безопаснее в эксплуатации. Поддерживаются per-client subscription secrets для link, JSON и Clash formats. Legacy URLs по имени клиента работают, пока `subSecretRequired=false`. Subscription responses очищают headers, применяют per-IP rate limits, поддерживают gzip и используют короткий output cache для успешных ответов.
 - Core управляется внутри процесса. sing-box запускается как встроенная Go library, не как subprocess. Изменения clients, TLS, inbounds, outbounds, endpoints и services применяются hot apply к затронутому объекту, когда это безопасно. Полный restart используется только когда изменение требует его или hot apply не может безопасно сохранить running config.
-- Есть panel-managed failover outbound. Тип `failover` хранит упорядоченный список member outbounds, проверяет их по HTTPS, переключается с отказавшего активного участника и может вернуться к preferred member после восстановления.
+- Есть panel-managed outbound-группы и provider-backed участники. Selector, URLTest, fallback и failover используют проверку tag-ссылок, preview и capability metadata. Тип `failover` проверяет участников по HTTPS, переключает новые подключения с отказавшего активного участника и поддерживает явные all-down политики.
 - Панель умеет обновляться из веб-интерфейса. Администратор может проверить stable или beta releases в Settings, сверить скачанный бинарь с release SHA-256, применить обновление и автоматически откатиться, если новый бинарь несколько раз не стартует. Действие попадает в audit и требует повторного ввода пароля.
 - Backup и import стали осторожнее. Import ограничен 64 MiB, проверяет SQLite magic, использует staging, read-only integrity check, schema migrations и rollback к предыдущей базе при ошибке. Локальный незашифрованный export базы стримит подготовленный SQLite file, а не буферизует весь backup в памяти.
 - Audit и observability встроены в панель. Есть audit events с retention cleanup, scoped и paginated audit API, bounded logs, bounded observability buckets и realtime events через защищённый WebSocket path с одноразовыми tokens и Origin checks.
@@ -456,12 +456,12 @@ README оставляет только установку и общий обзо
 | Канал | Версия | Заметки |
 |---|---|---|
 | Stable | ещё не выпущена | Первый стабильный релиз выйдет после завершения beta-цикла. |
-| Beta | `v1.0.0-beta7` | Pre-release сборка. Включает изменения upstream s-ui-x v1.5.10-beta7 с ядром sing-box-extended. Release notes: [`docs/releases/v1.0.0-beta7.md`](docs/releases/v1.0.0-beta7.md). |
+| Beta | `v1.0.0-beta8` | Pre-release сборка. Добавляет control-plane группы, provider health, политики failover и проверки покрытия опций при сохранении паритета с upstream s-ui-x v1.5.10-beta7 на ядре sing-box-extended. Release notes: [`docs/releases/v1.0.0-beta8.md`](docs/releases/v1.0.0-beta8.md). |
 
 ### Linux/macOS, beta
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta7
+bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta8
 ```
 
 Эта команда ставит последнюю beta-версию. Когда выйдет stable-релиз, команда без указания версии будет ставить stable по умолчанию.
@@ -471,12 +471,12 @@ bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/
 ```sh
 git clone https://github.com/deposist/s-ui-x-extended.git
 cd s-ui-x-extended
-sudo bash install.sh v1.0.0-beta7
+sudo bash install.sh v1.0.0-beta8
 ```
 
 ### Windows
 
-- Beta: скачайте `v1.0.0-beta7` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta7), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
+- Beta: скачайте `v1.0.0-beta8` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta8), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
 
 Существующие установки сохраняют settings, users, inbounds, outbounds, clients, TLS, services и tokens. Миграции базы запускаются автоматически при первом старте. Заметки по обновлению и откату находятся в changelog: [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), [中文](CHANGELOG-ZH.md).
 

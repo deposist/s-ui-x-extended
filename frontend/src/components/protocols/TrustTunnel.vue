@@ -69,17 +69,20 @@
         </v-row>
       </v-card-text>
     </v-card>
+    <InboundAdvanced :data="data" />
   </v-card>
 </template>
 
 <script lang="ts">
 import { RECOMMENDED } from '@/types/recommended'
+import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
   props: {
     direction: { type: String },
     data: { type: Object, required: true },
   },
+  components: {InboundAdvanced},
   data() {
     return {
       congestionControllers: ['bbr', 'bbr_standard', 'bbr2', 'bbr2_variant', 'cubic', 'reno'],

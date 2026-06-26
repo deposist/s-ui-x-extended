@@ -23,7 +23,7 @@ const Data = defineStore('Data', {
     subJsonURI: "",
     subClashURI: "",
     enableTraffic: false,
-    onlines: {inbound: <string[]>[], outbound: <string[]>[], user: <string[]>[], failover: <Record<string, FailoverStatusEntry>>{}},
+    onlines: {inbound: <string[]>[], outbound: <string[]>[], user: <string[]>[], failover: <Record<string, FailoverStatusEntry>>{}, outboundHealth: <Record<string, any>>{}, providerHealth: <Record<string, any>>{}},
     config: <any>{},
     inbounds: <any[]>[],
     outbounds: <any[]>[],

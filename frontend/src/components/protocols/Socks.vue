@@ -32,12 +32,14 @@
         <UoT :data="data" />
       </v-col>
     </v-row>
+    <InboundAdvanced :data="data" />
   </v-card>
 </template>
 
 <script lang="ts">
 import Network from '@/components/Network.vue'
 import UoT from '@/components/UoT.vue'
+import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
   props: ['data'],
@@ -54,6 +56,6 @@ export default {
       set(v:string) { this.data.password = v.length > 0 ? v : undefined },
     },
   },
-  components: { Network, UoT }
+  components: {Network, UoT, InboundAdvanced}
 }
 </script>

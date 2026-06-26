@@ -190,13 +190,14 @@ export class WsRuntime {
 // payloads (e.g. stats internals) stay silent to avoid noise.
 export const handleCoreStateWarning = (payload: unknown) => {
   if (typeof payload !== 'object' || payload === null) return
-  const p = payload as { warning?: string; group?: string }
+  const p = payload as { warning?: string; group?: string; allDownPolicy?: string }
   if (p.warning !== 'failover_all_down') return
 
+  const policySuffix = p.allDownPolicy ? ` (${p.allDownPolicy})` : ''
   push.warning({
     title: i18n.global.t('warning'),
     duration: 6000,
-    message: i18n.global.t('types.failover.allDown') + (p.group ? ': ' + p.group : ''),
+    message: i18n.global.t('types.failover.allDown') + (p.group ? ': ' + p.group : '') + policySuffix,
   })
 }
 

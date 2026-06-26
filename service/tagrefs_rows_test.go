@@ -128,3 +128,44 @@ func TestEagerTagReferencesFiltersLazy(t *testing.T) {
 		t.Fatalf("lazy-only input must filter to empty, got %+v", got)
 	}
 }
+
+// fallback groups must be scanned the same way as selector/urltest/failover.
+func TestScanOutboundRowsForTagIncludesFallbackGroup(t *testing.T) {
+	rows := []model.Outbound{
+		{Id: 1, Type: "fallback", Tag: "fb", Options: json.RawMessage(`{"outbounds":["proxy-a","direct"]}`)},
+		{Id: 2, Type: "socks", Tag: "proxy-a", Options: json.RawMessage(`{"server":"127.0.0.1","server_port":1080}`)},
+	}
+	refs := scanOutboundRowsForTag(rows, "proxy-a", 2)
+	if len(refs) != 1 || refs[0].Locator != `fallback "fb" (outbounds list)` {
+		t.Fatalf("fallback group member not scanned: %+v", refs)
+	}
+}
+
+// Provider-backed groups must be found when scanning for a provider tag.
+func TestScanOutboundRowsForProviderTag(t *testing.T) {
+	rows := []model.Outbound{
+		{Id: 1, Type: "selector", Tag: "grp", Options: json.RawMessage(`{"outbounds":["direct"],"providers":["remote-sub"]}`)},
+		{Id: 2, Type: "urltest", Tag: "lat", Options: json.RawMessage(`{"outbounds":["direct"],"providers":["local-sub"]}`)},
+		{Id: 3, Type: "socks", Tag: "plain", Options: json.RawMessage(`{"server":"127.0.0.1","server_port":1080}`)},
+		{Id: 4, Type: "selector", Tag: "self", Options: json.RawMessage(`{"outbounds":["direct"],"providers":["remote-sub"]}`)},
+	}
+
+	refs := scanOutboundRowsForProviderTag(rows, "remote-sub", 4)
+	if len(refs) != 1 || refs[0].Locator != `selector "grp" (providers list)` {
+		t.Fatalf("provider ref = %+v, want only grp", refs)
+	}
+
+	refsLocal := scanOutboundRowsForProviderTag(rows, "local-sub", 0)
+	if len(refsLocal) != 1 || refsLocal[0].Locator != `urltest "lat" (providers list)` {
+		t.Fatalf("provider ref = %+v, want only lat", refsLocal)
+	}
+
+	if got := scanOutboundRowsForProviderTag(rows, "missing", 0); len(got) != 0 {
+		t.Fatalf("unreferenced provider produced refs: %+v", got)
+	}
+
+	// Plain outbounds must not be scanned for provider refs.
+	if got := scanOutboundRowsForProviderTag(rows, "remote-sub", 1); len(got) != 1 {
+		t.Fatalf("excluding a plain outbound must not change provider scan results: %+v", got)
+	}
+}

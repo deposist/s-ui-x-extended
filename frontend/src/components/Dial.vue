@@ -91,6 +91,17 @@
       </v-col>
     </v-row>
     <DomainResolver v-if="optionDR" :data="dial" field="domain_resolver" />
+    <v-row v-if="optionDomainStrategy">
+      <v-col cols="12" sm="6" md="4">
+        <v-select
+          hide-details
+          clearable
+          :label="$t('dial.domainStrategy')"
+          :items="domainStrategies"
+          v-model="dial.domain_strategy">
+        </v-select>
+      </v-col>
+    </v-row>
     <v-row v-if="optionNetworkStrategy">
       <v-col cols="12" sm="6" md="4">
         <v-select
@@ -185,6 +196,9 @@
               <v-switch v-model="optionDR" color="primary" :label="$t('dial.domainResolver')" hide-details></v-switch>
             </v-list-item>
             <v-list-item v-if="mode != 'client'">
+              <v-switch v-model="optionDomainStrategy" color="primary" :label="$t('dial.domainStrategy')" hide-details></v-switch>
+            </v-list-item>
+            <v-list-item v-if="mode != 'client'">
               <v-switch v-model="optionNetworkStrategy" color="primary" :label="$t('singbox.networkStrategy')" hide-details></v-switch>
             </v-list-item>
           </v-list>
@@ -209,6 +223,7 @@ export default {
     outTags() { return [...Data().outbounds?.map((o:any) => o.tag), ...Data().endpoints?.map((e:any) => e.tag)] },
     networkTypes() { return ['wifi', 'cellular', 'ethernet', 'other'] },
     networkStrategies() { return ['fallback', 'hybrid'] },
+    domainStrategies() { return ['prefer_ipv4', 'prefer_ipv6', 'ipv4_only', 'ipv6_only'] },
     networkConflict(): boolean {
       return this.$props.dial.network_strategy != undefined &&
         (this.$props.dial.bind_interface != undefined ||
@@ -337,6 +352,10 @@ export default {
     optionDR: {
       get(): boolean { return this.$props.dial.domain_resolver != undefined },
       set(v:boolean) { v ? (this.dnsTags.length > 0 ? this.$props.dial.domain_resolver = this.dnsTags[0] : delete this.$props.dial.domain_resolver) : delete this.$props.dial.domain_resolver }
+    },
+    optionDomainStrategy: {
+      get(): boolean { return this.$props.dial.domain_strategy != undefined },
+      set(v:boolean) { v ? this.$props.dial.domain_strategy = 'prefer_ipv4' : delete this.$props.dial.domain_strategy }
     },
     optionNetworkStrategy: {
       get(): boolean {

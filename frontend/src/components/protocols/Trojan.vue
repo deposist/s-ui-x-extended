@@ -74,11 +74,13 @@
         </v-row>
       </v-card>
     </template>
+    <InboundAdvanced :data="data" />
   </v-card>
 </template>
 
 <script lang="ts">
 import Network from '@/components/Network.vue'
+import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
   props: ['direction', 'data'],
@@ -141,6 +143,6 @@ export default {
       delete this.$props.data.fallback_for_alpn[oldKey]
     }
   },
-  components: { Network }
+  components: {Network, InboundAdvanced}
 }
 </script>

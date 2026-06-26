@@ -24,11 +24,13 @@
       </v-col>
     </v-row>
     <Headers :data="data" />
+    <InboundAdvanced :data="data" />
   </v-card>
 </template>
 
 <script lang="ts">
 import Headers from '@/components/Headers.vue'
+import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
   props: ['data'],
@@ -45,6 +47,6 @@ export default {
       set(v:string) { this.data.password = v.length > 0 ? v : undefined },
     },
   },
-  components: { Headers }
+  components: {Headers, InboundAdvanced}
 }
 </script>

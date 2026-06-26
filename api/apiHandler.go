@@ -90,6 +90,7 @@ func (a *APIHandler) registerGroupedRoutes(g *gin.RouterGroup) {
 	g.GET("/tokens", a.ApiService.GetTokens)
 	g.GET("/singbox-config", a.ApiService.GetSingboxConfig)
 	g.GET("/checkOutbound", a.ApiService.GetCheckOutbound)
+	g.GET("/groupPreview", a.ApiService.GetGroupPreview)
 	g.GET("/failover-status", a.ApiService.GetFailoverStatus)
 	g.GET("/version", a.ApiService.GetVersionInfo)
 	g.POST("/checkOutbounds", a.ApiService.CheckOutbounds)

@@ -12,11 +12,14 @@
         </v-text-field>
       </v-col>
     </v-row>
+    <InboundAdvanced :data="data" />
   </v-card>
 </template>
 
 <script lang="ts">
+import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 export default {
   props: ['data'],
+  components: {InboundAdvanced},
 }
 </script>

@@ -99,7 +99,7 @@ func NewConfigServiceWithRuntime(runtime *Runtime) *ConfigService {
 		OutboundService: OutboundService{Runtime: runtime},
 		ServicesService: ServicesService{Runtime: runtime},
 		EndpointService: EndpointService{Runtime: runtime},
-		ProviderService:  ProviderService{},
+		ProviderService: ProviderService{},
 		Runtime:         runtime,
 	}
 }
@@ -266,9 +266,13 @@ func (s *ConfigService) CheckOutbound(tag string, link string) core.CheckOutboun
 	}
 	coreInstance := s.coreInstance()
 	if coreInstance == nil || !coreInstance.IsRunning() {
-		return core.CheckOutboundResult{Error: "core not running"}
+		result := core.CheckOutboundResult{Error: "core not running"}
+		SetOutboundHealth(tag, false, 0, result.Error)
+		return result
 	}
-	return coreInstance.CheckOutbound(coreInstance.GetCtx(), tag, link)
+	result := coreInstance.CheckOutbound(coreInstance.GetCtx(), tag, link)
+	SetOutboundHealth(tag, result.OK, result.Delay, result.Error)
+	return result
 }
 
 func (s *ConfigService) CheckOutboundWithContext(ctx context.Context, tag string, link string) core.CheckOutboundResult {
@@ -277,9 +281,13 @@ func (s *ConfigService) CheckOutboundWithContext(ctx context.Context, tag string
 	}
 	coreInstance := s.coreInstance()
 	if coreInstance == nil || !coreInstance.IsRunning() {
-		return core.CheckOutboundResult{Error: "core not running"}
+		result := core.CheckOutboundResult{Error: "core not running"}
+		SetOutboundHealth(tag, false, 0, result.Error)
+		return result
 	}
-	return coreInstance.CheckOutbound(ctx, tag, link)
+	result := coreInstance.CheckOutbound(ctx, tag, link)
+	SetOutboundHealth(tag, result.OK, result.Delay, result.Error)
+	return result
 }
 
 func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initUsers string, loginUser string, hostname string) (objs []string, err error) {
