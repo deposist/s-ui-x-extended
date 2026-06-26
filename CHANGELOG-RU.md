@@ -11,6 +11,18 @@
 
 
 
+## [1.0.0-hotfix2] - 2026-06-26 - стабильный hotfix
+
+Hotfix для первого стабильного релиза. Ручная миграция базы не требуется.
+
+- Исправлено восстановление после старого frontend-кэша при переустановке панели.
+- Исправлена генерация Mieru inbound, если у части включённых клиентов нет `config.mieru`.
+- Добавлены недостающие английские и русские подписи для extended protocol editors, включая Sudoku, Mieru, MTProxy, TrustTunnel, MASQUE, OpenVPN, provider, VPN, xHTTP и mKCP поля.
+- Восстановлены frontend asset prefixes, которые проверяют release tests.
+- Убраны service lint-ошибки в Doctor, IP certificate storage и panel self-update code.
+
+Полные release notes: [`.github/RELEASE_NOTES_v1.0.0-hotfix2.md`](.github/RELEASE_NOTES_v1.0.0-hotfix2.md).
+
 ## [1.0.0-hotfix1] - 2026-06-26 - стабильный hotfix
 
 Hotfix для первого стабильного релиза. Ручная миграция базы не требуется.

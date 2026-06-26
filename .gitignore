@@ -79,6 +79,9 @@ test-db/
 # Local recovery snapshots (corrupt backups from rename-module incident)
 .tools-recovery/
 
+# Local user screenshots / temporary images
+/docs/screen1.jpg
+
 # Internal upstream-sync notes and root-level local instruction drafts
 /UPSTREAM-SYNC.md
 docs/UPSTREAM-SYNC.md

@@ -177,6 +177,13 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
 		c.Header("Pragma", "no-cache")
 		c.Header("Expires", "0")
+		if c.Request.URL.Path == base_url+"login" {
+			// After a reinstall or update, browsers may still hold an old
+			// cached index.html that references removed assets. Clearing
+			// the cache when the user lands on the login page forces the
+			// browser to fetch the fresh frontend on the next load.
+			c.Header("Clear-Site-Data", `"cache"`)
+		}
 		c.HTML(http.StatusOK, "index.html", gin.H{"BASE_URL": base_url})
 	})
 

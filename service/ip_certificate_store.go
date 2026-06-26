@@ -27,7 +27,7 @@ func sanitizeIPForFilename(ip string) string {
 }
 
 // writeCertFiles persists the fullchain and private key to the managed dir and
-// returns their absolute paths. The key is 0600, the chain 0644, the dir 0700.
+// returns their absolute paths. Certificate and key files are 0600, the dir 0700.
 func writeCertFiles(ip string, certPEM, keyPEM []byte) (certPath, keyPath string, err error) {
 	if len(certPEM) == 0 || len(keyPEM) == 0 {
 		return "", "", common.NewError("ip cert: empty certificate or key material")
@@ -39,7 +39,7 @@ func writeCertFiles(ip string, certPEM, keyPEM []byte) (certPath, keyPath string
 	base := "ip-" + sanitizeIPForFilename(ip)
 	certPath = filepath.Join(dir, base+".crt")
 	keyPath = filepath.Join(dir, base+".key")
-	if err = os.WriteFile(certPath, certPEM, 0o644); err != nil { // #nosec G306 -- public certificate chain
+	if err = os.WriteFile(certPath, certPEM, 0o600); err != nil {
 		return "", "", err
 	}
 	if err = os.WriteFile(keyPath, keyPEM, 0o600); err != nil {

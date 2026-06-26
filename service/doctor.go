@@ -127,7 +127,7 @@ func (s *DoctorService) DiagnoseClient(req DoctorClientRequest, hostname string)
 
 	inboundIDs, inboundItems := s.clientInboundChecks(client)
 	items = append(items, inboundItems...)
-	items = append(items, s.clientLinkChecks(client, inboundIDs, hostname)...)
+	items = append(items, s.clientLinkChecks(client, inboundIDs)...)
 	items = append(items, s.clientSubscriptionChecks(client)...)
 	items = append(items, s.clientRuntimeChecks(client, req.Target)...)
 
@@ -448,7 +448,7 @@ func (s *DoctorService) clientInboundChecks(client model.Client) ([]uint, []Doct
 	return inboundIDs, []DoctorItem{doctorOK("client-inbounds", "Client inbounds", fmt.Sprintf("%d inbound(s) assigned.", len(inboundIDs)), inboundIDs)}
 }
 
-func (s *DoctorService) clientLinkChecks(client model.Client, inboundIDs []uint, hostname string) []DoctorItem {
+func (s *DoctorService) clientLinkChecks(client model.Client, inboundIDs []uint) []DoctorItem {
 	var links []map[string]string
 	if len(strings.TrimSpace(string(client.Links))) > 0 {
 		if err := json.Unmarshal(client.Links, &links); err != nil {

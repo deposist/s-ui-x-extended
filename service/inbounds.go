@@ -1,6 +1,7 @@
 package service
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -423,12 +424,13 @@ func (s *InboundService) fetchUsersByCondition(db *gorm.DB, inboundType string, 
 		return nil, common.NewErrorf("unsupported user JSON field for user lookup: %s", field)
 	}
 
-	var users []string
+	var userRows []sql.NullString
 	// `field` is constrained to a static allow-list above, so embedding it
 	// directly into the JSON path is safe. The dynamic condition is fed
-	// through the query parameter slot to remain SQL-injection free.
+	// through the query parameter slot to remain SQL-injection free. Missing
+	// per-protocol client config is scanned as SQL NULL and skipped below.
 	query := fmt.Sprintf(`SELECT json_extract(clients.config, '$.%s') FROM clients WHERE enable = true AND %s`, field, condition)
-	err := db.Raw(query, args...).Scan(&users).Error
+	err := db.Raw(query, args...).Scan(&userRows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -448,8 +450,12 @@ func (s *InboundService) fetchUsersByCondition(db *gorm.DB, inboundType string, 
 			}
 		}
 	}
-	var usersJson []json.RawMessage
-	for _, user := range users {
+	usersJson := make([]json.RawMessage, 0, len(userRows))
+	for _, userRow := range userRows {
+		if !userRow.Valid {
+			continue
+		}
+		user := userRow.String
 		if stripVisionFlow {
 			user = strings.Replace(user, "xtls-rprx-vision", "", -1)
 		}

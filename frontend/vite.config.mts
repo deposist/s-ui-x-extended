@@ -34,12 +34,12 @@ export default defineConfig({
         // Such a chunk was silently dropped from the embedded binary -> 404 on a
         // dynamically imported module -> blank panel. (web/web.go also uses
         // `all:` now as a belt-and-suspenders safeguard.)
-        entryFileNames: 'assets/app-[hash].js',
+        entryFileNames: 'assets/entry-[hash].js',
         chunkFileNames: 'assets/chunk-[hash].js',
         assetFileNames: (assetInfo) => {
           if (assetInfo.names.some(name => name.endsWith('.css')))
             return 'assets/style-[hash].css'
-          return 'assets/[name][extname]'
+          return 'assets/asset-[name][extname]'
         },
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined

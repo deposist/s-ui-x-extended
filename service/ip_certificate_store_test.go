@@ -111,14 +111,17 @@ func TestWriteCertFiles(t *testing.T) {
 		t.Fatalf("key file content mismatch: err=%v", err)
 	}
 
-	// Key permissions are 0600 on POSIX (Windows ignores the mode bits).
+	// Managed certificate material is private to the panel user on POSIX
+	// (Windows ignores these mode bits).
 	if runtime.GOOS != "windows" {
-		info, err := os.Stat(keyPath)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if info.Mode().Perm() != 0o600 {
-			t.Fatalf("key perm = %o, want 600", info.Mode().Perm())
+		for label, path := range map[string]string{"cert": certPath, "key": keyPath} {
+			info, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Mode().Perm() != 0o600 {
+				t.Fatalf("%s perm = %o, want 600", label, info.Mode().Perm())
+			}
 		}
 	}
 

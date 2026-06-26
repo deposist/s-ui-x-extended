@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -118,7 +119,7 @@ func downloadToFile(client httpDoer, url string, dest string) error {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("artifact download failed: status %d", resp.StatusCode)
 	}
-	f, err := os.OpenFile(dest, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(dest, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
@@ -246,7 +247,7 @@ func RestoreBackup(execPath string) error {
 }
 
 func writePendingMarker(execPath string) error {
-	return os.WriteFile(execPath+pendingSuffix, []byte("0"), 0o644)
+	return os.WriteFile(execPath+pendingSuffix, []byte("0"), 0o600)
 }
 
 // ClearPendingUpdate removes the pending-update marker. The freshly-booted new
@@ -267,7 +268,15 @@ func CheckPendingUpdate(execPath string) bool {
 		return false
 	}
 	attempts := 0
-	fmt.Sscanf(strings.TrimSpace(string(raw)), "%d", &attempts)
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed != "" {
+		parsed, parseErr := strconv.Atoi(trimmed)
+		if parseErr != nil {
+			logger.Warning("panel update: invalid pending marker, resetting boot attempts: ", parseErr)
+		} else {
+			attempts = parsed
+		}
+	}
 	attempts++
 	if attempts >= rollbackAfterAttempts {
 		restoreErr := RestoreBackup(execPath)
@@ -280,6 +289,8 @@ func CheckPendingUpdate(execPath string) bool {
 		logger.Error("panel update: new binary failed to boot ", attempts,
 			" times and the rollback backup is unavailable: ", restoreErr)
 	}
-	_ = os.WriteFile(marker, fmt.Appendf(nil, "%d", attempts), 0o644)
+	if err := os.WriteFile(marker, fmt.Appendf(nil, "%d", attempts), 0o600); err != nil {
+		logger.Error("panel update: could not update pending marker: ", err)
+	}
 	return false
 }

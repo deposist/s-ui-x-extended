@@ -199,3 +199,114 @@ func TestFetchUsersByConditionRejectsUnexpectedJSONFieldBeforeSQL(t *testing.T) 
 		t.Fatal("unexpected JSON field should be rejected before SQL execution")
 	}
 }
+
+func TestAddUsersSkipsClientsMissingProtocolConfig(t *testing.T) {
+	initSettingTestDB(t)
+
+	inbound := model.Inbound{
+		Type:    "mieru",
+		Tag:     "mieru-shared",
+		Options: json.RawMessage(`{"listen":"0.0.0.0","listen_port":2999}`),
+	}
+	if err := database.GetDB().Create(&inbound).Error; err != nil {
+		t.Fatal(err)
+	}
+	inboundIDs := json.RawMessage(fmt.Sprintf("[%d]", inbound.Id))
+
+	clients := []model.Client{
+		{
+			Enable:   true,
+			Name:     "alice",
+			Config:   json.RawMessage(`{"mieru":{"name":"alice","password":"pw1"}}`),
+			Inbounds: inboundIDs,
+		},
+		{
+			Enable: true,
+			Name:   "bob",
+			// bob only has a vmess account, so he should be ignored when building
+			// the mieru inbound users list rather than causing a NULL scan error.
+			Config:   json.RawMessage(`{"vmess":{"id":"a0b1c2d3-e4f5-6789-0123-456789abcdef"}}`),
+			Inbounds: inboundIDs,
+		},
+		{
+			Enable:   true,
+			Name:     "carol",
+			Config:   nil,
+			Inbounds: inboundIDs,
+		},
+	}
+	if err := database.GetDB().Create(&clients).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	inboundJSON, err := json.Marshal(map[string]any{
+		"type": "mieru", "tag": "mieru-shared", "listen": "0.0.0.0", "listen_port": 2999,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := (&InboundService{}).addUsers(database.GetDB(), inboundJSON, inbound.Id, "mieru")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Users []map[string]string `json:"users"`
+	}
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Users) != 1 || got.Users[0]["name"] != "alice" {
+		t.Fatalf("expected only alice in mieru users, got %s", out)
+	}
+}
+
+func TestAddUsersKeepsUsersArrayWhenAllProtocolConfigsAreMissing(t *testing.T) {
+	initSettingTestDB(t)
+
+	inbound := model.Inbound{
+		Type:    "mieru",
+		Tag:     "mieru-empty",
+		Options: json.RawMessage(`{"listen":"0.0.0.0","listen_port":2999}`),
+	}
+	if err := database.GetDB().Create(&inbound).Error; err != nil {
+		t.Fatal(err)
+	}
+	inboundIDs := json.RawMessage(fmt.Sprintf("[%d]", inbound.Id))
+	clients := []model.Client{
+		{
+			Enable:   true,
+			Name:     "bob",
+			Config:   json.RawMessage(`{"vmess":{"id":"a0b1c2d3-e4f5-6789-0123-456789abcdef"}}`),
+			Inbounds: inboundIDs,
+		},
+		{
+			Enable:   true,
+			Name:     "carol",
+			Config:   nil,
+			Inbounds: inboundIDs,
+		},
+	}
+	if err := database.GetDB().Create(&clients).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	inboundJSON, err := json.Marshal(map[string]any{
+		"type": "mieru", "tag": "mieru-empty", "listen": "0.0.0.0", "listen_port": 2999,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := (&InboundService{}).addUsers(database.GetDB(), inboundJSON, inbound.Id, "mieru")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Users []map[string]string `json:"users"`
+	}
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Users == nil || len(got.Users) != 0 {
+		t.Fatalf("expected an empty users array, got %s", out)
+	}
+}

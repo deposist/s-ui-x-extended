@@ -31,7 +31,11 @@ function _handleMsg(msg: any): void {
       // index.html instead of looping back to /login.
       if (loginSuccessTimestamp > 0 && Date.now() - loginSuccessTimestamp < 10000) {
         loginSuccessTimestamp = 0
-        window.location.reload()
+        // A plain reload() may be served from the browser's bfcache or HTTP cache,
+        // so force a real navigation to a cache-busting URL.
+        const url = new URL(window.location.href)
+        url.searchParams.set('_', String(Date.now()))
+        window.location.replace(url.toString())
         return
       }
       if (!invalidLoginHandled) {

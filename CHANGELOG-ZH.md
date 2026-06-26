@@ -10,6 +10,18 @@
 
 
 
+## [1.0.0-hotfix2] - 2026-06-26 - 稳定版 hotfix
+
+首个稳定版的 hotfix。无需手动迁移数据库。
+
+- 修复重新安装面板后旧前端缓存导致的恢复问题。
+- 修复部分已启用客户端缺少 `config.mieru` 时 Mieru inbound 生成失败的问题。
+- 补齐扩展协议编辑器缺少的英文和俄文标签，包括 Sudoku、Mieru、MTProxy、TrustTunnel、MASQUE、OpenVPN、provider、VPN、xHTTP 和 mKCP 字段。
+- 恢复 release tests 检查的 frontend asset 前缀。
+- 清理 Doctor、IP certificate storage 和 panel self-update code 中的 service lint 问题。
+
+完整发布说明：[`.github/RELEASE_NOTES_v1.0.0-hotfix2.md`](.github/RELEASE_NOTES_v1.0.0-hotfix2.md)。
+
 ## [1.0.0-hotfix1] - 2026-06-26 - 稳定版 hotfix
 
 首个稳定版的 hotfix。无需手动迁移数据库。

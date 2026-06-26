@@ -20,7 +20,7 @@ func makeTarGz(t *testing.T, suiContent []byte) []byte {
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gz)
-	hdr := &tar.Header{Name: "s-ui/sui", Mode: 0o755, Size: int64(len(suiContent)), Typeflag: tar.TypeReg}
+	hdr := &tar.Header{Name: "s-ui/sui", Mode: 0o600, Size: int64(len(suiContent)), Typeflag: tar.TypeReg}
 	if err := tw.WriteHeader(hdr); err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestApplyPipelineRejectsChecksumMismatch(t *testing.T) {
 	dir := t.TempDir()
 	execPath := filepath.Join(dir, "sui")
 	oldContent := []byte("OLD-WORKING-BINARY")
-	if err := os.WriteFile(execPath, oldContent, 0o755); err != nil {
+	if err := os.WriteFile(execPath, oldContent, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	tarball := makeTarGz(t, []byte("NEW-BINARY"))
@@ -80,7 +80,7 @@ func TestApplyPipelineReplacesBinaryAndKeepsBackup(t *testing.T) {
 	dir := t.TempDir()
 	execPath := filepath.Join(dir, "sui")
 	oldContent := []byte("OLD-WORKING-BINARY")
-	if err := os.WriteFile(execPath, oldContent, 0o755); err != nil {
+	if err := os.WriteFile(execPath, oldContent, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	newContent := []byte("NEW-FRESH-BINARY")
@@ -118,10 +118,10 @@ func TestApplyRejectsConcurrentUpdate(t *testing.T) {
 func TestRestoreBackupRollsBack(t *testing.T) {
 	dir := t.TempDir()
 	execPath := filepath.Join(dir, "sui")
-	if err := os.WriteFile(execPath, []byte("BROKEN-NEW"), 0o755); err != nil {
+	if err := os.WriteFile(execPath, []byte("BROKEN-NEW"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(execPath+backupSuffix, []byte("GOOD-OLD"), 0o755); err != nil {
+	if err := os.WriteFile(execPath+backupSuffix, []byte("GOOD-OLD"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := RestoreBackup(execPath); err != nil {
@@ -137,8 +137,8 @@ func TestRestoreBackupRollsBack(t *testing.T) {
 func TestCheckPendingUpdateRollsBackAfterThreshold(t *testing.T) {
 	dir := t.TempDir()
 	execPath := filepath.Join(dir, "sui")
-	_ = os.WriteFile(execPath, []byte("BROKEN-NEW"), 0o755)
-	_ = os.WriteFile(execPath+backupSuffix, []byte("GOOD-OLD"), 0o755)
+	_ = os.WriteFile(execPath, []byte("BROKEN-NEW"), 0o600)
+	_ = os.WriteFile(execPath+backupSuffix, []byte("GOOD-OLD"), 0o600)
 	if err := writePendingMarker(execPath); err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestApplySuccessRecordsAppliedAuditBeforeExit(t *testing.T) {
 	t.Cleanup(resetPanelUpdateStateForTest)
 	dir := t.TempDir()
 	execPath := filepath.Join(dir, "sui")
-	if err := os.WriteFile(execPath, []byte("OLD"), 0o755); err != nil {
+	if err := os.WriteFile(execPath, []byte("OLD"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	tarball := makeTarGz(t, []byte("NEW"))

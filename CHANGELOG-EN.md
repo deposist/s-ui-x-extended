@@ -11,6 +11,18 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 
 
+## [1.0.0-hotfix2] - 2026-06-26 - stable hotfix
+
+Hotfix for the first stable release. No manual database migration is required.
+
+- Fixed stale frontend cache recovery after reinstalling the panel.
+- Fixed Mieru inbound generation when enabled clients are missing `config.mieru`.
+- Added missing English and Russian labels for extended protocol editors, including Sudoku, Mieru, MTProxy, TrustTunnel, MASQUE, OpenVPN, provider, VPN, xHTTP, and mKCP fields.
+- Restored the frontend asset filename prefixes checked by release tests.
+- Cleared service linter findings in Doctor, IP certificate storage, and panel self-update code.
+
+Full release notes: [`.github/RELEASE_NOTES_v1.0.0-hotfix2.md`](.github/RELEASE_NOTES_v1.0.0-hotfix2.md).
+
 ## [1.0.0-hotfix1] - 2026-06-26 - stable hotfix
 
 Hotfix for the first stable release. No manual database migration is required.
