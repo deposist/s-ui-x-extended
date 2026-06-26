@@ -347,6 +347,10 @@ var userJSONField = map[string]string{
 	"hysteria2":     "hysteria2",
 	"vless":         "vless",
 	"anytls":        "anytls",
+	"mieru":         "mieru",
+	"trusttunnel":   "trusttunnel",
+	"ssh":           "ssh",
+	"mtproxy":       "mtproxy",
 }
 
 var allowedUserJSONFields = map[string]struct{}{
@@ -363,6 +367,10 @@ var allowedUserJSONFields = map[string]struct{}{
 	"hysteria2":   {},
 	"vless":       {},
 	"anytls":      {},
+	"mieru":       {},
+	"trusttunnel": {},
+	"ssh":         {},
+	"mtproxy":     {},
 }
 
 func (s *InboundService) addUsers(db *gorm.DB, inboundJson []byte, inboundId uint, inboundType string) ([]byte, error) {

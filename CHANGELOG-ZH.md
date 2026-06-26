@@ -10,6 +10,17 @@
 
 
 
+## [1.0.0-hotfix1] - 2026-06-26 - 稳定版 hotfix
+
+首个稳定版的 hotfix。无需手动迁移数据库。
+
+- 修复重新安装面板后，浏览器保留旧缓存资源时可能出现的登录循环。
+- 修复 Mieru、TrustTunnel、SSH 和 MTProxy inbounds 的 `users` 注入，运行时配置会在交给 sing-box 前带上对应用户。
+- 新建 Mieru、TrustTunnel、SSH 和 MTProxy inbounds 时默认选择所有现有客户端，并阻止在未选择客户端时保存。
+- 恢复 inbound UI 中的 xHTTP 和 mKCP transport 编辑器。
+
+完整发布说明：[`.github/RELEASE_NOTES_v1.0.0-hotfix1.md`](.github/RELEASE_NOTES_v1.0.0-hotfix1.md)。
+
 ## [1.0.0] - 2026-06-26 - 首个稳定版本
 
 s-ui-x-extended 的首个稳定版本。无需手动迁移数据库。

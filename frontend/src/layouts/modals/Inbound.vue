@@ -127,7 +127,7 @@
           color="primary"
           variant="tonal"
           :loading="loading"
-          :disabled="loading"
+          :disabled="loading || !validate"
           @click="saveChanges"
         >
           {{ $t('actions.save') }}
@@ -171,6 +171,7 @@ import Transport from '@/components/Transport.vue'
 import AddrVue from '@/components/Addr.vue'
 import OutJsonVue from '@/components/OutJson.vue'
 import Data from '@/store/modules/data'
+import { push } from 'notivue'
 export default {
   props: ['visible', 'id', 'inTags', 'tlsConfigs'],
   emits: ['close'],
@@ -195,6 +196,7 @@ export default {
       // Inbound types whose build tag is not compiled into the running binary
       // (from /api/capabilities). Such types are shown disabled in the picker.
       unavailableTypes: <string[]>[],
+      requiredInitialUsers: [InTypes.Mieru, InTypes.TrustTunnel, InTypes.SSH, InTypes.MTProxy],
     }
   },
   async created() {
@@ -258,6 +260,38 @@ export default {
         delete this.inbound.out_json
       }
       this.side = "s"
+      this.resetInitUsersForType()
+    },
+    resetInitUsersForType() {
+      this.initUsers = {
+        model: this.hasUser && this.clients.length > 0 ? 'all' : 'none',
+        values: [],
+      }
+    },
+    selectedInitialClientIds(): number[] {
+      if (!this.hasUser) return []
+      switch (this.initUsers.model) {
+        case 'all':
+          return this.clients.map((c:any) => c.id)
+        case 'group':
+          return this.clients.filter((c:any) => this.initUsers.values.includes(c.group)).map((c:any) => c.id)
+        case 'client':
+          return this.initUsers.values
+        default:
+          return []
+      }
+    },
+    requiresSelectedUsers(): boolean {
+      return this.hasUser && this.requiredInitialUsers.includes(this.inbound.type)
+    },
+    ensureRequiredUsersSelected(): boolean {
+      if (!this.requiresSelectedUsers()) return true
+      if (this.selectedInitialClientIds().length > 0) return true
+      push.error({
+        title: this.$t('failed'),
+        message: this.$t('error.invalidData') + ': ' + this.$t('pages.clients'),
+      })
+      return false
     },
     add_addr() {
       this.inbound.addrs?.push(<Addr>{ server: location.hostname, server_port: this.inbound.listen_port })
@@ -273,22 +307,12 @@ export default {
       const isDuplicatedTag = Data().checkTag("inbound", this.inbound.id, this.inbound.tag)
       if (isDuplicatedTag) return
 
+      const clientIds = this.selectedInitialClientIds()
+      if (!this.ensureRequiredUsersSelected()) return
+
       // save data
       this.loading = true
       try {
-        let clientIds = []
-        if (this.hasUser) {
-          switch (this.initUsers.model) {
-            case 'all':
-              clientIds = this.clients.map((c:any) => c.id)
-              break
-            case 'group':
-              clientIds = this.clients.filter((c:any) => this.initUsers.values.includes(c.group)).map((c:any) => c.id)
-              break
-            case 'client':
-              clientIds = this.initUsers.values
-          }
-        }
         const success = await Data().save("inbounds", this.$props.id == 0 ? "new" : "edit", this.inbound, clientIds)
         if (success) this.closeModal()
       } finally {

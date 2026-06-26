@@ -6,6 +6,12 @@ import { push } from 'notivue'
 import { clearCSRFToken } from '@/store/csrf'
 
 let invalidLoginHandled = false
+let loginSuccessTimestamp = 0
+
+export const markLoginSuccess = () => {
+  loginSuccessTimestamp = Date.now()
+  invalidLoginHandled = false
+}
 
 export interface Msg {
   success: boolean
@@ -19,11 +25,25 @@ function _handleMsg(msg: any): void {
   }
   if(msg.msg){
     if (!msg.success && msg.msg == "Invalid login") {
+      // After a successful login, stale cached assets can still send
+      // unauthenticated requests. If we get "Invalid login" within 10s
+      // of a successful login, force a hard reload to fetch fresh
+      // index.html instead of looping back to /login.
+      if (loginSuccessTimestamp > 0 && Date.now() - loginSuccessTimestamp < 10000) {
+        loginSuccessTimestamp = 0
+        window.location.reload()
+        return
+      }
       if (!invalidLoginHandled) {
         invalidLoginHandled = true
-        push.error({
-          title: i18n.global.t('invalidLogin'),
-        })
+        // Suppress the error notification when already on the login
+        // page — getting "Invalid login" while not authenticated is
+        // expected, not an error worth surfacing.
+        if (router.currentRoute.value.path !== '/login') {
+          push.error({
+            title: i18n.global.t('invalidLogin'),
+          })
+        }
         localLogout()
       }
       return

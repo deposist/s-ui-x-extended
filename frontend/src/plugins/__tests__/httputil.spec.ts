@@ -19,6 +19,7 @@ vi.mock('@/plugins/api', () => ({
 vi.mock('@/router', () => ({
   default: {
     push: mocks.routerPush,
+    currentRoute: { value: { path: '/home' } },
   },
 }))
 

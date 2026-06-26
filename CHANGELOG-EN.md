@@ -11,6 +11,17 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 
 
+## [1.0.0-hotfix1] - 2026-06-26 - stable hotfix
+
+Hotfix for the first stable release. No manual database migration is required.
+
+- Fixed a login loop that could appear after reinstalling the panel in a browser with old cached assets.
+- Fixed user injection for Mieru, TrustTunnel, SSH, and MTProxy inbounds, so sing-box receives `users` for these protocols.
+- New Mieru, TrustTunnel, SSH, and MTProxy inbounds now select all existing clients by default and block saving when no client is selected.
+- Restored the xHTTP and mKCP transport editors in the inbound UI.
+
+Full release notes: [`.github/RELEASE_NOTES_v1.0.0-hotfix1.md`](.github/RELEASE_NOTES_v1.0.0-hotfix1.md).
+
 ## [1.0.0] - 2026-06-26 - first stable release
 
 First stable release of s-ui-x-extended. No manual database migration is required.

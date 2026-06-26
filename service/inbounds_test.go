@@ -117,6 +117,64 @@ func TestAddUsersDropsTrojanTopLevelPassword(t *testing.T) {
 	}
 }
 
+func TestAddUsersInjectsExtendedProtocolUsers(t *testing.T) {
+	for _, tc := range []struct {
+		inboundType string
+		userConfig  string
+		wantName    string
+		wantSecret  string
+		secretKey   string
+	}{
+		{inboundType: "mieru", userConfig: `{"name":"alice","password":"pw1"}`, wantName: "alice", wantSecret: "pw1", secretKey: "password"},
+		{inboundType: "trusttunnel", userConfig: `{"name":"alice","password":"pw1"}`, wantName: "alice", wantSecret: "pw1", secretKey: "password"},
+		{inboundType: "ssh", userConfig: `{"name":"alice","password":"pw1"}`, wantName: "alice", wantSecret: "pw1", secretKey: "password"},
+		{inboundType: "mtproxy", userConfig: `{"name":"alice","secret":"0123456789abcdef0123456789abcdef"}`, wantName: "alice", wantSecret: "0123456789abcdef0123456789abcdef", secretKey: "secret"},
+	} {
+		t.Run(tc.inboundType, func(t *testing.T) {
+			initSettingTestDB(t)
+
+			inbound := model.Inbound{
+				Type:    tc.inboundType,
+				Tag:     tc.inboundType + "-1",
+				Options: json.RawMessage(`{"listen":"0.0.0.0","listen_port":2999}`),
+			}
+			if err := database.GetDB().Create(&inbound).Error; err != nil {
+				t.Fatal(err)
+			}
+			config := json.RawMessage(fmt.Sprintf(`{"%s":%s}`, tc.inboundType, tc.userConfig))
+			if err := database.GetDB().Create(&model.Client{
+				Enable:   true,
+				Name:     "alice",
+				Config:   config,
+				Inbounds: json.RawMessage(fmt.Sprintf("[%d]", inbound.Id)),
+			}).Error; err != nil {
+				t.Fatal(err)
+			}
+
+			inboundJSON, err := json.Marshal(map[string]any{
+				"type": tc.inboundType, "tag": tc.inboundType + "-1", "listen": "0.0.0.0", "listen_port": 2999,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			out, err := (&InboundService{}).addUsers(database.GetDB(), inboundJSON, inbound.Id, tc.inboundType)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got struct {
+				Users []map[string]string `json:"users"`
+			}
+			if err := json.Unmarshal(out, &got); err != nil {
+				t.Fatal(err)
+			}
+			users := got.Users
+			if len(users) != 1 || users[0]["name"] != tc.wantName || users[0][tc.secretKey] != tc.wantSecret {
+				t.Fatalf("%s users were not injected correctly: %s", tc.inboundType, out)
+			}
+		})
+	}
+}
+
 func TestFetchUsersByConditionRejectsUnsupportedInboundTypeBeforeSQL(t *testing.T) {
 	_, err := (&InboundService{}).fetchUsersByCondition(nil, "vmess'); DROP TABLE clients; --", "1=1", map[string]interface{}{})
 	if err == nil {

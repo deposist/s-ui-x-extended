@@ -11,6 +11,17 @@
 
 
 
+## [1.0.0-hotfix1] - 2026-06-26 - стабильный hotfix
+
+Hotfix для первого стабильного релиза. Ручная миграция базы не требуется.
+
+- Исправлен login-loop после переустановки панели, если браузер держал старые assets в кэше.
+- Исправлена подстановка `users` для Mieru, TrustTunnel, SSH и MTProxy inbounds перед запуском sing-box.
+- Новые Mieru, TrustTunnel, SSH и MTProxy inbounds теперь по умолчанию выбирают всех существующих клиентов и не сохраняются без выбранных клиентов.
+- В UI inbound снова отображаются редакторы transport для xHTTP и mKCP.
+
+Полные release notes: [`.github/RELEASE_NOTES_v1.0.0-hotfix1.md`](.github/RELEASE_NOTES_v1.0.0-hotfix1.md).
+
 ## [1.0.0] - 2026-06-26 - первый стабильный релиз
 
 Первый стабильный релиз s-ui-x-extended. Ручная миграция базы не требуется.
