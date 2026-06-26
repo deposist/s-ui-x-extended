@@ -99,7 +99,7 @@ This fork stays compatible with existing 1.x installations. You can replace the 
 
 | Feature | Support |
 | -------------------------------------- | :----------------: |
-| Multiple protocols | :heavy_check_mark: |
+| Multiple protocols (see table below) | :heavy_check_mark: |
 | Multiple languages | :heavy_check_mark: |
 | Multiple clients/inbounds | :heavy_check_mark: |
 | Traffic routing interface | :heavy_check_mark: |
@@ -107,6 +107,80 @@ This fork stays compatible with existing 1.x installations. You can replace the 
 | Subscription links (link/json/clash + info) | :heavy_check_mark: |
 | Dark/light theme | :heavy_check_mark: |
 | API | :heavy_check_mark: |
+
+## Supported Protocols
+
+### Inbound protocols
+
+| Protocol | Build tag | Notes |
+| :--- | :--- | :--- |
+| Socks | (always) | |
+| HTTP | (always) | |
+| Mixed | (always) | Socks + HTTP on one port |
+| Shadowsocks | (always) | AEAD ciphers, 2022 methods |
+| VMess | (always) | UUID auth, xudp/gRPC/WS |
+| VLESS | (always) | Reality / TLS transport |
+| Trojan | (always) | HTTPS camouflage, fallback |
+| ShadowTLS | (always) | Detour to hidden protocol |
+| AnyTLS | (always) | |
+| TUIC | `with_quic` | QUIC transport |
+| Hysteria | `with_quic` | QUIC transport |
+| Hysteria2 | `with_quic` | QUIC transport |
+| Naive | (always) | Chromium network stack |
+| Mieru | (always) | Stealth protocol |
+| SSH | (always) | SSH server emulation |
+| MTProxy | `with_mtproxy` | Telegram proxy, FakeTLS |
+| Sudoku | `with_sudoku` | HTTP mask obfuscation |
+| TrustTunnel | `with_trusttunnel` | QUIC tunnel |
+| Bond (inbound) | (always) | Native core aggregate |
+| Core failover (inbound) | (always) | Native core failover |
+| Direct (inbound) | (always) | Port forward / relay |
+| Tun | (always) | Virtual network interface |
+| TProxy | (always) | Linux transparent proxy |
+
+### Outbound protocols
+
+| Protocol | Build tag | Notes |
+| :--- | :--- | :--- |
+| Direct | (always) | Raw traffic, no proxy |
+| Block | (always) | Silently drop traffic |
+| Socks | (always) | |
+| HTTP | (always) | |
+| Shadowsocks | (always) | |
+| VMess | (always) | |
+| VLESS | (always) | |
+| Trojan | (always) | |
+| ShadowTLS | (always) | |
+| AnyTLS | (always) | |
+| TUIC | `with_quic` | |
+| Hysteria | `with_quic` | |
+| Hysteria2 | `with_quic` | |
+| Mieru | (always) | |
+| SSH | (always) | |
+| Tor | (always) | SOCKS5 to Tor daemon |
+| Naive | `with_naive_outbound` | Platform-dependent (cronet) |
+| MASQUE | `with_masque` | QUIC-based HTTP/3 proxy |
+| OpenVPN | `with_openvpn` | |
+| Sudoku | `with_sudoku` | |
+| TrustTunnel | `with_trusttunnel` | |
+| Core failover (outbound) | (always) | Native core dial-time failover |
+
+### Outbound groups
+
+| Type | Managed by | Notes |
+| :--- | :--- | :--- |
+| Selector | Core | Manual switch, operator picks member |
+| URLTest | Core | Auto-select lowest-latency member |
+| Fallback | Core | Connect-time failover |
+| Failover | Panel | Periodic health checks, all-down policies |
+
+### Providers (group membership sources)
+
+| Type | Build tag | Notes |
+| :--- | :--- | :--- |
+| Inline | (always) | Hand-written members in panel |
+| Local | (always) | Local file provider |
+| Remote | (always) | Remote subscription provider |
 
 ## Supported Platforms
 
@@ -429,7 +503,7 @@ README оставляет только установку и общий обзо
 
 | Возможность | Поддержка |
 | -------------------------------------- | :----------------: |
-| Несколько протоколов | :heavy_check_mark: |
+| Множество протоколов (см. таблицу ниже) | :heavy_check_mark: |
 | Несколько языков | :heavy_check_mark: |
 | Несколько клиентов/Inbounds | :heavy_check_mark: |
 | Интерфейс маршрутизации трафика | :heavy_check_mark: |
@@ -437,6 +511,80 @@ README оставляет только установку и общий обзо
 | Ссылки подписки (link/json/clash + info) | :heavy_check_mark: |
 | Темная/светлая тема | :heavy_check_mark: |
 | API | :heavy_check_mark: |
+
+## Поддерживаемые протоколы
+
+### Inbound протоколы
+
+| Протокол | Build tag | Примечания |
+| :--- | :--- | :--- |
+| Socks | (всегда) | |
+| HTTP | (всегда) | |
+| Mixed | (всегда) | Socks + HTTP на одном порту |
+| Shadowsocks | (всегда) | AEAD-шифры, методы 2022 |
+| VMess | (всегда) | UUID-авторизация, xudp/gRPC/WS |
+| VLESS | (всегда) | Reality / TLS-транспорт |
+| Trojan | (всегда) | HTTPS-маскировка, fallback |
+| ShadowTLS | (всегда) | Detour к скрытому протоколу |
+| AnyTLS | (всегда) | |
+| TUIC | `with_quic` | QUIC-транспорт |
+| Hysteria | `with_quic` | QUIC-транспорт |
+| Hysteria2 | `with_quic` | QUIC-транспорт |
+| Naive | (всегда) | Стек Chromium |
+| Mieru | (всегда) | Стелс-протокол |
+| SSH | (всегда) | Эмуляция SSH-сервера |
+| MTProxy | `with_mtproxy` | Telegram-прокси, FakeTLS |
+| Sudoku | `with_sudoku` | HTTP-маскировка |
+| TrustTunnel | `with_trusttunnel` | QUIC-туннель |
+| Bond (inbound) | (всегда) | Нативная агрегация ядра |
+| Core failover (inbound) | (всегда) | Нативный failover ядра |
+| Direct (inbound) | (всегда) | Проброс порта / релей |
+| Tun | (всегда) | Виртуальный сетевой интерфейс |
+| TProxy | (всегда) | Прозрачный прокси Linux |
+
+### Outbound протоколы
+
+| Протокол | Build tag | Примечания |
+| :--- | :--- | :--- |
+| Direct | (всегда) | Прямой трафик, без прокси |
+| Block | (всегда) | Тихий сброс трафика |
+| Socks | (всегда) | |
+| HTTP | (всегда) | |
+| Shadowsocks | (всегда) | |
+| VMess | (всегда) | |
+| VLESS | (всегда) | |
+| Trojan | (всегда) | |
+| ShadowTLS | (всегда) | |
+| AnyTLS | (всегда) | |
+| TUIC | `with_quic` | |
+| Hysteria | `with_quic` | |
+| Hysteria2 | `with_quic` | |
+| Mieru | (всегда) | |
+| SSH | (всегда) | |
+| Tor | (всегда) | SOCKS5 к Tor-демону |
+| Naive | `with_naive_outbound` | Зависит от платформы (cronet) |
+| MASQUE | `with_masque` | QUIC HTTP/3 прокси |
+| OpenVPN | `with_openvpn` | |
+| Sudoku | `with_sudoku` | |
+| TrustTunnel | `with_trusttunnel` | |
+| Core failover (outbound) | (всегда) | Нативный dial-time failover |
+
+### Outbound-группы
+
+| Тип | Управление | Примечания |
+| :--- | :--- | :--- |
+| Selector | Ядро | Ручной выбор участника оператором |
+| URLTest | Ядро | Автовыбор участника с наименьшей задержкой |
+| Fallback | Ядро | Переключение на этапе подключения |
+| Failover | Панель | Периодические проверки здоровья, all-down политики |
+
+### Провайдеры (источники участников групп)
+
+| Тип | Build tag | Примечания |
+| :--- | :--- | :--- |
+| Inline | (всегда) | Участники задаются вручную в панели |
+| Local | (всегда) | Локальный файл-провайдер |
+| Remote | (всегда) | Удалённый провайдер подписки |
 
 ## Поддерживаемые платформы
 
