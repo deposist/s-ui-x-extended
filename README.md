@@ -112,58 +112,58 @@ This fork stays compatible with existing 1.x installations. You can replace the 
 
 ### Inbound protocols
 
-| Protocol | Build tag | Notes |
-| :--- | :--- | :--- |
-| Socks | (always) | |
-| HTTP | (always) | |
-| Mixed | (always) | Socks + HTTP on one port |
-| Shadowsocks | (always) | AEAD ciphers, 2022 methods |
-| VMess | (always) | UUID auth, xudp/gRPC/WS |
-| VLESS | (always) | Reality / TLS transport |
-| Trojan | (always) | HTTPS camouflage, fallback |
-| ShadowTLS | (always) | Detour to hidden protocol |
-| AnyTLS | (always) | |
-| TUIC | `with_quic` | QUIC transport |
-| Hysteria | `with_quic` | QUIC transport |
-| Hysteria2 | `with_quic` | QUIC transport |
-| Naive | (always) | Chromium network stack |
-| Mieru | (always) | Stealth protocol |
-| SSH | (always) | SSH server emulation |
-| MTProxy | `with_mtproxy` | Telegram proxy, FakeTLS |
-| Sudoku | `with_sudoku` | HTTP mask obfuscation |
-| TrustTunnel | `with_trusttunnel` | QUIC tunnel |
-| Bond (inbound) | (always) | Native core aggregate |
-| Core failover (inbound) | (always) | Native core failover |
-| Direct (inbound) | (always) | Port forward / relay |
-| Tun | (always) | Virtual network interface |
-| TProxy | (always) | Linux transparent proxy |
+| Protocol | Notes |
+| :--- | :--- |
+| Socks | |
+| HTTP | |
+| Mixed | Socks + HTTP on one port |
+| Shadowsocks | AEAD ciphers, 2022 methods |
+| VMess | UUID auth, xudp/gRPC/WS |
+| VLESS | Reality / TLS transport |
+| Trojan | HTTPS camouflage, fallback |
+| ShadowTLS | Detour to hidden protocol |
+| AnyTLS | |
+| TUIC | QUIC transport |
+| Hysteria | QUIC transport |
+| Hysteria2 | QUIC transport |
+| Naive | Chromium network stack |
+| Mieru | Stealth protocol |
+| SSH | SSH server emulation |
+| MTProxy | Telegram proxy (FakeTLS) |
+| Sudoku | HTTP mask obfuscation |
+| TrustTunnel | QUIC tunnel |
+| Bond | Native core aggregate inbound |
+| Core failover | Native core failover inbound |
+| Direct | Port forward / relay |
+| Tun | Virtual network interface |
+| TProxy | Linux transparent proxy |
 
 ### Outbound protocols
 
-| Protocol | Build tag | Notes |
-| :--- | :--- | :--- |
-| Direct | (always) | Raw traffic, no proxy |
-| Block | (always) | Silently drop traffic |
-| Socks | (always) | |
-| HTTP | (always) | |
-| Shadowsocks | (always) | |
-| VMess | (always) | |
-| VLESS | (always) | |
-| Trojan | (always) | |
-| ShadowTLS | (always) | |
-| AnyTLS | (always) | |
-| TUIC | `with_quic` | |
-| Hysteria | `with_quic` | |
-| Hysteria2 | `with_quic` | |
-| Mieru | (always) | |
-| SSH | (always) | |
-| Tor | (always) | SOCKS5 to Tor daemon |
-| Naive | `with_naive_outbound` | Platform-dependent (cronet) |
-| MASQUE | `with_masque` | QUIC-based HTTP/3 proxy |
-| OpenVPN | `with_openvpn` | |
-| Sudoku | `with_sudoku` | |
-| TrustTunnel | `with_trusttunnel` | |
-| Core failover (outbound) | (always) | Native core dial-time failover |
+| Protocol | Notes |
+| :--- | :--- |
+| Direct | Raw traffic, no proxy |
+| Block | Silently drop traffic |
+| Socks | |
+| HTTP | |
+| Shadowsocks | |
+| VMess | |
+| VLESS | |
+| Trojan | |
+| ShadowTLS | |
+| AnyTLS | |
+| TUIC | |
+| Hysteria | |
+| Hysteria2 | |
+| Mieru | |
+| SSH | |
+| Tor | SOCKS5 to Tor daemon |
+| Naive | |
+| MASQUE | |
+| OpenVPN | |
+| Sudoku | |
+| TrustTunnel | |
+| Core failover | Native core dial-time failover |
 
 ### Outbound groups
 
@@ -176,11 +176,11 @@ This fork stays compatible with existing 1.x installations. You can replace the 
 
 ### Providers (group membership sources)
 
-| Type | Build tag | Notes |
-| :--- | :--- | :--- |
-| Inline | (always) | Hand-written members in panel |
-| Local | (always) | Local file provider |
-| Remote | (always) | Remote subscription provider |
+| Type | Notes |
+| :--- | :--- |
+| Inline | Hand-written members in panel |
+| Local | Local file provider |
+| Remote | Remote subscription provider |
 
 ## Supported Platforms
 
@@ -516,75 +516,66 @@ README оставляет только установку и общий обзо
 
 ### Inbound протоколы
 
-| Протокол | Build tag | Примечания |
-| :--- | :--- | :--- |
-| Socks | (всегда) | |
-| HTTP | (всегда) | |
-| Mixed | (всегда) | Socks + HTTP на одном порту |
-| Shadowsocks | (всегда) | AEAD-шифры, методы 2022 |
-| VMess | (всегда) | UUID-авторизация, xudp/gRPC/WS |
-| VLESS | (всегда) | Reality / TLS-транспорт |
-| Trojan | (всегда) | HTTPS-маскировка, fallback |
-| ShadowTLS | (всегда) | Detour к скрытому протоколу |
-| AnyTLS | (всегда) | |
-| TUIC | `with_quic` | QUIC-транспорт |
-| Hysteria | `with_quic` | QUIC-транспорт |
-| Hysteria2 | `with_quic` | QUIC-транспорт |
-| Naive | (всегда) | Стек Chromium |
-| Mieru | (всегда) | Стелс-протокол |
-| SSH | (всегда) | Эмуляция SSH-сервера |
-| MTProxy | `with_mtproxy` | Telegram-прокси, FakeTLS |
-| Sudoku | `with_sudoku` | HTTP-маскировка |
-| TrustTunnel | `with_trusttunnel` | QUIC-туннель |
-| Bond (inbound) | (всегда) | Нативная агрегация ядра |
-| Core failover (inbound) | (всегда) | Нативный failover ядра |
-| Direct (inbound) | (всегда) | Проброс порта / релей |
-| Tun | (всегда) | Виртуальный сетевой интерфейс |
-| TProxy | (всегда) | Прозрачный прокси Linux |
+| Протокол | Примечания |
+| :--- | :--- |
+| Socks | |
+| HTTP | |
+| Mixed | Socks + HTTP на одном порту |
+| Shadowsocks | AEAD-шифры, методы 2022 |
+| VMess | UUID-авторизация, xudp/gRPC/WS |
+| VLESS | Reality / TLS-транспорт |
+| Trojan | HTTPS-маскировка, fallback |
+| ShadowTLS | Detour к скрытому протоколу |
+| AnyTLS | |
+| TUIC | QUIC-транспорт |
+| Hysteria | QUIC-транспорт |
+| Hysteria2 | QUIC-транспорт |
+| Naive | Стек Chromium |
+| Mieru | Стелс-протокол |
+| SSH | Эмуляция SSH-сервера |
+| MTProxy | Telegram-прокси (FakeTLS) |
+| Sudoku | HTTP-маскировка |
+| TrustTunnel | QUIC-туннель |
+| Bond | Нативная агрегация inbound |
+| Core failover | Нативный failover inbound |
+| Direct | Проброс порта / релей |
+| Tun | Виртуальный сетевой интерфейс |
+| TProxy | Прозрачный прокси Linux |
 
 ### Outbound протоколы
 
-| Протокол | Build tag | Примечания |
-| :--- | :--- | :--- |
-| Direct | (всегда) | Прямой трафик, без прокси |
-| Block | (всегда) | Тихий сброс трафика |
-| Socks | (всегда) | |
-| HTTP | (всегда) | |
-| Shadowsocks | (всегда) | |
-| VMess | (всегда) | |
-| VLESS | (всегда) | |
-| Trojan | (всегда) | |
-| ShadowTLS | (всегда) | |
-| AnyTLS | (всегда) | |
-| TUIC | `with_quic` | |
-| Hysteria | `with_quic` | |
-| Hysteria2 | `with_quic` | |
-| Mieru | (всегда) | |
-| SSH | (всегда) | |
-| Tor | (всегда) | SOCKS5 к Tor-демону |
-| Naive | `with_naive_outbound` | Зависит от платформы (cronet) |
-| MASQUE | `with_masque` | QUIC HTTP/3 прокси |
-| OpenVPN | `with_openvpn` | |
-| Sudoku | `with_sudoku` | |
-| TrustTunnel | `with_trusttunnel` | |
-| Core failover (outbound) | (всегда) | Нативный dial-time failover |
-
-### Outbound-группы
-
-| Тип | Управление | Примечания |
-| :--- | :--- | :--- |
-| Selector | Ядро | Ручной выбор участника оператором |
-| URLTest | Ядро | Автовыбор участника с наименьшей задержкой |
-| Fallback | Ядро | Переключение на этапе подключения |
-| Failover | Панель | Периодические проверки здоровья, all-down политики |
+| Протокол | Примечания |
+| :--- | :--- |
+| Direct | Прямой трафик, без прокси |
+| Block | Тихий сброс трафика |
+| Socks | |
+| HTTP | |
+| Shadowsocks | |
+| VMess | |
+| VLESS | |
+| Trojan | |
+| ShadowTLS | |
+| AnyTLS | |
+| TUIC | |
+| Hysteria | |
+| Hysteria2 | |
+| Mieru | |
+| SSH | |
+| Tor | SOCKS5 к Tor-демону |
+| Naive | |
+| MASQUE | |
+| OpenVPN | |
+| Sudoku | |
+| TrustTunnel | |
+| Core failover | Нативный dial-time failover |
 
 ### Провайдеры (источники участников групп)
 
-| Тип | Build tag | Примечания |
-| :--- | :--- | :--- |
-| Inline | (всегда) | Участники задаются вручную в панели |
-| Local | (всегда) | Локальный файл-провайдер |
-| Remote | (всегда) | Удалённый провайдер подписки |
+| Тип | Примечания |
+| :--- | :--- |
+| Inline | Участники задаются вручную в панели |
+| Local | Локальный файл-провайдер |
+| Remote | Удалённый провайдер подписки |
 
 ## Поддерживаемые платформы
 
