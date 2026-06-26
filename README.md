@@ -63,6 +63,7 @@ The full per-release notes live in the language-specific changelog files:
 - English: [`CHANGELOG-EN.md`](CHANGELOG-EN.md)
 - Русский: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - 简体中文: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
+- Latest stable notes: [`docs/releases/v1.0.0.md`](docs/releases/v1.0.0.md)
 - Latest pre-release notes: [`docs/releases/v1.0.0-beta9.md`](docs/releases/v1.0.0-beta9.md)
 - Upstream parity reference: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
@@ -127,32 +128,33 @@ This fork stays compatible with existing 1.x installations. You can replace the 
 
 ## Install or upgrade
 
-Use the stable build for normal installations. Use the beta only if you want to test the newest changes before they become stable.
+Use the stable build for normal installations. Use beta releases only if you want to test changes before they become stable.
 
 | Channel | Version | Notes |
 |---|---|---|
-| Stable | not yet released | The first stable release will follow after the beta cycle completes. |
+| Stable | `v1.0.0` | First stable release. Includes the extended protocol panel, panel-managed groups, failover health, full option coverage checks, and release artifacts built with the supported protocol tags. Release notes: [`docs/releases/v1.0.0.md`](docs/releases/v1.0.0.md). |
 | Beta | `v1.0.0-beta9` | Pre-release build. Rebuilds official artifacts with the full supported protocol tag set, including Sudoku, TrustTunnel, MASQUE, and OpenVPN. Release notes: [`docs/releases/v1.0.0-beta9.md`](docs/releases/v1.0.0-beta9.md). |
 
-### Linux/macOS, beta
+### Linux/macOS, stable
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta9
+bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.0/install.sh)
 ```
 
-The command above installs the latest beta release. Once a stable release is published, the command without a version argument will install stable by default.
+The command above installs the latest stable release. Pass a version tag explicitly if you need a specific beta or older build.
 
 ### Local clone
 
 ```sh
-git clone https://github.com/deposist/s-ui-x-extended.git
+git clone --branch v1.0.0 --depth 1 https://github.com/deposist/s-ui-x-extended.git
 cd s-ui-x-extended
-sudo bash install.sh v1.0.0-beta9
+sudo bash install.sh v1.0.0
 ```
 
 ### Windows
 
-- Beta: download `v1.0.0-beta9` from [its release page](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta9), extract the ZIP, and run `install-windows.bat` as Administrator.
+- Stable: download `v1.0.0` from [its release page](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0), extract the ZIP, and run `install-windows.bat` as Administrator.
+- Beta: `v1.0.0-beta9` remains available on [its release page](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta9).
 
 Existing installations keep their settings, users, inbounds, outbounds, clients, TLS, services, and tokens. Database migrations run automatically on first start. Upgrade and rollback notes are in the changelog files: [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), [中文](CHANGELOG-ZH.md).
 
@@ -161,7 +163,7 @@ Existing installations keep their settings, users, inbounds, outbounds, clients,
 ### Linux/macOS
 
 1. Download the latest S-UI-X Extended version for your system and architecture from GitHub: [https://github.com/deposist/s-ui-x-extended/releases/latest](https://github.com/deposist/s-ui-x-extended/releases/latest)
-2. **Optional:** download the latest `s-ui.sh`: [https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/s-ui.sh](https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/s-ui.sh)
+2. **Optional:** download the latest `s-ui.sh`: [https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.0/s-ui.sh](https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.0/s-ui.sh)
 3. **Optional:** copy `s-ui.sh` to `/usr/bin/` and run `chmod +x /usr/bin/s-ui`.
 4. Extract the S-UI-X Extended tar.gz archive to your chosen directory and enter the extracted folder.
 5. Copy the `*.service` files to `/etc/systemd/system/`, then run `systemctl daemon-reload`.
@@ -391,6 +393,7 @@ Web-панель на базе [`sing-box-extended`](https://github.com/shtorm-7
 - English: [`CHANGELOG-EN.md`](CHANGELOG-EN.md)
 - Русский: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - 简体中文: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
+- Последние stable notes: [`docs/releases/v1.0.0.md`](docs/releases/v1.0.0.md)
 - Последние pre-release notes: [`docs/releases/v1.0.0-beta9.md`](docs/releases/v1.0.0-beta9.md)
 - Реферс паритета с upstream: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
@@ -455,32 +458,33 @@ README оставляет только установку и общий обзо
 
 ## Установка или обновление
 
-Для обычных установок используйте stable. Beta нужна только если вы хотите проверить свежие изменения до стабильного релиза.
+Для обычных установок используйте stable. Beta нужна только для проверки изменений до стабильного релиза.
 
 | Канал | Версия | Заметки |
 |---|---|---|
-| Stable | ещё не выпущена | Первый стабильный релиз выйдет после завершения beta-цикла. |
+| Stable | `v1.0.0` | Первый стабильный релиз. Включает extended protocol panel, panel-managed группы, failover health, проверки option coverage и release artifacts с поддерживаемыми protocol tags. Release notes: [`docs/releases/v1.0.0.md`](docs/releases/v1.0.0.md). |
 | Beta | `v1.0.0-beta9` | Pre-release сборка. Собирает официальные artifacts с полным набором protocol build tags, включая Sudoku, TrustTunnel, MASQUE и OpenVPN. Release notes: [`docs/releases/v1.0.0-beta9.md`](docs/releases/v1.0.0-beta9.md). |
 
-### Linux/macOS, beta
+### Linux/macOS, stable
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh) v1.0.0-beta9
+bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.0/install.sh)
 ```
 
-Эта команда ставит последнюю beta-версию. Когда выйдет stable-релиз, команда без указания версии будет ставить stable по умолчанию.
+Эта команда ставит последний stable-релиз. Укажите тег версии явно, если нужна конкретная beta или старая сборка.
 
 ### Локальный clone
 
 ```sh
-git clone https://github.com/deposist/s-ui-x-extended.git
+git clone --branch v1.0.0 --depth 1 https://github.com/deposist/s-ui-x-extended.git
 cd s-ui-x-extended
-sudo bash install.sh v1.0.0-beta9
+sudo bash install.sh v1.0.0
 ```
 
 ### Windows
 
-- Beta: скачайте `v1.0.0-beta9` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta9), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
+- Stable: скачайте `v1.0.0` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
+- Beta: `v1.0.0-beta9` остаётся доступна на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta9).
 
 Существующие установки сохраняют settings, users, inbounds, outbounds, clients, TLS, services и tokens. Миграции базы запускаются автоматически при первом старте. Заметки по обновлению и откату находятся в changelog: [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), [中文](CHANGELOG-ZH.md).
 
@@ -489,7 +493,7 @@ sudo bash install.sh v1.0.0-beta9
 ### Linux/macOS
 
 1. Скачайте последнюю версию S-UI-X Extended для вашей системы и архитектуры из GitHub: [https://github.com/deposist/s-ui-x-extended/releases/latest](https://github.com/deposist/s-ui-x-extended/releases/latest)
-2. **Необязательно:** скачайте последнюю версию `s-ui.sh`: [https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/s-ui.sh](https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/s-ui.sh)
+2. **Необязательно:** скачайте последнюю версию `s-ui.sh`: [https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.0/s-ui.sh](https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.0/s-ui.sh)
 3. **Необязательно:** скопируйте `s-ui.sh` в `/usr/bin/` и выполните `chmod +x /usr/bin/s-ui`.
 4. Распакуйте tar.gz-архив S-UI-X Extended в выбранный каталог и перейдите в распакованную папку.
 5. Скопируйте файлы `*.service` в `/etc/systemd/system/`, затем выполните `systemctl daemon-reload`.

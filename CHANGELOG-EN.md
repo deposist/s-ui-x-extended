@@ -10,6 +10,21 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 - No unreleased changes.
 
 
+
+## [1.0.0] - 2026-06-26 - first stable release
+
+First stable release of s-ui-x-extended. No manual database migration is required.
+
+- Shipped the extended protocol panel on the `shtorm-7/sing-box-extended` core with upstream s-ui-x `v1.5.10-beta7` panel parity.
+- Included panel support for Sudoku, TrustTunnel, MASQUE, OpenVPN, MTProxy, WireGuard/WARP endpoints, DHCP DNS transport, outbound `block`, native inbound `bond`, and native core failover.
+- Included panel-managed outbound groups, provider-backed group membership, failover runtime state, provider and outbound health snapshots, and Nexus operational health display.
+- Included shared inbound advanced options, outbound `domain_strategy`, endpoint advanced fields, protocol-specific option coverage, and the generated option coverage matrix with zero unexplained missing fields.
+- Built official release artifacts with the supported protocol tag set and verified Linux and Windows artifacts with runtime smoke checks for `/api/capabilities`.
+- Added English and Russian configuration guides under `docs/`.
+- Kept `shtorm-7/sing-box-extended` unchanged; release work stayed in the panel repository, build workflows, and documentation.
+
+Full release notes: [`.github/RELEASE_NOTES_v1.0.0.md`](.github/RELEASE_NOTES_v1.0.0.md).
+
 ## [1.0.0-beta9] - 2026-06-26 - full protocol tags in release builds
 
 Pre-release. Follow-up to v1.0.0-beta8. No manual database migration is required.

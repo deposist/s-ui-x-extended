@@ -1,51 +1,49 @@
 # s-ui-x-extended v1.0.0
 
-First stable release — the s-ui-x web panel on the `sing-box-extended` core
-(`shtorm-7/sing-box-extended`, a fork of `SagerNet/sing-box`). This GA
-consolidates the `1.0.0-beta1`…`1.0.0-beta3` line into one stable build.
+First stable release of s-ui-x-extended. This release follows the `1.0.0-beta` line and ships the s-ui-x web panel on the `shtorm-7/sing-box-extended` core.
 
-## Highlights
+## What is included
 
-- **Recommended defaults pre-filled across the admin panel.** Creating inbounds,
-  outbounds, endpoints, DNS servers, services, TLS templates, transports and
-  routing rules now opens with security-first, ready-to-use values instead of
-  blank fields — TUIC / Naive / TrustTunnel default to `bbr` congestion control,
-  VLESS / VMess to `xudp` packet encoding, VMess to `auto` security, OpenVPN to
-  `AES-256-GCM` / `SHA256`, Sudoku to the core's recommended AEAD / padding, and
-  new TLS templates to `min_version: 1.3`.
-- **Typed inputs that prevent mistakes.** Fixed-value fields are now dropdowns
-  (congestion controls, Mieru transport / multiplexing, Sudoku AEAD / mask modes,
-  SOCKS version, Tun stack, TLS cipher suites, …), so an invalid token can no
-  longer be typed by hand; free-text fields offer editable suggestion comboboxes
-  with a sensible default (Go durations, byte-size quotas, bandwidth speeds,
-  listen addresses, time zones, NTP servers, DNS resolvers, SSH versions /
-  algorithms, health-check URLs, …) while still accepting custom input.
-- **Extended protocol & transport set.** OpenVPN, MASQUE, MTProxy, TrustTunnel,
-  WireGuard/AmneziaWG, CCM/OCM, DHCP, QUIC, mKCP/XHTTP, providers, and
-  rate/traffic/bandwidth/connection limiters — plus the inherited security and
-  reliability hardening from the core.
-- **Full protocol tag set in every build path.** Prebuilt Linux tarballs and the
-  Windows packages now ship the same protocols as the Docker image / `build.sh`
-  (WireGuard/WARP, MASQUE, OpenVPN, MTProxy, Sudoku, TrustTunnel, DHCP-DNS,
-  CCM/OCM/OOMKiller) — no more `not included in this build, rebuild with -tags ...`
-  stub at runtime. Only Naive (cronet/CGO) still varies by platform — present on
-  Linux amd64/arm64/armv7/armv6/386, Docker and Windows amd64; absent on
-  armv5/s390x and Windows arm64.
-- **Fix — `database` token scope.** API tokens scoped to `database` now actually
-  grant database export/import (`getdb`/`importdb`) and x-ui / 3x-ui migration
-  (`import-xui`), instead of being unintentionally admin-only.
-- **Docs.** `docs/scope-matrix.md` documents all six token scopes (`admin`,
-  `read`, `write`, `database`, `telegram`, `observability`) with per-endpoint
-  gates; the README was restructured and fact-checked (HTTP API, migration,
-  backup, Telegram, paid subscriptions, security & hardening, monitoring,
-  transports/TLS, build matrix).
+- Panel support for the extended protocol set used by this fork, including Sudoku, TrustTunnel, MASQUE, OpenVPN, MTProxy, WireGuard/WARP endpoints, DHCP DNS transport, and the native `bond`, `block`, and core failover types.
+- Panel-managed outbound groups and provider-backed group membership. Selector, URLTest, fallback, and panel failover include tag validation, previews, capability metadata, and provider health data.
+- Failover runtime state and operational health reporting. The panel records outbound and provider probe results, publishes bounded realtime health payloads, and shows operational health on the Nexus overview page.
+- Explicit failover all-down policies. The default keeps the current member. Direct fallback is available only when selected by an administrator.
+- Type-level and option-level coverage for sing-box-extended options. The generated option coverage matrix has zero unexplained missing fields.
+- Shared inbound advanced options, outbound `domain_strategy`, endpoint advanced fields, and protocol-specific fields exposed in TypeScript and UI where they are safe to edit.
+- `/api/capabilities` reports build tags, inbound/outbound availability, groups, and providers. The frontend uses this endpoint to disable protocol types that are not compiled into the running binary.
+- Release artifacts are built with the full supported protocol tag set. Linux and Windows artifacts include Sudoku, TrustTunnel, MASQUE, and OpenVPN, with Naive kept conditional on platforms that prepare cronet support.
+- English and Russian configuration guides were added under `docs/`.
 
-All option tokens were verified against the `sing-box-extended` core. Secrets are
-never hard-coded (UUIDs / passwords / keys are still generated), and camouflage
-targets (Reality dest / ShadowTLS handshake / SNI) are intentionally left empty.
+## Upgrade notes
 
-See [`CHANGELOG.md`](CHANGELOG.md) for the full list and [`SECURITY.md`](SECURITY.md)
-for supply-chain and hardening notes.
+No manual database migration is needed. The binary runs the normal migration chain on startup and updates `settings.version` to `1.0.0`.
 
-This is the first stable release — still review `SECURITY.md` before exposing the
-panel.
+Panel-managed failover switches new connections. Existing sessions can still break when the active member changes.
+
+Native core failover is exposed as `core-failover` in the panel to keep it separate from the panel-managed `failover` group. During config assembly, the panel serializes it to the native core `type: failover` form.
+
+Direct fallback remains opt-in. Existing failover groups keep the conservative all-down behavior unless an administrator changes the policy.
+
+## Verification
+
+The release branch was checked with:
+
+- `go test ./...`
+- `go vet ./...`
+- `go test ./core -run 'OptionCoverage|Validate' -count=1`
+- `go test ./core/capabilities -run ReleaseBuildTagsCoverManifestProtocolCapabilities -count=1`
+- `node frontend/scripts/gen-capabilities.cjs --check`
+- `cd frontend && npm run build`
+- `cd frontend && npm run lint`
+- `cd frontend && npm run test`
+- `git diff --check`
+
+The beta9 release candidate was also checked against real GitHub release artifacts:
+
+- Linux amd64 runtime smoke on an Ubuntu GitHub Actions runner.
+- Windows amd64 runtime smoke in a local isolated database folder.
+- All Linux release checksums.
+- Embedded build-tag metadata across Linux and Windows artifacts.
+- `/api/capabilities` confirmed Sudoku, TrustTunnel, MASQUE, and OpenVPN as available in runtime smoke tests.
+
+The `shtorm-7/sing-box-extended` dependency was not modified in this release.

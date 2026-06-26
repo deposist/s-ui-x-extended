@@ -9,6 +9,21 @@
 - 暂无未发布变更。
 
 
+
+## [1.0.0] - 2026-06-26 - 首个稳定版本
+
+s-ui-x-extended 的首个稳定版本。无需手动迁移数据库。
+
+- 发布基于 `shtorm-7/sing-box-extended` core 的 extended protocol panel，并保持 upstream s-ui-x `v1.5.10-beta7` 面板功能对齐。
+- 包含 Sudoku、TrustTunnel、MASQUE、OpenVPN、MTProxy、WireGuard/WARP endpoints、DHCP DNS transport、outbound `block`、native inbound `bond` 和 native core failover 的面板支持。
+- 包含 panel-managed outbound groups、provider-backed 成员、failover runtime state、provider/outbound health snapshots，以及 Nexus operational health 显示。
+- 包含 shared inbound advanced options、outbound `domain_strategy`、endpoint advanced fields、protocol-specific option coverage，以及无未解释 missing fields 的 generated option coverage matrix。
+- 官方 release artifacts 使用受支持的 protocol tags 构建，并通过 Linux 和 Windows artifacts 的 `/api/capabilities` runtime smoke checks。
+- 在 `docs/` 中新增英文和俄文配置指南。
+- 未修改 `shtorm-7/sing-box-extended`；release work 仅涉及 panel repository、build workflows 和文档。
+
+完整发布说明：[`.github/RELEASE_NOTES_v1.0.0.md`](.github/RELEASE_NOTES_v1.0.0.md)。
+
 ## [1.0.0-beta9] - 2026-06-26 - 发布构建使用完整协议标签
 
 预发布版本。此版本是 v1.0.0-beta8 的后续修复。无需手动迁移数据库。

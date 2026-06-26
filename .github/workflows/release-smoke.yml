@@ -6,7 +6,7 @@ on:
       tag:
         description: "Release tag to smoke test"
         required: true
-        default: "v1.0.0-beta9"
+        default: "v1.0.0"
         type: string
 
 permissions:
