@@ -56,7 +56,9 @@ func TestUpdateClientsOnInboundAddBackfillsProtocolConfig(t *testing.T) {
 	var got struct {
 		Users []map[string]string `json:"users"`
 	}
-	json.Unmarshal(out, &got)
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
 	if len(got.Users) != 1 || got.Users[0]["name"] != "backfill-me" {
 		t.Fatalf("expected backfill-me to be extracted, got %s", out)
 	}

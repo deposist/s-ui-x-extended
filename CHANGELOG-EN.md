@@ -11,6 +11,15 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 
 
+## [1.0.0-hotfix3] - 2026-06-26 - stable hotfix
+
+Hotfix for the first stable release. No manual database migration is required.
+
+- Fixed extended protocol inbounds (Mieru, TrustTunnel, SSH, MTProxy, and others) failing with `users is empty` when existing clients lacked per-protocol credentials. The backend now backfills missing config blocks when clients are linked to an inbound.
+- Hardened credential backfill error handling: UUID, shadowsocks password, and mtproxy secret generation errors are now propagated instead of silently producing empty values.
+
+Full release notes: [`.github/RELEASE_NOTES_v1.0.0-hotfix3.md`](.github/RELEASE_NOTES_v1.0.0-hotfix3.md).
+
 ## [1.0.0-hotfix2] - 2026-06-26 - stable hotfix
 
 Hotfix for the first stable release. No manual database migration is required.

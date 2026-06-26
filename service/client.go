@@ -400,37 +400,61 @@ func backfillClientProtocol(config json.RawMessage, inboundType string, clientNa
 	}
 
 	mixedPassword := common.Random(10)
-	u, _ := uuid.NewV4()
-	uuidStr := u.String()
 
 	newObj := map[string]any{"password": mixedPassword}
 	switch field {
 	case "mixed", "socks", "http", "naive":
 		newObj["username"] = clientName
 	case "shadowsocks":
+		var ssPw string
 		if inboundType == "shadowsocks16" {
-			ss16, _ := randomSSPassword(16)
-			newObj["password"] = ss16
+			ss, err := randomSSPassword(16)
+			if err != nil {
+				return config, false, err
+			}
+			ssPw = ss
 		} else {
-			ss32, _ := randomSSPassword(32)
-			newObj["password"] = ss32
+			ss, err := randomSSPassword(32)
+			if err != nil {
+				return config, false, err
+			}
+			ssPw = ss
 		}
+		newObj["password"] = ssPw
 		newObj["name"] = clientName
 	case "shadowtls":
-		ss32, _ := randomSSPassword(32)
-		newObj["password"] = ss32
+		ss, err := randomSSPassword(32)
+		if err != nil {
+			return config, false, err
+		}
+		newObj["password"] = ss
 		newObj["name"] = clientName
 	case "vmess":
-		newObj = map[string]any{"name": clientName, "uuid": uuidStr, "alterId": 0}
+		u, err := uuid.NewV4()
+		if err != nil {
+			return config, false, err
+		}
+		newObj = map[string]any{"name": clientName, "uuid": u.String(), "alterId": 0}
 	case "vless":
-		newObj = map[string]any{"name": clientName, "uuid": uuidStr, "flow": "xtls-rprx-vision"}
+		u, err := uuid.NewV4()
+		if err != nil {
+			return config, false, err
+		}
+		newObj = map[string]any{"name": clientName, "uuid": u.String(), "flow": "xtls-rprx-vision"}
 	case "tuic":
+		u, err := uuid.NewV4()
+		if err != nil {
+			return config, false, err
+		}
 		newObj["name"] = clientName
-		newObj["uuid"] = uuidStr
+		newObj["uuid"] = u.String()
 	case "hysteria":
 		newObj = map[string]any{"name": clientName, "auth_str": mixedPassword}
 	case "mtproxy":
-		mtSecret, _ := randomMTProtoSecret()
+		mtSecret, err := randomMTProtoSecret()
+		if err != nil {
+			return config, false, err
+		}
 		newObj = map[string]any{"name": clientName, "secret": mtSecret}
 	default:
 		newObj["name"] = clientName

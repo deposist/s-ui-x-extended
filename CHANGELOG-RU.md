@@ -11,6 +11,15 @@
 
 
 
+## [1.0.0-hotfix3] - 2026-06-26 - стабильный hotfix
+
+Hotfix для первого стабильного релиза. Ручная миграция базы не требуется.
+
+- Исправлена ошибка `users is empty` для extended protocol inbounds (Mieru, TrustTunnel, SSH, MTProxy и других), когда у существующих клиентов не было per-protocol credentials. Backend теперь достраивает недостающие config-блоки при привязке клиентов к inbound.
+- Усилена обработка ошибок при генерации credentials: ошибки генерации UUID, shadowsocks-пароля и mtproxy-секрета теперь пробрасываются, а не игнорируются.
+
+Полные release notes: [`.github/RELEASE_NOTES_v1.0.0-hotfix3.md`](.github/RELEASE_NOTES_v1.0.0-hotfix3.md).
+
 ## [1.0.0-hotfix2] - 2026-06-26 - стабильный hotfix
 
 Hotfix для первого стабильного релиза. Ручная миграция базы не требуется.
