@@ -11,7 +11,7 @@
     <v-tab value="t2">{{ $t('setting.sub') }}</v-tab>
     <v-tab value="t3">{{ $t('setting.jsonSub') }}</v-tab>
     <v-tab value="t4">{{ $t('setting.clashSub') }}</v-tab>
-    <v-tab value="t6">Basics (Singbox)</v-tab>
+    <v-tab value="t6">{{ $t('setting.basics') }}</v-tab>
     <v-tab value="t5">{{ $t('setting.maintenance') }}</v-tab>
   </v-tabs>
   <v-card-text>
@@ -1639,7 +1639,8 @@ onMounted(async () => {
   // Poll until the Data store has loaded the sing-box config, exactly like
   // the original Basics.vue did: the store's loadData() may still be in-flight
   // when Settings is opened directly (e.g. via a bookmark to /settings).
-  while (Data().lastLoad === 0) {
+  const pollDeadline = Date.now() + 10000
+  while (Data().lastLoad === 0 && Date.now() < pollDeadline) {
     await new Promise(resolve => setTimeout(resolve, 100))
   }
   resyncBasicsFromStore()
@@ -1690,13 +1691,11 @@ const restartApp = async () => {
   loading.value = true
   const msg = await HttpUtils.post('api/restartApp',{})
   if (msg.success) {
-    let url = settings.value.webURI
-    if (url !== "") {
-      const isTLS = settings.value.webCertFile !== "" || settings.value.webKeyFile !== ""
-      url = buildURL(settings.value.webDomain,settings.value.webPort.toString(),isTLS, settings.value.webPath)
-    }
+    // Use the current window location as the restart target: the form values
+    // in settings.value may not have been saved yet, so building a URL from
+    // them could redirect the user to a wrong address.
     await sleep(3000)
-    window.location.replace(url)
+    window.location.reload()
   }
   loading.value = false
 }

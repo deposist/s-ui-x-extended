@@ -325,6 +325,8 @@ export interface MASQUE extends OutboundBasics, Dial {
   udp_keepalive_period?: string
   udp_initial_packet_size?: number
   reconnect_delay?: string
+  congestion_controller?: string
+  cwnd?: number
   tls?: MasqueTls
 }
 
@@ -360,6 +362,7 @@ export interface OpenVPN extends OutboundBasics, Dial {
   key_direction?: number
   reconnect_delay?: string
   ping_interval?: string
+  ping_restart?: string
   tls?: OpenVPNTls
 }
 
@@ -436,6 +439,7 @@ export interface FailoverStatusEntry {
 
 export interface Fallback extends OutboundBasics {
   outbounds: string[]
+  blacklist_timeout?: string
 }
 
 export interface Block extends OutboundBasics {}

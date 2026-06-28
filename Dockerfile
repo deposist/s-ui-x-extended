@@ -70,4 +70,11 @@ RUN set -ex && apk add --no-cache --upgrade bash tzdata ca-certificates nftables
 COPY --from=backend-builder /app/sui /app/libcronet.so /app/
 COPY entrypoint.sh /app/
 RUN chmod +x /app/entrypoint.sh
+
+# Create a non-root user and run as that user by default.
+# Note: nftables management requires CAP_NET_ADMIN. When running in Docker, pass
+# --cap-add=NET_ADMIN (or use the appropriate Kubernetes securityContext).
+RUN addgroup -S sui && adduser -S -G sui sui && chown -R sui:sui /app
+USER sui
+
 ENTRYPOINT [ "./entrypoint.sh" ]

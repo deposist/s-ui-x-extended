@@ -20,6 +20,7 @@ import (
 	"github.com/deposist/s-ui-x-extended/realtime"
 	"github.com/deposist/s-ui-x-extended/service"
 	"github.com/deposist/s-ui-x-extended/util/common"
+	"github.com/deposist/s-ui-x-extended/util/redact"
 
 	"github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
@@ -278,7 +279,7 @@ func (a *ApiService) enforceWSHandshakeRateLimit(c *gin.Context, endpoint string
 	})
 	c.Header("Retry-After", strconv.Itoa(int(wsHandshakeRateLimitWindow/time.Second)))
 	if endpoint == "ws-token" {
-		c.JSON(http.StatusTooManyRequests, Msg{Success: false, Msg: "wsToken: " + err.Error()})
+		c.JSON(http.StatusTooManyRequests, Msg{Success: false, Msg: "wsToken: " + redact.String(err.Error())})
 	} else {
 		c.Status(http.StatusTooManyRequests)
 	}

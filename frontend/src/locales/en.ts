@@ -179,7 +179,8 @@ export default {
       addTitle: "Add binding",
       editTitle: "Bind Telegram to {name}",
       client: "Client",
-      tgId: "Telegram user ID (0 = unbind)",
+      tgId: "Telegram user ID",
+      invalidTgId: "Enter a valid Telegram user ID, or use Unbind to clear an existing binding.",
     },
     unbind: {
       title: "Unbind Telegram from {name}?",
@@ -923,6 +924,7 @@ export default {
     },
   },
   setting: {
+    basics: "Basics",
     interface: "Interface",
     maintenance: "Maintenance",
     sub: "Subscription",

@@ -209,9 +209,25 @@ export default {
     async fetchFromUrl() {
       this.error = ''
       this.parsed = null
+      const url = (this.fetchUrl || '').trim()
+      if (!url) {
+        this.error = this.$t('rule.import.errFetch', { message: 'URL is required' })
+        return
+      }
+      let parsedUrl: URL
+      try {
+        parsedUrl = new URL(url)
+      } catch {
+        this.error = this.$t('rule.import.errFetch', { message: 'Invalid URL' })
+        return
+      }
+      if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
+        this.error = this.$t('rule.import.errFetch', { message: 'Only HTTP(S) URLs are allowed' })
+        return
+      }
       this.fetching = true
       try {
-        const resp = await fetch(this.fetchUrl)
+        const resp = await fetch(url)
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const block = this.extractRouteBlock(await resp.json())
         if (!block) this.error = this.$t('rule.import.errNoArraysFetched')

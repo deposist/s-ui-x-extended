@@ -9,6 +9,7 @@ import (
 	"github.com/deposist/s-ui-x-extended/core/capabilities"
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
+	"github.com/deposist/s-ui-x-extended/logger"
 	"github.com/deposist/s-ui-x-extended/service"
 	"github.com/deposist/s-ui-x-extended/util"
 	"github.com/deposist/s-ui-x-extended/util/common"
@@ -140,12 +141,14 @@ func (j *JsonService) getOutbounds(clientConfig json.RawMessage, inbounds []*mod
 	}
 	for _, inData := range inbounds {
 		if len(inData.OutJson) < 5 {
+			logger.Warningf("subscription: inbound %d has empty or truncated OutJson, skipping", inData.Id)
 			continue
 		}
 		var outbound map[string]interface{}
 		err = json.Unmarshal(inData.OutJson, &outbound)
 		if err != nil {
-			return nil, nil, err
+			logger.Warningf("subscription: inbound %d has corrupt OutJson, skipping: %v", inData.Id, err)
+			continue
 		}
 		protocol, _ := outbound["type"].(string)
 

@@ -188,9 +188,10 @@ func (b *Bot) sendPhoto(ctx context.Context, chatID int64, png []byte, caption s
 		return fmt.Errorf("telegram sendPhoto: network error")
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, maxTelegramResponseBytes))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("telegram sendPhoto: status %d", resp.StatusCode)
 	}
-	return nil
+	_, err = parseTelegramResponse("sendPhoto", data)
+	return err
 }

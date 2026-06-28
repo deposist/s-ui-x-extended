@@ -201,14 +201,16 @@ func (s *InboundService) saveInboundUpsert(tx *gorm.DB, act string, data json.Ra
 		return nil, err
 	}
 	if inbound.TlsId > 0 {
-		if err := tx.Model(model.Tls{}).Where("id = ?", inbound.TlsId).Find(&inbound.Tls).Error; err != nil {
+		if err := tx.Model(model.Tls{}).Where("id = ?", inbound.TlsId).First(&inbound.Tls).Error; err != nil {
 			return nil, err
 		}
 	}
 	var oldTag string
 	if act == "edit" {
-		if err := tx.Model(model.Inbound{}).Select("tag").Where("id = ?", inbound.Id).Find(&oldTag).Error; err != nil {
-			return nil, err
+		if err := tx.Model(model.Inbound{}).Select("tag").Where("id = ?", inbound.Id).First(&oldTag).Error; err != nil {
+			if !database.IsNotFound(err) {
+				return nil, err
+			}
 		}
 		if oldTag != "" && oldTag != inbound.Tag {
 			refs, err := inboundTagReferences(tx, oldTag)

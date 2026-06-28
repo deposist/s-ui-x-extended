@@ -11,6 +11,7 @@ import (
 
 	"github.com/deposist/s-ui-x-extended/service"
 	"github.com/deposist/s-ui-x-extended/util/common"
+	"github.com/deposist/s-ui-x-extended/util/redact"
 	"github.com/deposist/s-ui-x-extended/util/ssrf"
 
 	"github.com/gin-gonic/gin"
@@ -29,32 +30,32 @@ func (a *ApiService) GetSecurityAudit(c *gin.Context) {
 	}
 	limit, err := parseAuditLimit(c.Query("limit"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "audit: " + err.Error()})
+		c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "audit: " + redact.String(err.Error())})
 		return
 	}
 	cursor, err := parseAuditCursor(c.Query("cursor"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "audit: " + err.Error()})
+		c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "audit: " + redact.String(err.Error())})
 		return
 	}
 	eventFilter, err := parseAuditEventFilter(c.Query("event"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "audit: " + err.Error()})
+		c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "audit: " + redact.String(err.Error())})
 		return
 	}
 	severityFilter, err := parseAuditSeverityFilter(c.Query("severity"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "audit: " + err.Error()})
+		c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "audit: " + redact.String(err.Error())})
 		return
 	}
 	since, err := parseAuditUnixSecondsFilter("since", c.Query("since"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "audit: " + err.Error()})
+		c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "audit: " + redact.String(err.Error())})
 		return
 	}
 	until, err := parseAuditUnixSecondsFilter("until", c.Query("until"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "audit: " + err.Error()})
+		c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "audit: " + redact.String(err.Error())})
 		return
 	}
 	events, nextCursor, err := a.AuditService.ListPageFiltered(cursor, limit, eventFilter, severityFilter, since, until)
@@ -192,7 +193,7 @@ func (a *ApiService) enforceAuditEndpointRateLimit(c *gin.Context) bool {
 		"ip": ip,
 	})
 	c.Header("Retry-After", strconv.Itoa(int(auditEndpointRateLimitWindow/time.Second)))
-	c.JSON(http.StatusTooManyRequests, Msg{Success: false, Msg: "audit: " + err.Error()})
+	c.JSON(http.StatusTooManyRequests, Msg{Success: false, Msg: "audit: " + redact.String(err.Error())})
 	return false
 }
 
@@ -339,7 +340,7 @@ func (a *ApiService) GetObservabilityHistory(c *gin.Context) {
 	if metricRaw := c.Query("metric"); metricRaw != "" {
 		metric, err := service.ParseObservabilityMetric(metricRaw)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "observability: " + err.Error()})
+			c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "observability: " + redact.String(err.Error())})
 			return
 		}
 		samples, err := a.ObservabilityService.MetricHistory(metric, bucket, since)
@@ -379,12 +380,12 @@ func (a *ApiService) GetCoreHistory(c *gin.Context) {
 func parseObservabilityQuery(c *gin.Context) (service.ObservabilityBucket, int64, bool) {
 	bucket, err := service.ParseObservabilityBucket(c.Query("bucket"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "observability: " + err.Error()})
+		c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "observability: " + redact.String(err.Error())})
 		return "", 0, false
 	}
 	since, err := parseObservabilitySince(c.Query("since"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "observability: " + err.Error()})
+		c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "observability: " + redact.String(err.Error())})
 		return "", 0, false
 	}
 	return bucket, since, true

@@ -130,14 +130,20 @@ export default {
 
       // save data
       this.loading = true
-      this.outbounds.forEach(async (o:Outbound, index:number) => {
-        if (this.outChecks[index] == 2) return
-        this.outChecks[index] = 3
-        const success = await Data().save("outbounds",  "new", o)
-        if (success) this.outChecks[index] = 1
-        else this.outChecks[index] = 2
-      })
-      this.loading = false
+      try {
+        await Promise.all(this.outbounds.map(async (o:Outbound, index:number) => {
+          if (this.outChecks[index] == 2) return
+          this.outChecks[index] = 3
+          try {
+            const success = await Data().save("outbounds",  "new", o)
+            this.outChecks[index] = success ? 1 : 2
+          } catch {
+            this.outChecks[index] = 2
+          }
+        }))
+      } finally {
+        this.loading = false
+      }
     }
   },
   computed: {

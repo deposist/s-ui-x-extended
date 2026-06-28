@@ -427,14 +427,16 @@ func (p *PaymentService) finalizeRefund(orderID uint, revoke bool) error {
 			// be clobbered with this order's stale snapshot (which would silently
 			// discard the usage accrued in the current window). Totals stay
 			// relative either way, so the ledger remains consistent.
-			var newerTrafficOrders int64
-			if err := tx.Model(&PaymentOrder{}).
-				Where("client_id = ? AND id > ? AND status = ?", order.ClientId, order.Id, StatusPaid).
+			var latestTrafficOrder PaymentOrder
+			err := tx.Model(&PaymentOrder{}).
+				Where("client_id = ? AND status = ?", order.ClientId, StatusPaid).
 				Where("tariff_id IN (?)", tx.Model(&Tariff{}).Select("id").Where("add_traffic_bytes > 0")).
-				Count(&newerTrafficOrders).Error; err != nil {
+				Order("id DESC").
+				First(&latestTrafficOrder).Error
+			if err != nil && !database.IsNotFound(err) {
 				return err
 			}
-			if newerTrafficOrders == 0 {
+			if database.IsNotFound(err) || latestTrafficOrder.Id == order.Id {
 				updates["up"] = order.GrantedUp
 				updates["down"] = order.GrantedDown
 			}

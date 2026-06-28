@@ -137,6 +137,27 @@ func (s *SubService) ensureClientSubSecret(db *gorm.DB, client *model.Client) er
 	if err != nil {
 		return err
 	}
-	client.SubSecret = secret.String()
-	return db.Model(model.Client{}).Where("id = ?", client.Id).Update("sub_secret", client.SubSecret).Error
+	candidate := secret.String()
+	result := db.Model(model.Client{}).
+		Where("id = ? AND (sub_secret = ? OR sub_secret IS NULL)", client.Id, "").
+		Update("sub_secret", candidate)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 1 {
+		client.SubSecret = candidate
+		return nil
+	}
+	var persisted model.Client
+	if err := db.Model(model.Client{}).
+		Select("sub_secret").
+		Where("id = ?", client.Id).
+		First(&persisted).Error; err != nil {
+		return err
+	}
+	if persisted.SubSecret == "" {
+		return fmt.Errorf("sub_secret was not persisted for client %d", client.Id)
+	}
+	client.SubSecret = persisted.SubSecret
+	return nil
 }

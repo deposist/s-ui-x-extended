@@ -82,7 +82,7 @@ func extractPlainTLS(row xuiInboundRow) (*tlsCertSpec, []string, error) {
 		if pathOnly {
 			return nil, []string{fmt.Sprintf("inbound %s: TLS certificate is referenced by file path on the source host; its content is not in the database, so upload the certificate/key on this host after import", row.Tag)}, nil
 		}
-		return nil, []string{fmt.Sprintf("inbound %s: TLS is enabled but no certificate is present; upload one manually", row.Tag)}, nil
+		return nil, []string{fmt.Sprintf("inbound %s: TLS is enabled but no inline certificate is present; upload one manually", row.Tag)}, nil
 	}
 	spec := &tlsCertSpec{
 		ServerName:  strings.TrimSpace(t.ServerName),

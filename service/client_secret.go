@@ -18,21 +18,33 @@ func (s *ClientService) prepareClientSubSecret(tx *gorm.DB, client *model.Client
 	if client.SubSecret != "" {
 		return nil
 	}
-	if preserveExisting && client.Id > 0 {
-		var old model.Client
-		if err := tx.Model(model.Client{}).Select("sub_secret").Where("id = ?", client.Id).First(&old).Error; err != nil {
-			return err
-		}
-		if old.SubSecret != "" {
-			client.SubSecret = old.SubSecret
-			return nil
-		}
-	}
 	secret, err := uuid.NewV4()
 	if err != nil {
 		return err
 	}
-	client.SubSecret = secret.String()
+	candidate := secret.String()
+	if preserveExisting && client.Id > 0 {
+		result := tx.Model(model.Client{}).
+			Where("id = ? AND (sub_secret = ? OR sub_secret IS NULL)", client.Id, "").
+			Update("sub_secret", candidate)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 1 {
+			client.SubSecret = candidate
+			return nil
+		}
+		var old model.Client
+		if err := tx.Model(model.Client{}).Select("sub_secret").Where("id = ?", client.Id).First(&old).Error; err != nil {
+			return err
+		}
+		if old.SubSecret == "" {
+			return gorm.ErrRecordNotFound
+		}
+		client.SubSecret = old.SubSecret
+		return nil
+	}
+	client.SubSecret = candidate
 	return nil
 }
 

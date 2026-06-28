@@ -353,7 +353,7 @@ func (a *ApiService) GetLogs(c *gin.Context) {
 	}
 	logs, err := a.ServerService.GetLogsFiltered(count, level, c.Query("source"), c.Query("filter"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "logs: " + err.Error()})
+		c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "logs: " + redact.String(err.Error())})
 		return
 	}
 	jsonObj(c, logs, nil)
@@ -522,7 +522,7 @@ func (a *ApiService) Login(c *gin.Context) {
 		recordLoginFailure(remoteIP)
 		recordLoginFailure(userKey)
 		a.recordAudit(c, username, "login_failed", "auth", service.AuditSeverityWarn, map[string]any{
-			"reason": err.Error(),
+			"reason": redact.String(err.Error()),
 		})
 		a.TelegramService.NotifyTelegramEvent("login_failed", telegramRequestFields(c))
 		jsonMsg(c, "", err)
@@ -552,7 +552,7 @@ func (a *ApiService) Login(c *gin.Context) {
 	} else {
 		logger.Warning("login failed: ", err)
 		a.recordAudit(c, loginUser, "login_session_failed", "auth", service.AuditSeverityWarn, map[string]any{
-			"reason": err.Error(),
+			"reason": redact.String(err.Error()),
 		})
 	}
 
@@ -676,11 +676,11 @@ func (a *ApiService) Save(c *gin.Context, loginUser string) {
 				invalidSettingKey = true
 			}
 			a.recordAudit(c, loginUser, event, "settings", service.AuditSeverityWarn, map[string]any{
-				"reason": err.Error(),
+				"reason": redact.String(err.Error()),
 			})
 		}
 		if invalidSettingKey {
-			c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "save: " + err.Error()})
+			c.JSON(http.StatusBadRequest, Msg{Success: false, Msg: "save: " + redact.String(err.Error())})
 			return
 		}
 		jsonMsg(c, "save", err)
@@ -1057,7 +1057,7 @@ func (a *ApiService) GetSingboxConfig(c *gin.Context) {
 	rawConfig, err := a.ConfigService.GetConfig("")
 	if err != nil {
 		c.Status(400)
-		_, _ = c.Writer.WriteString(err.Error())
+		_, _ = c.Writer.WriteString(redact.String(err.Error()))
 		return
 	}
 	c.Header("Content-Type", "application/json")

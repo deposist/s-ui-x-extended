@@ -2,10 +2,10 @@ package common
 
 import (
 	crand "crypto/rand"
+	"encoding/binary"
 	"math/big"
 	mrand "math/rand"
 	"sync"
-	"time"
 )
 
 var (
@@ -15,10 +15,19 @@ var (
 		'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
 	}
 
-	// #nosec G404 -- non-cryptographic fallback only; crypto/rand is the primary source above.
-	fallbackRand = mrand.New(mrand.NewSource(time.Now().UnixNano()))
+	// #nosec G404 -- crypto-seeded fallback only; crypto/rand is the primary source above.
+	fallbackRand *mrand.Rand
 	fallbackMu   = sync.Mutex{}
 )
+
+func init() {
+	var seedBytes [8]byte
+	if _, err := crand.Read(seedBytes[:]); err != nil {
+		panic("crypto/rand unavailable: " + err.Error())
+	}
+	seed := int64(binary.LittleEndian.Uint64(seedBytes[:]))
+	fallbackRand = mrand.New(mrand.NewSource(seed))
+}
 
 func Random(n int) string {
 	if n <= 0 || len(allSeq) == 0 {
@@ -29,7 +38,7 @@ func Random(n int) string {
 	for i := 0; i < n; i++ {
 		num, err := crand.Int(crand.Reader, maxBig)
 		if err != nil {
-			// fallback
+			// crypto-seeded fallback
 			fallbackMu.Lock()
 			result[i] = allSeq[fallbackRand.Intn(len(allSeq))]
 			fallbackMu.Unlock()
@@ -47,7 +56,7 @@ func RandomInt(n int) int {
 	max := big.NewInt(int64(n))
 	result, err := crand.Int(crand.Reader, max)
 	if err != nil {
-		// fallback
+		// crypto-seeded fallback
 		fallbackMu.Lock()
 		defer fallbackMu.Unlock()
 		return fallbackRand.Intn(n)

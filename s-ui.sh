@@ -2,6 +2,7 @@
 # S-UI management menu with multilingual UI (English / Russian / Chinese).
 # Language is persisted in /etc/s-ui/lang and can be switched from
 # menu item 22.
+set -eo pipefail
 
 red='\033[0;31m'
 green='\033[0;32m'
@@ -21,7 +22,7 @@ load_language() {
     fi
     if [[ -f "${LANG_FILE}" ]]; then
         local saved
-        saved=$(cat "${LANG_FILE}" 2>/dev/null | tr -d '[:space:]')
+        saved=$(tr -d '[:space:]')
         case "${saved}" in
             en|ru|zh) lang="${saved}"; return ;;
         esac
@@ -52,6 +53,7 @@ t() {
             update_done)         echo "更新完成，面板已自动重启"; return ;;
             enter_panel_version) echo "请输入面板版本（例如 v1.4.1）："; return ;;
             version_required)    echo "面板版本不能为空。正在退出。"; return ;;
+            invalid_panel_version) echo "无效的面板版本：$2。请使用类似 v1.4.1 或 v1.0.0-beta1 的版本。"; return ;;
             downloading_version) echo "正在下载并安装面板版本 $2..."; return ;;
             uninstall_q)         echo "确定要卸载面板吗？"; return ;;
             uninstall_done)      echo "卸载成功。如果要删除此脚本，请在退出脚本后运行 rm /usr/local/s-ui -f。"; return ;;
@@ -194,6 +196,8 @@ t() {
         ru:enter_panel_version) echo "Введите версию панели (например, v1.4.1):";;
         en:version_required)    echo "Panel version cannot be empty. Exiting.";;
         ru:version_required)    echo "Версия панели не может быть пустой. Выход.";;
+        en:invalid_panel_version) echo "Invalid panel version: $2. Use a version like v1.4.1 or v1.0.0-beta1.";;
+        ru:invalid_panel_version) echo "Недопустимая версия панели: $2. Используйте версию вида v1.4.1 или v1.0.0-beta1.";;
         en:downloading_version) echo "Downloading and installing panel $2...";;
         ru:downloading_version) echo "Скачивание и установка версии панели $2...";;
         en:uninstall_q)         echo "Are you sure you want to uninstall the panel?";;
@@ -386,6 +390,8 @@ t() {
         ru:lang_select)         echo "Select language / Выберите язык / 请选择语言";;
         en:lang_set_to)         echo "Language set to: $2";;
         ru:lang_set_to)         echo "Язык установлен: $2";;
+        en:lang_save_failed)    echo "Could not write language file $2; check permissions.";;
+        ru:lang_save_failed)    echo "Не удалось сохранить файл языка $2; проверьте права.";;
 
         en:usage_title)         echo "S-UI management menu usage";;
         ru:usage_title)         echo "Использование меню управления S-UI";;
@@ -440,13 +446,13 @@ fi
 echo "$(t current_release "${release}")"
 
 confirm() {
-    if [[ $# > 1 ]]; then
-        echo && read -p "$1 [$(t default_n "$2")]: " temp
+    if [[ $# -gt 1 ]]; then
+        echo && read -rp "$1 [$(t default_n "$2")]: " temp
         if [[ x"${temp}" == x"" ]]; then
             temp=$2
         fi
     else
-        read -p "$1 [y/n]: " temp
+read -rp "$1 [y/n]: " temp
     fi
     if [[ x"${temp}" == x"y" || x"${temp}" == x"Y" ]]; then
         return 0
@@ -465,7 +471,7 @@ confirm_restart() {
 }
 
 before_show_menu() {
-    echo && echo -n -e "${yellow}$(t press_enter_main)${plain}" && read temp
+    echo && echo -n -e "${yellow}$(t press_enter_main)${plain}" && read -r temp
     show_menu
 }
 
@@ -498,7 +504,7 @@ update() {
 
 custom_version() {
     echo "$(t enter_panel_version)"
-    read panel_version
+    read -r panel_version
 
     if [ -z "$panel_version" ]; then
         echo "$(t version_required)"
@@ -507,12 +513,15 @@ custom_version() {
 
     [[ "${panel_version}" != v* ]] && panel_version="v${panel_version}"
 
+    if [[ ! "${panel_version}" =~ ^v[0-9]+[.][0-9]+[.][0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+        echo "$(t invalid_panel_version "${panel_version}")"
+        exit 1
+    fi
+
     download_link="https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh"
 
-    install_command="bash <(curl -Ls $download_link) $panel_version"
-
     echo "$(t downloading_version "${panel_version}")"
-    eval "$install_command"
+    bash <(curl -Ls "${download_link}") "${panel_version}"
 }
 
 uninstall() {
@@ -553,8 +562,8 @@ reset_admin() {
 
 set_admin() {
     echo "$(t set_admin_warn)"
-    read -p "$(t set_username_p)" config_account
-    read -p "$(t set_password_p)" config_password
+read -rp "$(t set_username_p)" config_account
+read -rp "$(t set_password_p)" config_password
     /usr/local/s-ui/sui admin -username "${config_account}" -password "${config_password}"
     before_show_menu
 }
@@ -574,22 +583,22 @@ reset_setting() {
 
 set_setting() {
     echo -e "$(t enter_panel_port)"
-    read config_port
+    read -r config_port
     echo -e "$(t enter_panel_path)"
-    read config_path
+    read -r config_path
 
     echo -e "$(t enter_sub_port)"
-    read config_subPort
+    read -r config_subPort
     echo -e "$(t enter_sub_path)"
-    read config_subPath
+    read -r config_subPath
 
     echo -e "${yellow}$(t initializing)${plain}"
-    params=""
-    [ -z "$config_port" ] || params="$params -port $config_port"
-    [ -z "$config_path" ] || params="$params -path $config_path"
-    [ -z "$config_subPort" ] || params="$params -subPort $config_subPort"
-    [ -z "$config_subPath" ] || params="$params -subPath $config_subPath"
-    /usr/local/s-ui/sui setting ${params}
+    params=()
+    [ -z "$config_port" ] || params+=("-port" "$config_port")
+    [ -z "$config_path" ] || params+=("-path" "$config_path")
+    [ -z "$config_subPort" ] || params+=("-subPort" "$config_subPort")
+    [ -z "$config_subPath" ] || params+=("-subPath" "$config_subPath")
+    /usr/local/s-ui/sui setting "${params[@]}"
     before_show_menu
 }
 
@@ -629,7 +638,7 @@ write_env_value() {
     local var="$1" value="$2"
     mkdir -p "$(dirname "${SECRETBOX_ENV_FILE}")"
     if [[ -f "${SECRETBOX_ENV_FILE}" ]]; then
-        if grep -q "^${var}=" "${SECRETBOX_ENV_FILE}"; then
+        if awk -v var="${var}" 'index($0, var"=") == 1 { exit 0 } END { exit 1 }' "${SECRETBOX_ENV_FILE}"; then
             local tmp="${SECRETBOX_ENV_FILE}.tmp"
             (umask 077 && awk -v var="${var}" -v val="${value}" \
                 'index($0, var"=") == 1 { print var "=" val; next } { print }' \
@@ -708,20 +717,21 @@ view_uri() {
     if [[ $? != 0 ]]; then
         LOGE "$(t could_not_get_uri)"
         before_show_menu
+        return
     fi
     LOGI "$(t panel_url)"
     echo -e "${green}${info}${plain}"
 }
 
 start() {
-    check_status $1
+    check_status "$1"
     if [[ $? == 0 ]]; then
         echo ""
         LOGI "$(t already_running "${1}")"
     else
-        systemctl start $1
+        systemctl start "$1"
         sleep 2
-        check_status $1
+        check_status "$1"
         if [[ $? == 0 ]]; then
             LOGI "$(t start_ok "${1}")"
         else
@@ -735,14 +745,14 @@ start() {
 }
 
 stop() {
-    check_status $1
+    check_status "$1"
     if [[ $? == 1 ]]; then
         echo ""
         LOGI "$(t already_stopped "${1}")"
     else
-        systemctl stop $1
+        systemctl stop "$1"
         sleep 2
-        check_status
+        check_status "$1"
         if [[ $? == 1 ]]; then
             LOGI "$(t stop_ok "${1}")"
         else
@@ -756,9 +766,17 @@ stop() {
 }
 
 restart() {
-    systemctl restart $1
-    sleep 2
-    check_status $1
+    systemctl restart "$1"
+    local waited=0
+    while [[ $waited -lt 10 ]]; do
+        check_status "$1"
+        if [[ $? == 0 ]]; then
+            break
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    check_status "$1"
     if [[ $? == 0 ]]; then
         LOGI "$(t restart_ok "${1}")"
     else
@@ -777,7 +795,7 @@ status() {
 }
 
 enable() {
-    systemctl enable $1
+    systemctl enable "$1"
     if [[ $? == 0 ]]; then
         LOGI "$(t enable_ok "${1}")"
     else
@@ -790,7 +808,7 @@ enable() {
 }
 
 disable() {
-    systemctl disable $1
+    systemctl disable "$1"
     if [[ $? == 0 ]]; then
         LOGI "$(t disable_ok "${1}")"
     else
@@ -803,7 +821,7 @@ disable() {
 }
 
 show_log() {
-    journalctl -u $1.service -e --no-pager -f
+    journalctl -u "$1".service -e --no-pager -f
     if [[ $# == 1 ]]; then
         before_show_menu
     fi
@@ -834,8 +852,8 @@ check_status() {
     if [[ ! -f "/etc/systemd/system/$1.service" ]]; then
         return 2
     fi
-    temp=$(systemctl status "$1" | grep Active | awk '{print $3}' | cut -d "(" -f2 | cut -d ")" -f1)
-    if [[ x"${temp}" == x"running" ]]; then
+    temp=$(systemctl is-active "$1" 2>/dev/null)
+    if [[ x"${temp}" == x"active" || x"${temp}" == x"activating" ]]; then
         return 0
     else
         return 1
@@ -843,7 +861,7 @@ check_status() {
 }
 
 check_enabled() {
-    temp=$(systemctl is-enabled $1)
+    temp=$(systemctl is-enabled "$1")
     if [[ x"${temp}" == x"enabled" ]]; then
         return 0
     else
@@ -880,15 +898,15 @@ check_install() {
 }
 
 show_status() {
-    check_status $1
+    check_status "$1"
     case $? in
     0)
         echo -e "${green}$(t status_running "${1}")${plain}"
-        show_enable_status $1
+        show_enable_status "$1"
         ;;
     1)
         echo -e "${yellow}$(t status_stopped "${1}")${plain}"
-        show_enable_status $1
+        show_enable_status "$1"
         ;;
     2)
         echo -e "${red}$(t status_missing "${1}")${plain}"
@@ -897,7 +915,7 @@ show_status() {
 }
 
 show_enable_status() {
-    check_enabled $1
+    check_enabled "$1"
     if [[ $? == 0 ]]; then
         echo -e "${green}$(t autostart_yes "${1}")${plain}"
     else
@@ -909,7 +927,7 @@ bbr_menu() {
     echo -e "${green}\t1.${plain} $(t enable_bbr)"
     echo -e "${green}\t2.${plain} $(t disable_bbr)"
     echo -e "${green}\t0.${plain} $(t back_main)"
-    read -p "$(t select_option)" choice
+    read -rp "$(t select_option)" choice
     case "$choice" in
     0) show_menu ;;
     1) enable_bbr ;;
@@ -962,7 +980,7 @@ enable_bbr() {
 }
 
 install_acme() {
-    cd ~
+    cd ~ || return 1
     LOGI "$(t installing_acme)"
     # Fail closed: -f rejects HTTP error bodies (a 404/partial page must never be
     # piped into a root shell), --proto '=https' forbids a downgrade/redirect to
@@ -984,19 +1002,19 @@ ssl_cert_issue_main() {
     echo -e "${green}\t3.${plain} $(t ssl_force_renew)"
     echo -e "${green}\t4.${plain} $(t ssl_self_signed)"
     echo -e "${green}\t5.${plain} $(t ssl_ip)"
-    read -p "$(t select_option)" choice
+    read -rp "$(t select_option)" choice
     case "$choice" in
         1) ssl_cert_issue ;;
         2)
             local domain=""
-            read -p "Domain to revoke / Введите домен сертификата для отзыва: " domain
-            ~/.acme.sh/acme.sh --revoke -d "${domain}"
+            read -rp "Domain to revoke / Введите домен сертификата для отзыва: " domain
+            "${HOME}/.acme.sh/acme.sh" --revoke -d "${domain}"
             LOGI "Certificate revoked / Сертификат отозван"
             ;;
         3)
             local domain=""
-            read -p "Domain to force-renew / Введите домен SSL-сертификата для принудительного продления: " domain
-            ~/.acme.sh/acme.sh --renew -d "${domain}" --force ;;
+            read -rp "Domain to force-renew / Введите домен SSL-сертификата для принудительного продления: " domain
+            "${HOME}/.acme.sh/acme.sh" --renew -d "${domain}" --force ;;
         4) generate_self_signed_cert ;;
         5) ssl_cert_issue_ip ;;
         *) echo "$(t invalid_choice)" ;;
@@ -1017,7 +1035,7 @@ ssl_cert_issue_ip() {
     fi
 
     local ip=""
-    read -p "IP address / IP-адрес: " ip
+read -rp "IP address / IP-адрес: " ip
     ip="$(echo -n "${ip}" | tr -d '[:space:]')"
     if [[ -z "${ip}" ]]; then
         LOGE "No IP address entered / IP-адрес не введён."
@@ -1026,10 +1044,10 @@ ssl_cert_issue_ip() {
     fi
 
     local email=""
-    read -p "ACME account email (optional) / Email для ACME-аккаунта (необязательно): " email
+read -rp "ACME account email (optional) / Email для ACME-аккаунта (необязательно): " email
 
     local WebPort=80
-    read -p "HTTP-01 challenge port (default 80) / Порт проверки HTTP-01 (по умолчанию 80): " WebPort
+read -rp "HTTP-01 challenge port (default 80) / Порт проверки HTTP-01 (по умолчанию 80): " WebPort
     [[ -z "${WebPort}" ]] && WebPort=80
     if [[ ! "${WebPort}" =~ ^[0-9]+$ ]] || (( WebPort < 1 || WebPort > 65535 )); then
         LOGE "Invalid port; using 80 / Некорректный порт, используется 80."
@@ -1071,7 +1089,7 @@ ssl_cert_issue_ip() {
 }
 
 ssl_cert_issue() {
-    if ! command -v ~/.acme.sh/acme.sh &>/dev/null; then
+    if ! command -v "${HOME}/.acme.sh/acme.sh" &>/dev/null; then
         echo "acme.sh not found, installing / acme.sh не найден, будет выполнена установка"
         install_acme
         if [ $? -ne 0 ]; then
@@ -1088,23 +1106,24 @@ ssl_cert_issue() {
     esac
 
     local domain=""
-    read -p "Domain / Домен: " domain
+read -rp "Domain / Домен: " domain
     LOGD "Domain: ${domain}"
     # Detect an existing acme.sh cert for this exact domain. Scan every row
     # (column 1) rather than only the last line, so the check stays correct
     # when several certificates are present.
     local force_flag=""
-    local existing=$(~/.acme.sh/acme.sh --list | awk -v d="${domain}" 'NR>1 && $1==d {print $1; exit}')
+    local existing
+    existing=$("${HOME}/.acme.sh/acme.sh" --list | awk -v d="${domain}" 'NR>1 && $1==d {print $1; exit}')
 
     if [ "${existing}" == "${domain}" ]; then
-        LOGI "$(~/.acme.sh/acme.sh --list)"
+        LOGI "$("${HOME}/.acme.sh/acme.sh" --list)"
         echo -e "${yellow}Certificate already exists / Сертификат уже существует.${plain}"
         echo -e "${yellow}Re-issuing overwrites it and counts against the Let's Encrypt"
         echo -e "duplicate-certificate limit (5 per week per identical domain set)."
         echo -e "Перевыпуск перезапишет его и расходует лимит Let's Encrypt"
         echo -e "(5 дубликатов в неделю на одинаковый набор доменов).${plain}"
         local reissue=""
-        read -p "Force re-issue? / Перевыпустить принудительно? [y/N]: " reissue
+read -rp "Force re-issue? / Перевыпустить принудительно? [y/N]: " reissue
         if [[ "${reissue}" =~ ^[Yy]$ ]]; then
             force_flag="--force"
         else
@@ -1118,22 +1137,22 @@ ssl_cert_issue() {
     mkdir -p "$certPath"
 
     local WebPort=80
-    read -p "Port (default 80) / Порт (по умолчанию 80): " WebPort
+read -rp "Port (default 80) / Порт (по умолчанию 80): " WebPort
     if [[ ${WebPort} -gt 65535 || ${WebPort} -lt 1 ]]; then
         LOGE "Invalid port; using default."
         WebPort=80
     fi
-    ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt
-    ~/.acme.sh/acme.sh --issue -d "${domain}" --standalone --httpport "${WebPort}" $force_flag
+    "${HOME}/.acme.sh/acme.sh" --set-default-ca --server letsencrypt
+    "${HOME}/.acme.sh/acme.sh" --issue -d "${domain}" --standalone --httpport "${WebPort}" $force_flag
     if [ $? -ne 0 ]; then
         LOGE "Issue failed; aborting."
-        rm -rf ~/.acme.sh/${domain}
+        rm -rf "${HOME}/.acme.sh/${domain}"
         exit 1
     fi
-    ~/.acme.sh/acme.sh --installcert -d "${domain}" \
+    "${HOME}/.acme.sh/acme.sh" --installcert -d "${domain}" \
         --key-file "/root/cert/${domain}/privkey.pem" \
         --fullchain-file "/root/cert/${domain}/fullchain.pem"
-    ~/.acme.sh/acme.sh --upgrade
+    "${HOME}/.acme.sh/acme.sh" --upgrade
     chmod 755 "$certPath"/*
     ls -lah "$certPath"/*
 }
@@ -1143,7 +1162,7 @@ ssl_cert_issue_CF() {
     echo "1) Issue / Выпустить новый сертификат через Cloudflare"
     echo "2) Force renew / Принудительно продлить существующий сертификат"
     echo "3) Back / Вернуться"
-    read -p "Choice [1-3]: " choice
+read -rp "Choice [1-3]: " choice
 
     certPath="/root/cert-CF"
     case $choice in
@@ -1151,7 +1170,7 @@ ssl_cert_issue_CF() {
             force_flag=""
             [ "$choice" -eq 2 ] && force_flag="--force"
 
-            if ! command -v ~/.acme.sh/acme.sh &>/dev/null; then
+            if ! command -v "${HOME}/.acme.sh/acme.sh" &>/dev/null; then
                 install_acme || exit 1
             fi
 
@@ -1159,23 +1178,23 @@ ssl_cert_issue_CF() {
             CF_GlobalKey=""
             CF_AccountEmail=""
 
-            read -p "Domain / Домен: " CF_Domain
-            read -p "Cloudflare Global API key / API key: " CF_GlobalKey
-            read -p "Cloudflare account email / Email: " CF_AccountEmail
+read -rp "Domain / Домен: " CF_Domain
+read -rp "Cloudflare Global API key / API key: " CF_GlobalKey
+read -rp "Cloudflare account email / Email: " CF_AccountEmail
 
             rm -rf "$certPath" && mkdir -p "$certPath"
 
-            ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt || exit 1
+            "${HOME}/.acme.sh/acme.sh" --set-default-ca --server letsencrypt || exit 1
             export CF_Key="${CF_GlobalKey}"
             export CF_Email="${CF_AccountEmail}"
 
-            ~/.acme.sh/acme.sh --issue --dns dns_cf -d "${CF_Domain}" -d "*.${CF_Domain}" $force_flag --log || exit 1
+            "${HOME}/.acme.sh/acme.sh" --issue --dns dns_cf -d "${CF_Domain}" -d "*.${CF_Domain}" $force_flag --log || exit 1
 
             mkdir -p "${certPath}/${CF_Domain}"
-            ~/.acme.sh/acme.sh --installcert -d "${CF_Domain}" -d "*.${CF_Domain}" \
+            "${HOME}/.acme.sh/acme.sh" --installcert -d "${CF_Domain}" -d "*.${CF_Domain}" \
                 --fullchain-file "${certPath}/${CF_Domain}/fullchain.pem" \
                 --key-file "${certPath}/${CF_Domain}/privkey.pem"
-            ~/.acme.sh/acme.sh --upgrade
+            "${HOME}/.acme.sh/acme.sh" --upgrade
             chmod 755 "${certPath}/${CF_Domain}"
             ls -lah "${certPath}/${CF_Domain}"
             show_menu
@@ -1194,7 +1213,7 @@ generate_self_signed_cert() {
     echo -e "${green}\t3.${plain} RSA 4096"
     echo -e "${green}\t4.${plain} ECDSA prime256v1"
     echo -e "${green}\t5.${plain} ECDSA secp384r1"
-    read -p "Choice [1-5, default 1]: " cert_type
+read -rp "Choice [1-5, default 1]: " cert_type
     cert_type=${cert_type:-1}
 
     case "$cert_type" in
@@ -1210,7 +1229,7 @@ generate_self_signed_cert() {
     # The script already requires root (see the EUID check), so call openssl
     # directly: prefixing sudo breaks on minimal root-only systems where sudo is
     # not installed ("sudo: command not found").
-    openssl req -x509 -nodes -days 3650 $key_opt \
+    openssl req -x509 -nodes -days 3650 "${key_opt}" \
         -keyout "${cert_dir}/self.key" \
         -out "${cert_dir}/self.crt" \
         -subj "/CN=myserver"
@@ -1296,7 +1315,7 @@ show_menu() {
 ---------------------------------------------------------------
  "
     show_status s-ui
-    echo && read -p "$(t enter_choice_range)" num
+    echo && read -rp "$(t enter_choice_range)" num
 
     case "${num}" in
     0) exit 0 ;;
@@ -1327,7 +1346,7 @@ show_menu() {
     esac
 }
 
-if [[ $# > 0 ]]; then
+if [[ $# -gt 0 ]]; then
     case $1 in
     "start")     check_install 0 && start s-ui 0 ;;
     "stop")      check_install 0 && stop s-ui 0 ;;

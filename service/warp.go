@@ -101,11 +101,14 @@ func doWarpAttempt(req *http.Request, body []byte) (*http.Response, error) {
 //
 // Each version is retried up to 3 times to absorb transient TLS / network
 // hiccups. The last error is preserved when all attempts fail.
-func doWarpRequestVersions(mkRequest func(version string) (*http.Request, []byte, error)) (*http.Response, string, error) {
+func doWarpRequestVersions(ctx context.Context, mkRequest func(version string) (*http.Request, []byte, error)) (*http.Response, string, error) {
 	const attemptsPerVersion = 3
 	var lastErr error
 	for _, version := range warpAPIVersions {
 		for attempt := 1; attempt <= attemptsPerVersion; attempt++ {
+			if err := ctx.Err(); err != nil {
+				return nil, "", err
+			}
 			req, body, err := mkRequest(version)
 			if err != nil {
 				return nil, "", err
@@ -128,7 +131,11 @@ func doWarpRequestVersions(mkRequest func(version string) (*http.Request, []byte
 			// EOF / connection-reset are the most likely failure modes here;
 			// a brief backoff helps Cloudflare recycle the trust window.
 			if attempt < attemptsPerVersion {
-				time.Sleep(time.Duration(attempt) * time.Second)
+				select {
+				case <-time.After(time.Duration(attempt) * time.Second):
+				case <-ctx.Done():
+					return nil, "", ctx.Err()
+				}
 			}
 		}
 	}
@@ -174,7 +181,7 @@ func (s *WarpService) RegisterWarp(ep *model.Endpoint) error {
 		return err
 	}
 
-	resp, version, err := doWarpRequestVersions(func(version string) (*http.Request, []byte, error) {
+	resp, version, err := doWarpRequestVersions(context.Background(), func(version string) (*http.Request, []byte, error) {
 		url := fmt.Sprintf("https://api.cloudflareclient.com/%s/reg", version)
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, nil)
 		if err != nil {

@@ -430,12 +430,25 @@ func (s *TelegramService) SendTelegramDocument(filename string, data []byte, cap
 		return TelegramResult{ErrorClass: "network"}
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
+	respData, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err := <-writeErr; err != nil {
 		return TelegramResult{ErrorClass: "payload"}
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return TelegramResult{ErrorClass: telegramStatusErrorClass(resp.StatusCode)}
+	}
+	var tgResp struct {
+		OK          bool `json:"ok"`
+		ErrorCode   int `json:"error_code"`
+		Description string `json:"description"`
+	}
+	if len(respData) > 0 {
+		if err := json.Unmarshal(respData, &tgResp); err != nil {
+			return TelegramResult{ErrorClass: "payload"}
+		}
+		if !tgResp.OK {
+			return TelegramResult{ErrorClass: telegramStatusErrorClass(tgResp.ErrorCode)}
+		}
 	}
 	return TelegramResult{Success: true}
 }

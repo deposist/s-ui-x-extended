@@ -1,13 +1,16 @@
 package cronjob
 
 import (
+	"context"
 	"time"
 
 	"github.com/robfig/cron/v3"
 )
 
 type CronJob struct {
-	cron *cron.Cron
+	cron    *cron.Cron
+	ctx     context.Context
+	cancel  context.CancelFunc
 }
 
 func NewCronJob() *CronJob {
@@ -15,6 +18,7 @@ func NewCronJob() *CronJob {
 }
 
 func (c *CronJob) Start(loc *time.Location, trafficAge int) error {
+	c.ctx, c.cancel = context.WithCancel(context.Background())
 	c.cron = cron.New(
 		cron.WithLocation(loc),
 		cron.WithSeconds(),
@@ -78,12 +82,12 @@ func (c *CronJob) Start(loc *time.Location, trafficAge int) error {
 		return err
 	}
 	// Paid Subscriptions: poll out-of-band payments + expire stale orders
-	if _, err := c.cron.AddJob("@every 20s", NewPaidSubPollJob()); err != nil {
+	if _, err := c.cron.AddJob("@every 20s", NewPaidSubPollJob(c.ctx)); err != nil {
 		return err
 	}
 	// IP TLS certificate auto-renewal (shortlived Let's Encrypt cert). Guarded
 	// internally: a no-op unless auto-renew is enabled and the cert nears expiry.
-	if _, err := c.cron.AddJob("@every 12h", NewCertRenewJob()); err != nil {
+	if _, err := c.cron.AddJob("@every 12h", NewCertRenewJob(c.ctx)); err != nil {
 		return err
 	}
 
@@ -93,6 +97,9 @@ func (c *CronJob) Start(loc *time.Location, trafficAge int) error {
 }
 
 func (c *CronJob) Stop() {
+	if c.cancel != nil {
+		c.cancel()
+	}
 	if c.cron != nil {
 		c.cron.Stop()
 	}

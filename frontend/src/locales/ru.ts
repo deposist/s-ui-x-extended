@@ -179,7 +179,8 @@ export default {
       addTitle: "Добавить привязку",
       editTitle: "Привязать Telegram к {name}",
       client: "Клиент",
-      tgId: "Telegram ID пользователя (0 = отвязать)",
+      tgId: "Telegram ID пользователя",
+      invalidTgId: "Введите корректный Telegram ID или используйте отвязку, чтобы очистить существующую привязку.",
     },
     unbind: {
       title: "Отвязать Telegram от {name}?",
@@ -923,6 +924,7 @@ export default {
     },
   },
   setting: {
+    basics: "Основное",
     interface: "Интерфейс",
     maintenance: "Обслуживание",
     sub: "Подписка",

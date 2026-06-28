@@ -88,3 +88,29 @@ docs/UPSTREAM-SYNC.md
 /INBOUNDS-*.md
 /INSTRUCTIONS-*.md
 /MENUS-*.md
+
+# pi-crew runtime state
+.crew/state/
+.crew/artifacts/
+.crew/worktrees/
+.crew/imports/
+
+/.crew/
+/.crew
+!.crew/artifacts/
+!.crew/graphs/
+!.crew/artifacts/.gitkeep
+!.crew/graphs/.gitkeep
+
+# Audit artifacts and handoff prompt (local only)
+AUDIT*.md
+AUDIT*.json
+semgrep_results.json
+semgrep_stderr.log
+NEXT_PROMPT.md
+.semgrep-rules/
+.semgrepignore
+
+# Generated initial admin password files
+initial-admin.txt
+**/initial-admin.txt

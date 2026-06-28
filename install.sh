@@ -3,6 +3,7 @@
 # Language choice can be supplied non-interactively via env:
 #   SUI_LANG=en|ru|zh  bash install.sh ...
 # A version tag (e.g. "v1.4.2-beta") may be provided as the only positional
+set -eo pipefail
 # argument to install a specific release.
 
 red='\033[0;31m'
@@ -24,7 +25,7 @@ ask_language() {
     fi
     if [[ -f "${LANG_FILE}" ]]; then
         local saved
-        saved=$(cat "${LANG_FILE}" 2>/dev/null | tr -d '[:space:]')
+        saved=$(tr -d '[:space:]' < "${LANG_FILE}" 2>/dev/null)
         case "${saved}" in
             en|ru|zh) lang="${saved}"; return ;;
         esac
@@ -384,12 +385,12 @@ config_after_install() {
         read -r config_subPath
 
         echo -e "${yellow}$(t initializing)${plain}"
-        params=""
-        [ -z "$config_port" ] || params="$params -port $config_port"
-        [ -z "$config_path" ] || params="$params -path $config_path"
-        [ -z "$config_subPort" ] || params="$params -subPort $config_subPort"
-        [ -z "$config_subPath" ] || params="$params -subPath $config_subPath"
-        /usr/local/s-ui/sui setting ${params}
+        params=()
+        [ -z "$config_port" ] || params+=("-port" "$config_port")
+        [ -z "$config_path" ] || params+=("-path" "$config_path")
+        [ -z "$config_subPort" ] || params+=("-subPort" "$config_subPort")
+        [ -z "$config_subPath" ] || params+=("-subPath" "$config_subPath")
+        /usr/local/s-ui/sui setting "${params[@]}"
 
         read -rp "$(t change_admin)" admin_confirm
         if [[ "${admin_confirm}" == "y" || "${admin_confirm}" == "Y" ]]; then
@@ -441,7 +442,7 @@ verify_download_checksum() {
     local checksum_url="$2"
     local checksum_name="${artifact_name}.sha256"
 
-    wget -N --timeout=20 --tries=5 --retry-connrefused -O "/tmp/${checksum_name}" "${checksum_url}"
+    wget --no-cache --timeout=20 --tries=5 --retry-connrefused -O "/tmp/${checksum_name}" "${checksum_url}"
     if [[ $? -ne 0 ]]; then
         echo -e "${red}$(t checksum_failed)${plain}"
         exit 1
@@ -453,18 +454,18 @@ verify_download_checksum() {
 }
 
 install_s-ui() {
-    cd /tmp/
+    cd /tmp/ || exit 1
     artifact_name="s-ui-linux-$(arch).tar.gz"
 
     if [[ $# -eq 0 || -z "${1:-}" ]]; then
-        last_version=$(curl -Ls "https://api.github.com/repos/deposist/s-ui-x-extended/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        last_version=$(curl --proto '=https' -Ls "https://api.github.com/repos/deposist/s-ui-x-extended/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
         if [[ ! -n "$last_version" ]]; then
             echo -e "${red}$(t rate_limited)${plain}"
             exit 1
         fi
         echo -e "$(t fetching_latest "${last_version}")"
         url="https://github.com/deposist/s-ui-x-extended/releases/download/${last_version}/${artifact_name}"
-        wget -N --timeout=20 --tries=5 --retry-connrefused -O "/tmp/${artifact_name}" "${url}"
+        wget --no-cache --timeout=20 --tries=5 --retry-connrefused -O "/tmp/${artifact_name}" "${url}"
         if [[ $? -ne 0 ]]; then
             echo -e "${red}$(t download_failed)${plain}"
             exit 1
@@ -475,7 +476,7 @@ install_s-ui() {
         [[ "${last_version}" != v* ]] && last_version="v${last_version}"
         url="https://github.com/deposist/s-ui-x-extended/releases/download/${last_version}/${artifact_name}"
         echo -e "$(t installing_specific "${last_version}")"
-        wget -N --timeout=20 --tries=5 --retry-connrefused -O "/tmp/${artifact_name}" "${url}"
+        wget --no-cache --timeout=20 --tries=5 --retry-connrefused -O "/tmp/${artifact_name}" "${url}"
         if [[ $? -ne 0 ]]; then
             echo -e "${red}$(t download_failed_specific "${last_version}")${plain}"
             exit 1
@@ -487,7 +488,7 @@ install_s-ui() {
         systemctl stop s-ui
     fi
 
-    tar zxvf "${artifact_name}"
+    tar --no-same-owner -zxvf "${artifact_name}"
     rm "${artifact_name}" "${artifact_name}.sha256" -f
 
     chmod +x s-ui/sui s-ui/s-ui.sh

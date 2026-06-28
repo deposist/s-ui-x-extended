@@ -1,13 +1,8 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/deposist/s-ui-x-extended/config"
 	"github.com/deposist/s-ui-x-extended/database"
@@ -129,59 +124,6 @@ func showSetting() {
 	}
 }
 
-func getPublicIP() string {
-	apis := []string{
-		"https://api64.ipify.org",
-		"https://ip.sb",
-		"https://icanhazip.com",
-		"https://ipinfo.io/ip",
-		"https://checkip.amazonaws.com",
-	}
-	type result struct {
-		ip  string
-		err error
-	}
-	ch := make(chan result, len(apis))
-	var wg sync.WaitGroup
-	client := &http.Client{Timeout: 3 * time.Second}
-
-	for _, api := range apis {
-		wg.Add(1)
-		go func(url string) {
-			defer wg.Done()
-			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
-			if err != nil {
-				ch <- result{"", err}
-				return
-			}
-			resp, err := client.Do(req)
-			if err != nil {
-				ch <- result{"", err}
-				return
-			}
-			defer resp.Body.Close()
-			body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-			if err != nil {
-				ch <- result{"", err}
-				return
-			}
-			ch <- result{string(body), nil}
-		}(api)
-	}
-
-	go func() {
-		wg.Wait()
-		close(ch)
-	}()
-
-	for res := range ch {
-		if res.err == nil && res.ip != "" {
-			return strings.TrimSpace(res.ip)
-		}
-	}
-	return ""
-}
-
 func getPanelURI() {
 	err := database.InitDB(config.GetDBPath())
 	if err != nil {
@@ -232,8 +174,6 @@ func getPanelURI() {
 			}
 		}
 	}
-	pubIP := getPublicIP()
-	if pubIP != "" {
-		fmt.Printf("\nGlobal address:\n%s%s%s\n", Proto, pubIP, PortText+BasePath)
-	}
+	fmt.Println()
+	fmt.Println("Global address is not discovered automatically. Configure webDomain or webListen manually if you need a public URI.")
 }

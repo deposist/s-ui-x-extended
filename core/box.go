@@ -432,14 +432,6 @@ func NewBox(options Options) (*Box, error) {
 func (s *Box) PreStart() error {
 	err := s.preStart()
 	if err != nil {
-		// TODO: remove catch error
-		defer func() {
-			v := recover()
-			if v != nil {
-				s.logger.Error(err.Error())
-				s.logger.Error("panic on early close: " + fmt.Sprint(v))
-			}
-		}()
 		_ = s.Close()
 		return err
 	}

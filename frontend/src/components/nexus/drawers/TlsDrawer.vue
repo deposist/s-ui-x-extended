@@ -316,18 +316,18 @@ export default {
           let isPublicKey = false
 
           msg.obj.forEach((line:string) => {
-              if (line === "-----BEGIN PRIVATE KEY-----") {
+              if (line.includes("BEGIN") && line.includes("PRIVATE KEY")) {
                   isPrivateKey = true
                   isPublicKey = false
                   privateKey.push(line)
-              } else if (line === "-----END PRIVATE KEY-----") {
+              } else if (line.includes("END") && line.includes("PRIVATE KEY")) {
                   isPrivateKey = false
                   privateKey.push(line)
-              } else if (line === "-----BEGIN CERTIFICATE-----") {
+              } else if (line.includes("BEGIN") && line.includes("CERTIFICATE")) {
                   isPublicKey = true
                   isPrivateKey = false
                   publicKey.push(line)
-              } else if (line === "-----END CERTIFICATE-----") {
+              } else if (line.includes("END") && line.includes("CERTIFICATE")) {
                   isPublicKey = false
                   publicKey.push(line)
               } else if (isPrivateKey) {

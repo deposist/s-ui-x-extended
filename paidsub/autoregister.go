@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -60,7 +61,12 @@ func (b *Bot) tryAutoRegister(ctx context.Context, chatID int64, from *tgUser, l
 		}
 	}
 
-	name := b.uniqueClientName(db, from.ID)
+	name, err := b.uniqueClientName(db, from.ID)
+	if err != nil {
+		logger.Warning("paidsub: unique client name: ", err)
+		_ = b.sendMessage(ctx, chatID, tr(l, "error"), nil)
+		return true
+	}
 	config, err := generateClientConfig(name)
 	if err != nil {
 		logger.Warning("paidsub: generate client config: ", err)
@@ -124,18 +130,47 @@ func (b *Bot) tryAutoRegister(ctx context.Context, chatID int64, from *tgUser, l
 }
 
 // uniqueClientName derives a collision-free name from the Telegram id.
-func (b *Bot) uniqueClientName(db *gorm.DB, tgID int64) string {
+// Returns an error only in the extremely unlikely case that the clients table
+// was pre-seeded with every Random(16) candidate under this base. Callers must
+// handle the error and not auto-register a colliding name.
+func (b *Bot) uniqueClientName(db *gorm.DB, tgID int64) (string, error) {
 	base := "tg" + strconv.FormatInt(tgID, 10)
 	name := base
 	for i := 0; i < 50; i++ {
 		var cnt int64
 		db.Model(&model.Client{}).Where("name = ?", name).Count(&cnt)
 		if cnt == 0 {
-			return name
+			return name, nil
 		}
 		name = base + "_" + common.Random(4)
 	}
-	return base + "_" + common.Random(8)
+	// Final attempt with a longer suffix; verify it is actually unique.
+	for i := 0; i < 10; i++ {
+		name = base + "_" + common.Random(8)
+		var cnt int64
+		db.Model(&model.Client{}).Where("name = ?", name).Count(&cnt)
+		if cnt == 0 {
+			return name, nil
+		}
+	}
+	// Last-resort retry loop with a 16-char random suffix. Each candidate is
+	// verified against the clients table so a collision is caught and a fresh
+	// suffix is drawn. The 64-char common.Random space makes accidental
+	// collisions astronomically unlikely; the bound here protects against a
+	// hostile pre-seeded clients table, which would otherwise let a duplicate
+	// name slip through.
+	for i := 0; i < 20; i++ {
+		name = base + "_" + common.Random(16)
+		var cnt int64
+		db.Model(&model.Client{}).Where("name = ?", name).Count(&cnt)
+		if cnt == 0 {
+			return name, nil
+		}
+	}
+	// Only reachable if the clients table was pre-seeded with every Random(16)
+	// guess under this base. Surface the impossibility so an operator notices
+	// rather than auto-registering with a colliding name.
+	return "", fmt.Errorf("could not derive a unique client name for tg %d", tgID)
 }
 
 // generateClientConfig builds a full per-protocol client config, mirroring the

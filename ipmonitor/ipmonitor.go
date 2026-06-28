@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -557,9 +558,12 @@ func getInstallSalt() ([]byte, error) {
 	err := database.GetDB().Model(model.Setting{}).Where("key = ?", "installSalt").First(&setting).Error
 	if database.IsNotFound(err) {
 		setting = model.Setting{Key: "installSalt", Value: common.Random(32)}
-		err = database.GetDB().Create(&setting).Error
-	}
-	if err != nil {
+		if createErr := database.GetDB().Create(&setting).Error; createErr != nil {
+			if rereadErr := database.GetDB().Model(model.Setting{}).Where("key = ?", "installSalt").First(&setting).Error; rereadErr != nil {
+				return nil, fmt.Errorf("installSalt create failed (%v) and reread failed: %w", createErr, rereadErr)
+			}
+		}
+	} else if err != nil {
 		return nil, err
 	}
 	salt := []byte(setting.Value)

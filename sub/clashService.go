@@ -290,9 +290,11 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 				for i := 1; i < len(ech_config)-1; i++ {
 					ech_string += asString(ech_config[i])
 				}
-				proxy["ech-opts"] = map[string]interface{}{
-					"enable": true,
-					"config": ech_string,
+				if ech_string != "" {
+					proxy["ech-opts"] = map[string]interface{}{
+						"enable": true,
+						"config": ech_string,
+					}
 				}
 			}
 		}
@@ -418,6 +420,10 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 	err := yaml.Unmarshal([]byte(ProxyGroups), &proxyGroups)
 	if err != nil {
 		logger.Error(err.Error())
+	}
+
+	if len(proxyGroups) < 2 || proxyGroups[0] == nil || proxyGroups[1] == nil {
+		return "", common.NewError("clash proxy-groups config must have at least 2 non-nil groups (selector and fallback)")
 	}
 
 	proxyGroups[1]["proxies"] = proxyTags

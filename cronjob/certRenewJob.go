@@ -12,19 +12,25 @@ import (
 // so it is safe to run on a fixed schedule.
 type CertRenewJob struct {
 	service.IpCertificateService
+	ctx context.Context
 }
 
-func NewCertRenewJob() *CertRenewJob {
+func NewCertRenewJob(ctx context.Context) *CertRenewJob {
 	return &CertRenewJob{
 		IpCertificateService: service.IpCertificateService{
 			Runtime:  service.DefaultRuntime(),
 			Settings: &service.SettingService{},
 		},
+		ctx: ctx,
 	}
 }
 
 func (j *CertRenewJob) Run() {
-	renewed, err := j.IpCertificateService.RenewIfNeeded(context.Background())
+	ctx := j.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	renewed, err := j.IpCertificateService.RenewIfNeeded(ctx)
 	if err != nil {
 		logger.Warning("ip cert renew failed: ", err)
 		return

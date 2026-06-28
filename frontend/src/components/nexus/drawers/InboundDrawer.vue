@@ -165,6 +165,7 @@ export default {
       loading: false,
       side: "s",
       snapshot: "",
+      snapshotInitUsers: "",
       inTypes: InTypes,
       // Capability lists are generated from core/capabilities/protocols.json by
       // scripts/gen-capabilities.cjs (shared source of truth with the Go backend).
@@ -188,7 +189,7 @@ export default {
         this.inbound.out_json = {}
       }
       this.loading = false
-      this.snapshot = JSON.stringify(this.inbound)
+      this.snapshot = JSON.stringify(this.inbound); this.snapshotInitUsers = JSON.stringify(this.initUsers)
     },
     updateData(id: number) {
       if (id > 0) {
@@ -207,7 +208,7 @@ export default {
         }
         this.title = "add"
         this.loading = false
-        this.snapshot = JSON.stringify(this.inbound)
+        this.snapshot = JSON.stringify(this.inbound); this.snapshotInitUsers = JSON.stringify(this.initUsers)
       }
       this.side = "s"
       this.initUsers = {
@@ -270,7 +271,7 @@ export default {
   },
   computed: {
     dirty(): boolean {
-      return this.snapshot !== "" && JSON.stringify(this.inbound) !== this.snapshot
+      return this.snapshot !== "" && (JSON.stringify(this.inbound) !== this.snapshot || JSON.stringify(this.initUsers) !== this.snapshotInitUsers)
     },
     validate() {
       if (this.inbound == undefined) return false

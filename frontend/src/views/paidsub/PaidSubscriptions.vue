@@ -182,7 +182,7 @@
           </template>
           <template #item.actions="{ item }">
             <v-btn size="small" variant="text" icon="mdi-pencil" @click="openTariff(item)" />
-            <v-btn size="small" variant="text" icon="mdi-delete" color="error" @click="deleteTariff(item)" />
+            <v-btn size="small" variant="text" icon="mdi-delete" color="error" @click="openDeleteTariffConfirm(item)" />
           </template>
         </v-data-table>
       </v-window-item>
@@ -191,7 +191,7 @@
       <v-window-item value="payments">
         <v-row>
           <v-col cols="12" md="4">
-            <v-combobox v-model="settings.paidSubCurrency" :items="currencies" :label="$t('paidSub.payments.currency')" />
+            <v-select v-model="settings.paidSubCurrency" :items="currencies" :label="$t('paidSub.payments.currency')" />
           </v-col>
           <v-col cols="12" md="4">
             <v-text-field v-model="settings.paidSubOrderTTLMinutes" type="number" :label="$t('paidSub.payments.orderTtl')" />
@@ -423,7 +423,7 @@
         <v-text-field v-model="tariffEdit.description" :label="$t('paidSub.cols.description')" />
         <v-row>
           <v-col cols="6"><v-text-field v-model.number="tariffEdit.priceMajor" type="number" :label="$t('paidSub.tariffs.priceMajor')" /></v-col>
-          <v-col cols="6"><v-combobox v-model="tariffEdit.currency" :items="currencies" :label="$t('paidSub.tariffs.currency')" /></v-col>
+          <v-col cols="6"><v-select v-model="tariffEdit.currency" :items="currencies" :label="$t('paidSub.tariffs.currency')" /></v-col>
           <v-col cols="6"><v-text-field v-model.number="tariffEdit.starsAmount" type="number" :label="$t('paidSub.tariffs.starsAmount')" /></v-col>
           <v-col cols="6"><v-text-field v-model.number="tariffEdit.addDays" type="number" :label="$t('paidSub.tariffs.addDays')" /></v-col>
           <v-col cols="6"><v-text-field v-model.number="tariffEdit.addTrafficGB" type="number" :label="$t('paidSub.tariffs.addTrafficGB')" /></v-col>
@@ -435,6 +435,19 @@
         <v-spacer />
         <v-btn variant="text" @click="tariffDialog = false">{{ $t('actions.cancel') }}</v-btn>
         <v-btn color="primary" @click="saveTariff">{{ $t('actions.set') }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
+  <!-- Delete tariff confirm dialog -->
+  <v-dialog v-model="deleteTariffDialog" max-width="440">
+    <v-card>
+      <v-card-title>{{ $t('actions.del') }} {{ deleteTariffEdit.name }}</v-card-title>
+      <v-card-text>{{ $t('confirm') }}</v-card-text>
+      <v-card-actions>
+        <v-spacer />
+        <v-btn variant="text" @click="deleteTariffDialog = false">{{ $t('actions.cancel') }}</v-btn>
+        <v-btn color="error" :loading="deleteTariffBusy" @click="deleteTariff">{{ $t('actions.del') }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -560,7 +573,7 @@ const handleBindingAction = (key: string, item: any) => {
 }
 const handleTariffAction = (key: string, item: any) => {
   if (key === 'edit') openTariff(item)
-  else if (key === 'del') deleteTariff(item)
+  else if (key === 'del') openDeleteTariffConfirm(item)
 }
 const handleOrderAction = (key: string, item: any) => {
   if (key === 'refund') openRefund(item)
@@ -624,6 +637,12 @@ const pickSettings = (all: SMap): SMap => {
     if (all[k] !== undefined) out[k] = String(all[k])
     else out[k] = defaults[k]
   }
+  // Warn about unknown keys from the backend so schema drift is visible.
+  const known = new Set(Object.keys(defaults))
+  const unknown = Object.keys(all).filter(k => !known.has(k))
+  if (unknown.length > 0) {
+    console.warn('[paidsub] unknown settings keys from backend, ignored:', unknown.join(', '))
+  }
   return out
 }
 
@@ -652,15 +671,19 @@ const loadSettings = async () => {
   if (msg.success) {
     const normalized = normalizeSecretFields({ ...defaults, ...(msg.obj ?? {}) }) as SMap
     settings.value = pickSettings(normalized)
+  } else {
+    push.error({ title: i18n.global.t('failed'), message: i18n.global.t('pages.paidSub') + ': settings' })
   }
 }
 
 const loadStatus = async () => {
   const msg = await HttpUtils.get('api/paidsub/status')
   if (msg.success) secretboxKeySet.value = !!msg.obj?.secretboxKeySet
+  else push.error({ title: i18n.global.t('failed'), message: i18n.global.t('pages.paidSub') + ': status' })
 }
 
 const saveSettings = async () => {
+  settings.value.paidSubCurrency = normalizeCurrency(settings.value.paidSubCurrency)
   loading.value = true
   const payload = stripSecretPlaceholders(pickSettings(settings.value)) as SMap
   const msg = await HttpUtils.post('api/save', { object: 'settings', action: 'set', data: JSON.stringify(payload) })
@@ -686,9 +709,13 @@ const loadInbounds = async () => {
 }
 
 // ---- transport (proxy / outbound) ----
-// Common payment currencies offered as a dropdown; v-combobox still accepts a
-// provider-specific code not in this list. XTR = Telegram Stars.
+// Common payment currencies accepted by the backend/payment providers. XTR = Telegram Stars.
 const currencies = ['RUB', 'USD', 'EUR', 'GBP', 'UAH', 'KZT', 'BYN', 'XTR']
+const isAllowedCurrency = (currency: string) => currencies.includes(String(currency || '').toUpperCase())
+const normalizeCurrency = (currency: string, fallback = 'RUB') => {
+  const normalized = String(currency || '').toUpperCase()
+  return isAllowedCurrency(normalized) ? normalized : fallback
+}
 const transportModes = [
   { title: i18n.global.t('paidSub.transportModes.proxy'), value: 'proxy' },
   { title: i18n.global.t('paidSub.transportModes.outbound'), value: 'outbound' },
@@ -740,7 +767,12 @@ const openAddBinding = () => {
 }
 const saveBinding = async () => {
   if (!bindingEdit.value.clientId) return
-  const tgUserId = Number(bindingEdit.value.tgUserId) || 0
+  const rawTgUserId = String(bindingEdit.value.tgUserId ?? '').trim()
+  const tgUserId = Number(rawTgUserId)
+  if (rawTgUserId === '' || !Number.isSafeInteger(tgUserId) || tgUserId <= 0) {
+    push.error({ title: i18n.global.t('failed'), message: i18n.global.t('paidSub.bindingDialog.invalidTgId') })
+    return
+  }
   const msg = await HttpUtils.post('api/paidsub/bindings', { clientId: bindingEdit.value.clientId, tgUserId }, jsonPost)
   if (msg.success) { bindingDialog.value = false; await loadBindings() }
 }
@@ -759,7 +791,15 @@ const doUnbind = async () => {
 }
 
 // ---- messages: greeting + broadcast ----
-const recipientCount = computed(() => bindings.value.filter((b: any) => b.tgUserId).length)
+const isActiveBroadcastRecipient = (binding: any, now = Date.now() / 1000) => {
+  const tgUserId = Number(binding?.tgUserId)
+  const expiry = Number(binding?.expiry || 0)
+  return binding?.enable === true && Number.isFinite(tgUserId) && tgUserId > 0 && (expiry === 0 || expiry > now)
+}
+const recipientCount = computed(() => {
+  const now = Date.now() / 1000
+  return bindings.value.filter((b: any) => isActiveBroadcastRecipient(b, now)).length
+})
 const broadcastText = ref('')
 const broadcastLoading = ref(false)
 const broadcastDialog = ref(false)
@@ -789,7 +829,7 @@ const tariffHeaders = [
   { title: '', key: 'actions', sortable: false, align: 'end' as const },
 ]
 const tariffDialog = ref(false)
-const blankTariff = () => ({ id: 0, name: '', description: '', priceMajor: 0, currency: settings.value.paidSubCurrency || 'RUB', starsAmount: 0, addDays: 30, addTrafficGB: 0, sort: 0, enabled: true })
+const blankTariff = () => ({ id: 0, name: '', description: '', priceMajor: 0, currency: normalizeCurrency(settings.value.paidSubCurrency), starsAmount: 0, addDays: 30, addTrafficGB: 0, sort: 0, enabled: true })
 const tariffEdit = ref<any>(blankTariff())
 
 const loadTariffs = async () => {
@@ -802,7 +842,7 @@ const openTariff = (item?: any) => {
   if (item) {
     tariffEdit.value = {
       id: item.id, name: item.name, description: item.description,
-      priceMajor: (item.price || 0) / 100, currency: item.currency,
+      priceMajor: (item.price || 0) / 100, currency: normalizeCurrency(item.currency),
       starsAmount: item.starsAmount || 0, addDays: item.addDays || 0,
       addTrafficGB: (item.addTrafficBytes || 0) / (1024 * 1024 * 1024),
       sort: item.sort || 0, enabled: !!item.enabled,
@@ -814,12 +854,14 @@ const openTariff = (item?: any) => {
 }
 const saveTariff = async () => {
   const e = tariffEdit.value
+  const currency = normalizeCurrency(e.currency)
+  tariffEdit.value.currency = currency
   // Clamp every numeric to >= 0 so a typo / negative spinner value never reaches
   // the backend (which now also rejects negatives — defense in depth).
   const data: any = {
     name: e.name, description: e.description,
     price: Math.max(0, Math.round(Number(e.priceMajor) * 100) || 0),
-    currency: (e.currency || 'RUB').toUpperCase(),
+    currency,
     starsAmount: Math.max(0, Math.round(Number(e.starsAmount) || 0)),
     addDays: Math.max(0, Math.round(Number(e.addDays) || 0)),
     addTrafficBytes: Math.max(0, Math.round((Number(e.addTrafficGB) || 0) * 1024 * 1024 * 1024)),
@@ -831,9 +873,22 @@ const saveTariff = async () => {
   const msg = await HttpUtils.post('api/paidsub/tariffs', { action, data }, jsonPost)
   if (msg.success) { tariffDialog.value = false; await loadTariffs() }
 }
-const deleteTariff = async (item: any) => {
-  const msg = await HttpUtils.post('api/paidsub/tariffs', { action: 'del', data: item.id }, jsonPost)
-  if (msg.success) await loadTariffs()
+const deleteTariffDialog = ref(false)
+const deleteTariffBusy = ref(false)
+const deleteTariffEdit = ref<{ id: number; name: string }>({ id: 0, name: '' })
+const openDeleteTariffConfirm = (item: any) => {
+  deleteTariffEdit.value = { id: Number(item.id), name: item.name || String(item.id) }
+  deleteTariffDialog.value = true
+}
+const deleteTariff = async () => {
+  if (!deleteTariffEdit.value.id) return
+  deleteTariffBusy.value = true
+  const msg = await HttpUtils.post('api/paidsub/tariffs', { action: 'del', data: deleteTariffEdit.value.id }, jsonPost)
+  deleteTariffBusy.value = false
+  if (msg.success) {
+    deleteTariffDialog.value = false
+    await loadTariffs()
+  }
 }
 
 // ---- orders ----

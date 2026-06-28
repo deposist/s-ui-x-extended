@@ -22,6 +22,8 @@ func quoteIdent(name string) string {
 }
 
 // tableColumns returns the set of column names defined on table, lower-cased.
+// The table argument must always be a hardcoded string literal from the known
+// set of source-DB table names; never interpolate user or source-DB values.
 // `SELECT * ... LIMIT 0` exposes the live column list without reading any rows
 // and works uniformly across SQLite drivers, unlike parameterised PRAGMA calls.
 // Names are normalized to lower case because SQLite identifiers are

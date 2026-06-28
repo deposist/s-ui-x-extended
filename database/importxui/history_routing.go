@@ -441,6 +441,11 @@ func mergeRoutingIntoConfig(tx *gorm.DB, mapped map[string]any) error {
 	if err != nil {
 		return err
 	}
+	// Validate the merged config is parseable JSON before persisting.
+	var validate map[string]json.RawMessage
+	if err := json.Unmarshal(merged, &validate); err != nil {
+		return fmt.Errorf("routing: merged config is not valid JSON: %w", err)
+	}
 	return upsertSetting(tx, "config", string(merged))
 }
 

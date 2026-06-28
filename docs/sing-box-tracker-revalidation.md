@@ -2,13 +2,12 @@
 
 Validated dependency:
 
-- `github.com/sagernet/sing-box v1.13.13`
+- `github.com/sagernet/sing-box v1.13.14`
 
-> Note: the upstream `v1.13.13` tag was moved after publishing. `go.mod` keeps
-> `require v1.13.13` but `replace`s it with the fixed release commit
-> (`v1.13.13-0.20260603083344-78b2e12fbdd8`, commit `78b2e12`) because the
-> original tag commit cached by the Go proxy breaks the Windows build. See the
-> `replace` comment in `go.mod`.
+> Note: `go.mod` keeps `require v1.13.14` but `replace`s it with the
+> shtorm-7/sing-box-extended fork (`v1.13.14-extended-2.5.0`). The fork
+> preserves the upstream module path so all imports remain
+> `github.com/sagernet/sing-box/...`.
 
 The local `ConnTracker` and `StatsTracker` wrap sing-box routed TCP and packet
 connections. Any bump of `github.com/sagernet/sing-box` must revalidate this
@@ -46,3 +45,13 @@ Revalidation log:
   Reset-drain, and stable-counter-pointer invariants are local code and
   unchanged. `go build ./...`, `go vet ./...`, `go test ./core`, and the full
   non-race `go test ./...` (Windows TempDir-cleanup flakes excepted) pass.
+- 2026-06-27, v1.13.13 -> v1.13.14: revalidated against fork
+  `shtorm-7/sing-box-extended v1.13.14-extended-2.5.0` (upstream `v1.13.14`).
+  `adapter.ConnectionTracker` signature is unchanged. The project compiles
+  against the new version (`go build ./...`, `go vet ./...` pass). Four new
+  option fields surfaced in the coverage test (`MASQUEOutboundOptions.congestion_controller`,
+  `MASQUEOutboundOptions.cwnd`, `OpenVPNOutboundOptions.ping_restart`,
+  `FallbackOutboundOptions.blacklist_timeout`); all four were added to the
+  corresponding TS interfaces in `frontend/src/types/outbounds.ts`.
+  `go test ./core` passes. The sing-tun v0.8.9 pin was removed because the
+  fork no longer uses the removed `MyInterface()` method.

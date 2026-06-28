@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -394,12 +393,27 @@ func warningOnlyItem(kind string, srcID any, srcTag string, dstTag string, warni
 	}
 }
 
+// recordExists checks whether a row matching the given parameterized query exists.
+// The query argument must always be a hardcoded string literal with placeholders;
+// never interpolate user or source-DB values into the query string.
 func recordExists(tx *gorm.DB, modelValue any, query string, args ...any) (bool, error) {
 	var count int64
 	if err := tx.Model(modelValue).Where(query, args...).Count(&count).Error; err != nil {
 		return false, err
 	}
 	return count > 0, nil
+}
+
+func findExistingInbound(tx *gorm.DB, tag string) (model.Inbound, bool, error) {
+	var existing model.Inbound
+	err := tx.Where("tag = ?", tag).First(&existing).Error
+	if err != nil {
+		if database.IsNotFound(err) {
+			return model.Inbound{}, false, nil
+		}
+		return model.Inbound{}, false, err
+	}
+	return existing, true, nil
 }
 
 func Apply(srcPath string, plan MigrationPlan, opts ApplyOptions) (*Report, error) {
@@ -525,7 +539,7 @@ func (s *applyState) run(ctx context.Context, tx *gorm.DB, src *sourceDB, opts A
 		return err
 	}
 	if !opts.DryRun && !opts.SkipAudit {
-		if err := recordAuditWithBackup(tx, s.report, opts); err != nil {
+		if err := recordImportAudit(tx, s.report, opts); err != nil {
 			return err
 		}
 		s.progress("audit", "xui_import")
@@ -702,7 +716,33 @@ func (s *applyState) applyInboundsEndpoints(ctx context.Context, tx *gorm.DB, sr
 		}
 		s.report.warnAll(mapped.Warnings)
 		item := s.item(KindInbound, row.ID)
-		if mapped.Inbound.Type == "" || item.Action == ActionSkip {
+		if mapped.Inbound.Type == "" {
+			s.report.Summary.Inbounds.Skipped++
+			return nil
+		}
+		if item.Action == ActionSkip {
+			// Skip means preserve the destination inbound id so client refs still
+			// resolve and imported clients retain their inbound/link associations.
+			lookupTag := mapped.Inbound.Tag
+			if item.DstTag != "" {
+				lookupTag = item.DstTag
+			}
+			existing, found, err := findExistingInbound(tx, lookupTag)
+			if err != nil {
+				return err
+			}
+			if found {
+				s.inboundIDBySrc[row.ID] = existing.Id
+				for i := range mapped.ClientRefs {
+					mapped.ClientRefs[i].DstInboundID = existing.Id
+				}
+				s.clientRefs = append(s.clientRefs, mapped.ClientRefs...)
+				s.report.ByInbound = append(s.report.ByInbound, InboundStat{
+					SrcTag:  row.Tag,
+					DstTag:  existing.Tag,
+					Clients: len(mapped.ClientRefs),
+				})
+			}
 			s.report.Summary.Inbounds.Skipped++
 			return nil
 		}
@@ -779,6 +819,7 @@ func (s *applyState) applySettings(ctx context.Context, tx *gorm.DB, src *source
 		}
 		target, ok := mapSettingKey(setting.Key)
 		if !ok {
+			s.report.Warnings = append(s.report.Warnings, fmt.Sprintf("setting %q has no mapping in destination, skipped", setting.Key))
 			continue
 		}
 		item := s.item(KindSetting, setting.ID)
@@ -821,7 +862,7 @@ func (s *applyState) applyAdmins(ctx context.Context, tx *gorm.DB, src *sourceDB
 		case AdminModeSkip:
 			continue
 		case AdminModeNewPassword:
-			password := deterministicSeq(username+":admin:"+strconv.FormatInt(time.Now().UnixNano(), 10), 16)
+			password := common.Random(16)
 			hash, err := common.HashPassword(password)
 			if err != nil {
 				return err
@@ -996,7 +1037,7 @@ func planSettings(ctx context.Context, tx *gorm.DB, src *sourceDB, plan *Migrati
 			// break it. The item stays in the plan; the operator can re-enable it
 			// when migrating within the same host.
 			action = ActionSkip
-			warnings = []string{fmt.Sprintf("setting %s is server-specific (listen address, port, domain or TLS certificate path); skipped by default to avoid breaking this host. Enable it only when migrating to the same host/domain", setting.Key)}
+			warnings = []string{fmt.Sprintf("setting %s is server-specific (listen address, domain, or TLS certificate path); skipped by default to avoid breaking this host. Enable it only when migrating to the same host/domain", setting.Key)}
 		}
 		plan.Items = append(plan.Items, PlanItem{
 			Kind:        KindSetting,
@@ -1194,7 +1235,7 @@ func upsertUserResetRequired(tx *gorm.DB, username string, sourcePasswordHash st
 	return tx.Model(&user).Updates(updates).Error
 }
 
-func recordAuditWithBackup(tx *gorm.DB, report *Report, opts ApplyOptions) error {
+func recordImportAudit(tx *gorm.DB, report *Report, opts ApplyOptions) error {
 	now := time.Now().Unix()
 	if opts.Now != nil {
 		now = opts.Now()

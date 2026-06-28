@@ -495,7 +495,7 @@ func (s *SettingService) GetSessionGeneration() (string, error) {
 func (s *SettingService) RotateSessionGeneration() (string, error) {
 	generation := common.Random(32)
 	if err := s.setString("sessionGeneration", generation); err != nil {
-		return generation, err
+		return "", err
 	}
 	realtime.CloseAll("session_rotated")
 	invalidated := invalidateWSTokensForSessionRotation()
@@ -837,6 +837,9 @@ func (s *SettingService) Save(tx *gorm.DB, data json.RawMessage) error {
 		if strings.HasSuffix(key, "HasSecret") {
 			continue
 		}
+		if key == "paidSubCurrency" {
+			obj = canonicalPaidSubCurrency(obj)
+		}
 		if isEncryptedSettingKey(key) {
 			if obj == StoredSecretMarker {
 				continue
@@ -860,13 +863,6 @@ func (s *SettingService) Save(tx *gorm.DB, data json.RawMessage) error {
 			}
 		}
 
-		// Delete all stats if it is set to 0
-		if key == "trafficAge" && obj == "0" {
-			err = tx.Where("id > 0").Delete(model.Stats{}).Error
-			if err != nil {
-				return err
-			}
-		}
 		result := tx.Model(model.Setting{}).Where("key = ?", key).Update("value", obj)
 		if result.Error != nil {
 			return result.Error
@@ -920,6 +916,11 @@ func (s *SettingService) validateAll(settings map[string]string) error {
 		obj := settings[key]
 		if strings.HasSuffix(key, "HasSecret") {
 			continue
+		}
+		if key == "trafficAge" {
+			if age, err := strconv.Atoi(strings.TrimSpace(obj)); err == nil && age == 0 {
+				return common.NewError("invalid trafficAge setting: 0 is reserved")
+			}
 		}
 		if (key == "telegramProxyURL" || key == "paidSubProxyURL") && obj != "" && obj != StoredSecretMarker {
 			if err := validateTelegramProxyURL(obj); err != nil {
@@ -1366,6 +1367,76 @@ func validateObservabilitySettingInput(key string, value string) error {
 	return nil
 }
 
+var allowedPaidSubCurrencies = map[string]bool{
+	// Keep in sync with the frontend picker (PaidSubscriptions.vue: `currencies`).
+	// XTR is Telegram Stars; the Stars provider pins the order currency to XTR
+	// regardless of paidSubCurrency, so listing it here only keeps the picker
+	// and the backend validator from disagreeing.
+	"RUB": true,
+	"USD": true,
+	"EUR": true,
+	"GBP": true,
+	"UAH": true,
+	"KZT": true,
+	"BYN": true,
+	"XTR": true,
+}
+
+func canonicalPaidSubCurrency(value string) string {
+	return strings.ToUpper(strings.TrimSpace(value))
+}
+
+func validatePaidSubAutoInbounds(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	var raw []int64
+	if err := json.Unmarshal([]byte(value), &raw); err != nil {
+		return common.NewError("paidSubAutoInbounds must be a JSON array of inbound ids")
+	}
+	seen := make(map[int64]bool, len(raw))
+	ids := make([]uint, 0, len(raw))
+	for _, id := range raw {
+		if id <= 0 {
+			return common.NewError("paidSubAutoInbounds must contain positive inbound ids")
+		}
+		if seen[id] {
+			return common.NewError("paidSubAutoInbounds must not contain duplicate inbound ids")
+		}
+		seen[id] = true
+		ids = append(ids, uint(id))
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	var count int64
+	if err := database.GetDB().Model(&model.Inbound{}).Where("id IN ?", ids).Count(&count).Error; err != nil {
+		return err
+	}
+	if count != int64(len(ids)) {
+		return common.NewError("paidSubAutoInbounds contains unknown inbound ids")
+	}
+	return nil
+}
+
+func validatePaidSubExternalURLTemplate(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	if len(value) > 2048 {
+		return common.NewError("paidSubExternalUrlTemplate is too long")
+	}
+	if strings.Contains(value, "{") || strings.Contains(value, "}") {
+		return common.NewError("paidSubExternalUrlTemplate must not contain placeholders in the host")
+	}
+	if err := validateOptionalHTTPURL(value); err != nil {
+		return common.NewError("invalid paidSubExternalUrlTemplate")
+	}
+	return nil
+}
+
 func validatePaidSubSettingInput(key string, value string) error {
 	switch key {
 	case "paidSubEnabled", "paidSubAutoRegister", "paidSubStarsEnabled",
@@ -1399,28 +1470,16 @@ func validatePaidSubSettingInput(key string, value string) error {
 			return err
 		}
 	case "paidSubAutoInbounds":
-		if value != "" {
-			var ids []uint
-			if err := json.Unmarshal([]byte(value), &ids); err != nil {
-				return common.NewError("paidSubAutoInbounds must be a JSON array of inbound ids")
-			}
+		if err := validatePaidSubAutoInbounds(value); err != nil {
+			return err
 		}
 	case "paidSubCurrency":
-		v := strings.ToUpper(strings.TrimSpace(value))
-		if len(v) != 3 {
-			return common.NewError("paidSubCurrency must be a 3-letter code")
+		if !allowedPaidSubCurrencies[canonicalPaidSubCurrency(value)] {
+			return common.NewError("paidSubCurrency is not supported")
 		}
 	case "paidSubExternalUrlTemplate":
-		if value != "" {
-			if len(value) > 2048 {
-				return common.NewError("paidSubExternalUrlTemplate is too long")
-			}
-			if !strings.HasPrefix(value, "https://") {
-				return common.NewError("paidSubExternalUrlTemplate must start with https://")
-			}
-			if strings.ContainsAny(value, " \t\r\n#") {
-				return common.NewError("paidSubExternalUrlTemplate must not contain spaces or a fragment")
-			}
+		if err := validatePaidSubExternalURLTemplate(value); err != nil {
+			return err
 		}
 	case "paidSubTransportMode":
 		if err := validateTransportMode(value); err != nil {
