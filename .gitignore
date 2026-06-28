@@ -46,8 +46,9 @@ verify-*.txt
 .appdata/
 .audit/
 
-# Internal development log (not needed by end users)
+# Internal development log / local UI mockups (not needed by end users)
 docs/project-context.md
+docs/default-values-ui-mockup.html
 dc42e16-files.txt
 docs/audit/
 tests/baseline/*

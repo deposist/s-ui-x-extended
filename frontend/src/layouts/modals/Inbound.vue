@@ -28,6 +28,13 @@
               <v-text-field v-model="inbound.tag" :label="$t('objects.tag')" hide-details></v-text-field>
             </v-col>
           </v-row>
+          <RecommendedValues
+            :model="inbound"
+            :specs="recommendationSpecs"
+            :context="recommendationContext"
+            class="mb-3"
+            @apply="applyRecommended"
+          />
           <v-card
             v-if="[inTypes.HTTP, inTypes.Mixed].includes(inbound.type)"
             border
@@ -172,6 +179,9 @@ import AddrVue from '@/components/Addr.vue'
 import OutJsonVue from '@/components/OutJson.vue'
 import Data from '@/store/modules/data'
 import { push } from 'notivue'
+import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
+import { applyRecommendation } from '@/utils/recommendations'
+import { inboundRecommendationSpecs } from '@/utils/defaultRecommendations'
 export default {
   props: ['visible', 'id', 'inTags', 'tlsConfigs'],
   emits: ['close'],
@@ -197,6 +207,8 @@ export default {
       // (from /api/capabilities). Such types are shown disabled in the picker.
       unavailableTypes: <string[]>[],
       requiredInitialUsers: [InTypes.Mieru, InTypes.TrustTunnel, InTypes.SSH, InTypes.MTProxy],
+      recommendationSpecs: inboundRecommendationSpecs,
+      editHadOutJson: true,
     }
   },
   async created() {
@@ -216,6 +228,7 @@ export default {
       this.loading = true
       const inboundArray = await Data().loadInbounds([id])
       this.inbound = inboundArray[0]
+      this.editHadOutJson = this.inbound.out_json != null
       if (this.HasInData.includes(this.inbound.type) && this.inbound.out_json == null) {
         this.inbound.out_json = {}
       }
@@ -245,12 +258,17 @@ export default {
         values: [],
       }
     },
+    applyRecommended(spec: any) {
+      applyRecommendation(this.inbound, spec, this.recommendationContext, { force: true })
+    },
     changeType() {
       if (!this.inbound.listen_port) this.inbound.listen_port = RandomUtil.randomIntRange(10000, 60000)
       // Tag change only in add inbound
       const tag = this.$props.id > 0 ? this.inbound.tag : this.inbound.type + "-" + this.inbound.listen_port
       // Use previous data
-      const prevConfig = { id: this.inbound.id, tag: tag, listen: this.inbound.listen?? "::", listen_port: this.inbound.listen_port }
+      const prevConfig: any = { id: this.inbound.id, tag: tag, listen_port: this.inbound.listen_port }
+      if (this.inbound.listen != null) prevConfig.listen = this.inbound.listen
+      else if (this.$props.id == 0) prevConfig.listen = "::"
       this.inbound = createInbound(this.inbound.type, this.inbound.type != this.inTypes.Tun ? prevConfig : { tag: tag })
       if (this.HasInData.includes(this.inbound.type)){
         this.inbound.addrs = []
@@ -313,7 +331,9 @@ export default {
       // save data
       this.loading = true
       try {
-        const success = await Data().save("inbounds", this.$props.id == 0 ? "new" : "edit", this.inbound, clientIds)
+        const saveData = JSON.parse(JSON.stringify(this.inbound))
+        if (this.$props.id > 0 && !this.editHadOutJson && saveData.out_json && Object.keys(saveData.out_json).length === 0) delete saveData.out_json
+        const success = await Data().save("inbounds", this.$props.id == 0 ? "new" : "edit", saveData, clientIds)
         if (success) this.closeModal()
       } finally {
         this.loading = false
@@ -350,6 +370,9 @@ export default {
       if ((<any>this.inbound).managed) return false
       return true
     },
+    recommendationContext() {
+      return { model: this.inbound, mode: this.$props.id > 0 ? 'edit' : 'create', type: this.inbound.type, unavailableTypes: this.unavailableTypes }
+    },
     setSystemProxy: {
       get(): boolean {
         return (<any>this.inbound).set_system_proxy === true
@@ -374,7 +397,8 @@ export default {
     Listen, InTls, Hysteria2, Naive, Direct, Shadowsocks,
     Users, Hysteria, ShadowTls, TProxy, Multiplex, Tuic, Tun,
     Trojan, AnyTls, Transport, AddrVue, OutJsonVue, Dial, DomainResolver,
-    Mieru, Sudoku, TrustTunnel, SshInbound, MTProxy, BondInbound, CoreFailoverInbound, VlessInbound
+    Mieru, Sudoku, TrustTunnel, SshInbound, MTProxy, BondInbound, CoreFailoverInbound, VlessInbound,
+    RecommendedValues
   }
 }
 </script>

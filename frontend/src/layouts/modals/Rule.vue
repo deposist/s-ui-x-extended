@@ -56,6 +56,13 @@
             <v-switch color="primary" v-model="ruleData.invert" :label="$t('rule.invert')" hide-details></v-switch>
           </v-col>
         </v-row>
+        <RecommendedValues
+          :model="ruleData"
+          :specs="recommendationSpecs"
+          :context="recommendationContext"
+          class="mb-3"
+          @apply="applyRecommended"
+        />
         <v-card :subtitle="ruleData.action == 'bypass' ? $t('rule.action.bypass') : $t('rule.action.route')" v-if="['route', 'bypass'].includes(ruleData.action)">
           <v-row>
             <v-col cols="12" sm="6" md="4">
@@ -188,6 +195,9 @@
 import { logicalRule, rule, actionKeys } from '@/types/rules'
 import RuleOptions from '@/components/Rule.vue'
 import FormShell from '@/components/nexus/drawers/FormShell.vue'
+import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
+import { applyRecommendation } from '@/utils/recommendations'
+import { ruleRecommendationSpecs } from '@/utils/defaultRecommendations'
 
 // Stable identity key for each sub-rule object so the v-for is not keyed by array
 // index. Splicing out a middle rule then re-binds the remaining RuleOptions
@@ -243,6 +253,7 @@ export default {
         { title: 'Fallback', value: 'fallback' },
         { title: 'Hybrid', value: 'hybrid' },
       ],
+      recommendationSpecs: ruleRecommendationSpecs,
     }
   },
   methods: {
@@ -254,6 +265,9 @@ export default {
         ruleObjectKeys.set(r, k)
       }
       return k
+    },
+    applyRecommended(spec: any) {
+      applyRecommendation(this.ruleData, spec, this.recommendationContext, { force: true })
     },
     updateData() {
       if (this.$props.index != -1) {
@@ -358,6 +372,9 @@ export default {
     dirty(): boolean {
       return this.snapshot !== '' && JSON.stringify(this.ruleData) !== this.snapshot
     },
+    recommendationContext() {
+      return { model: this.ruleData, mode: this.$props.index != -1 ? 'edit' : 'create' }
+    },
     logical: {
       get() { return this.ruleData.type == 'logical' },
       set(v:boolean) {
@@ -390,7 +407,7 @@ export default {
       }
     },
   },
-  components: { FormShell, RuleOptions }
+  components: { FormShell, RecommendedValues, RuleOptions }
 }
 
 </script>

@@ -21,6 +21,13 @@
             <v-text-field v-model="endpoint.tag" :label="$t('objects.tag')" hide-details></v-text-field>
           </v-col>
         </v-row>
+        <RecommendedValues
+          :model="endpoint"
+          :specs="recommendationSpecs"
+          :context="recommendationContext"
+          class="mb-3"
+          @apply="applyRecommended"
+        />
         <Wireguard v-if="endpoint.type == epTypes.Wireguard"
           :data="endpoint"
           @getWgPubKey="getWgPubKey"
@@ -70,6 +77,9 @@ import HttpUtils from '@/plugins/httputil'
 import { push } from 'notivue'
 import { i18n } from '@/locales'
 import Data from '@/store/modules/data'
+import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
+import { applyRecommendation } from '@/utils/recommendations'
+import { endpointRecommendationSpecs } from '@/utils/defaultRecommendations'
 export default {
   props: ['visible', 'data', 'id', 'tags'],
   emits: ['close'],
@@ -81,13 +91,14 @@ export default {
       loading: false,
       epTypes: EpTypes,
       noDial: [EpTypes.VpnServer, EpTypes.VpnClient],
+      recommendationSpecs: endpointRecommendationSpecs,
     }
   },
   methods: {
     async updateData(id: number) {
       if (id > 0) {
         const newData = JSON.parse(this.$props.data)
-        this.endpoint = createEndpoint(newData.type, newData)
+        this.endpoint = newData
         this.title = "edit"
       }
       else {
@@ -97,6 +108,9 @@ export default {
         this.title = "add"
       }
       this.tab = "t1"
+    },
+    applyRecommended(spec: any) {
+      applyRecommendation(this.endpoint, spec, this.recommendationContext, { force: true })
     },
     async changeType() {
       // Tag change only in add endpoint
@@ -240,6 +254,11 @@ export default {
       this.loading = false
     },
   },
+  computed: {
+    recommendationContext() {
+      return { model: this.endpoint, mode: this.$props.id > 0 ? 'edit' : 'create', type: this.endpoint.type }
+    },
+  },
   watch: {
     visible(v) {
       if (v) {
@@ -247,6 +266,6 @@ export default {
       }
     },
   },
-  components: { Dial, Wireguard, Warp, TailscaleVue, VpnServer, VpnClient }
+  components: { RecommendedValues, Dial, Wireguard, Warp, TailscaleVue, VpnServer, VpnClient }
 }
 </script>

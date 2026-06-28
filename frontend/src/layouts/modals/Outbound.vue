@@ -34,6 +34,13 @@
                   <v-text-field v-model="outbound.tag" :label="$t('objects.tag')" hide-details></v-text-field>
                 </v-col>
               </v-row>
+              <RecommendedValues
+                :model="outbound"
+                :specs="recommendationSpecs"
+                :context="recommendationContext"
+                class="mb-3"
+                @apply="applyRecommended"
+              />
               <v-row v-if="!NoServer.includes(outbound.type)">
                 <v-col cols="12" sm="6" md="4">
                   <v-text-field
@@ -167,6 +174,9 @@ import RateLimiter from '@/components/protocols/RateLimiter.vue'
 import HttpUtils from '@/plugins/httputil'
 import AnyTls from '@/components/protocols/AnyTls.vue'
 import Data from '@/store/modules/data'
+import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
+import { applyRecommendation } from '@/utils/recommendations'
+import { outboundRecommendationSpecs } from '@/utils/defaultRecommendations'
 export default {
   props: ['visible', 'data', 'id', 'tags'],
   emits: ['close'],
@@ -181,6 +191,7 @@ export default {
       unavailableOutboundTypes: <string[]>[],
       NoDial: [OutTypes.Selector, OutTypes.URLTest, OutTypes.Bond, OutTypes.Failover, OutTypes.Block, OutTypes.CoreFailover, OutTypes.Fallback, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter],
       NoServer: [OutTypes.Direct, OutTypes.Selector, OutTypes.URLTest, OutTypes.Tor, OutTypes.OpenVPN, OutTypes.MASQUE, OutTypes.Parser, OutTypes.Bond, OutTypes.Failover, OutTypes.Block, OutTypes.CoreFailover, OutTypes.Fallback, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter],
+      recommendationSpecs: outboundRecommendationSpecs,
     }
   },
   async mounted() {
@@ -200,7 +211,7 @@ export default {
     updateData(id: number) {
       if (id > 0) {
         const newData = JSON.parse(this.$props.data)
-        this.outbound = createOutbound(newData.type, newData)
+        this.outbound = newData
         this.title = "edit"
       }
       else {
@@ -208,6 +219,9 @@ export default {
         this.title = "add"
       }
       this.tab = "t1"
+    },
+    applyRecommended(spec: any) {
+      applyRecommendation(this.outbound, spec, this.recommendationContext, { force: true })
     },
     changeType() {
       // Tag change only in add outbound
@@ -250,6 +264,11 @@ export default {
       }
     }
   },
+  computed: {
+    recommendationContext() {
+      return { model: this.outbound, mode: this.$props.id > 0 ? 'edit' : 'create', type: this.outbound.type, unavailableTypes: this.unavailableOutboundTypes }
+    },
+  },
   watch: {
     visible(newValue) {
       if (newValue) {
@@ -257,7 +276,7 @@ export default {
       }
     },
   },
-  components: { Dial, Multiplex, Transport, OutTLS,
+  components: { RecommendedValues, Dial, Multiplex, Transport, OutTLS,
     Direct, Socks, Http, Shadowsocks, Vmess, Trojan,
     Wireguard, Hysteria, Naive, ShadowTls, Vless, Tuic,
     Hysteria2, AnyTls, Tor, Ssh, Mieru, Sudoku, TrustTunnel, Masque, OpenVpn, Parser, Selector, UrlTest, Bond, Failover, Block, CoreFailover, Fallback,

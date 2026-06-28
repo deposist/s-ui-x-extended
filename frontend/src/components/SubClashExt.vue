@@ -8,6 +8,14 @@
     @save="saveEditor"
     />
   <v-card>
+    <RecommendedValues
+      :model="metaJsonForRecommendations"
+      :specs="recommendations"
+      class="mb-4"
+      show-apply-all
+      @apply="applyClashRecommendation"
+      @apply-all="applyClashRecommendations"
+    />
     <v-row>
       <v-col cols="12" sm="6" md="3" lg="2" v-if="optionMixed">
         <v-text-field type="number" v-model.number="mixedPort" min="1" max="65535" :label="$t('setting.mixedPort')" hide-details></v-text-field>
@@ -84,6 +92,14 @@ import { push } from 'notivue'
 import Editor from './Editor.vue'
 import yaml from 'yaml'
 import { i18n } from '@/locales'
+import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
+import {
+  applyRecommendation,
+  applyRecommendations,
+  type RecommendationContext,
+  type RecommendationSpec,
+  type ResolvedRecommendation,
+} from '@/utils/recommendations'
 export default {
   props: ['settings'],
   data() {
@@ -121,6 +137,16 @@ export default {
           "MATCH,Proxy"
         ]
       },
+      recommendations: <RecommendationSpec<Record<string, any>>[]>[
+        { id: 'clash-mixed-port', label: 'Clash mixed port', description: 'Enable the default mixed proxy port.', path: 'mixed-port', value: 7890 },
+        { id: 'clash-allow-lan', label: 'Clash LAN access', description: 'Keep LAN access disabled by default.', path: 'allow-lan', value: false },
+        { id: 'clash-mode', label: 'Clash mode', description: 'Use rule mode for generated profiles.', path: 'mode', value: 'rule' },
+        { id: 'clash-log', label: 'Clash log level', description: 'Use info-level logging.', path: 'log-level', value: 'info' },
+        { id: 'clash-controller', label: 'Clash external controller', description: 'Bind the API controller to localhost.', path: 'external-controller', value: '127.0.0.1:9090' },
+        { id: 'clash-tun', label: 'Clash TUN preset', description: 'Enable safe TUN defaults.', path: 'tun', value: { "enable": true, "stack": "system", "auto-route": true, "auto-detect-interface": true, "dns-hijack": ["any:53"] } },
+        { id: 'clash-dns', label: 'Clash DNS preset', description: 'Enable fake-ip DNS defaults.', path: 'dns', value: { "enable": true, "ipv6": false, "enhanced-mode": "fake-ip", "fake-ip-range": "198.18.0.1/16", "default-nameserver": ["8.8.8.8", "1.1.1.1"], "nameserver": ["https://doh.pub/dns-query", "https://1.0.0.1/dns-query"], "fallback": ["tcp://9.9.9.9:53"], "fake-ip-filter": ["*.lan", "localhost", "*.local"] } },
+        { id: 'clash-rules', label: 'Clash rules preset', description: 'Add private direct and match proxy rules.', path: 'rules', value: ["GEOIP,Private,DIRECT", "MATCH,Proxy"] },
+      ],
       rulesIP: [
         { title: 'Private-Direct', value: 'GEOIP,Private,DIRECT' },
         { title: 'Private-Block', value: 'GEOIP,Private,REJECT' },
@@ -157,6 +183,19 @@ export default {
       this.$props.settings.subClashExt = data
       this.enableEditor = false
     },
+    recommendationContext(): RecommendationContext<Record<string, any>> {
+      return { mode: 'edit', model: this.metaJson }
+    },
+    applyClashRecommendation(spec: ResolvedRecommendation<Record<string, any>>) {
+      const nextMetaJson = { ...this.metaJson }
+      applyRecommendation(nextMetaJson, spec, { ...this.recommendationContext(), model: nextMetaJson })
+      this.metaJson = nextMetaJson
+    },
+    applyClashRecommendations(specs: ResolvedRecommendation<Record<string, any>>[]) {
+      const nextMetaJson = { ...this.metaJson }
+      applyRecommendations(nextMetaJson, specs, { ...this.recommendationContext(), model: nextMetaJson })
+      this.metaJson = nextMetaJson
+    },
     updateMetaJson(data:any, key:string) {
       let newMetaJson = this.metaJson
       if (data==null) {
@@ -168,6 +207,9 @@ export default {
     }
   },
   computed: {
+    metaJsonForRecommendations(): Record<string, any> {
+      return this.metaJson
+    },
     metaJson: {
       get() {
         try {
@@ -243,6 +285,6 @@ export default {
       }
     }
   },
-  components: { Editor }
+  components: { Editor, RecommendedValues }
 }
 </script>

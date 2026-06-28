@@ -25,6 +25,13 @@
           <v-text-field v-model="inbound.tag" :label="$t('objects.tag')" hide-details></v-text-field>
         </v-col>
       </v-row>
+      <RecommendedValues
+        :model="inbound"
+        :specs="recommendationSpecs"
+        :context="recommendationContext"
+        class="mb-3"
+        @apply="applyRecommended"
+      />
       <DomainResolver
         v-if="[inTypes.SOCKS, inTypes.HTTP, inTypes.Mixed].includes(inbound.type)"
         :data="inbound"
@@ -137,6 +144,9 @@ import OutJsonVue from '@/components/OutJson.vue'
 import Data from '@/store/modules/data'
 import EntityDrawer from './EntityDrawer.vue'
 import FormSection from './FormSection.vue'
+import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
+import { applyRecommendation } from '@/utils/recommendations'
+import { inboundRecommendationSpecs } from '@/utils/defaultRecommendations'
 export default {
   // The drawer is driven explicitly by the `visible` prop (the parent passes it
   // alongside v-model); inheritAttrs:false stops the v-model's modelValue from
@@ -164,6 +174,8 @@ export default {
       HasTls,
       MuxAvailable,
       OnlyTLS,
+      recommendationSpecs: inboundRecommendationSpecs,
+      editHadOutJson: true,
     }
   },
   methods: {
@@ -171,6 +183,7 @@ export default {
       this.loading = true
       const inboundArray = await Data().loadInbounds([id])
       this.inbound = inboundArray[0]
+      this.editHadOutJson = this.inbound.out_json != null
       if (this.HasInData.includes(this.inbound.type) && this.inbound.out_json == null) {
         this.inbound.out_json = {}
       }
@@ -202,12 +215,17 @@ export default {
         values: [],
       }
     },
+    applyRecommended(spec: any) {
+      applyRecommendation(this.inbound, spec, this.recommendationContext, { force: true })
+    },
     changeType() {
       if (!this.inbound.listen_port) this.inbound.listen_port = RandomUtil.randomIntRange(10000, 60000)
       // Tag change only in add inbound
       const tag = this.$props.id > 0 ? this.inbound.tag : this.inbound.type + "-" + this.inbound.listen_port
       // Use previous data
-      const prevConfig = { id: this.inbound.id, tag: tag, listen: this.inbound.listen?? "::", listen_port: this.inbound.listen_port }
+      const prevConfig: any = { id: this.inbound.id, tag: tag, listen_port: this.inbound.listen_port }
+      if (this.inbound.listen != null) prevConfig.listen = this.inbound.listen
+      else if (this.$props.id == 0) prevConfig.listen = "::"
       this.inbound = createInbound(this.inbound.type, this.inbound.type != this.inTypes.Tun ? prevConfig : { tag: tag })
       if (this.HasInData.includes(this.inbound.type)){
         this.inbound.addrs = []
@@ -248,7 +266,9 @@ export default {
               clientIds = this.initUsers.values
           }
         }
-        const success = await Data().save("inbounds", this.$props.id == 0 ? "new" : "edit", this.inbound, clientIds)
+        const saveData = JSON.parse(JSON.stringify(this.inbound))
+        if (this.$props.id > 0 && !this.editHadOutJson && saveData.out_json && Object.keys(saveData.out_json).length === 0) delete saveData.out_json
+        const success = await Data().save("inbounds", this.$props.id == 0 ? "new" : "edit", saveData, clientIds)
         if (success) this.closeModal()
       } finally {
         this.loading = false
@@ -269,6 +289,9 @@ export default {
     clients() {
       return Data().clients?? []
     },
+    recommendationContext() {
+      return { model: this.inbound, mode: this.$props.id > 0 ? 'edit' : 'create', type: this.inbound.type }
+    },
     hasUser() {
       if (this.$props.id > 0) return false
       if (!this.inboundWithUsers.includes(this.inbound.type)) return false
@@ -287,7 +310,7 @@ export default {
     },
   },
   components: {
-    EntityDrawer, FormSection,
+    EntityDrawer, FormSection, RecommendedValues,
     Listen, InTls, Hysteria2, Naive, Direct, Shadowsocks,
     Users, Hysteria, ShadowTls, TProxy, Multiplex, Tuic, Tun,
     Trojan, AnyTls, Transport, AddrVue, OutJsonVue, Dial, DomainResolver,

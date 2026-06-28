@@ -8,6 +8,14 @@
     @save="saveEditor"
     />
   <v-card>
+    <RecommendedValues
+      :model="subJsonExt"
+      :specs="recommendations"
+      class="mb-4"
+      show-apply-all
+      @apply="applySubJsonRecommendation"
+      @apply-all="applySubJsonRecommendations"
+    />
     <v-row>
       <v-col cols="12" sm="6" md="3">
         <v-select
@@ -156,6 +164,14 @@ import Editor from './Editor.vue'
 import SimpleDNS from './SimpleDNS.vue'
 import { push } from 'notivue'
 import { i18n } from '@/locales'
+import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
+import {
+  applyRecommendation,
+  applyRecommendations,
+  type RecommendationContext,
+  type RecommendationSpec,
+  type ResolvedRecommendation,
+} from '@/utils/recommendations'
 export default {
   props: ['settings'],
   data() {
@@ -273,6 +289,12 @@ export default {
         { title: "🇨🇳 IP-China", value: "geoip-cn" },
         { title: "🇻🇳 Site-Vietnam", value: "geosite-vn" },
         { title: "🇻🇳 IP-Vietnam", value: "geoip-vn" },
+      ],
+      recommendations: <RecommendationSpec<Record<string, any>>[]>[
+        { id: 'json-log', label: 'JSON log preset', description: 'Enable info-level logs with timestamps.', path: 'log', value: () => this.defaultLog },
+        { id: 'json-dns', label: 'JSON DNS preset', description: 'Add proxy/direct/local DNS servers and safe default DNS rules.', path: 'dns', value: () => this.defaultDns },
+        { id: 'json-inbounds', label: 'JSON inbound preset', description: 'Add TUN and mixed local inbound presets.', path: 'inbounds', value: () => this.defaultInb },
+        { id: 'json-experimental', label: 'JSON experimental preset', description: 'Add Clash API and cache file presets.', path: 'experimental', value: () => this.defaultExp },
       ],
       geo: [
         {
@@ -485,6 +507,15 @@ export default {
     openEditor() {
       this.enableEditor = true
     },
+    recommendationContext(): RecommendationContext<Record<string, any>> {
+      return { mode: 'edit', model: this.subJsonExt }
+    },
+    applySubJsonRecommendation(spec: ResolvedRecommendation<Record<string, any>>) {
+      applyRecommendation(this.subJsonExt, spec, this.recommendationContext())
+    },
+    applySubJsonRecommendations(specs: ResolvedRecommendation<Record<string, any>>[]) {
+      applyRecommendations(this.subJsonExt, specs, this.recommendationContext())
+    },
     saveEditor(data:string) {
       try {
         this.subJsonExt = JSON.parse(data)
@@ -509,6 +540,6 @@ export default {
       deep: true
     },
   },
-  components: { Editor, SimpleDNS }
+  components: { Editor, SimpleDNS, RecommendedValues }
 }
 </script>

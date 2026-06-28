@@ -20,6 +20,13 @@
             <v-text-field v-model="dnsServer.tag" :label="$t('objects.tag')" hide-details />
           </v-col>
         </v-row>
+        <RecommendedValues
+          :model="dnsServer"
+          :specs="recommendationSpecs"
+          :context="recommendationContext"
+          class="mb-3"
+          @apply="applyRecommended"
+        />
         <v-row v-if="HasServer.includes(dnsServer.type)">
           <v-col cols="12" sm="6" md="4">
             <v-combobox v-model="dnsServer.server" :items="dnsResolvers" :label="$t('in.addr')" hide-details />
@@ -138,6 +145,9 @@ import Headers from '@/components/Headers.vue'
 import RandomUtil from '@/plugins/randomUtil'
 import { DnsTypes, createDnsServer } from '@/types/dns'
 import { dnsResolvers, dohPaths } from '@/types/recommended'
+import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
+import { applyRecommendation } from '@/utils/recommendations'
+import { dnsRecommendationSpecs } from '@/utils/defaultRecommendations'
 export default {
   props: ['visible', 'data', 'index', 'tsTags', 'rslvdTags'],
   emits: ['close', 'save'],
@@ -152,6 +162,7 @@ export default {
       WithoutDial: [DnsTypes.Hosts, DnsTypes.Tailscale, DnsTypes.FakeIP, DnsTypes.Resolved, DnsTypes.Fallback, DnsTypes.SDNS, DnsTypes.DHCP],
       dnsResolvers,
       dohPaths,
+      recommendationSpecs: dnsRecommendationSpecs,
     }
   },
   methods: {
@@ -164,6 +175,9 @@ export default {
         this.dnsServer = createDnsServer("local",{tag: "dns-" + RandomUtil.randomSeq(3)})
         this.title = 'add'
       }
+    },
+    applyRecommended(spec: any) {
+      applyRecommendation(this.dnsServer, spec, this.recommendationContext, { force: true })
     },
     changeType(dnsType: string) {
       this.dnsServer = createDnsServer(dnsType,{tag: this.dnsServer.tag})
@@ -195,6 +209,9 @@ export default {
     },
   },
   computed:{
+    recommendationContext() {
+      return { model: this.dnsServer, mode: this.$props.index != -1 ? 'edit' : 'create', type: this.dnsServer.type }
+    },
     hostsPath: {
       get() { return this.dnsServer.path },
       set(v: string) {
@@ -236,6 +253,6 @@ export default {
       }
     },
   },
-  components: { DialVue, oTlsVue, Headers }
+  components: { RecommendedValues, DialVue, oTlsVue, Headers }
 }
 </script>

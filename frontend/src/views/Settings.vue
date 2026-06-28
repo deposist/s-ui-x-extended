@@ -40,6 +40,14 @@
     </v-row>
     <v-window v-model="tab">
       <v-window-item value="t1">
+        <RecommendedValues
+          :model="settings"
+          :specs="interfaceRecommendations"
+          class="mb-4"
+          show-apply-all
+          @apply="applySettingsRecommendation"
+          @apply-all="applySettingsRecommendations"
+        />
         <v-row v-if="!nexus">
           <v-col cols="12" sm="6" md="4" v-if="showNexusControls">
             <ui-mode-control variant="select" />
@@ -226,6 +234,14 @@
       </v-window-item>
 
       <v-window-item value="t2">
+        <RecommendedValues
+          :model="settings"
+          :specs="subscriptionRecommendations"
+          class="mb-4"
+          show-apply-all
+          @apply="applySettingsRecommendation"
+          @apply-all="applySettingsRecommendations"
+        />
         <v-row v-if="!nexus">
           <v-col cols="12" sm="6" md="4">
             <div class="d-flex align-center">
@@ -526,6 +542,14 @@
       </v-window-item>
 
       <v-window-item value="t3">
+        <RecommendedValues
+          :model="settings"
+          :specs="jsonSubscriptionRecommendations"
+          class="mb-4"
+          show-apply-all
+          @apply="applySettingsRecommendation"
+          @apply-all="applySettingsRecommendations"
+        />
         <v-row v-if="!nexus">
           <v-col cols="12" sm="6" md="4">
             <v-text-field v-model="settings.subJsonPath" :label="$t('setting.jsonPath')" placeholder="/json/" persistent-placeholder hide-details>
@@ -563,6 +587,14 @@
       </v-window-item>
 
       <v-window-item value="t4">
+        <RecommendedValues
+          :model="settings"
+          :specs="clashSubscriptionRecommendations"
+          class="mb-4"
+          show-apply-all
+          @apply="applySettingsRecommendation"
+          @apply-all="applySettingsRecommendations"
+        />
         <v-row v-if="!nexus">
           <v-col cols="12" sm="6" md="4">
             <v-text-field v-model="settings.subClashPath" :label="$t('setting.clashPath')" placeholder="/clash/" persistent-placeholder hide-details>
@@ -1378,12 +1410,20 @@ import HttpUtils from '@/plugins/httputil'
 import { FindDiff } from '@/plugins/utils'
 import SubJsonExtVue from '@/components/SubJsonExt.vue'
 import SubClashExtVue from '@/components/SubClashExt.vue'
+import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
 import MaintenanceTab from '@/components/settings/MaintenanceTab.vue'
 import Dial from '@/components/Dial.vue'
 import { normalizeSecretFields, stripSecretPlaceholders } from '@/components/settingsSecretField'
 import { push } from 'notivue'
 import { Config, Ntp } from '@/types/config'
 import Data from '@/store/modules/data'
+import {
+  applyRecommendation,
+  applyRecommendations,
+  type RecommendationContext,
+  type RecommendationSpec,
+  type ResolvedRecommendation,
+} from '@/utils/recommendations'
 
 const route = useRoute()
 const tab = ref(route.query.tab === 'basics' ? 't6' : 't1')
@@ -1594,6 +1634,33 @@ const showNexusControls = isNexusEnabled()
 const loading:Ref = inject('loading')?? ref(false)
 const oldSettings = ref({})
 
+type SettingsModel = Record<string, any>
+
+const interfaceRecommendations: RecommendationSpec<SettingsModel>[] = [
+  { id: 'web-listen', label: 'Web listen address', description: 'Listen on all interfaces when the panel must be reachable remotely.', path: 'webListen', value: '0.0.0.0' },
+  { id: 'web-port', label: 'Web port', description: 'Default panel HTTP port.', path: 'webPort', value: '2095' },
+  { id: 'web-path', label: 'Web path', description: 'Default panel base path.', path: 'webPath', value: '/app/' },
+  { id: 'session-age', label: 'Session lifetime', description: 'Use 0 to keep the current server-side default.', path: 'sessionMaxAge', value: '0' },
+  { id: 'traffic-age', label: 'Traffic history retention', description: 'Keep traffic history for 30 days.', path: 'trafficAge', value: '30' },
+  { id: 'timezone', label: 'Timezone', description: 'Safe default timezone used when no backend value is set.', path: 'timeLocation', value: 'Asia/Shanghai' },
+]
+
+const subscriptionRecommendations: RecommendationSpec<SettingsModel>[] = [
+  { id: 'sub-listen', label: 'Subscription listen address', description: 'Listen on all interfaces when subscriptions must be reachable remotely.', path: 'subListen', value: '0.0.0.0' },
+  { id: 'sub-port', label: 'Subscription port', description: 'Default subscription service port.', path: 'subPort', value: '2096' },
+  { id: 'sub-path', label: 'Subscription path', description: 'Default subscription endpoint path.', path: 'subPath', value: '/sub/' },
+  { id: 'sub-updates', label: 'Update interval', description: 'Refresh subscription data every 12 hours.', path: 'subUpdates', value: '12' },
+  { id: 'sub-rate-limit', label: 'Rate limit per IP', description: 'Allow up to 60 subscription requests per IP.', path: 'subRateLimitPerIP', value: '60' },
+]
+
+const jsonSubscriptionRecommendations: RecommendationSpec<SettingsModel>[] = [
+  { id: 'json-path', label: 'JSON subscription path', description: 'Default JSON subscription endpoint path.', path: 'subJsonPath', value: '/json/' },
+]
+
+const clashSubscriptionRecommendations: RecommendationSpec<SettingsModel>[] = [
+  { id: 'clash-path', label: 'Clash subscription path', description: 'Default Clash subscription endpoint path.', path: 'subClashPath', value: '/clash/' },
+]
+
 const settings = ref({
 	webListen: "",
 	webDomain: "",
@@ -1632,6 +1699,19 @@ const settings = ref({
   subJsonExt: "",
   subClashExt: "",
 })
+
+const settingsRecommendationContext = computed<RecommendationContext<SettingsModel>>(() => ({
+  mode: 'edit',
+  model: settings.value,
+}))
+
+function applySettingsRecommendation(spec: ResolvedRecommendation<SettingsModel>) {
+  applyRecommendation(settings.value, spec, settingsRecommendationContext.value)
+}
+
+function applySettingsRecommendations(specs: ResolvedRecommendation<SettingsModel>[]) {
+  applyRecommendations(settings.value, specs, settingsRecommendationContext.value)
+}
 
 onMounted(async () => {
   loading.value = true

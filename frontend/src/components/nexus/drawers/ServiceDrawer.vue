@@ -24,6 +24,13 @@
           <v-text-field v-model="srv.tag" :label="$t('objects.tag')" hide-details></v-text-field>
         </v-col>
       </v-row>
+      <RecommendedValues
+        :model="srv"
+        :specs="recommendationSpecs"
+        :context="recommendationContext"
+        class="mb-3"
+        @apply="applyRecommended"
+      />
 
       <Listen v-if="!NoListen.includes(srv.type)" :data="srv" :inTags="inTags" />
       <Derp v-if="srv.type == srvTypes.DERP" :data="srv" :inTags="inTags" :tsTags="tsTags" />
@@ -56,6 +63,9 @@ import SSMapi from '@/components/services/SSMAPI.vue'
 import Data from '@/store/modules/data'
 import EntityDrawer from './EntityDrawer.vue'
 import FormSection from './FormSection.vue'
+import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
+import { applyRecommendation } from '@/utils/recommendations'
+import { serviceRecommendationSpecs } from '@/utils/defaultRecommendations'
 export default {
   inheritAttrs: false,
   props: ['visible', 'data', 'id', 'inTags', 'tsTags', 'ssTags', 'tlsConfigs'],
@@ -69,13 +79,14 @@ export default {
       srvTypes: SrvTypes,
       HasTls: [SrvTypes.DERP, SrvTypes.SSMAPI, SrvTypes.OCM, SrvTypes.CCM],
       NoListen: [SrvTypes.OOMKiller, SrvTypes.Profiler],
+      recommendationSpecs: serviceRecommendationSpecs,
     }
   },
   methods: {
     async updateData(id: number) {
       if (id > 0) {
         const newData = JSON.parse(this.$props.data)
-        this.srv = createSrv(newData.type, newData)
+        this.srv = newData
         this.title = "edit"
       }
       else {
@@ -88,6 +99,9 @@ export default {
         this.title = "add"
       }
       this.snapshot = JSON.stringify(this.srv)
+    },
+    applyRecommended(spec: any) {
+      applyRecommendation(this.srv, spec, this.recommendationContext, { force: true })
     },
     changeType() {
       // Tag change only in add service
@@ -124,6 +138,9 @@ export default {
     dirty(): boolean {
       return this.snapshot !== "" && JSON.stringify(this.srv) !== this.snapshot
     },
+    recommendationContext() {
+      return { model: this.srv, mode: this.$props.id > 0 ? 'edit' : 'create', type: this.srv.type }
+    },
   },
   watch: {
     visible(v) {
@@ -132,6 +149,6 @@ export default {
       }
     },
   },
-  components: { EntityDrawer, FormSection, Listen, InTLS, Derp, Ocm, Ccm, OomKiller, Profiler, SSMapi },
+  components: { EntityDrawer, FormSection, RecommendedValues, Listen, InTLS, Derp, Ocm, Ccm, OomKiller, Profiler, SSMapi },
 }
 </script>

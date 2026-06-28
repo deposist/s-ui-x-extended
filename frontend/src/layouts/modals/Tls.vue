@@ -28,6 +28,13 @@
               </v-btn-toggle>
             </v-col>
           </v-row>
+          <RecommendedValues
+            :model="tls"
+            :specs="recommendationSpecs"
+            :context="recommendationContext"
+            class="mb-3"
+            @apply="applyRecommended"
+          />
           <v-row>
             <v-col cols="12" sm="6" md="4" v-if="inTls.server_name != undefined">
               <v-text-field
@@ -373,6 +380,9 @@ import HttpUtils from '@/plugins/httputil'
 import { push } from 'notivue'
 import { i18n } from '@/locales'
 import RandomUtil from '@/plugins/randomUtil'
+import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
+import { applyRecommendation } from '@/utils/recommendations'
+import { tlsRecommendationSpecs } from '@/utils/defaultRecommendations'
 export default {
   props: ['visible', 'data', 'id'],
   emits: ['close', 'save'],
@@ -432,21 +442,31 @@ export default {
         { title: "Android", value: "android" },
         { title: "Random", value: "random" },
         { title: "Randomized", value: "randomized" },
-      ]
+      ],
+      recommendationSpecs: tlsRecommendationSpecs,
+      editHadServer: true,
+      editHadClient: true,
     }
   },
   methods: {
+    applyRecommended(spec: any) {
+      applyRecommendation(this.tls, spec, this.recommendationContext, { force: true })
+    },
     updateData(id: number) {
       if (id > 0) {
         const newData = <tls>JSON.parse(this.$props.data)
+        this.editHadServer = newData.server != null
+        this.editHadClient = newData.client != null
         this.tls = newData
-        if (this.tls.server == null) this.tls.server = { enabled: true }
-        if (this.tls.client == null) this.tls.client = {}
+        if (this.tls.server == null) this.tls.server = <iTls>{}
+        if (this.tls.client == null) this.tls.client = <oTls>{}
         this.tlsType = newData.server?.reality == undefined ? 0 : 1
         this.usePath = newData.server?.key == undefined ? 0 : 1
         this.title = "edit"
       }
       else {
+        this.editHadServer = true
+        this.editHadClient = true
         this.tls = <tls>{ id: 0, name: '', server: {enabled: true}, client: {} }
         this.tlsType = 0
         this.usePath = 0
@@ -472,7 +492,10 @@ export default {
     },
     saveChanges() {
       this.loading = true
-      this.$emit('save', this.tls)
+      const saveData = JSON.parse(JSON.stringify(this.tls))
+      if (this.$props.id > 0 && !this.editHadServer && saveData.server && Object.keys(saveData.server).length === 0) delete saveData.server
+      if (this.$props.id > 0 && !this.editHadClient && saveData.client && Object.keys(saveData.client).length === 0) delete saveData.client
+      this.$emit('save', saveData)
       this.loading = false
     },
     async genSelfSigned(){
@@ -551,6 +574,9 @@ export default {
     },
     outTls(): oTls {
       return this.tls.client
+    },
+    recommendationContext() {
+      return { model: this.tls, mode: this.$props.id > 0 ? 'edit' : 'create', type: this.tlsType ? 'reality' : 'tls' }
     },
     certText: {
       get(): string { return this.inTls.certificate ? this.inTls.certificate.join('\n') : '' },
@@ -685,6 +711,6 @@ export default {
       }
     },
   },
-  components: { AcmeVue, EchVue }
+  components: { RecommendedValues, AcmeVue, EchVue }
 }
 </script>

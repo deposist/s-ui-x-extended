@@ -54,6 +54,13 @@
             <v-switch color="primary" v-model="ruleData.invert" :label="$t('rule.invert')" hide-details></v-switch>
           </v-col>
         </v-row>
+        <RecommendedValues
+          :model="ruleData"
+          :specs="recommendationSpecs"
+          :context="recommendationContext"
+          class="mb-3"
+          @apply="applyRecommended"
+        />
         <v-card :subtitle="$t('dns.rule.action.route')" v-if="['route', 'route-options'].includes(ruleData.action)">
           <v-row v-if="ruleData.action == 'route'">
             <v-col cols="12" sm="6" md="4">
@@ -156,6 +163,9 @@
 import { logicalDnsRule, dnsRule, actionDnsRuleKeys } from '@/types/dns'
 import RuleOptions from '@/components/DnsRule.vue'
 import { i18n } from '@/locales'
+import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
+import { applyRecommendation } from '@/utils/recommendations'
+import { dnsRuleRecommendationSpecs } from '@/utils/defaultRecommendations'
 export default {
   props: ['visible', 'data', 'index', 'clients', 'inTags', 'serverTags', 'ruleSets'],
   emits: ['close', 'save'],
@@ -191,9 +201,13 @@ export default {
         { title: i18n.global.t('dns.rule.action.rcodes.notImp'), value: 'NOTIMP' },
         { title: i18n.global.t('dns.rule.action.rcodes.refused'), value: 'REFUSED' },
       ],
+      recommendationSpecs: dnsRuleRecommendationSpecs,
     }
   },
   methods: {
+    applyRecommended(spec: any) {
+      applyRecommendation(this.ruleData, spec, this.recommendationContext, { force: true })
+    },
     updateData() {
       if (this.$props.index != -1) {
         const newData = JSON.parse(this.$props.data)
@@ -281,6 +295,9 @@ export default {
     }
   },
   computed: {
+    recommendationContext() {
+      return { model: this.ruleData, mode: this.$props.index != -1 ? 'edit' : 'create' }
+    },
     logical: {
       get() { return this.ruleData.type == 'logical' },
       set(v:boolean) {
@@ -307,7 +324,7 @@ export default {
       }
     },
   },
-  components: { RuleOptions }
+  components: { RecommendedValues, RuleOptions }
 }
 
 </script>
