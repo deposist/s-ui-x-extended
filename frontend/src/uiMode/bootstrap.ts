@@ -3,17 +3,15 @@ import { DEFAULT_UI_PALETTE, UI_PALETTE_KEY, isUiPalette, type UiPalette } from 
 import { DEFAULT_UI_MODE, UI_MODE_KEY, isUiMode, type UiMode } from './types'
 
 const applyUiMode = (): void => {
-  // Gate off -> force the literal 'classic'. Gate on -> DEFAULT_UI_MODE
-  // ('nexus') unless the user persisted an explicit choice.
-  let mode: UiMode = 'classic'
+  const mode: UiMode = isNexusEnabled() ? DEFAULT_UI_MODE : 'classic'
 
   if (isNexusEnabled()) {
-    mode = DEFAULT_UI_MODE
-
     try {
       const raw = localStorage.getItem(UI_MODE_KEY)
 
-      if (isUiMode(raw)) mode = raw
+      if (raw !== DEFAULT_UI_MODE) {
+        localStorage.setItem(UI_MODE_KEY, DEFAULT_UI_MODE)
+      }
     } catch {
       // Keep the default when storage is unavailable.
     }

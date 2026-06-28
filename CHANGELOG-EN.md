@@ -9,16 +9,31 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.1-beta1] - 2026-06-28 - hardening
+
+Hardening release. No database migration is required.
+
+- Shell: removed `eval` from custom version installer; `s-ui uri` no longer contacts external IP services; all positional arguments quoted; `read -r` throughout; tilde paths corrected.
+- Panel: `trafficAge=0` is now rejected (prevented silent data loss); SubSecret generation is atomic under concurrency; import preserves client link mappings for skipped inbounds; broadcast delivery and UI count use the same active-client filter.
+- API: Telegram bot parses `ok:false` in responses and redacts tokens from error messages; error responses no longer leak internal details.
+- Validation: `paidSubCurrency` allowlist matches the frontend picker; `paidSubAutoInbounds` rejects duplicates and missing inbounds; `paidSubExternalUrlTemplate` blocks local IPs and control characters; `saveBinding` validates `tgUserId`.
+- Frontend: Nexus is now the only selectable/default UI mode under the Nexus gate; the visible mode switch to classic was removed; QUIC transport editor restored as a deprecated-visible option for legacy `v2rayquic` compatibility; bulk outbound save correctly awaits all operations; Settings restart button uses `window.location.reload()`; polling loop bounded; tariff deletion requires confirmation; TLS PEM parsing uses substring match; rule import validates URL protocol; inbound dirty tracking includes user list changes.
+- Cron jobs propagate context and cancel on shutdown; WARP retries respect cancellation; IP monitor salt bootstrap hardened; protocol coverage additions from the prior implementation wave remain included in this release.
+- Auto-registered client names are verified against the database before use.
+
+Full release notes: [`.github/RELEASE_NOTES_v1.0.1-beta1.md`](.github/RELEASE_NOTES_v1.0.1-beta1.md).
 
 
-## [1.0.0-hotfix4] - 2026-06-26 - stable hotfix
-
-Hotfix for the first stable release. No manual database migration is required.
-
-- Fixed the client config editor not showing the MTProxy `secret` field. The generic config loop only rendered `password`, `uuid`, and `auth_str`, so MTProxy credentials were invisible and uneditable.
-
-Full release notes: [`.github/RELEASE_NOTES_v1.0.0-hotfix4.md`](.github/RELEASE_NOTES_v1.0.0-hotfix4.md).
-
+
+
+## [1.0.0-hotfix4] - 2026-06-26 - stable hotfix
+
+Hotfix for the first stable release. No manual database migration is required.
+
+- Fixed the client config editor not showing the MTProxy `secret` field. The generic config loop only rendered `password`, `uuid`, and `auth_str`, so MTProxy credentials were invisible and uneditable.
+
+Full release notes: [`.github/RELEASE_NOTES_v1.0.0-hotfix4.md`](.github/RELEASE_NOTES_v1.0.0-hotfix4.md).
+
 ## [1.0.0-hotfix3] - 2026-06-26 - stable hotfix
 
 

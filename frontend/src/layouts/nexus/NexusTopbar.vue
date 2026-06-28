@@ -84,10 +84,6 @@
             <v-list-item-title>{{ $t(`nexus.palette.options.${item}`) }}</v-list-item-title>
           </v-list-item>
 
-          <template v-if="uiModeEnabled">
-            <v-divider />
-            <v-list-item :prepend-icon="quickIcon" :title="quickLabel" @click="toggleMode" />
-          </template>
         </v-list>
       </v-menu>
 
@@ -165,20 +161,15 @@
           </v-list>
         </v-menu>
 
-        <ui-mode-control variant="quick" />
       </template>
     </template>
   </v-app-bar>
 </template>
 
 <script lang="ts" setup>
-import UiModeControl from '@/components/UiModeControl.vue'
 import { pageHeader, topbarSearch } from '@/components/nexus/primitives/pageHeaderPortal'
 import { languages, setI18nLocale } from '@/locales'
-import { isNexusEnabled } from '@/uiMode/featureGate'
 import { UI_PALETTES, useUiPalette } from '@/uiMode/palette'
-import type { UiMode } from '@/uiMode/types'
-import { useUiMode } from '@/uiMode/useUiMode'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
@@ -197,21 +188,10 @@ const emit = defineEmits<{
 const theme = useTheme()
 const { smAndDown } = useDisplay()
 const vuetifyLocale = useLocale()
-const { locale: i18nLocale, t } = useI18n()
+const { locale: i18nLocale } = useI18n()
 const { palette, setPalette } = useUiPalette()
-const { mode, setMode } = useUiMode()
 const palettes = UI_PALETTES
 const compactActions = computed(() => smAndDown.value)
-const uiModeEnabled = isNexusEnabled()
-const nexusMode: UiMode = 'nexus'
-const classicMode: UiMode = 'classic'
-const nextMode = computed<UiMode>(() => mode.value === nexusMode ? classicMode : nexusMode)
-const quickIcon = computed(() =>
-  mode.value === nexusMode ? 'lucide:layout-dashboard' : 'lucide:layout-panel-left',
-)
-const quickLabel = computed(() =>
-  t('nexus.mode.switchTo', { mode: t(`nexus.mode.options.${nextMode.value}`) }),
-)
 
 const changeLocale = async (nextLocale: string) => {
   const selectedLocale = await setI18nLocale(nextLocale)
@@ -240,7 +220,6 @@ const isActiveTheme = (value: string) => {
   return currentTheme === value
 }
 
-const toggleMode = () => setMode(nextMode.value)
 </script>
 
 <style scoped>

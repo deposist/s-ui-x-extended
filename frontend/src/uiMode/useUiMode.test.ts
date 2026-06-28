@@ -34,7 +34,7 @@ describe('useUiMode', () => {
     expect(setItem).not.toHaveBeenCalled()
   })
 
-  it('persists a valid value', async () => {
+  it('persists nexus as the only selectable value', async () => {
     const { useUiMode } = await import('./useUiMode')
 
     useUiMode().setMode('nexus')
@@ -43,22 +43,22 @@ describe('useUiMode', () => {
     expect(setItem).toHaveBeenCalledWith(UI_MODE_KEY, 'nexus')
   })
 
-  it('syncs the html ui mode dataset when mode changes', async () => {
+  it('syncs the html ui mode dataset to nexus when mode changes under the gate', async () => {
     const dataset: Record<string, string> = {}
     vi.stubGlobal('document', { documentElement: { dataset } })
     const { useUiMode } = await import('./useUiMode')
 
     useUiMode().setMode('classic')
 
-    expect(dataset.uiMode).toBe('classic')
+    expect(dataset.uiMode).toBe('nexus')
 
     useUiMode().setMode('nexus')
 
     expect(dataset.uiMode).toBe('nexus')
   })
 
-  it('falls back to the default (nexus) for an invalid stored value', async () => {
-    storage.set(UI_MODE_KEY, 'NEXUS')
+  it('normalizes a non-nexus stored value back to nexus', async () => {
+    storage.set(UI_MODE_KEY, 'classic')
     const { useUiMode } = await import('./useUiMode')
 
     const { mode, persisted } = useUiMode()
@@ -67,13 +67,13 @@ describe('useUiMode', () => {
     expect(persisted.value).toBe('nexus')
   })
 
-  it('updates reactively when mode changes', async () => {
+  it('keeps both consumers on nexus even if classic is requested', async () => {
     const { useUiMode } = await import('./useUiMode')
 
     const first = useUiMode()
     const second = useUiMode()
 
-    first.setMode('nexus')
+    first.setMode('classic')
 
     expect(first.mode.value).toBe('nexus')
     expect(second.mode.value).toBe('nexus')

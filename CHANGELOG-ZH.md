@@ -10,14 +10,35 @@
 
 
 
-## [1.0.0-hotfix4] - 2026-06-26 - 稳定版 hotfix
-
-首个稳定版的 hotfix。无需手动迁移数据库。
-
-- 修复客户端配置编辑器中 MTProxy `secret` 字段不显示的问题。通用配置循环只渲染了 `password`、`uuid` 和 `auth_str`，导致 MTProxy 凭据在 UI 中不可见且无法编辑。
-
-完整发布说明：[`.github/RELEASE_NOTES_v1.0.0-hotfix4.md`](.github/RELEASE_NOTES_v1.0.0-hotfix4.md)。
-
+## [1.0.1-beta1] - 2026-06-28 - 加固预发布版
+
+加固预发布版本。无需手动迁移数据库。
+
+- Shell：移除自定义版本安装流程中的 `eval`；`s-ui uri` 不再访问外部 IP 服务；位置参数统一加引号；全面使用 `read -r`；修正波浪线路径处理。
+- 面板：拒绝 `trafficAge=0` 以避免静默删除流量统计；并发下 `SubSecret` 原子生成；3x-ui 导入在 skip inbound 时保留客户端映射；broadcast 实际发送与 UI 计数使用同一活跃客户端过滤条件。
+- API：Telegram 机器人现在识别 `ok:false` 响应并避免在错误日志中暴露 token；API 错误响应不再泄露内部细节。
+- 校验：`paidSubCurrency` 与前端货币下拉选项对齐；`paidSubAutoInbounds` 拒绝重复和不存在的 inbound；`paidSubExternalUrlTemplate` 阻止本地 IP 与控制字符；`saveBinding` 校验 `tgUserId`。
+- 前端：在 Nexus gate 启用时，Nexus 现在是唯一可选且默认的 UI 模式；移除了切换到 classic 的可见开关；恢复 QUIC transport 编辑器，并以弃用警告形式保留给 legacy `v2rayquic` 兼容场景；bulk outbound 保存会等待全部操作完成；Settings 重启按钮改为 `window.location.reload()`；配置轮询增加 10 秒超时；资费删除需要确认；TLS PEM 解析改用子串匹配；规则导入会校验 URL 协议；inbound 脏表单检测现在包含用户列表变更。
+- 其他：Cron 作业在关闭时传播并取消 context；WARP 重试尊重取消；IP 监控 installSalt 初始化增强并发安全；上一轮实现的协议覆盖补充也包含在本次发布中。
+
+完整发布说明：[`.github/RELEASE_NOTES_v1.0.1-beta1.md`](.github/RELEASE_NOTES_v1.0.1-beta1.md)。
+
+## [1.0.0-hotfix4] - 2026-06-26 - 稳定版 hotfix
+
+
+
+首个稳定版的 hotfix。无需手动迁移数据库。
+
+
+
+- 修复客户端配置编辑器中 MTProxy `secret` 字段不显示的问题。通用配置循环只渲染了 `password`、`uuid` 和 `auth_str`，导致 MTProxy 凭据在 UI 中不可见且无法编辑。
+
+
+
+完整发布说明：[`.github/RELEASE_NOTES_v1.0.0-hotfix4.md`](.github/RELEASE_NOTES_v1.0.0-hotfix4.md)。
+
+
+
 ## [1.0.0-hotfix3] - 2026-06-26 - 稳定版 hotfix
 
 

@@ -32,6 +32,11 @@
       <Ccm v-if="srv.type == srvTypes.CCM" :data="srv" />
       <OomKiller v-if="srv.type == srvTypes.OOMKiller" :data="srv" />
       <Profiler v-if="srv.type == srvTypes.Profiler" :data="srv" />
+      <div v-if="srv.type == srvTypes.Resolved" style="margin-top: 8px;">
+        <v-alert type="info" variant="tonal" density="compact">
+          Resolved DNS service has no type-specific settings beyond Listen.
+        </v-alert>
+      </div>
       <InTLS v-if="HasTls.includes(srv.type)"  :inbound="srv" :tlsConfigs="tlsConfigs" :tls_id="srv.tls_id" />
     </form-section>
   </entity-drawer>

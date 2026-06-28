@@ -1,6 +1,6 @@
 {
   "name": "s-ui-frontend",
-  "version": "1.5.10-beta7",
+  "version": "1.0.1-beta1",
   "private": true,
   "scripts": {
     "dev": "vite --host",

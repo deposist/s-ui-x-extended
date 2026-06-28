@@ -25,30 +25,6 @@
           <v-text-field v-model="inbound.tag" :label="$t('objects.tag')" hide-details></v-text-field>
         </v-col>
       </v-row>
-      <v-card
-        v-if="[inTypes.HTTP, inTypes.Mixed].includes(inbound.type)"
-        border
-        density="compact"
-        color="background"
-        style="margin-top: 8px;">
-        <v-card-text>
-          <v-row>
-            <v-col cols="12" sm="6">
-              <v-switch
-                v-model="setSystemProxy"
-                color="primary"
-                :label="$t('singbox.setSystemProxy')"
-                hide-details>
-              </v-switch>
-            </v-col>
-            <v-col cols="12" v-if="setSystemProxy">
-              <v-alert type="warning" variant="tonal" density="compact">
-                {{ $t('singbox.setSystemProxyWarning') }}
-              </v-alert>
-            </v-col>
-          </v-row>
-        </v-card-text>
-      </v-card>
       <DomainResolver
         v-if="[inTypes.SOCKS, inTypes.HTTP, inTypes.Mixed].includes(inbound.type)"
         :data="inbound"
@@ -71,6 +47,9 @@
         <v-window-item value="s">
           <Listen :data="inbound" :inTags="inTags" v-if="inbound.type != inTypes.Tun" />
           <Direct v-if="inbound.type == inTypes.Direct" :data="inbound" />
+          <Socks v-if="inbound.type == inTypes.SOCKS" direction="in" :data="inbound" />
+          <Http v-if="inbound.type == inTypes.HTTP" direction="in" :data="inbound" />
+          <Mixed v-if="inbound.type == inTypes.Mixed" :data="inbound" />
           <Shadowsocks v-if="inbound.type == inTypes.Shadowsocks" direction="in" :data="inbound" />
           <Hysteria v-if="inbound.type == inTypes.Hysteria" direction="in" :data="inbound" />
           <Hysteria2 v-if="inbound.type == inTypes.Hysteria2" direction="in" :data="inbound" />
@@ -80,8 +59,10 @@
           <Tuic v-if="inbound.type == inTypes.TUIC" direction="in" :data="inbound" />
           <Tun v-if="inbound.type == inTypes.Tun" :data="inbound" />
           <AnyTls v-if="inbound.type == inTypes.AnyTls" :data="inbound" direction="in" />
+          <Redirect v-if="inbound.type == inTypes.Redirect" :data="inbound" />
           <TProxy v-if="inbound.type == inTypes.TProxy" :inbound="inbound" />
           <VlessInbound v-if="inbound.type == inTypes.VLESS" :data="inbound" />
+          <Vmess v-if="inbound.type == inTypes.VMess" direction="in" :data="inbound" />
           <Mieru v-if="inbound.type == inTypes.Mieru" direction="in" :data="inbound" />
           <Sudoku v-if="inbound.type == inTypes.Sudoku" direction="in" :data="inbound" />
           <TrustTunnel v-if="inbound.type == inTypes.TrustTunnel" direction="in" :data="inbound" />
@@ -142,6 +123,11 @@ import SshInbound from '@/components/protocols/SshInbound.vue'
 import MTProxy from '@/components/protocols/MTProxy.vue'
 import BondInbound from '@/components/protocols/BondInbound.vue'
 import CoreFailoverInbound from '@/components/protocols/CoreFailoverInbound.vue'
+import Vmess from '@/components/protocols/Vmess.vue'
+import Socks from '@/components/protocols/Socks.vue'
+import Http from '@/components/protocols/Http.vue'
+import Mixed from '@/components/protocols/Mixed.vue'
+import Redirect from '@/components/protocols/Redirect.vue'
 import InTls from '@/components/tls/InTLS.vue'
 import TProxy from '@/components/protocols/TProxy.vue'
 import Multiplex from '@/components/Multiplex.vue'
@@ -290,18 +276,6 @@ export default {
       if ((<any>this.inbound).managed) return false
       return true
     },
-    setSystemProxy: {
-      get(): boolean {
-        return (<any>this.inbound).set_system_proxy === true
-      },
-      set(v:boolean) {
-        if (v) {
-          (<any>this.inbound).set_system_proxy = true
-        } else {
-          delete (<any>this.inbound).set_system_proxy
-        }
-      }
-    },
   },
   watch: {
     visible(newValue) {
@@ -317,7 +291,8 @@ export default {
     Listen, InTls, Hysteria2, Naive, Direct, Shadowsocks,
     Users, Hysteria, ShadowTls, TProxy, Multiplex, Tuic, Tun,
     Trojan, AnyTls, Transport, AddrVue, OutJsonVue, Dial, DomainResolver,
-    VlessInbound, Mieru, Sudoku, TrustTunnel, SshInbound, MTProxy, BondInbound, CoreFailoverInbound
+    VlessInbound, Mieru, Sudoku, TrustTunnel, SshInbound, MTProxy, BondInbound, CoreFailoverInbound,
+    Vmess, Socks, Http, Mixed, Redirect,
   }
 }
 </script>

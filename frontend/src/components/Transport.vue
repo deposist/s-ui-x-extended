@@ -19,6 +19,7 @@
     <HttpUpgrade v-if="Transport.type == trspTypes.HTTPUpgrade" :transport="Transport" />
     <Xhttp v-if="Transport.type == trspTypes.XHTTP" :transport="Transport" />
     <Mkcp v-if="Transport.type == trspTypes.mKCP" :transport="Transport" />
+    <Quic v-if="Transport.type == trspTypes.QUIC" :transport="Transport" />
   </v-card>
 </template>
 
@@ -30,6 +31,7 @@ import GRPC from './transports/gRPC.vue'
 import HttpUpgrade from './transports/HttpUpgrade.vue'
 import Xhttp from './transports/Xhttp.vue'
 import Mkcp from './transports/Mkcp.vue'
+import Quic from './transports/QUIC.vue'
 export default {
   props: ['data'],
   data() {
@@ -50,6 +52,6 @@ export default {
       set(newValue: string) { this.$props.data.transport = { type: newValue } }
     }
   },
-  components: { Http, WebSocket, GRPC, HttpUpgrade, Xhttp, Mkcp }
+  components: { Http, WebSocket, GRPC, HttpUpgrade, Xhttp, Mkcp, Quic }
 }
 </script>

@@ -170,10 +170,12 @@
         </v-card>
       </v-menu>
     </v-card-actions>
+    <Amnezia :data="data" :full="false" />
   </v-card>
 </template>
 
 <script lang="ts">
+import Amnezia from '@/components/protocols/Amnezia.vue'
 
 export default {
   props: ['data'],
@@ -234,6 +236,7 @@ export default {
       get() { return this.$props.data.udp_timeout ? parseInt(this.$props.data.udp_timeout.replace('m','')) : 5 },
       set(v:number) { this.$props.data.udp_timeout = v > 0 ? v + 'm' : '5m' }
     }
-  }
+  },
+  components: { Amnezia }
 }
 </script>

@@ -123,6 +123,7 @@
         </v-card>
       </v-menu>
     </v-card-actions>
+    <Amnezia :data="data" :full="true" />
   </v-card>
   <v-card v-if="data.peers != undefined">
     <v-card-subtitle>
@@ -142,6 +143,7 @@
 
 <script lang="ts">
 import Peer from '@/components/WgPeer.vue'
+import Amnezia from '@/components/protocols/Amnezia.vue'
 
 export default {
   props: ['data'],
@@ -225,6 +227,6 @@ export default {
       set(v:string) { this.$props.data.ext.public_key = v }
     }
   },
-  components: { Peer }
+  components: { Peer, Amnezia }
 }
 </script>

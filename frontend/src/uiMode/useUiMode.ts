@@ -1,13 +1,13 @@
 import { computed, readonly, ref } from 'vue'
 
 import { isNexusEnabled } from './featureGate'
-import { DEFAULT_UI_MODE, UI_MODE_KEY, isUiMode, type UiMode } from './types'
+import { DEFAULT_UI_MODE, UI_MODE_KEY, type UiMode } from './types'
 
 const readPersisted = (): UiMode => {
   try {
     const raw = localStorage.getItem(UI_MODE_KEY)
 
-    return isUiMode(raw) ? raw : DEFAULT_UI_MODE
+    return raw === DEFAULT_UI_MODE ? DEFAULT_UI_MODE : DEFAULT_UI_MODE
   } catch {
     return DEFAULT_UI_MODE
   }
@@ -15,11 +15,11 @@ const readPersisted = (): UiMode => {
 
 const persisted = ref<UiMode>(readPersisted())
 
-// When the Nexus feature gate is off we force the literal 'classic' rather
-// than DEFAULT_UI_MODE: the default is now 'nexus', so deriving from it would
-// keep Nexus active even when the gate is meant to disable it.
+// When the Nexus feature gate is off we force the literal 'classic'. When the
+// gate is on, Nexus is the only selectable mode and the persisted value is
+// normalized to the Nexus default.
 const effective = computed<UiMode>(() =>
-  isNexusEnabled() ? persisted.value : 'classic',
+  isNexusEnabled() ? DEFAULT_UI_MODE : 'classic',
 )
 
 const syncDocumentUiMode = (next: UiMode): void => {
@@ -28,14 +28,12 @@ const syncDocumentUiMode = (next: UiMode): void => {
   document.documentElement.dataset.uiMode = next
 }
 
-const setMode = (next: UiMode): void => {
-  if (!isUiMode(next)) return
-
-  persisted.value = next
+const setMode = (_next: UiMode): void => {
+  persisted.value = DEFAULT_UI_MODE
   syncDocumentUiMode(effective.value)
 
   try {
-    localStorage.setItem(UI_MODE_KEY, next)
+    localStorage.setItem(UI_MODE_KEY, DEFAULT_UI_MODE)
   } catch {
     // Keep the reactive preference when storage is unavailable.
   }

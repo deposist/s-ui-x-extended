@@ -1,16 +1,16 @@
 export const TrspTypes = {
   HTTP: 'http',
   WebSocket: 'ws',
-  QUIC: 'quic',
   gRPC: 'grpc',
   HTTPUpgrade: "httpupgrade",
   XHTTP: 'xhttp',
   mKCP: 'mkcp',
+  QUIC: 'quic',
 }
 
 export type TrspType = typeof TrspTypes[keyof typeof TrspTypes]
 
-export type Transport = HTTP|WebSocket|QUIC|gRPC|HTTPUpgrade|XHTTP|mKCP
+export type Transport = HTTP|WebSocket|gRPC|HTTPUpgrade|XHTTP|mKCP|QUIC
 
 interface TransportBasics {
   type: TrspType
@@ -33,8 +33,6 @@ export interface WebSocket extends TransportBasics {
   max_early_data?: number
   early_data_header_name?: string
 }
-
-export interface QUIC extends TransportBasics {}
 
 export interface gRPC extends TransportBasics {
   service_name?: string
@@ -59,6 +57,14 @@ export interface mKCP extends TransportBasics {
   write_buffer_size?: number
   header_type?: string
   seed?: string
+}
+
+export interface QUIC extends TransportBasics {
+  security?: string
+  key?: string
+  header?: {
+    type?: string
+  }
 }
 
 export interface XHTTPXmux {
