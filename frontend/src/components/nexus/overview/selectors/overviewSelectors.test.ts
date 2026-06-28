@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   auditDisplayIcons,
@@ -9,7 +9,24 @@ import { selectKpiSummary } from './kpiSelectors'
 import { selectProtocolSummaries } from './protocolSummarySelectors'
 import { selectSystemStatus } from './systemStatusSelectors'
 import { selectTopClients } from './topClientsSelectors'
-import { selectTrafficSeries } from './trafficSelectors'
+import {
+  formatTrafficLabel,
+  loadTrafficTimeZone,
+  persistTrafficTimeZone,
+  selectTrafficSeries,
+  trafficTimeZoneOptions,
+  trafficTimeZoneStorageKey,
+} from './trafficSelectors'
+
+const originalSupportedValuesOf = Intl.supportedValuesOf
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  Object.defineProperty(Intl, 'supportedValuesOf', {
+    configurable: true,
+    value: originalSupportedValuesOf,
+  })
+})
 
 describe('overview selectors', () => {
   it('returns empty-safe defaults', () => {
@@ -74,10 +91,10 @@ describe('overview selectors', () => {
     ]
     const originalTrafficStats = trafficStats.map((stat) => ({ ...stat }))
 
-    expect(selectTrafficSeries({ stats: trafficStats, range: '7d' })).toEqual({
+    expect(selectTrafficSeries({ stats: trafficStats, range: '7d', timeZone: 'UTC' })).toEqual({
       labels: [
-        '2024-03-09T16:00:00.000Z',
-        '2024-03-09T16:01:00.000Z',
+        '2024-03-09 16:00',
+        '2024-03-09 16:01',
       ],
       download: [11, 0],
       upload: [8, 7],
@@ -187,10 +204,11 @@ describe('overview selectors', () => {
       stats: [
         { dateTime: 1710000000, direction: false, traffic: 999 },
       ],
+      timeZone: 'UTC',
     })).toEqual({
       labels: [
-        '2024-03-09T16:00:00.000Z',
-        '2024-03-09T16:30:00.000Z',
+        '2024-03-09 16:00',
+        '2024-03-09 16:30',
       ],
       download: [10, 30],
       upload: [4, 5],
@@ -209,17 +227,64 @@ describe('overview selectors', () => {
         { dateTime: 1710001800, direction: false, traffic: 6 },
         { dateTime: 1709999900, direction: false, traffic: 99 },
       ],
+      timeZone: 'UTC',
     })).toEqual({
       labels: [
-        '2024-03-09T16:00:00.000Z',
-        '2024-03-09T16:15:00.000Z',
-        '2024-03-09T16:30:00.000Z',
-        '2024-03-09T16:45:00.000Z',
+        '2024-03-09 16:00',
+        '2024-03-09 16:15',
+        '2024-03-09 16:30',
+        '2024-03-09 16:45',
       ],
       download: [10, 0, 6, 0],
       upload: [4, 0, 0, 0],
       range: '1h',
     })
+  })
+
+  it('formats and persists traffic timezone labels safely', () => {
+    expect(formatTrafficLabel(1710000000, 'UTC')).toBe('2024-03-09 16:00')
+    expect(formatTrafficLabel(1710000000, 'Europe/Moscow')).toBe('2024-03-09 19:00')
+
+    const storage = (() => {
+      const values = new Map<string, string>()
+      return {
+        getItem: vi.fn((key: string) => values.get(key) ?? null),
+        setItem: vi.fn((key: string, value: string) => values.set(key, value)),
+        clear: vi.fn(() => values.clear()),
+        key: vi.fn(),
+        length: 0,
+        removeItem: vi.fn((key: string) => values.delete(key)),
+      } satisfies Storage
+    })()
+
+    persistTrafficTimeZone('Europe/Moscow', storage)
+    expect(storage.setItem).toHaveBeenCalledWith(trafficTimeZoneStorageKey, 'Europe/Moscow')
+    expect(loadTrafficTimeZone(storage)).toBe('Europe/Moscow')
+
+    storage.setItem(trafficTimeZoneStorageKey, 'Invalid/Zone')
+    expect(loadTrafficTimeZone(storage)).toEqual(expect.any(String))
+  })
+
+  it('builds supported or fallback traffic timezone options with UTC labels', () => {
+    Object.defineProperty(Intl, 'supportedValuesOf', {
+      configurable: true,
+      value: vi.fn(() => ['Europe/Moscow']),
+    })
+
+    expect(trafficTimeZoneOptions()).toEqual(expect.arrayContaining([
+      { value: 'Europe/Moscow', label: 'Europe/Moscow (UTC +3)' },
+    ]))
+
+    Object.defineProperty(Intl, 'supportedValuesOf', {
+      configurable: true,
+      value: undefined,
+    })
+
+    expect(trafficTimeZoneOptions().map(option => option.value)).toEqual(expect.arrayContaining([
+      'UTC',
+      'Europe/Moscow',
+      'America/New_York',
+    ]))
   })
 
   it('maps known and unknown audit or partial API payloads to plain display data', () => {
@@ -301,8 +366,9 @@ describe('overview selectors', () => {
         { dateTime: 1710000000, direction: 'down', traffic: 5 },
         { dateTime: 1710000000, direction: false, traffic: -1 },
       ],
+      timeZone: 'UTC',
     })).toEqual({
-      labels: ['2024-03-09T16:00:00.000Z'],
+      labels: ['2024-03-09 16:00'],
       download: [0],
       upload: [0],
       range: '24h',

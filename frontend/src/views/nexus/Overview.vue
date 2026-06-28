@@ -2,6 +2,7 @@
   <section class="nexus-overview">
     <kpi-row
       v-model:traffic-range="trafficRange"
+      v-model:traffic-time-zone="trafficTimeZone"
       :loading="dashboardLoading"
       :summary="kpiSummary"
       :status="systemStatus"
@@ -53,6 +54,8 @@ import { selectProtocolSummaries } from '@/components/nexus/overview/selectors/p
 import { selectSystemStatus } from '@/components/nexus/overview/selectors/systemStatusSelectors'
 import { selectTopClients } from '@/components/nexus/overview/selectors/topClientsSelectors'
 import {
+  loadTrafficTimeZone,
+  persistTrafficTimeZone,
   selectTrafficSeries,
   trafficRangeHours,
   type TrafficRange,
@@ -85,6 +88,7 @@ const liveTraffic = ref<NetworkTrafficRate>({
   uploadBps: 0,
 })
 const trafficRange = ref<TrafficRange>('24h')
+const trafficTimeZone = ref(loadTrafficTimeZone())
 const trafficSummary = ref<unknown>()
 const trafficLoading = ref(false)
 
@@ -101,6 +105,7 @@ const systemMetrics = computed(() => overviewStatusMetrics(statusPayload.value))
 const trafficSeries = computed(() => selectTrafficSeries({
   range: trafficRange.value,
   summary: trafficSummary.value,
+  timeZone: trafficTimeZone.value,
 }))
 const topClients = computed(() => selectTopClients({
   clients: data.clients,
@@ -237,6 +242,10 @@ const setOffline = () => {
 
 watch(trafficRange, () => {
   void loadTrafficStats()
+})
+
+watch(trafficTimeZone, (value) => {
+  persistTrafficTimeZone(value)
 })
 
 // Pause polling while the browser tab is hidden; refresh immediately when visible.

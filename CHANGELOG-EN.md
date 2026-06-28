@@ -9,6 +9,15 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.1-beta2] - 2026-06-29 - frontend and documentation
+
+Frontend and documentation update. No database migration is required.
+
+- Frontend: Dashboard Traffic statistics now include a timezone selector that defaults to the browser timezone, persists the selected timezone in `localStorage`, formats chart labels as `YYYY-MM-DD HH:MM`, and shows the selected timezone in KPI metadata.
+- Documentation: README now documents the Dashboard Traffic statistics timezone selector behavior and refreshes the supported-protocol list from repository capability/configuration documentation.
+
+Full release notes: [`.github/RELEASE_NOTES_v1.0.1-beta2.md`](.github/RELEASE_NOTES_v1.0.1-beta2.md).
+
 ## [1.0.1-beta1] - 2026-06-28 - hardening
 
 Hardening release. No database migration is required.

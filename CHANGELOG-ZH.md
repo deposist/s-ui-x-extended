@@ -8,7 +8,14 @@
 
 - 暂无未发布变更。
 
+## [1.0.1-beta2] - 2026-06-29 - 前端与文档
 
+前端与文档更新。无需手动迁移数据库。
+
+- 前端：Dashboard Traffic statistics 新增时区选择器，默认使用浏览器时区；选择结果保存在 `localStorage`；图表标签使用 `YYYY-MM-DD HH:MM` 格式；KPI metadata 显示当前选择的时区。
+- 文档：README 现在说明 Dashboard Traffic statistics 时区选择器行为，并根据仓库 capability/configuration documentation 刷新支持协议列表。
+
+完整发布说明：[`.github/RELEASE_NOTES_v1.0.1-beta2.md`](.github/RELEASE_NOTES_v1.0.1-beta2.md)。
 
 ## [1.0.1-beta1] - 2026-06-28 - 加固预发布版
 

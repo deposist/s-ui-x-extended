@@ -13,6 +13,12 @@ export interface TrafficSelectorInput {
   range?: unknown
   stats?: readonly unknown[] | null
   summary?: unknown
+  timeZone?: unknown
+}
+
+export interface TrafficTimeZoneOption {
+  label: string
+  value: string
 }
 
 export type TrafficRange = '1h' | '6h' | '12h' | '24h' | '7d' | '30d'
@@ -23,6 +29,24 @@ type TrafficBucket = {
 }
 
 const defaultRange: TrafficRange = '24h'
+const defaultTimeZone = 'UTC'
+export const trafficTimeZoneStorageKey = 'nexus-overview-traffic-timezone'
+
+const fallbackTrafficTimeZones = [
+  'UTC',
+  'Europe/London',
+  'Europe/Berlin',
+  'Europe/Moscow',
+  'Asia/Dubai',
+  'Asia/Kolkata',
+  'Asia/Shanghai',
+  'Asia/Tokyo',
+  'Australia/Sydney',
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+]
 
 export const trafficRangeHours: Record<TrafficRange, number> = {
   '1h': 1,
@@ -42,9 +66,131 @@ const isTrafficRange = (value: unknown): value is TrafficRange => {
     || value === '30d'
 }
 
-const trafficLabel = (dateTime: number): string => {
+export const isValidTrafficTimeZone = (value: unknown): value is string => {
+  if (typeof value !== 'string' || value.length === 0) return false
+
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value }).format(0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const browserTrafficTimeZone = (): string => {
+  try {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    return isValidTrafficTimeZone(timeZone) ? timeZone : defaultTimeZone
+  } catch {
+    return defaultTimeZone
+  }
+}
+
+export const resolveTrafficTimeZone = (value?: unknown): string => {
+  return isValidTrafficTimeZone(value) ? value : browserTrafficTimeZone()
+}
+
+export const loadTrafficTimeZone = (storage: Storage | undefined = typeof localStorage === 'undefined' ? undefined : localStorage): string => {
+  try {
+    return resolveTrafficTimeZone(storage?.getItem(trafficTimeZoneStorageKey))
+  } catch {
+    return browserTrafficTimeZone()
+  }
+}
+
+export const persistTrafficTimeZone = (
+  timeZone: string,
+  storage: Storage | undefined = typeof localStorage === 'undefined' ? undefined : localStorage,
+): void => {
+  if (!isValidTrafficTimeZone(timeZone)) return
+
+  try {
+    storage?.setItem(trafficTimeZoneStorageKey, timeZone)
+  } catch {
+    // Ignore storage failures; the selected timezone still applies in memory.
+  }
+}
+
+const trafficTimeZoneOffsetMinutes = (timeZone: string, atMs = Date.now()): number => {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).formatToParts(new Date(atMs))
+
+    const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find(item => item.type === type)?.value)
+    const hour = part('hour') % 24
+    const asUtc = Date.UTC(part('year'), part('month') - 1, part('day'), hour, part('minute'), part('second'))
+    const offset = Math.round((asUtc - atMs) / 60000)
+
+    return Number.isFinite(offset) ? offset : 0
+  } catch {
+    return 0
+  }
+}
+
+const trafficTimeZoneOffsetLabel = (timeZone: string): string => {
+  const offset = trafficTimeZoneOffsetMinutes(timeZone)
+  if (offset === 0) return 'UTC +0'
+
+  const sign = offset > 0 ? '+' : '-'
+  const absolute = Math.abs(offset)
+  const hours = Math.floor(absolute / 60)
+  const minutes = absolute % 60
+
+  return `UTC ${sign}${minutes === 0 ? hours : `${hours}:${String(minutes).padStart(2, '0')}`}`
+}
+
+export const trafficTimeZoneOptions = (): TrafficTimeZoneOption[] => {
+  let supportedTimeZones: string[] = []
+
+  try {
+    supportedTimeZones = typeof Intl.supportedValuesOf === 'function'
+      ? Intl.supportedValuesOf('timeZone')
+      : []
+  } catch {
+    supportedTimeZones = []
+  }
+
+  const values = supportedTimeZones.length ? supportedTimeZones : fallbackTrafficTimeZones
+  const uniqueValues = [...new Set([...values, browserTrafficTimeZone(), defaultTimeZone])]
+    .filter(isValidTrafficTimeZone)
+    .sort((left, right) => left.localeCompare(right))
+
+  return uniqueValues.map(value => ({
+    value,
+    label: `${value} (${trafficTimeZoneOffsetLabel(value)})`,
+  }))
+}
+
+export const formatTrafficLabel = (dateTime: number, timeZone?: unknown): string => {
   const date = new Date(dateTime * 1000)
-  return Number.isNaN(date.getTime()) ? String(dateTime) : date.toISOString()
+  if (Number.isNaN(date.getTime())) return String(dateTime)
+
+  const resolvedTimeZone = resolveTrafficTimeZone(timeZone)
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: resolvedTimeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(date)
+
+    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(item => item.type === type)?.value ?? '00'
+
+    return `${part('year')}-${part('month')}-${part('day')} ${part('hour')}:${part('minute')}`
+  } catch {
+    return date.toISOString()
+  }
 }
 
 const summaryBucketStart = (bucket: unknown, fallback: number): number => {
@@ -57,12 +203,13 @@ const summaryBucketTraffic = (bucket: unknown, key: 'download' | 'upload'): numb
 
 export const selectTrafficSeries = (input?: TrafficSelectorInput | null): TrafficSeries => {
   const range = isTrafficRange(input?.range) ? input.range : defaultRange
+  const timeZone = resolveTrafficTimeZone(input?.timeZone)
   const summary = isSelectorRecord(input?.summary) ? input.summary : undefined
   const summaryBuckets = Array.isArray(summary?.buckets) ? summary.buckets : undefined
 
   if (summaryBuckets?.length) {
     return {
-      labels: summaryBuckets.map((bucket, index) => trafficLabel(summaryBucketStart(bucket, index))),
+      labels: summaryBuckets.map((bucket, index) => formatTrafficLabel(summaryBucketStart(bucket, index), timeZone)),
       download: summaryBuckets.map(bucket => summaryBucketTraffic(bucket, 'download')),
       upload: summaryBuckets.map(bucket => summaryBucketTraffic(bucket, 'upload')),
       range,
@@ -116,7 +263,7 @@ export const selectTrafficSeries = (input?: TrafficSelectorInput | null): Traffi
     }
 
     return {
-      labels: buckets.map((_, index) => trafficLabel(startSec + (index * bucketSpanSec))),
+      labels: buckets.map((_, index) => formatTrafficLabel(startSec + (index * bucketSpanSec), timeZone)),
       download: buckets.map(bucket => bucket.download),
       upload: buckets.map(bucket => bucket.upload),
       range,
@@ -141,7 +288,7 @@ export const selectTrafficSeries = (input?: TrafficSelectorInput | null): Traffi
   const dateTimes = [...buckets.keys()].sort((left, right) => left - right)
 
   return {
-    labels: dateTimes.map(trafficLabel),
+    labels: dateTimes.map(dateTime => formatTrafficLabel(dateTime, timeZone)),
     download: dateTimes.map((dateTime) => buckets.get(dateTime)?.download ?? 0),
     upload: dateTimes.map((dateTime) => buckets.get(dateTime)?.upload ?? 0),
     range,

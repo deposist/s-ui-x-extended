@@ -64,7 +64,7 @@ The full per-release notes live in the language-specific changelog files:
 - Русский: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - 简体中文: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
 - Latest stable notes: [`docs/releases/v1.0.0.md`](docs/releases/v1.0.0.md)
-- Latest pre-release notes: [`docs/releases/v1.0.0-beta9.md`](docs/releases/v1.0.0-beta9.md)
+- Latest pre-release notes: [`.github/RELEASE_NOTES_v1.0.1-beta2.md`](.github/RELEASE_NOTES_v1.0.1-beta2.md)
 - Upstream parity reference: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 The README keeps installation and project overview short. For full release
@@ -103,12 +103,14 @@ This fork stays compatible with existing 1.x installations. You can replace the 
 | Multiple languages | :heavy_check_mark: |
 | Multiple clients/inbounds | :heavy_check_mark: |
 | Traffic routing interface | :heavy_check_mark: |
-| Client, traffic, and system status | :heavy_check_mark: |
+| Client, Dashboard Traffic statistics, and system status | :heavy_check_mark: |
 | Subscription links (link/json/clash + info) | :heavy_check_mark: |
 | Dark/light theme | :heavy_check_mark: |
 | API | :heavy_check_mark: |
 
 ## Supported Protocols
+
+The list below follows the repository capability matrix. Some protocols, endpoints, and services require builds with the corresponding core tags.
 
 ### Inbound protocols
 
@@ -121,22 +123,23 @@ This fork stays compatible with existing 1.x installations. You can replace the 
 | VMess | UUID auth, xudp/gRPC/WS |
 | VLESS | Reality / TLS transport |
 | Trojan | HTTPS camouflage, fallback |
-| ShadowTLS | Detour to hidden protocol |
-| AnyTLS | |
-| TUIC | QUIC transport |
+| Naive | Chromium network stack |
 | Hysteria | QUIC transport |
 | Hysteria2 | QUIC transport |
-| Naive | Chromium network stack |
+| TUIC | QUIC transport |
+| AnyTLS | |
+| ShadowTLS | Detour to hidden protocol |
 | Mieru | Stealth protocol |
-| SSH | SSH server emulation |
-| MTProxy | Telegram proxy (FakeTLS) |
 | Sudoku | HTTP mask obfuscation |
 | TrustTunnel | QUIC tunnel |
-| Bond | Native core aggregate inbound |
-| Core failover | Native core failover inbound |
+| SSH | SSH server emulation |
+| MTProxy | Telegram proxy (FakeTLS; delivered as `tg://proxy`) |
 | Direct | Port forward / relay |
 | Tun | Virtual network interface |
+| Redirect | Linux redirect transparent proxy |
 | TProxy | Linux transparent proxy |
+| Bond | Native core aggregate inbound |
+| Core failover | Native core failover inbound |
 
 ### Outbound protocols
 
@@ -150,19 +153,19 @@ This fork stays compatible with existing 1.x installations. You can replace the 
 | VMess | |
 | VLESS | |
 | Trojan | |
+| Naive | |
+| Tor | SOCKS5 to Tor daemon |
+| SSH | |
 | ShadowTLS | |
 | AnyTLS | |
-| TUIC | |
-| Hysteria | |
-| Hysteria2 | |
 | Mieru | |
-| SSH | |
-| Tor | SOCKS5 to Tor daemon |
-| Naive | |
+| TrustTunnel | |
+| Sudoku | |
 | MASQUE | |
 | OpenVPN | |
-| Sudoku | |
-| TrustTunnel | |
+| Hysteria | |
+| Hysteria2 | |
+| TUIC | |
 | Core failover | Native core dial-time failover |
 
 ### Outbound groups
@@ -172,7 +175,7 @@ This fork stays compatible with existing 1.x installations. You can replace the 
 | Selector | Core | Manual switch, operator picks member |
 | URLTest | Core | Auto-select lowest-latency member |
 | Fallback | Core | Connect-time failover |
-| Failover | Panel | Periodic health checks, all-down policies |
+| Failover | Panel | Periodic health checks, all-down policies; affects new connections |
 
 ### Providers (group membership sources)
 
@@ -181,6 +184,26 @@ This fork stays compatible with existing 1.x installations. You can replace the 
 | Inline | Hand-written members in panel |
 | Local | Local file provider |
 | Remote | Remote subscription provider |
+
+### Endpoints
+
+| Type | Notes |
+| :--- | :--- |
+| WireGuard | Requires WireGuard-enabled core build |
+| Tailscale | Requires Tailscale-enabled core build |
+| VPN | WARP/VPN client and server endpoint |
+
+### Core services
+
+| Service | Notes |
+| :--- | :--- |
+| resolved | DNS resolver service |
+| ssm-api | SSM API service |
+| derp | DERP service |
+| ccm | Requires CCM-enabled core build |
+| ocm | Requires OCM-enabled core build |
+| oom-killer | Requires oom-killer-enabled core build |
+| profiler | Development profiling service |
 
 ## Supported Platforms
 
@@ -207,7 +230,7 @@ Use the stable build for normal installations. Use beta releases only if you wan
 | Channel | Version | Notes |
 |---|---|---|
 | Stable | `v1.0.0` | First stable release. Includes the extended protocol panel, panel-managed groups, failover health, full option coverage checks, and release artifacts built with the supported protocol tags. Release notes: [`docs/releases/v1.0.0.md`](docs/releases/v1.0.0.md). |
-| Beta | `v1.0.0-beta9` | Pre-release build. Rebuilds official artifacts with the full supported protocol tag set, including Sudoku, TrustTunnel, MASQUE, and OpenVPN. Release notes: [`docs/releases/v1.0.0-beta9.md`](docs/releases/v1.0.0-beta9.md). |
+| Beta | `v1.0.1-beta2` | Pre-release build. Adds the Dashboard Traffic statistics timezone selector and refreshes README protocol coverage. Release notes: [`.github/RELEASE_NOTES_v1.0.1-beta2.md`](.github/RELEASE_NOTES_v1.0.1-beta2.md). |
 
 ### Linux/macOS, stable
 
@@ -228,7 +251,7 @@ sudo bash install.sh v1.0.0
 ### Windows
 
 - Stable: download `v1.0.0` from [its release page](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0), extract the ZIP, and run `install-windows.bat` as Administrator.
-- Beta: `v1.0.0-beta9` remains available on [its release page](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta9).
+- Beta: `v1.0.1-beta2` is available on [its release page](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.1-beta2).
 
 Existing installations keep their settings, users, inbounds, outbounds, clients, TLS, services, and tokens. Database migrations run automatically on first start. Upgrade and rollback notes are in the changelog files: [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), [中文](CHANGELOG-ZH.md).
 
@@ -388,15 +411,12 @@ Run the backend from the repository root:
 
 ## Features
 
-- Supported protocols:
-  - General protocols: Mixed, SOCKS, HTTP, HTTPS, Direct, Redirect, TProxy
-  - V2Ray-based protocols: VLESS, VMess, Trojan, Shadowsocks
-  - Other protocols: ShadowTLS, Hysteria, Hysteria2, Naive, TUIC
+- Supported protocols: see the capability-aligned Supported Protocols tables above for inbound protocols, outbound protocols, groups, providers, endpoints, and core services.
 - XTLS protocol support.
 - Traffic routing interface with PROXY Protocol, External, transparent proxy, SSL certificates, and port configuration support.
 - Inbound and outbound configuration interface.
 - Client traffic limit and expiration support.
-- Online clients, inbound/outbound traffic statistics, and system status monitoring.
+- Online clients, inbound/outbound traffic statistics, and system status monitoring. Dashboard Traffic statistics include a timezone selector that defaults to the browser timezone, persists the selection in `localStorage`, formats chart labels as `YYYY-MM-DD HH:MM`, and shows the selected timezone in KPI meta.
 - Subscription service supports external links and subscriptions.
 - Web panel and subscription service support secure HTTPS access (you must provide your own domain and SSL certificate).
 - Dark/light theme.
@@ -468,7 +488,7 @@ Web-панель на базе [`sing-box-extended`](https://github.com/shtorm-7
 - Русский: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - 简体中文: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
 - Последние stable notes: [`docs/releases/v1.0.0.md`](docs/releases/v1.0.0.md)
-- Последние pre-release notes: [`docs/releases/v1.0.0-beta9.md`](docs/releases/v1.0.0-beta9.md)
+- Последние pre-release notes: [`.github/RELEASE_NOTES_v1.0.1-beta2.md`](.github/RELEASE_NOTES_v1.0.1-beta2.md)
 - Реферс паритета с upstream: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 README оставляет только установку и общий обзор проекта. Полная история
@@ -507,12 +527,14 @@ README оставляет только установку и общий обзо
 | Несколько языков | :heavy_check_mark: |
 | Несколько клиентов/Inbounds | :heavy_check_mark: |
 | Интерфейс маршрутизации трафика | :heavy_check_mark: |
-| Клиенты, трафик и состояние системы | :heavy_check_mark: |
+| Клиенты, Dashboard Traffic statistics и состояние системы | :heavy_check_mark: |
 | Ссылки подписки (link/json/clash + info) | :heavy_check_mark: |
 | Темная/светлая тема | :heavy_check_mark: |
 | API | :heavy_check_mark: |
 
 ## Поддерживаемые протоколы
+
+Список ниже следует repository capability matrix. Для части протоколов, endpoints и services нужна сборка core с соответствующими tags.
 
 ### Inbound протоколы
 
@@ -525,22 +547,23 @@ README оставляет только установку и общий обзо
 | VMess | UUID-авторизация, xudp/gRPC/WS |
 | VLESS | Reality / TLS-транспорт |
 | Trojan | HTTPS-маскировка, fallback |
-| ShadowTLS | Detour к скрытому протоколу |
-| AnyTLS | |
-| TUIC | QUIC-транспорт |
+| Naive | Стек Chromium |
 | Hysteria | QUIC-транспорт |
 | Hysteria2 | QUIC-транспорт |
-| Naive | Стек Chromium |
+| TUIC | QUIC-транспорт |
+| AnyTLS | |
+| ShadowTLS | Detour к скрытому протоколу |
 | Mieru | Стелс-протокол |
-| SSH | Эмуляция SSH-сервера |
-| MTProxy | Telegram-прокси (FakeTLS) |
 | Sudoku | HTTP-маскировка |
 | TrustTunnel | QUIC-туннель |
-| Bond | Нативная агрегация inbound |
-| Core failover | Нативный failover inbound |
+| SSH | Эмуляция SSH-сервера |
+| MTProxy | Telegram-прокси (FakeTLS; отдаётся как `tg://proxy`) |
 | Direct | Проброс порта / релей |
 | Tun | Виртуальный сетевой интерфейс |
+| Redirect | Прозрачный redirect-прокси Linux |
 | TProxy | Прозрачный прокси Linux |
+| Bond | Нативная агрегация inbound |
+| Core failover | Нативный failover inbound |
 
 ### Outbound протоколы
 
@@ -554,20 +577,29 @@ README оставляет только установку и общий обзо
 | VMess | |
 | VLESS | |
 | Trojan | |
+| Naive | |
+| Tor | SOCKS5 к Tor-демону |
+| SSH | |
 | ShadowTLS | |
 | AnyTLS | |
-| TUIC | |
-| Hysteria | |
-| Hysteria2 | |
 | Mieru | |
-| SSH | |
-| Tor | SOCKS5 к Tor-демону |
-| Naive | |
+| TrustTunnel | |
+| Sudoku | |
 | MASQUE | |
 | OpenVPN | |
-| Sudoku | |
-| TrustTunnel | |
+| Hysteria | |
+| Hysteria2 | |
+| TUIC | |
 | Core failover | Нативный dial-time failover |
+
+### Outbound группы
+
+| Тип | Управляется | Примечания |
+| :--- | :--- | :--- |
+| Selector | Core | Ручное переключение, участника выбирает operator |
+| URLTest | Core | Автовыбор участника с минимальной latency |
+| Fallback | Core | Failover во время подключения |
+| Failover | Panel | Периодические health checks и all-down policies; влияет на новые подключения |
 
 ### Провайдеры (источники участников групп)
 
@@ -576,6 +608,26 @@ README оставляет только установку и общий обзо
 | Inline | Участники задаются вручную в панели |
 | Local | Локальный файл-провайдер |
 | Remote | Удалённый провайдер подписки |
+
+### Endpoints
+
+| Тип | Примечания |
+| :--- | :--- |
+| WireGuard | Нужна core-сборка с WireGuard |
+| Tailscale | Нужна core-сборка с Tailscale |
+| VPN | WARP/VPN client and server endpoint |
+
+### Core services
+
+| Service | Примечания |
+| :--- | :--- |
+| resolved | DNS resolver service |
+| ssm-api | SSM API service |
+| derp | DERP service |
+| ccm | Нужна core-сборка с CCM |
+| ocm | Нужна core-сборка с OCM |
+| oom-killer | Нужна core-сборка с oom-killer |
+| profiler | Development profiling service |
 
 ## Поддерживаемые платформы
 
@@ -602,7 +654,7 @@ README оставляет только установку и общий обзо
 | Канал | Версия | Заметки |
 |---|---|---|
 | Stable | `v1.0.0` | Первый стабильный релиз. Включает extended protocol panel, panel-managed группы, failover health, проверки option coverage и release artifacts с поддерживаемыми protocol tags. Release notes: [`docs/releases/v1.0.0.md`](docs/releases/v1.0.0.md). |
-| Beta | `v1.0.0-beta9` | Pre-release сборка. Собирает официальные artifacts с полным набором protocol build tags, включая Sudoku, TrustTunnel, MASQUE и OpenVPN. Release notes: [`docs/releases/v1.0.0-beta9.md`](docs/releases/v1.0.0-beta9.md). |
+| Beta | `v1.0.1-beta2` | Pre-release сборка. Добавляет selector часового пояса для Dashboard Traffic statistics и обновляет README со списком протоколов. Release notes: [`.github/RELEASE_NOTES_v1.0.1-beta2.md`](.github/RELEASE_NOTES_v1.0.1-beta2.md). |
 
 ### Linux/macOS, stable
 
@@ -623,7 +675,7 @@ sudo bash install.sh v1.0.0
 ### Windows
 
 - Stable: скачайте `v1.0.0` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
-- Beta: `v1.0.0-beta9` остаётся доступна на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0-beta9).
+- Beta: `v1.0.1-beta2` доступна на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.1-beta2).
 
 Существующие установки сохраняют settings, users, inbounds, outbounds, clients, TLS, services и tokens. Миграции базы запускаются автоматически при первом старте. Заметки по обновлению и откату находятся в changelog: [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), [中文](CHANGELOG-ZH.md).
 
@@ -783,15 +835,12 @@ go build -o sui main.go
 
 ## Возможности
 
-- Поддерживаемые протоколы:
-  - Общие протоколы: Mixed, SOCKS, HTTP, HTTPS, Direct, Redirect, TProxy
-  - Протоколы на базе V2Ray: VLESS, VMess, Trojan, Shadowsocks
-  - Другие протоколы: ShadowTLS, Hysteria, Hysteria2, Naive, TUIC
+- Поддерживаемые протоколы: см. capability-aligned таблицы «Поддерживаемые протоколы» выше для inbound/outbound протоколов, групп, провайдеров, endpoints и core services.
 - Поддержка протокола XTLS.
 - Интерфейс маршрутизации трафика с поддержкой PROXY Protocol, External, прозрачного прокси, SSL-сертификатов и настройки портов.
 - Интерфейс настройки Inbounds и Outbounds.
 - Поддержка лимита трафика и срока действия для клиентов.
-- Отображение онлайн-клиентов, статистики трафика Inbounds/Outbounds и мониторинг состояния системы.
+- Отображение онлайн-клиентов, статистики трафика Inbounds/Outbounds и мониторинг состояния системы. Dashboard Traffic statistics включает selector часового пояса: по умолчанию используется timezone браузера, выбор сохраняется в `localStorage`, подписи графиков имеют формат `YYYY-MM-DD HH:MM`, а выбранный timezone отображается в KPI meta.
 - Служба подписок поддерживает добавление внешних ссылок и подписок.
 - Web-панель и служба подписок поддерживают безопасный доступ по HTTPS (необходимо самостоятельно предоставить домен и SSL-сертификат).
 - Темная/светлая тема.

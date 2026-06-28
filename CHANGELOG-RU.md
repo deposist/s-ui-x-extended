@@ -9,6 +9,15 @@
 
 - Нет незарелизенных изменений.
 
+## [1.0.1-beta2] - 2026-06-29 - frontend and documentation
+
+Обновление фронтенда и документации. Миграция базы не требуется.
+
+- Фронтенд: Dashboard Traffic statistics теперь включает выбор часового пояса с дефолтом из browser timezone; выбор сохраняется в `localStorage`, подписи графиков используют формат `YYYY-MM-DD HH:MM`, а выбранный часовой пояс отображается в KPI metadata.
+- Документация: README теперь описывает поведение selector часового пояса для Dashboard Traffic statistics и обновляет список поддерживаемых протоколов по repository capability/configuration documentation.
+
+Полные release notes: [`.github/RELEASE_NOTES_v1.0.1-beta2.md`](.github/RELEASE_NOTES_v1.0.1-beta2.md).
+
 ## [1.0.1-beta1] - 2026-06-28 - hardening
 
 Hardening-релиз. Миграция базы не требуется.
