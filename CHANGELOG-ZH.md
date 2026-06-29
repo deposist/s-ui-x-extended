@@ -8,11 +8,14 @@
 
 - 暂无未发布变更。
 
-## [1.0.1-beta2] - 2026-06-29 - 前端与文档
+## [1.0.1-beta2] - 2026-06-29 - 前端引导与文档
 
 前端与文档更新。无需手动迁移数据库。
 
-- 前端：Dashboard Traffic statistics 新增时区选择器，默认使用浏览器时区；选择结果保存在 `localStorage`；图表标签使用 `YYYY-MM-DD HH:MM` 格式；KPI metadata 显示当前选择的时区。
+- Dashboard：Traffic statistics 新增时区选择器，默认使用浏览器时区；选择结果保存在 `localStorage`；图表标签使用 `YYYY-MM-DD HH:MM` 格式；KPI metadata 显示当前选择的时区。
+- Inbound 引导：Add inbound 表单现在通过创建模式下的显式操作和字段提示显示协议相关建议。VLESS 和其他受支持协议只会在操作员点击 Apply inbound recommendations 后应用安全 preset；编辑表单会保留已有的空值。
+- Inbound 安全：新建 Shadowsocks 和 Sudoku inbound 时会生成 credentials；ShadowTLS 只在 version 2 生成 password；TLS/Reality template 会按协议过滤，Reality 只对 VLESS 和 Trojan 显示。
+- 本地化与测试：新的 inbound recommendation 提示已加入所有受支持 UI 语言，并增加测试覆盖 locale parity、recommendation helpers、inbound credential 生成和 TLS template 兼容性。
 - 文档：README 现在说明 Dashboard Traffic statistics 时区选择器行为，并根据仓库 capability/configuration documentation 刷新支持协议列表。
 
 完整发布说明：[`.github/RELEASE_NOTES_v1.0.1-beta2.md`](.github/RELEASE_NOTES_v1.0.1-beta2.md)。

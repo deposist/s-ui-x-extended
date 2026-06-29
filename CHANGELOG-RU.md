@@ -9,11 +9,14 @@
 
 - Нет незарелизенных изменений.
 
-## [1.0.1-beta2] - 2026-06-29 - frontend and documentation
+## [1.0.1-beta2] - 2026-06-29 - frontend guidance and documentation
 
 Обновление фронтенда и документации. Миграция базы не требуется.
 
-- Фронтенд: Dashboard Traffic statistics теперь включает выбор часового пояса с дефолтом из browser timezone; выбор сохраняется в `localStorage`, подписи графиков используют формат `YYYY-MM-DD HH:MM`, а выбранный часовой пояс отображается в KPI metadata.
+- Dashboard: Traffic statistics теперь включает выбор часового пояса с дефолтом из browser timezone; выбор сохраняется в `localStorage`, подписи графиков используют формат `YYYY-MM-DD HH:MM`, а выбранный часовой пояс отображается в KPI metadata.
+- Настройка inbound: формы добавления inbound теперь показывают рекомендации с учетом протокола через явные действия в режиме создания и подсказки у полей. VLESS и другие поддержанные протоколы получают безопасные presets только после клика Apply inbound recommendations; формы редактирования сохраняют существующие пустые значения.
+- Безопасность inbound: Shadowsocks и Sudoku credentials генерируются при создании новых inbound, ShadowTLS password генерируется только для version 2, а TLS/Reality templates фильтруются так, что Reality показывается только для VLESS и Trojan.
+- Локали и тесты: новые подсказки inbound-рекомендаций добавлены во все поддерживаемые локали UI, а тесты покрывают parity локалей, recommendation helpers, генерацию inbound credentials и совместимость TLS template.
 - Документация: README теперь описывает поведение selector часового пояса для Dashboard Traffic statistics и обновляет список поддерживаемых протоколов по repository capability/configuration documentation.
 
 Полные release notes: [`.github/RELEASE_NOTES_v1.0.1-beta2.md`](.github/RELEASE_NOTES_v1.0.1-beta2.md).
