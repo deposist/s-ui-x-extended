@@ -32,7 +32,7 @@ const defaultRange: TrafficRange = '24h'
 const defaultTimeZone = 'UTC'
 export const trafficTimeZoneStorageKey = 'nexus-overview-traffic-timezone'
 
-const fallbackTrafficTimeZones = [
+const curatedTrafficTimeZones = [
   'UTC',
   'Europe/London',
   'Europe/Berlin',
@@ -147,26 +147,55 @@ const trafficTimeZoneOffsetLabel = (timeZone: string): string => {
   return `UTC ${sign}${minutes === 0 ? hours : `${hours}:${String(minutes).padStart(2, '0')}`}`
 }
 
-export const trafficTimeZoneOptions = (): TrafficTimeZoneOption[] => {
-  let supportedTimeZones: string[] = []
-
+const supportedTrafficTimeZones = (): string[] => {
   try {
-    supportedTimeZones = typeof Intl.supportedValuesOf === 'function'
+    return typeof Intl.supportedValuesOf === 'function'
       ? Intl.supportedValuesOf('timeZone')
       : []
   } catch {
-    supportedTimeZones = []
+    return []
+  }
+}
+
+const defaultTrafficTimeZoneValues = (selectedTimeZone?: string): unknown[] => [
+  defaultTimeZone,
+  browserTrafficTimeZone(),
+  selectedTimeZone,
+  ...curatedTrafficTimeZones,
+]
+
+const uniqueValidTrafficTimeZones = (timeZones: readonly unknown[]): string[] => {
+  const seen = new Set<string>()
+  const values: string[] = []
+
+  for (const timeZone of timeZones) {
+    if (!isValidTrafficTimeZone(timeZone) || seen.has(timeZone)) continue
+
+    seen.add(timeZone)
+    values.push(timeZone)
   }
 
-  const values = supportedTimeZones.length ? supportedTimeZones : fallbackTrafficTimeZones
-  const uniqueValues = [...new Set([...values, browserTrafficTimeZone(), defaultTimeZone])]
-    .filter(isValidTrafficTimeZone)
-    .sort((left, right) => left.localeCompare(right))
+  return values
+}
 
-  return uniqueValues.map(value => ({
-    value,
-    label: `${value} (${trafficTimeZoneOffsetLabel(value)})`,
-  }))
+const createTrafficTimeZoneOption = (value: string): TrafficTimeZoneOption => ({
+  value,
+  label: `${value} (${trafficTimeZoneOffsetLabel(value)})`,
+})
+
+export const trafficTimeZoneOptions = (
+  selectedTimeZone?: unknown,
+  searchQuery?: unknown,
+): TrafficTimeZoneOption[] => {
+  const query = typeof searchQuery === 'string' ? searchQuery.trim().toLowerCase() : ''
+  const selected = isValidTrafficTimeZone(selectedTimeZone) ? selectedTimeZone : undefined
+  const supportedTimeZones = query.length > 0 ? supportedTrafficTimeZones() : []
+  const source = supportedTimeZones.length > 0 ? supportedTimeZones : defaultTrafficTimeZoneValues(selected)
+  const matchingSource = query.length > 0
+    ? source.filter(timeZone => typeof timeZone === 'string' && timeZone.toLowerCase().includes(query))
+    : source
+
+  return uniqueValidTrafficTimeZones(matchingSource).map(createTrafficTimeZoneOption)
 }
 
 export const formatTrafficLabel = (dateTime: number, timeZone?: unknown): string => {

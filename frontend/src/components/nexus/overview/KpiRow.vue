@@ -33,7 +33,7 @@
             </v-list>
           </v-menu>
 
-          <v-menu>
+          <v-menu v-model="trafficTimeZoneMenuOpen">
             <template #activator="{ props }">
               <v-btn
                 variant="text"
@@ -48,11 +48,22 @@
               </v-btn>
             </template>
             <v-list density="compact" class="nexus-overview-kpis__timezone-list" min-width="260">
+              <div class="nexus-overview-kpis__timezone-search" @click.stop>
+                <v-text-field
+                  v-model="trafficTimeZoneSearch"
+                  aria-label="Search timezones"
+                  density="compact"
+                  hide-details
+                  placeholder="Search timezones"
+                  prepend-inner-icon="lucide:search"
+                  variant="outlined"
+                />
+              </div>
               <v-list-item
                 v-for="opt in trafficTimeZoneOptions"
                 :key="opt.value"
                 :active="opt.value === trafficTimeZone"
-                @click="trafficTimeZone = opt.value"
+                @click="selectTrafficTimeZone(opt.value)"
               >
                 <v-list-item-title class="text-caption">{{ opt.label }}</v-list-item-title>
               </v-list-item>
@@ -101,7 +112,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AreaSeries from '@/components/nexus/primitives/AreaSeries.vue'
@@ -161,7 +172,20 @@ const trafficRangeLabel = computed(() => {
   return activeOpt ? activeOpt.label : `${n(24)}${t('date.h')}`
 })
 
-const trafficTimeZoneOptions = computed<TrafficTimeZoneOption[]>(() => createTrafficTimeZoneOptions())
+const trafficTimeZoneMenuOpen = ref(false)
+const trafficTimeZoneSearch = ref('')
+const selectTrafficTimeZone = (value: string) => {
+  trafficTimeZone.value = value
+  trafficTimeZoneSearch.value = ''
+  trafficTimeZoneMenuOpen.value = false
+}
+watch(trafficTimeZoneMenuOpen, (open) => {
+  if (!open) trafficTimeZoneSearch.value = ''
+})
+const trafficTimeZoneOptions = computed<TrafficTimeZoneOption[]>(() => createTrafficTimeZoneOptions(
+  trafficTimeZone.value,
+  trafficTimeZoneSearch.value,
+))
 const trafficTimeZoneLabel = computed(() => {
   const activeOpt = trafficTimeZoneOptions.value.find(opt => opt.value === trafficTimeZone.value)
   return activeOpt ? activeOpt.label : trafficTimeZone.value
@@ -244,6 +268,14 @@ const wsStateLabel = computed(() => {
 .nexus-overview-kpis__timezone-list {
   max-height: 320px;
   overflow-y: auto;
+}
+
+.nexus-overview-kpis__timezone-search {
+  padding: 6px 8px 4px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgb(var(--v-theme-surface));
 }
 
 .nexus-overview-kpis__signal {

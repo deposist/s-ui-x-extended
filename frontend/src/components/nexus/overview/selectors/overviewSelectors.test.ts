@@ -21,6 +21,7 @@ import {
 const originalSupportedValuesOf = Intl.supportedValuesOf
 
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
   Object.defineProperty(Intl, 'supportedValuesOf', {
     configurable: true,
@@ -265,25 +266,85 @@ describe('overview selectors', () => {
     expect(loadTrafficTimeZone(storage)).toEqual(expect.any(String))
   })
 
-  it('builds supported or fallback traffic timezone options with UTC labels', () => {
+  it('builds a short curated default traffic timezone list without reading the full IANA list', () => {
+    const supportedValuesOf = vi.fn(() => [
+      'Africa/Abidjan',
+      'America/Adak',
+      'Asia/Yerevan',
+      'Pacific/Chatham',
+    ])
+    vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({
+      locale: 'en-US',
+      calendar: 'gregory',
+      numberingSystem: 'latn',
+      timeZone: 'Europe/Paris',
+    } as Intl.ResolvedDateTimeFormatOptions)
     Object.defineProperty(Intl, 'supportedValuesOf', {
       configurable: true,
-      value: vi.fn(() => ['Europe/Moscow']),
+      value: supportedValuesOf,
     })
 
-    expect(trafficTimeZoneOptions()).toEqual(expect.arrayContaining([
-      { value: 'Europe/Moscow', label: 'Europe/Moscow (UTC +3)' },
-    ]))
+    const options = trafficTimeZoneOptions()
+    const values = options.map(option => option.value)
 
+    expect(supportedValuesOf).not.toHaveBeenCalled()
+    expect(options.length).toBeLessThan(20)
+    expect(values).toEqual(expect.arrayContaining([
+      'UTC',
+      'Europe/Paris',
+      'Europe/Moscow',
+      'Asia/Kolkata',
+      'America/New_York',
+    ]))
+    expect(options.every(option => option.label.startsWith(`${option.value} (UTC `))).toBe(true)
+  })
+
+  it('filters the full supported IANA traffic timezone list only when searching', () => {
+    const supportedValuesOf = vi.fn(() => [
+      'Europe/Moscow',
+      'Asia/Kolkata',
+      'America/New_York',
+      'Pacific/Chatham',
+    ])
+    Object.defineProperty(Intl, 'supportedValuesOf', {
+      configurable: true,
+      value: supportedValuesOf,
+    })
+
+    expect(trafficTimeZoneOptions('UTC', 'KOL')).toEqual([
+      { value: 'Asia/Kolkata', label: 'Asia/Kolkata (UTC +5:30)' },
+    ])
+    expect(supportedValuesOf).toHaveBeenCalledWith('timeZone')
+  })
+
+  it('includes a valid selected traffic timezone outside the curated defaults', () => {
+    const supportedValuesOf = vi.fn(() => ['Pacific/Chatham'])
+    Object.defineProperty(Intl, 'supportedValuesOf', {
+      configurable: true,
+      value: supportedValuesOf,
+    })
+
+    const options = trafficTimeZoneOptions('Africa/Abidjan')
+    const values = options.map(option => option.value)
+
+    expect(supportedValuesOf).not.toHaveBeenCalled()
+    expect(values.filter(value => value === 'Africa/Abidjan')).toHaveLength(1)
+    expect(options).toContainEqual({
+      value: 'Africa/Abidjan',
+      label: 'Africa/Abidjan (UTC +0)',
+    })
+  })
+
+  it('filters curated fallback traffic timezones when full IANA support is unavailable', () => {
     Object.defineProperty(Intl, 'supportedValuesOf', {
       configurable: true,
       value: undefined,
     })
 
-    expect(trafficTimeZoneOptions().map(option => option.value)).toEqual(expect.arrayContaining([
-      'UTC',
-      'Europe/Moscow',
-      'America/New_York',
+    expect(trafficTimeZoneOptions(undefined, 'new')).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        value: 'America/New_York',
+      }),
     ]))
   })
 
