@@ -20,6 +20,9 @@
         :label="$t('types.pw')"
         hide-details
         v-model="data.password">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="password" />
+          </template>
         </v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4">
@@ -30,6 +33,9 @@
         hide-details
         :suffix="$t('date.s')"
         v-model.number="idleInterval">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="idle_session_check_interval" />
+          </template>
         </v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4">
@@ -40,6 +46,9 @@
         hide-details
         :suffix="$t('date.s')"
         v-model.number="idleTimeout">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="idle_session_timeout" />
+          </template>
         </v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4">
@@ -49,6 +58,9 @@
         min="0"
         hide-details
         v-model.number="minIdle">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="min_idle_session" />
+          </template>
         </v-text-field>
       </v-col>
     </v-row>

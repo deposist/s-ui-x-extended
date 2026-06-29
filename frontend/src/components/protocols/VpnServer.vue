@@ -7,6 +7,9 @@
           :label="$t('types.vpn.address')"
           :placeholder="'10.0.0.1'"
           hide-details>
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="address" />
+          </template>
         </v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4" v-if="optionTimeout">
@@ -15,18 +18,24 @@
           :label="$t('types.vpn.connectTimeout')"
           :placeholder="'30s'"
           hide-details>
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="connect_timeout" />
+          </template>
         </v-text-field>
       </v-col>
     </v-row>
 
     <v-card :subtitle="$t('types.vpn.users')" class="mt-2">
-      <v-row v-for="(user, index) in data.users" :key="index" class="px-2">
+      <v-row v-for="(user, index) in users" :key="index" class="px-2">
         <v-col cols="12" sm="4">
           <v-text-field
             v-model="user.address"
             :label="$t('types.vpn.userAddress')"
             :placeholder="'10.0.0.2'"
             hide-details>
+            <template #append-inner>
+              <FieldHint :field-hints="fieldHints" field="vpn_user" />
+            </template>
           </v-text-field>
         </v-col>
         <v-col cols="12" sm="6">
@@ -34,8 +43,11 @@
             v-model="user.key"
             :label="$t('types.vpn.key')"
             hide-details
-            append-inner-icon="mdi-refresh"
-            @click:append-inner="user.key = genKey()">
+            append-icon="mdi-refresh"
+            @click:append="user.key = genKey()">
+            <template #append-inner>
+              <FieldHint :field-hints="fieldHints" field="vpn_user" />
+            </template>
           </v-text-field>
         </v-col>
         <v-col cols="12" sm="2" class="d-flex align-center">
@@ -83,27 +95,30 @@
 
 <script lang="ts">
 import RandomUtil from '@/plugins/randomUtil'
+import FieldHint from '@/components/FieldHint.vue'
 
 export default {
-  props: { data: { type: Object, required: true } },
+  props: {
+    data: { type: Object, required: true },
+    fieldHints: { type: Object, default: () => ({}) },
+  },
   data() {
     return {
       menu: false,
       inboundsError: "",
     }
   },
-  created() {
-    if (!Array.isArray(this.$props.data.users)) this.$props.data.users = []
-    if (!Array.isArray(this.$props.data.inbounds)) this.$props.data.inbounds = []
-  },
   computed: {
     optionTimeout: {
       get(): boolean { return this.$props.data.connect_timeout != undefined },
       set(v: boolean) { this.$props.data.connect_timeout = v ? "30s" : undefined }
     },
+    users(): any[] {
+      return Array.isArray(this.$props.data.users) ? this.$props.data.users : []
+    },
     inboundsJson: {
       get(): string {
-        return JSON.stringify(this.$props.data.inbounds ?? [], null, 2)
+        return JSON.stringify(Array.isArray(this.$props.data.inbounds) ? this.$props.data.inbounds : [], null, 2)
       },
       set(v: string) {
         if (v.trim().length === 0) {
@@ -130,13 +145,15 @@ export default {
       return RandomUtil.randomUUID()
     },
     addUser() {
+      if (!Array.isArray(this.$props.data.users)) this.$props.data.users = []
       const octet = (this.$props.data.users?.length ?? 0) + 2
       if (octet > 254) return
       this.$props.data.users.push({ address: "10.0.0." + octet, key: this.genKey() })
     },
     delUser(index: number | string) {
-      this.$props.data.users.splice(Number(index), 1)
+      this.$props.data.users?.splice(Number(index), 1)
     },
   },
+  components: { FieldHint },
 }
 </script>

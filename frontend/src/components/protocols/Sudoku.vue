@@ -107,20 +107,9 @@ export default {
       maskModes: ['legacy', 'stream', 'poll', 'auto', 'ws'],
     }
   },
-  created() {
-    // http_mask is an OUTBOUND-only field; do not inject it into inbound configs.
-    if (this.direction == 'out' && !this.$props.data.http_mask) this.$props.data.http_mask = {}
-  },
-  mounted() {
-    this.$props.data.aead_method ??= RECOMMENDED.sudokuAead
-    this.$props.data.padding_min ??= RECOMMENDED.sudokuPaddingMin
-    this.$props.data.padding_max ??= RECOMMENDED.sudokuPaddingMax
-    // handshake_timeout exists only on the inbound Sudoku type.
-    if (this.direction == 'in') this.$props.data.handshake_timeout ??= RECOMMENDED.sudokuHandshakeTimeout
-  },
   computed: {
     httpMask(): any {
-      return this.$props.data.http_mask
+      return this.$props.data.http_mask ?? {}
     },
   },
   methods: {

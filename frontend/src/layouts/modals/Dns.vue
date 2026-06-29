@@ -13,40 +13,65 @@
               :items="dnsTypes"
               :label="$t('type')"
               @update:modelValue="changeType"
-              hide-details
-            />
+              hide-details>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('type')" :text="fieldHint('type')" />
+              </template>
+            </v-select>
           </v-col>
           <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="dnsServer.tag" :label="$t('objects.tag')" hide-details />
+            <v-text-field v-model="dnsServer.tag" :label="$t('objects.tag')" hide-details>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('tag')" :text="fieldHint('tag')" />
+              </template>
+            </v-text-field>
+          </v-col>
+          <v-col cols="12" v-if="showDnsServerRecommendedPreset">
+            <v-btn
+              color="primary"
+              prepend-icon="mdi-star-plus"
+              variant="tonal"
+              @click="applyCurrentDnsServerRecommendations">
+              {{ $t('types.dns.recommendedPreset') }}
+            </v-btn>
           </v-col>
         </v-row>
-        <RecommendedValues
-          :model="dnsServer"
-          :specs="recommendationSpecs"
-          :context="recommendationContext"
-          class="mb-3"
-          @apply="applyRecommended"
-        />
         <v-row v-if="HasServer.includes(dnsServer.type)">
           <v-col cols="12" sm="6" md="4">
-            <v-combobox v-model="dnsServer.server" :items="dnsResolvers" :label="$t('in.addr')" hide-details />
+            <v-combobox v-model="dnsServer.server" :items="dnsResolvers" :label="$t('in.addr')" hide-details>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('server')" :text="fieldHint('server')" />
+              </template>
+            </v-combobox>
           </v-col>
           <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model.number="dnsServer.server_port" type="number" min="0" :label="$t('in.port')" hide-details />
+            <v-text-field v-model.number="dnsServer.server_port" type="number" min="0" :label="$t('in.port')" hide-details>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('server_port')" :text="fieldHint('server_port')" />
+              </template>
+            </v-text-field>
           </v-col>
         </v-row>
         <v-row v-if="HasHeaders.includes(dnsServer.type)">
           <v-col cols="12" sm="8">
-            <v-combobox v-model="dnsServer.path" :items="dohPaths" :label="$t('transport.path')" hide-details />
+            <v-combobox v-model="dnsServer.path" :items="dohPaths" :label="$t('transport.path')" hide-details>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('path')" :text="fieldHint('path')" />
+              </template>
+            </v-combobox>
           </v-col>
         </v-row>
-        <DialVue :dial="dnsServer" v-if="!WithoutDial.includes(dnsServer.type)" />
-        <oTlsVue :outbound="dnsServer" v-if="HasTls.includes(dnsServer.type)" />
+        <DialVue :dial="dnsServer" v-if="!WithoutDial.includes(dnsServer.type)" :field-hints="currentFieldHints" />
+        <oTlsVue :outbound="dnsServer" v-if="HasTls.includes(dnsServer.type)" :field-hints="currentFieldHints" />
         <Headers :data="dnsServer" v-if="HasHeaders.includes(dnsServer.type)" />
         <template v-if="dnsServer.type == 'hosts'">
           <v-row>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="hostsPath" :label="$t('transport.path') + $t('commaSeparated')" hide-details />
+              <v-text-field v-model="hostsPath" :label="$t('transport.path') + $t('commaSeparated')" hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('hosts_path')" :text="fieldHint('hosts_path')" />
+                </template>
+              </v-text-field>
             </v-col>
           </v-row>
           <v-card>
@@ -63,6 +88,9 @@
                   :label="$t('types.tun.addr') + $t('commaSeparated')"
                   @input="update_pds_value(index,$event.target.value)"
                   hide-details>
+                  <template #append-inner>
+                    <SettingInfo v-if="fieldHint('predefined')" :text="fieldHint('predefined')" />
+                  </template>
                   <template v-slot:append>
                     <v-icon @click="delHostsPredefined(index)" color="error" icon="mdi-delete" />
                   </template>
@@ -73,25 +101,44 @@
         </template>
         <v-row v-if="dnsServer.type == 'local'">
           <v-col cols="12" sm="6" md="4">
-            <v-switch v-model="dnsServer.prefer_go" color="primary" :label="$t('dns.local.preferGo')" hide-details></v-switch>
+            <div class="d-flex align-center ga-1">
+              <v-switch v-model="dnsServer.prefer_go" color="primary" :label="$t('dns.local.preferGo')" hide-details></v-switch>
+              <SettingInfo v-if="fieldHint('prefer_go')" :text="fieldHint('prefer_go')" />
+            </div>
           </v-col>
         </v-row>
         <v-row v-if="dnsServer.type == 'dhcp'">
           <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="dnsServer.interface" :label="$t('types.tun.ifName')" hide-details />
+            <v-text-field v-model="dnsServer.interface" :label="$t('types.tun.ifName')" hide-details>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('dhcp_interface')" :text="fieldHint('dhcp_interface')" />
+              </template>
+            </v-text-field>
           </v-col>
         </v-row>
         <v-row v-if="dnsServer.type == 'fakeip'">
           <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="dnsServer.inet4_range" :label="$t('dns.rule.inet4Range')" hide-details />
+            <v-text-field v-model="dnsServer.inet4_range" :label="$t('dns.rule.inet4Range')" hide-details>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('fakeip_range')" :text="fieldHint('fakeip_range')" />
+              </template>
+            </v-text-field>
           </v-col>
           <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="dnsServer.inet6_range" :label="$t('dns.rule.inet6Range')" hide-details />
+            <v-text-field v-model="dnsServer.inet6_range" :label="$t('dns.rule.inet6Range')" hide-details>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('fakeip_range')" :text="fieldHint('fakeip_range')" />
+              </template>
+            </v-text-field>
           </v-col>
         </v-row>
         <v-row v-if="dnsServer.type == 'sdns'">
           <v-col cols="12">
-            <v-text-field v-model="dnsServer.stamp" :label="$t('types.sdns.stamp')" :hint="$t('types.sdns.stampHint')" persistent-hint />
+            <v-text-field v-model="dnsServer.stamp" :label="$t('types.sdns.stamp')" :hint="$t('types.sdns.stampHint')" persistent-hint>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('sdns_stamp')" :text="fieldHint('sdns_stamp')" />
+              </template>
+            </v-text-field>
           </v-col>
         </v-row>
         <template v-if="dnsServer.type == 'fallback'">
@@ -105,27 +152,45 @@
                 multiple
                 chips
                 clearable
-              ></v-combobox>
+              >
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('fallback_servers')" :text="fieldHint('fallback_servers')" />
+                </template>
+              </v-combobox>
             </v-col>
             <v-col cols="12" sm="6" md="4">
               <v-select
                 v-model="dnsServer.strategy"
                 :items="['sequential', 'parallel']"
                 :label="$t('types.fallback.strategy')"
-                hide-details
-              />
+                hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('fallback_strategy')" :text="fieldHint('fallback_strategy')" />
+                </template>
+              </v-select>
             </v-col>
           </v-row>
         </template>
         <v-row v-if="dnsServer.type == 'tailscale' || dnsServer.type == 'resolved'">
           <v-col cols="12" sm="6" md="4" v-if="dnsServer.type == 'tailscale'">
-            <v-select v-model="dnsServer.endpoint" :label="$t('objects.endpoint')" :items="tsTags" hide-details />
+            <v-select v-model="dnsServer.endpoint" :label="$t('objects.endpoint')" :items="tsTags" hide-details>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('endpoint')" :text="fieldHint('endpoint')" />
+              </template>
+            </v-select>
           </v-col>
           <v-col cols="12" sm="6" md="4" v-if="dnsServer.type == 'resolved'">
-            <v-select v-model="dnsServer.service" :label="$t('objects.service')" :items="rslvdTags" hide-details />
+            <v-select v-model="dnsServer.service" :label="$t('objects.service')" :items="rslvdTags" hide-details>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('service')" :text="fieldHint('service')" />
+              </template>
+            </v-select>
           </v-col>
           <v-col cols="12" sm="6" md="4">
-            <v-switch v-model="dnsServer.accept_default_resolvers" :label="$t('dns.rule.acceptDefault')" hide-details></v-switch>
+            <div class="d-flex align-center ga-1">
+              <v-switch v-model="dnsServer.accept_default_resolvers" :label="$t('dns.rule.acceptDefault')" hide-details></v-switch>
+              <SettingInfo v-if="fieldHint('accept_default_resolvers')" :text="fieldHint('accept_default_resolvers')" />
+            </div>
           </v-col>
         </v-row>
       </v-card-text>
@@ -145,9 +210,8 @@ import Headers from '@/components/Headers.vue'
 import RandomUtil from '@/plugins/randomUtil'
 import { DnsTypes, createDnsServer } from '@/types/dns'
 import { dnsResolvers, dohPaths } from '@/types/recommended'
-import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
-import { applyRecommendation } from '@/utils/recommendations'
-import { dnsRecommendationSpecs } from '@/utils/defaultRecommendations'
+import SettingInfo from '@/components/SettingInfo.vue'
+import { applyDnsServerRecommendedValues, dnsServerFieldHintsForType, hasDnsServerRecommendedPreset } from '@/utils/defaultRecommendations'
 export default {
   props: ['visible', 'data', 'index', 'tsTags', 'rslvdTags'],
   emits: ['close', 'save'],
@@ -162,7 +226,6 @@ export default {
       WithoutDial: [DnsTypes.Hosts, DnsTypes.Tailscale, DnsTypes.FakeIP, DnsTypes.Resolved, DnsTypes.Fallback, DnsTypes.SDNS, DnsTypes.DHCP],
       dnsResolvers,
       dohPaths,
-      recommendationSpecs: dnsRecommendationSpecs,
     }
   },
   methods: {
@@ -176,8 +239,14 @@ export default {
         this.title = 'add'
       }
     },
-    applyRecommended(spec: any) {
-      applyRecommendation(this.dnsServer, spec, this.recommendationContext, { force: true })
+    fieldHint(key: string): string {
+      const hintKey = (this.currentFieldHints as Record<string, string>)[key]
+      if (!hintKey) return ''
+      const translated = this.$t(hintKey)
+      return translated === hintKey ? '' : translated
+    },
+    applyCurrentDnsServerRecommendations() {
+      applyDnsServerRecommendedValues(this.dnsServer)
     },
     changeType(dnsType: string) {
       this.dnsServer = createDnsServer(dnsType,{tag: this.dnsServer.tag})
@@ -209,8 +278,11 @@ export default {
     },
   },
   computed:{
-    recommendationContext() {
-      return { model: this.dnsServer, mode: this.$props.index != -1 ? 'edit' : 'create', type: this.dnsServer.type }
+    currentFieldHints(): Record<string, string> {
+      return dnsServerFieldHintsForType(this.dnsServer.type)
+    },
+    showDnsServerRecommendedPreset(): boolean {
+      return this.$props.index == -1 && hasDnsServerRecommendedPreset(this.dnsServer.type)
     },
     hostsPath: {
       get() { return this.dnsServer.path },
@@ -253,6 +325,6 @@ export default {
       }
     },
   },
-  components: { RecommendedValues, DialVue, oTlsVue, Headers }
+  components: { SettingInfo, DialVue, oTlsVue, Headers }
 }
 </script>

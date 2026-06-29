@@ -8,6 +8,9 @@
           append-icon="mdi-key-star"
           @click:append="newKey()"
           hide-details>
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="private_key" />
+          </template>
         </v-text-field>
       </v-col>
       <v-col cols="12" sm="8">
@@ -18,10 +21,17 @@
           append-icon="mdi-refresh"
           @click:append="getWgPubKey()"
           hide-details>
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="public_key" />
+          </template>
         </v-text-field>
       </v-col>
       <v-col cols="12" sm="8">
-        <v-text-field v-model="address" :label="$t('types.wg.localIp') + ' ' + $t('commaSeparated')" hide-details></v-text-field>
+        <v-text-field v-model="address" :label="$t('types.wg.localIp') + ' ' + $t('commaSeparated')" hide-details>
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="address" />
+          </template>
+        </v-text-field>
       </v-col>
     </v-row>
     <v-row>
@@ -32,6 +42,9 @@
           type="number"
           min=1
           v-model.number="data.listen_port">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="listen_port" />
+          </template>
         </v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4" v-if="data.udp_timeout != undefined">
@@ -62,6 +75,9 @@
           type="number"
           min=0
           v-model.number="data.mtu">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="mtu" />
+          </template>
         </v-text-field>
       </v-col>
     </v-row>
@@ -78,12 +94,19 @@
         <v-text-field v-model.number="data.preallocated_buffers_per_pool" type="number" min="0" :label="$t('types.wg.preallocatedBuffers')" hide-details></v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4" v-if="data.domain_strategy != undefined">
-        <v-select v-model="data.domain_strategy" :items="domainStrategies" clearable :label="$t('types.wg.domainStrategy')" hide-details></v-select>
+        <v-select v-model="data.domain_strategy" :items="domainStrategies" clearable :label="$t('types.wg.domainStrategy')" hide-details>
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="domain_strategy" />
+          </template>
+        </v-select>
       </v-col>
     </v-row>
     <v-row>
       <v-col cols="12" sm="6" md="4">
-        <v-switch v-model="data.system" color="primary" :label="$t('types.wg.sysIf')" hide-details></v-switch>
+        <div class="d-flex align-center ga-1">
+          <v-switch v-model="data.system" color="primary" :label="$t('types.wg.sysIf')" hide-details></v-switch>
+          <FieldHint :field-hints="fieldHints" field="system" />
+        </div>
       </v-col>
       <v-col cols="12" sm="6" md="4" v-if="data.system">
         <v-text-field
@@ -108,7 +131,10 @@
               <v-switch v-model="optionWorker" color="primary" :label="$t('types.wg.worker')" hide-details></v-switch>
             </v-list-item>
             <v-list-item>
-              <v-switch v-model="optionMtu" color="primary" label="MTU" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="optionMtu" color="primary" label="MTU" hide-details></v-switch>
+                <FieldHint :field-hints="fieldHints" field="mtu" />
+              </div>
             </v-list-item>
             <v-list-item>
               <v-switch v-model="optionDisablePauses" color="primary" :label="$t('types.wg.disablePauses')" hide-details></v-switch>
@@ -117,7 +143,10 @@
               <v-switch v-model="optionPreallocatedBuffers" color="primary" :label="$t('types.wg.preallocatedBuffers')" hide-details></v-switch>
             </v-list-item>
             <v-list-item>
-              <v-switch v-model="optionDomainStrategy" color="primary" :label="$t('types.wg.domainStrategy')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="optionDomainStrategy" color="primary" :label="$t('types.wg.domainStrategy')" hide-details></v-switch>
+                <FieldHint :field-hints="fieldHints" field="domain_strategy" />
+              </div>
             </v-list-item>
           </v-list>
         </v-card>
@@ -144,9 +173,13 @@
 <script lang="ts">
 import Peer from '@/components/WgPeer.vue'
 import Amnezia from '@/components/protocols/Amnezia.vue'
+import FieldHint from '@/components/FieldHint.vue'
 
 export default {
-  props: ['data'],
+  props: {
+    data: { type: Object, required: true },
+    fieldHints: { type: Object, default: () => ({}) },
+  },
   emits: ['newWgKey', 'getWgPubKey', 'addPeer', 'delPeer', 'refreshPeerKey'],
   data() {
     return {
@@ -227,6 +260,6 @@ export default {
       set(v:string) { this.$props.data.ext.public_key = v }
     }
   },
-  components: { Peer, Amnezia }
+  components: { Peer, Amnezia, FieldHint }
 }
 </script>

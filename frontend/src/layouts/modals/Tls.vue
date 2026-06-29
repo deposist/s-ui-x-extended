@@ -13,34 +13,47 @@
                 :label="$t('client.name')"
                 hide-details
                 v-model="tls.name">
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('name')" :text="fieldHint('name')" />
+                </template>
               </v-text-field>
             </v-col>
             <v-col align="end">
-              <v-btn-toggle v-model="tlsType"
-              class="rounded-xl"
-              density="compact"
-              variant="outlined"
-              @update:model-value="changeTlsType"
-              shaped
-              mandatory>
-                <v-btn>TLS</v-btn>
-                <v-btn>Reality</v-btn>
-              </v-btn-toggle>
+              <div class="d-flex align-center ga-1 justify-end">
+                <v-btn-toggle v-model="tlsType"
+                class="rounded-xl"
+                density="compact"
+                variant="outlined"
+                @update:model-value="changeTlsType"
+                shaped
+                mandatory>
+                  <v-btn>TLS</v-btn>
+                  <v-btn>Reality</v-btn>
+                </v-btn-toggle>
+                <SettingInfo v-if="fieldHint('tls_type')" :text="fieldHint('tls_type')" />
+              </div>
             </v-col>
           </v-row>
-          <RecommendedValues
-            :model="tls"
-            :specs="recommendationSpecs"
-            :context="recommendationContext"
-            class="mb-3"
-            @apply="applyRecommended"
-          />
+          <v-row v-if="showTlsRecommendedPreset">
+            <v-col cols="12">
+              <v-btn
+                color="primary"
+                prepend-icon="mdi-star-plus"
+                variant="tonal"
+                @click="applyCurrentTlsRecommendations">
+                {{ $t('types.tls.recommendedPreset') }}
+              </v-btn>
+            </v-col>
+          </v-row>
           <v-row>
             <v-col cols="12" sm="6" md="4" v-if="inTls.server_name != undefined">
               <v-text-field
                 label="SNI"
                 hide-details
                 v-model="inTls.server_name">
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('server_name')" :text="fieldHint('server_name')" />
+                </template>
               </v-text-field>
             </v-col>
             <template v-if="tlsType == 0">
@@ -50,6 +63,9 @@
                   :label="$t('tls.minVer')"
                   :items="tlsVersions"
                   v-model="inTls.min_version">
+                  <template #append-inner>
+                    <SettingInfo v-if="fieldHint('min_version')" :text="fieldHint('min_version')" />
+                  </template>
                 </v-select>
               </v-col>
               <v-col cols="12" sm="6" md="4" v-if="inTls.max_version">
@@ -58,6 +74,9 @@
                   :label="$t('tls.maxVer')"
                   :items="tlsVersions"
                   v-model="inTls.max_version">
+                  <template #append-inner>
+                    <SettingInfo v-if="fieldHint('max_version')" :text="fieldHint('max_version')" />
+                  </template>
                 </v-select>
               </v-col>
               <v-col cols="12" sm="6" md="4" v-if="inTls.alpn">
@@ -67,6 +86,9 @@
                   multiple
                   :items="alpn"
                   v-model="inTls.alpn">
+                  <template #append-inner>
+                    <SettingInfo v-if="fieldHint('alpn')" :text="fieldHint('alpn')" />
+                  </template>
                 </v-select>
               </v-col>
               <v-col cols="12" md="8" v-if="inTls.cipher_suites != undefined">
@@ -76,6 +98,9 @@
                   multiple
                   :items="cipher_suites"
                   v-model="inTls.cipher_suites">
+                  <template #append-inner>
+                    <SettingInfo v-if="fieldHint('cipher_suites')" :text="fieldHint('cipher_suites')" />
+                  </template>
                 </v-select>
               </v-col>
               <v-col cols="12" md="8" v-if="inTls.curve_preferences != undefined">
@@ -128,6 +153,9 @@
                   :label="$t('tls.certPath')"
                   hide-details
                   v-model="inTls.certificate_path">
+                  <template #append-inner>
+                    <SettingInfo v-if="fieldHint('certificate_path')" :text="fieldHint('certificate_path')" />
+                  </template>
                 </v-text-field>
               </v-col>
               <v-col cols="12" sm="6">
@@ -135,6 +163,9 @@
                   :label="$t('tls.keyPath')"
                   hide-details
                   v-model="inTls.key_path">
+                  <template #append-inner>
+                    <SettingInfo v-if="fieldHint('key_path')" :text="fieldHint('key_path')" />
+                  </template>
                 </v-text-field>
               </v-col>
             </v-row>
@@ -156,10 +187,16 @@
             </v-row>
             <v-row>
               <v-col cols="12" sm="6" md="4">
-                <v-switch color="primary" :label="$t('tls.disableSni')" v-model="disableSni" hide-details></v-switch>
+                <div class="d-flex align-center ga-1">
+                  <v-switch color="primary" :label="$t('tls.disableSni')" v-model="disableSni" hide-details></v-switch>
+                  <SettingInfo v-if="fieldHint('disable_sni')" :text="fieldHint('disable_sni')" />
+                </div>
               </v-col>
               <v-col cols="12" sm="6" md="4">
-                <v-switch color="primary" :label="$t('tls.insecure')" v-model="insecure" hide-details></v-switch>
+                <div class="d-flex align-center ga-1">
+                  <v-switch color="primary" :label="$t('tls.insecure')" v-model="insecure" hide-details></v-switch>
+                  <SettingInfo v-if="fieldHint('insecure')" :text="fieldHint('insecure')" />
+                </div>
               </v-col>
             </v-row>
             <template v-if="optionClientAuth">
@@ -207,6 +244,9 @@
                 :label="$t('types.shdwTls.hs')"
                 hide-details
                 v-model="inTls.reality.handshake.server">
+                  <template #append-inner>
+                    <SettingInfo v-if="fieldHint('reality_handshake_server')" :text="fieldHint('reality_handshake_server')" />
+                  </template>
                 </v-text-field>
               </v-col>
               <v-col cols="12" sm="6" md="4">
@@ -216,6 +256,9 @@
                 min="0"
                 hide-details
                 v-model="server_port">
+                  <template #append-inner>
+                    <SettingInfo v-if="fieldHint('reality_handshake_port')" :text="fieldHint('reality_handshake_port')" />
+                  </template>
                 </v-text-field>
               </v-col>
               <v-spacer></v-spacer>
@@ -239,6 +282,9 @@
                   :label="$t('tls.privKey')"
                   hide-details
                   v-model="inTls.reality.private_key">
+                  <template #append-inner>
+                    <SettingInfo v-if="fieldHint('reality_private_key')" :text="fieldHint('reality_private_key')" />
+                  </template>
                 </v-text-field>
               </v-col>
               <v-col cols="12">
@@ -246,6 +292,9 @@
                   :label="$t('tls.pubKey')"
                   hide-details
                   v-model="outTls.reality.public_key">
+                  <template #append-inner>
+                    <SettingInfo v-if="fieldHint('reality_public_key')" :text="fieldHint('reality_public_key')" />
+                  </template>
                 </v-text-field>
               </v-col>
               <v-col cols="12">
@@ -255,6 +304,9 @@
                   append-icon="mdi-refresh"
                   @click:append="randomSID"
                   v-model="short_id">
+                  <template #append-inner>
+                    <SettingInfo v-if="fieldHint('reality_short_id')" :text="fieldHint('reality_short_id')" />
+                  </template>
                 </v-text-field>
               </v-col>
               <v-col cols="12" sm="6" md="4" v-if="optionTime">
@@ -294,6 +346,9 @@
                 label="Fingerprint"
                 :items="fingerprints"
                 v-model="outTls.utls.fingerprint">
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('utls')" :text="fieldHint('utls')" />
+                </template>
               </v-select>
             </v-col>
           </v-row>
@@ -380,9 +435,8 @@ import HttpUtils from '@/plugins/httputil'
 import { push } from 'notivue'
 import { i18n } from '@/locales'
 import RandomUtil from '@/plugins/randomUtil'
-import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
-import { applyRecommendation } from '@/utils/recommendations'
-import { tlsRecommendationSpecs } from '@/utils/defaultRecommendations'
+import SettingInfo from '@/components/SettingInfo.vue'
+import { applyTlsRecommendedValues, hasTlsRecommendedPreset, tlsFieldHintsForType } from '@/utils/defaultRecommendations'
 export default {
   props: ['visible', 'data', 'id'],
   emits: ['close', 'save'],
@@ -443,14 +497,19 @@ export default {
         { title: "Random", value: "random" },
         { title: "Randomized", value: "randomized" },
       ],
-      recommendationSpecs: tlsRecommendationSpecs,
       editHadServer: true,
       editHadClient: true,
     }
   },
   methods: {
-    applyRecommended(spec: any) {
-      applyRecommendation(this.tls, spec, this.recommendationContext, { force: true })
+    fieldHint(key: string): string {
+      const hintKey = (this.currentFieldHints as Record<string, string>)[key]
+      if (!hintKey) return ''
+      const translated = this.$t(hintKey)
+      return translated === hintKey ? '' : translated
+    },
+    applyCurrentTlsRecommendations() {
+      applyTlsRecommendedValues(this.tls as any)
     },
     updateData(id: number) {
       if (id > 0) {
@@ -575,8 +634,11 @@ export default {
     outTls(): oTls {
       return this.tls.client
     },
-    recommendationContext() {
-      return { model: this.tls, mode: this.$props.id > 0 ? 'edit' : 'create', type: this.tlsType ? 'reality' : 'tls' }
+    currentFieldHints(): Record<string, string> {
+      return tlsFieldHintsForType(this.tlsType ? 'reality' : 'tls')
+    },
+    showTlsRecommendedPreset(): boolean {
+      return this.$props.id == 0 && hasTlsRecommendedPreset(this.tlsType ? 'reality' : 'tls')
     },
     certText: {
       get(): string { return this.inTls.certificate ? this.inTls.certificate.join('\n') : '' },
@@ -711,6 +773,6 @@ export default {
       }
     },
   },
-  components: { RecommendedValues, AcmeVue, EchVue }
+  components: { SettingInfo, AcmeVue, EchVue }
 }
 </script>

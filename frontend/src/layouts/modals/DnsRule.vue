@@ -8,7 +8,10 @@
       <v-card-text style="padding: 0 16px;">
         <v-row>
           <v-col cols="12" sm="6" md="4">
-            <v-switch color="primary" v-model="logical" :label="$t('rule.logical')" hide-details></v-switch>
+            <div class="d-flex align-center ga-1">
+              <v-switch color="primary" v-model="logical" :label="$t('rule.logical')" hide-details></v-switch>
+              <SettingInfo v-if="fieldHint('logical')" :text="fieldHint('logical')" />
+            </div>
           </v-col>
           <v-spacer></v-spacer>
           <v-col cols="auto" v-if="logical" justify="center" align="center">
@@ -24,7 +27,8 @@
               :rule="r"
               :clients="clients"
               :inTags="inTags"
-              :ruleSets="ruleSets" />
+              :ruleSets="ruleSets"
+              :field-hints="currentFieldHints" />
           </v-card-text>
         </v-card>
         <RuleOptions
@@ -32,35 +36,49 @@
           :rule="ruleData.rules[0]"
           :clients="clients"
           :inTags="inTags"
-          :ruleSets="ruleSets" />
+          :ruleSets="ruleSets"
+          :field-hints="currentFieldHints" />
         <v-row>
           <v-col cols="12" sm="6" md="4">
             <v-select
               v-model="ruleData.action"
               :items="actions"
               :label="$t('dns.rule.action.title')"
-              hide-details
-            ></v-select>
+              hide-details>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('action')" :text="fieldHint('action')" />
+              </template>
+            </v-select>
           </v-col>
           <v-col cols="12" sm="6" md="4" v-if="logical">
             <v-select
               v-model="ruleData.mode"
               :items="['and', 'or']"
               :label="$t('rule.mode')"
-              hide-details
-            ></v-select>
+              hide-details>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('mode')" :text="fieldHint('mode')" />
+              </template>
+            </v-select>
           </v-col>
           <v-col cols="12" sm="6" md="4">
-            <v-switch color="primary" v-model="ruleData.invert" :label="$t('rule.invert')" hide-details></v-switch>
+            <div class="d-flex align-center ga-1">
+              <v-switch color="primary" v-model="ruleData.invert" :label="$t('rule.invert')" hide-details></v-switch>
+              <SettingInfo v-if="fieldHint('invert')" :text="fieldHint('invert')" />
+            </div>
           </v-col>
         </v-row>
-        <RecommendedValues
-          :model="ruleData"
-          :specs="recommendationSpecs"
-          :context="recommendationContext"
-          class="mb-3"
-          @apply="applyRecommended"
-        />
+        <v-row v-if="showDnsRuleRecommendedPreset">
+          <v-col cols="12">
+            <v-btn
+              color="primary"
+              prepend-icon="mdi-star-plus"
+              variant="tonal"
+              @click="applyCurrentDnsRuleRecommendations">
+              {{ $t('types.dnsRule.recommendedPreset') }}
+            </v-btn>
+          </v-col>
+        </v-row>
         <v-card :subtitle="$t('dns.rule.action.route')" v-if="['route', 'route-options'].includes(ruleData.action)">
           <v-row v-if="ruleData.action == 'route'">
             <v-col cols="12" sm="6" md="4">
@@ -68,8 +86,11 @@
                 v-model="ruleData.server"
                 :items="serverTags"
                 :label="$t('dns.server')"
-                hide-details
-              ></v-select>
+                hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('server')" :text="fieldHint('server')" />
+                </template>
+              </v-select>
             </v-col>
             <v-col cols="12" sm="6" md="4">
               <v-select
@@ -79,18 +100,32 @@
                 clearable
                 @click:clear="delete ruleData.strategy"
                 hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('strategy')" :text="fieldHint('strategy')" />
+                </template>
               </v-select>
             </v-col>
           </v-row>
           <v-row>
             <v-col cols="12" sm="6" md="4">
-              <v-switch v-model="ruleData.disable_cache" :label="$t('dns.disableCache')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="ruleData.disable_cache" :label="$t('dns.disableCache')" hide-details></v-switch>
+                <SettingInfo v-if="fieldHint('disable_cache')" :text="fieldHint('disable_cache')" />
+              </div>
             </v-col>
             <v-col cols="12" sm="6" md="4">
-              <v-text-field v-model.number="ruleData.rewrite_ttl" type="number" min="0" :label="$t('dns.rule.action.rewriteTtl')" hide-details></v-text-field>
+              <v-text-field v-model.number="ruleData.rewrite_ttl" type="number" min="0" :label="$t('dns.rule.action.rewriteTtl')" hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('rewrite_ttl')" :text="fieldHint('rewrite_ttl')" />
+                </template>
+              </v-text-field>
             </v-col>
             <v-col cols="12" sm="6" md="4">
-              <v-text-field v-model="ruleData.client_subnet" :label="$t('dns.rule.action.clientSubnet')" hide-details></v-text-field>
+              <v-text-field v-model="ruleData.client_subnet" :label="$t('dns.rule.action.clientSubnet')" hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('client_subnet')" :text="fieldHint('client_subnet')" />
+                </template>
+              </v-text-field>
             </v-col>
           </v-row>
         </v-card>
@@ -104,10 +139,16 @@
                 clearable
                 @click:clear="delete ruleData.method"
                 hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('method')" :text="fieldHint('method')" />
+                </template>
             </v-select>
             </v-col>
             <v-col cols="12" sm="6" md="4">
-              <v-switch v-model="ruleData.no_drop" :label="$t('rule.noDrop')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="ruleData.no_drop" :label="$t('rule.noDrop')" hide-details></v-switch>
+                <SettingInfo v-if="fieldHint('no_drop')" :text="fieldHint('no_drop')" />
+              </div>
             </v-col>
           </v-row>
         </v-card>
@@ -121,18 +162,33 @@
                 clearable
                 @click:clear="delete ruleData.rcode"
                 hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('rcode')" :text="fieldHint('rcode')" />
+                </template>
               </v-select>
             </v-col>
           </v-row>
           <v-row v-if="ruleData.rcode == 'NOERROR'">
             <v-col cols="12" sm="8">
-              <v-text-field v-model="answer" :label="$t('dns.rule.action.answer') + ' ' + $t('commaSeparated')" hide-details></v-text-field>
+              <v-text-field v-model="answer" :label="$t('dns.rule.action.answer') + ' ' + $t('commaSeparated')" hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('answer')" :text="fieldHint('answer')" />
+                </template>
+              </v-text-field>
             </v-col>
             <v-col cols="12" sm="8">
-              <v-text-field v-model="ns" :label="$t('dns.rule.action.ns') + ' ' + $t('commaSeparated')" hide-details></v-text-field>
+              <v-text-field v-model="ns" :label="$t('dns.rule.action.ns') + ' ' + $t('commaSeparated')" hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('answer')" :text="fieldHint('answer')" />
+                </template>
+              </v-text-field>
             </v-col>
             <v-col cols="12" sm="8">
-              <v-text-field v-model="extra" :label="$t('dns.rule.action.extra') + ' ' + $t('commaSeparated')" hide-details></v-text-field>
+              <v-text-field v-model="extra" :label="$t('dns.rule.action.extra') + ' ' + $t('commaSeparated')" hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('answer')" :text="fieldHint('answer')" />
+                </template>
+              </v-text-field>
             </v-col>
           </v-row>
         </v-card>
@@ -163,9 +219,8 @@
 import { logicalDnsRule, dnsRule, actionDnsRuleKeys } from '@/types/dns'
 import RuleOptions from '@/components/DnsRule.vue'
 import { i18n } from '@/locales'
-import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
-import { applyRecommendation } from '@/utils/recommendations'
-import { dnsRuleRecommendationSpecs } from '@/utils/defaultRecommendations'
+import SettingInfo from '@/components/SettingInfo.vue'
+import { applyDnsRuleRecommendedValues, dnsRuleFieldHints, hasDnsRuleRecommendedPreset } from '@/utils/defaultRecommendations'
 export default {
   props: ['visible', 'data', 'index', 'clients', 'inTags', 'serverTags', 'ruleSets'],
   emits: ['close', 'save'],
@@ -201,12 +256,17 @@ export default {
         { title: i18n.global.t('dns.rule.action.rcodes.notImp'), value: 'NOTIMP' },
         { title: i18n.global.t('dns.rule.action.rcodes.refused'), value: 'REFUSED' },
       ],
-      recommendationSpecs: dnsRuleRecommendationSpecs,
     }
   },
   methods: {
-    applyRecommended(spec: any) {
-      applyRecommendation(this.ruleData, spec, this.recommendationContext, { force: true })
+    fieldHint(key: string): string {
+      const hintKey = (this.currentFieldHints as Record<string, string>)[key]
+      if (!hintKey) return ''
+      const translated = this.$t(hintKey)
+      return translated === hintKey ? '' : translated
+    },
+    applyCurrentDnsRuleRecommendations() {
+      applyDnsRuleRecommendedValues(this.ruleData)
     },
     updateData() {
       if (this.$props.index != -1) {
@@ -295,8 +355,11 @@ export default {
     }
   },
   computed: {
-    recommendationContext() {
-      return { model: this.ruleData, mode: this.$props.index != -1 ? 'edit' : 'create' }
+    currentFieldHints(): Record<string, string> {
+      return dnsRuleFieldHints()
+    },
+    showDnsRuleRecommendedPreset(): boolean {
+      return this.$props.index == -1 && hasDnsRuleRecommendedPreset()
     },
     logical: {
       get() { return this.ruleData.type == 'logical' },
@@ -324,7 +387,7 @@ export default {
       }
     },
   },
-  components: { RecommendedValues, RuleOptions }
+  components: { SettingInfo, RuleOptions }
 }
 
 </script>

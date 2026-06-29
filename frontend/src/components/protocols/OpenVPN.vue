@@ -22,7 +22,11 @@
         <v-text-field hide-details :label="$t('types.openvpn.name')" v-model="data.name"></v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4">
-        <v-select hide-details :label="$t('types.openvpn.proto')" :items="['udp', 'tcp']" v-model="data.proto"></v-select>
+        <v-select hide-details :label="$t('types.openvpn.proto')" :items="['udp', 'tcp']" v-model="data.proto">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="proto" />
+          </template>
+        </v-select>
       </v-col>
       <v-col cols="12" sm="6" md="4">
         <v-switch color="primary" hide-details :label="$t('types.openvpn.sysIf')" v-model="data.system"></v-switch>
@@ -36,6 +40,9 @@
           :label="$t('types.openvpn.cipher')"
           :items="openvpnCiphers"
           v-model="data.cipher">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="cipher" />
+          </template>
         </v-combobox>
       </v-col>
       <v-col cols="12" sm="6" md="4">
@@ -45,6 +52,9 @@
           :label="$t('types.openvpn.auth')"
           :items="openvpnAuthDigests"
           v-model="data.auth">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="auth" />
+          </template>
         </v-combobox>
       </v-col>
       <v-col cols="12" sm="6" md="4">
@@ -146,9 +156,13 @@
 
 <script lang="ts">
 import { openvpnCiphers, openvpnAuthDigests, durationPresets, tlsCipherSuites } from '@/types/recommended'
+import FieldHint from '@/components/FieldHint.vue'
 
 export default {
-  props: { data: { type: Object, required: true } },
+  props: {
+    data: { type: Object, required: true },
+    fieldHints: { type: Object, default: () => ({}) },
+  },
   data() {
     return {
       openvpnCiphers,
@@ -157,21 +171,18 @@ export default {
       tlsCipherSuites,
     }
   },
-  created() {
-    if (!Array.isArray(this.$props.data.servers)) this.$props.data.servers = []
-    if (!this.$props.data.tls) this.$props.data.tls = {}
-  },
   computed: {
     servers(): any[] {
-      return this.$props.data.servers
+      return Array.isArray(this.$props.data.servers) ? this.$props.data.servers : []
     },
     tls(): any {
-      return this.$props.data.tls
+      return this.$props.data.tls ?? {}
     },
   },
   methods: {
     addServer() {
-      this.servers.push({ server: '', server_port: 1194 })
+      if (!Array.isArray(this.$props.data.servers)) this.$props.data.servers = []
+      this.$props.data.servers.push({ server: '', server_port: 1194 })
     },
     delServer(index: number) {
       this.servers.splice(index, 1)
@@ -184,5 +195,6 @@ export default {
       }
     },
   },
+  components: { FieldHint },
 }
 </script>

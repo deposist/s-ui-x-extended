@@ -22,6 +22,9 @@
             :label="$t('types.vmess.security')"
             :items="securities"
             v-model="data.security">
+            <template #append-inner>
+              <FieldHint :field-hints="fieldHints" field="security" />
+            </template>
           </v-select>
         </v-col>
         <v-col cols="12" sm="6" md="4">
@@ -30,16 +33,25 @@
             :label="$t('types.vless.udpEnc')"
             :items="['none','packetaddr','xudp']"
             v-model="packet_encoding">
+            <template #append-inner>
+              <FieldHint :field-hints="fieldHints" field="packet_encoding" />
+            </template>
           </v-select>
         </v-col>
         <v-col cols="12" sm="6" md="4">
           <Network :data="data" :field-hints="fieldHints" />
         </v-col>
         <v-col cols="12" sm="6" md="4">
-          <v-switch v-model="data.global_padding" color="primary" :label="$t('types.vmess.globalPadding')" hide-details></v-switch>
+          <div class="d-flex align-center ga-1">
+            <v-switch v-model="data.global_padding" color="primary" :label="$t('types.vmess.globalPadding')" hide-details></v-switch>
+            <FieldHint :field-hints="fieldHints" field="global_padding" />
+          </div>
         </v-col>
         <v-col cols="12" sm="6" md="4">
-          <v-switch v-model="data.authenticated_length" color="primary" :label="$t('types.vmess.authLen')" hide-details></v-switch>
+          <div class="d-flex align-center ga-1">
+            <v-switch v-model="data.authenticated_length" color="primary" :label="$t('types.vmess.authLen')" hide-details></v-switch>
+            <FieldHint :field-hints="fieldHints" field="authenticated_length" />
+          </div>
         </v-col>
       </v-row>
       <InboundAdvanced :data="data" :field-hints="fieldHints" />
@@ -56,6 +68,7 @@
 <script lang="ts">
 import Network from '@/components/Network.vue'
 import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
+import FieldHint from '@/components/FieldHint.vue'
 
 export default {
   props: {
@@ -81,6 +94,6 @@ export default {
       set(newValue:string) { this.$props.data.packet_encoding = newValue != "none" ? newValue : undefined }
     },
   },
-  components: {Network, InboundAdvanced}
+  components: {Network, InboundAdvanced, FieldHint}
 }
 </script>

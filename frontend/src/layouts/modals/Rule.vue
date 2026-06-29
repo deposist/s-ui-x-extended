@@ -8,7 +8,10 @@
   >
         <v-row>
           <v-col cols="12" sm="6" md="4">
-            <v-switch color="primary" v-model="logical" :label="$t('rule.logical')" hide-details></v-switch>
+            <div class="d-flex align-center ga-1">
+              <v-switch color="primary" v-model="logical" :label="$t('rule.logical')" hide-details></v-switch>
+              <SettingInfo v-if="fieldHint('logical')" :text="fieldHint('logical')" />
+            </div>
           </v-col>
           <v-spacer></v-spacer>
           <v-col cols="auto" v-if="logical" justify="center" align="center">
@@ -25,7 +28,8 @@
               :clients="clients"
               :inTags="inTags"
               :outTags="outTags"
-              :rsTags="rsTags" />
+              :rsTags="rsTags"
+              :field-hints="currentFieldHints" />
           </v-card-text>
         </v-card>
         <RuleOptions
@@ -34,35 +38,49 @@
           :clients="clients"
           :inTags="inTags"
           :outTags="outTags"
-          :rsTags="rsTags" />
+          :rsTags="rsTags"
+          :field-hints="currentFieldHints" />
         <v-row>
           <v-col cols="12" sm="6" md="4">
             <v-select
               v-model="ruleData.action"
               :items="actions"
               :label="$t('admin.action')"
-              hide-details
-            ></v-select>
+              hide-details>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('action')" :text="fieldHint('action')" />
+              </template>
+            </v-select>
           </v-col>
           <v-col cols="12" sm="6" md="4" v-if="logical">
             <v-combobox
               v-model="ruleData.mode"
               :items="['and', 'or']"
               :label="$t('rule.mode')"
-              hide-details
-            ></v-combobox>
+              hide-details>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('mode')" :text="fieldHint('mode')" />
+              </template>
+            </v-combobox>
           </v-col>
           <v-col cols="12" sm="6" md="4">
-            <v-switch color="primary" v-model="ruleData.invert" :label="$t('rule.invert')" hide-details></v-switch>
+            <div class="d-flex align-center ga-1">
+              <v-switch color="primary" v-model="ruleData.invert" :label="$t('rule.invert')" hide-details></v-switch>
+              <SettingInfo v-if="fieldHint('invert')" :text="fieldHint('invert')" />
+            </div>
           </v-col>
         </v-row>
-        <RecommendedValues
-          :model="ruleData"
-          :specs="recommendationSpecs"
-          :context="recommendationContext"
-          class="mb-3"
-          @apply="applyRecommended"
-        />
+        <v-row v-if="showRouteRuleRecommendedPreset">
+          <v-col cols="12">
+            <v-btn
+              color="primary"
+              prepend-icon="mdi-star-plus"
+              variant="tonal"
+              @click="applyCurrentRouteRuleRecommendations">
+              {{ $t('types.rule.recommendedPreset') }}
+            </v-btn>
+          </v-col>
+        </v-row>
         <v-card :subtitle="ruleData.action == 'bypass' ? $t('rule.action.bypass') : $t('rule.action.route')" v-if="['route', 'bypass'].includes(ruleData.action)">
           <v-row>
             <v-col cols="12" sm="6" md="4">
@@ -72,15 +90,22 @@
                 :label="$t('objects.outbound')"
                 :clearable="ruleData.action == 'bypass'"
                 @click:clear="delete ruleData.outbound"
-                hide-details
-              ></v-select>
+                hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('outbound')" :text="fieldHint('outbound')" />
+                </template>
+              </v-select>
             </v-col>
           </v-row>
         </v-card>
         <v-card :subtitle="$t('rule.action.routeOption')" v-if="['route', 'route-options', 'bypass'].includes(ruleData.action)">
           <v-row>
             <v-col cols="12" sm="6" md="4">
-              <v-text-field v-model="ruleData.override_address" :label="$t('types.direct.overrideAddr')" hide-details></v-text-field>
+              <v-text-field v-model="ruleData.override_address" :label="$t('types.direct.overrideAddr')" hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('override_address')" :text="fieldHint('override_address')" />
+                </template>
+              </v-text-field>
             </v-col>
             <v-col cols="12" sm="6" md="4">
               <v-text-field
@@ -90,16 +115,29 @@
                 max="65534"
                 :label="$t('types.direct.overridePort')"
                 hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('override_port')" :text="fieldHint('override_port')" />
+                </template>
               </v-text-field>
             </v-col>
             <v-col cols="12" sm="6" md="4">
-              <v-switch v-model="ruleData.udp_disable_domain_unmapping" :label="$t('rule.udpDisableDomainUnmapping')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="ruleData.udp_disable_domain_unmapping" :label="$t('rule.udpDisableDomainUnmapping')" hide-details></v-switch>
+                <SettingInfo v-if="fieldHint('udp_disable_domain_unmapping')" :text="fieldHint('udp_disable_domain_unmapping')" />
+              </div>
             </v-col>
             <v-col cols="12" sm="6" md="4">
-              <v-switch v-model="ruleData.udp_connect" :label="$t('rule.udpConnect')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="ruleData.udp_connect" :label="$t('rule.udpConnect')" hide-details></v-switch>
+                <SettingInfo v-if="fieldHint('udp_connect')" :text="fieldHint('udp_connect')" />
+              </div>
             </v-col>
             <v-col cols="12" sm="6" md="4">
-              <v-text-field v-model="ruleData.udp_timeout" :label="$t('rule.udpTimeout')" hide-details></v-text-field>
+              <v-text-field v-model="ruleData.udp_timeout" :label="$t('rule.udpTimeout')" hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('udp_timeout')" :text="fieldHint('udp_timeout')" />
+                </template>
+              </v-text-field>
             </v-col>
             <v-col cols="12" sm="6" md="4">
               <v-select
@@ -109,6 +147,9 @@
                 clearable
                 @click:clear="delete ruleData.network_strategy"
                 hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('network_strategy')" :text="fieldHint('network_strategy')" />
+                </template>
               </v-select>
             </v-col>
             <v-col cols="12" sm="6" md="4">
@@ -119,13 +160,22 @@
                 min="0"
                 :suffix="$t('date.ms')"
                 hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('fallback_delay')" :text="fieldHint('fallback_delay')" />
+                </template>
               </v-text-field>
             </v-col>
             <v-col cols="12" sm="6" md="4">
-              <v-switch v-model="tlsRecordFragment" :label="$t('singbox.tlsRecordFragment')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="tlsRecordFragment" :label="$t('singbox.tlsRecordFragment')" hide-details></v-switch>
+                <SettingInfo v-if="fieldHint('tls_record_fragment')" :text="fieldHint('tls_record_fragment')" />
+              </div>
             </v-col>
             <v-col cols="12" sm="6" md="4">
-              <v-switch v-model="tlsFragment" :label="$t('singbox.tlsFragment')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="tlsFragment" :label="$t('singbox.tlsFragment')" hide-details></v-switch>
+                <SettingInfo v-if="fieldHint('tls_fragment')" :text="fieldHint('tls_fragment')" />
+              </div>
             </v-col>
             <v-col cols="12" sm="6" md="4" v-if="ruleData.tls_fragment">
               <v-text-field
@@ -133,6 +183,9 @@
                 :label="$t('singbox.tlsFragmentFallbackDelay')"
                 placeholder="500ms"
                 hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('tls_fragment')" :text="fieldHint('tls_fragment')" />
+                </template>
               </v-text-field>
             </v-col>
           </v-row>
@@ -147,10 +200,16 @@
                 clearable
                 @click:clear="delete ruleData.method"
                 hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('method')" :text="fieldHint('method')" />
+                </template>
             </v-select>
             </v-col>
             <v-col cols="12" sm="6" md="4">
-              <v-switch v-model="ruleData.no_drop" :label="$t('rule.noDrop')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="ruleData.no_drop" :label="$t('rule.noDrop')" hide-details></v-switch>
+                <SettingInfo v-if="fieldHint('no_drop')" :text="fieldHint('no_drop')" />
+              </div>
             </v-col>
           </v-row>
         </v-card>
@@ -164,10 +223,17 @@
                 multiple
                 chips
                 hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('sniffer')" :text="fieldHint('sniffer')" />
+                </template>
               </v-select>
             </v-col>
             <v-col cols="12" sm="6" md="4">
-              <v-text-field v-model="ruleData.timeout" :label="$t('rule.timeout')" hide-details></v-text-field>
+              <v-text-field v-model="ruleData.timeout" :label="$t('rule.timeout')" hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('timeout')" :text="fieldHint('timeout')" />
+                </template>
+              </v-text-field>
             </v-col>
           </v-row>
         </v-card>
@@ -181,10 +247,17 @@
                 clearable
                 @click:clear="delete ruleData.strategy"
                 hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('strategy')" :text="fieldHint('strategy')" />
+                </template>
               </v-select>
             </v-col>
             <v-col cols="12" sm="6" md="4">
-              <v-text-field v-model="ruleData.server" :label="$t('basic.dns.server')" hide-details></v-text-field>
+              <v-text-field v-model="ruleData.server" :label="$t('basic.dns.server')" hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('server')" :text="fieldHint('server')" />
+                </template>
+              </v-text-field>
             </v-col>
           </v-row>
         </v-card>
@@ -195,9 +268,8 @@
 import { logicalRule, rule, actionKeys } from '@/types/rules'
 import RuleOptions from '@/components/Rule.vue'
 import FormShell from '@/components/nexus/drawers/FormShell.vue'
-import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
-import { applyRecommendation } from '@/utils/recommendations'
-import { ruleRecommendationSpecs } from '@/utils/defaultRecommendations'
+import SettingInfo from '@/components/SettingInfo.vue'
+import { applyRouteRuleRecommendedValues, hasRouteRuleRecommendedPreset, routeRuleFieldHints } from '@/utils/defaultRecommendations'
 
 // Stable identity key for each sub-rule object so the v-for is not keyed by array
 // index. Splicing out a middle rule then re-binds the remaining RuleOptions
@@ -253,7 +325,6 @@ export default {
         { title: 'Fallback', value: 'fallback' },
         { title: 'Hybrid', value: 'hybrid' },
       ],
-      recommendationSpecs: ruleRecommendationSpecs,
     }
   },
   methods: {
@@ -266,8 +337,14 @@ export default {
       }
       return k
     },
-    applyRecommended(spec: any) {
-      applyRecommendation(this.ruleData, spec, this.recommendationContext, { force: true })
+    fieldHint(key: string): string {
+      const hintKey = (this.currentFieldHints as Record<string, string>)[key]
+      if (!hintKey) return ''
+      const translated = this.$t(hintKey)
+      return translated === hintKey ? '' : translated
+    },
+    applyCurrentRouteRuleRecommendations() {
+      applyRouteRuleRecommendedValues(this.ruleData)
     },
     updateData() {
       if (this.$props.index != -1) {
@@ -372,8 +449,11 @@ export default {
     dirty(): boolean {
       return this.snapshot !== '' && JSON.stringify(this.ruleData) !== this.snapshot
     },
-    recommendationContext() {
-      return { model: this.ruleData, mode: this.$props.index != -1 ? 'edit' : 'create' }
+    currentFieldHints(): Record<string, string> {
+      return routeRuleFieldHints()
+    },
+    showRouteRuleRecommendedPreset(): boolean {
+      return this.$props.index == -1 && hasRouteRuleRecommendedPreset()
     },
     logical: {
       get() { return this.ruleData.type == 'logical' },
@@ -407,7 +487,7 @@ export default {
       }
     },
   },
-  components: { FormShell, RecommendedValues, RuleOptions }
+  components: { FormShell, SettingInfo, RuleOptions }
 }
 
 </script>

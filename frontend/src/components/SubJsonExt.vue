@@ -8,14 +8,6 @@
     @save="saveEditor"
     />
   <v-card>
-    <RecommendedValues
-      :model="subJsonExt"
-      :specs="recommendations"
-      class="mb-4"
-      show-apply-all
-      @apply="applySubJsonRecommendation"
-      @apply-all="applySubJsonRecommendations"
-    />
     <v-row>
       <v-col cols="12" sm="6" md="3">
         <v-select
@@ -24,8 +16,11 @@
           :label="$t('setting.toDirect')"
           multiple
           chips
-          hide-details
-        ></v-select>
+          hide-details>
+          <template #append-inner>
+            <SettingInfo :text="$t('setting.hint.subJsonRouteDirect')" />
+          </template>
+        </v-select>
       </v-col>
       <v-col cols="12" sm="6" md="3">
         <v-select
@@ -34,8 +29,11 @@
           :label="$t('setting.toBlock')"
           multiple
           chips
-          hide-details
-        ></v-select>
+          hide-details>
+          <template #append-inner>
+            <SettingInfo :text="$t('setting.hint.subJsonRouteBlock')" />
+          </template>
+        </v-select>
       </v-col>
     </v-row>
     <v-row  v-if="enableLog">
@@ -45,10 +43,16 @@
           :label="$t('basic.log.level')"
           :items="levels"
           v-model="subJsonExt.log.level">
+          <template #append-inner>
+            <SettingInfo :text="$t('setting.hint.subJsonLogLevel')" />
+          </template>
         </v-select>
       </v-col>
       <v-col cols="12" sm="6" md="3" lg="2">
-        <v-switch v-model="subJsonExt.log.timestamp" color="primary" :label="$t('setting.timestamp')" hide-details />
+        <div class="d-flex align-center ga-1">
+          <v-switch v-model="subJsonExt.log.timestamp" color="primary" :label="$t('setting.timestamp')" hide-details />
+          <SettingInfo :text="$t('setting.hint.subJsonLogTimestamp')" />
+        </div>
       </v-col>
     </v-row>
     <v-row v-if="enableDns">
@@ -58,6 +62,9 @@
           :label="$t('dns.final')"
           :items="dnsTags"
           v-model="subJsonExt.dns.final">
+          <template #append-inner>
+            <SettingInfo :text="$t('setting.hint.subJsonDnsFinal')" />
+          </template>
         </v-select>
       </v-col>
       <v-col cols="12" sm="6" md="3" lg="2">
@@ -76,6 +83,9 @@
           clearable
           @click:clear="delete subJsonExt.default_domain_resolver"
           v-model="subJsonExt.default_domain_resolver">
+          <template #append-inner>
+            <SettingInfo :text="$t('setting.hint.subJsonDefaultResolver')" />
+          </template>
         </v-select>
       </v-col>
       <v-col cols="12" sm="6" md="3">
@@ -85,8 +95,11 @@
           :label="$t('setting.toDirectDns')"
           multiple
           chips
-          hide-details
-        ></v-select>
+          hide-details>
+          <template #append-inner>
+            <SettingInfo :text="$t('setting.hint.subJsonDnsDirect')" />
+          </template>
+        </v-select>
       </v-col>
     </v-row>
     <template v-if="enableInb">
@@ -98,16 +111,22 @@
             chips
             multiple
             hide-details
-            :label="$t('in.addr')"
-          ></v-combobox>
+            :label="$t('in.addr')">
+            <template #append-inner>
+              <SettingInfo :text="$t('setting.hint.subJsonTunAddress')" />
+            </template>
+          </v-combobox>
         </v-col>
         <v-col cols="12" sm="6" md="3" lg="2">
           <v-text-field
             type="number"
             v-model.number="inbounds[0].mtu"
             hide-details
-            label="MTU"
-          ></v-text-field>
+            label="MTU">
+            <template #append-inner>
+              <SettingInfo :text="$t('setting.hint.subJsonTunMtu')" />
+            </template>
+          </v-text-field>
         </v-col>
       </v-row>
       <v-row>
@@ -118,16 +137,22 @@
             chips
             multiple
             hide-details
-            :label="$t('setting.excludePkg')"
-          ></v-combobox>
+            :label="$t('setting.excludePkg')">
+            <template #append-inner>
+              <SettingInfo :text="$t('setting.hint.subJsonExcludePackage')" />
+            </template>
+          </v-combobox>
         </v-col>
         <v-col cols="12" sm="6" md="3" lg="2">
-          <v-switch
-            v-model="platformProxy"
-            hide-details
-            color="primary"
-            label="Platform HTTP proxy"
-          ></v-switch>
+          <div class="d-flex align-center ga-1">
+            <v-switch
+              v-model="platformProxy"
+              hide-details
+              color="primary"
+              label="Platform HTTP proxy"
+            ></v-switch>
+            <SettingInfo :text="$t('setting.hint.subJsonPlatformProxy')" />
+          </div>
         </v-col>
       </v-row>
     </template>
@@ -136,7 +161,10 @@
       <v-btn @click="openEditor" variant="outlined" hide-details>{{ $t('editor') }}</v-btn>
       <v-menu v-model="menu" :close-on-content-click="false" location="start">
         <template v-slot:activator="{ props }">
-          <v-btn v-bind="props" hide-details variant="tonal">{{ $t('setting.jsonSubOptions') }}</v-btn>
+          <div class="d-flex align-center ga-1">
+            <v-btn v-bind="props" hide-details variant="tonal">{{ $t('setting.jsonSubOptions') }}</v-btn>
+            <SettingInfo :text="$t('setting.hint.subJsonOptions')" />
+          </div>
         </template>
         <v-card>
           <v-list>
@@ -162,16 +190,9 @@
 <script lang="ts">
 import Editor from './Editor.vue'
 import SimpleDNS from './SimpleDNS.vue'
+import SettingInfo from '@/components/SettingInfo.vue'
 import { push } from 'notivue'
 import { i18n } from '@/locales'
-import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
-import {
-  applyRecommendation,
-  applyRecommendations,
-  type RecommendationContext,
-  type RecommendationSpec,
-  type ResolvedRecommendation,
-} from '@/utils/recommendations'
 export default {
   props: ['settings'],
   data() {
@@ -289,12 +310,6 @@ export default {
         { title: "🇨🇳 IP-China", value: "geoip-cn" },
         { title: "🇻🇳 Site-Vietnam", value: "geosite-vn" },
         { title: "🇻🇳 IP-Vietnam", value: "geoip-vn" },
-      ],
-      recommendations: <RecommendationSpec<Record<string, any>>[]>[
-        { id: 'json-log', label: 'JSON log preset', description: 'Enable info-level logs with timestamps.', path: 'log', value: () => this.defaultLog },
-        { id: 'json-dns', label: 'JSON DNS preset', description: 'Add proxy/direct/local DNS servers and safe default DNS rules.', path: 'dns', value: () => this.defaultDns },
-        { id: 'json-inbounds', label: 'JSON inbound preset', description: 'Add TUN and mixed local inbound presets.', path: 'inbounds', value: () => this.defaultInb },
-        { id: 'json-experimental', label: 'JSON experimental preset', description: 'Add Clash API and cache file presets.', path: 'experimental', value: () => this.defaultExp },
       ],
       geo: [
         {
@@ -507,15 +522,6 @@ export default {
     openEditor() {
       this.enableEditor = true
     },
-    recommendationContext(): RecommendationContext<Record<string, any>> {
-      return { mode: 'edit', model: this.subJsonExt }
-    },
-    applySubJsonRecommendation(spec: ResolvedRecommendation<Record<string, any>>) {
-      applyRecommendation(this.subJsonExt, spec, this.recommendationContext())
-    },
-    applySubJsonRecommendations(specs: ResolvedRecommendation<Record<string, any>>[]) {
-      applyRecommendations(this.subJsonExt, specs, this.recommendationContext())
-    },
     saveEditor(data:string) {
       try {
         this.subJsonExt = JSON.parse(data)
@@ -540,6 +546,6 @@ export default {
       deep: true
     },
   },
-  components: { Editor, SimpleDNS, RecommendedValues }
+  components: { Editor, SimpleDNS, SettingInfo }
 }
 </script>

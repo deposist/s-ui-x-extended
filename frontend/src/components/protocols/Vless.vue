@@ -10,6 +10,9 @@
           :label="$t('types.vless.flow')"
           :items="['','xtls-rprx-vision']"
           v-model="data.flow">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="flow" />
+          </template>
         </v-select>
       </v-col>
     </v-row>
@@ -20,10 +23,13 @@
           :label="$t('types.vless.udpEnc')"
           :items="['none','packetaddr','xudp']"
           v-model="packet_encoding">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="packet_encoding" />
+          </template>
         </v-select>
       </v-col>
       <v-col cols="12" sm="6" md="4">
-        <Network :data="data" />
+        <Network :data="data" :field-hints="fieldHints" />
       </v-col>
     </v-row>
   </v-card>
@@ -31,9 +37,10 @@
 
 <script lang="ts">
 import Network from '@/components/Network.vue'
+import FieldHint from '@/components/FieldHint.vue'
 
 export default {
-  props: ['data'],
+  props: ['data', 'fieldHints'],
   data() {
     return {}
   },
@@ -43,6 +50,6 @@ export default {
       set(newValue:string) { this.$props.data.packet_encoding = newValue != "none" ? newValue : undefined }
     },
   },
-  components: { Network }
+  components: { Network, FieldHint }
 }
 </script>

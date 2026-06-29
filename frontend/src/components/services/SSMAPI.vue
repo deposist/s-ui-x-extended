@@ -10,6 +10,9 @@
           :label="$t('singbox.cachePath')"
           placeholder="/var/lib/sing-box/ssm-api.cache"
           hide-details>
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="cache_path" />
+          </template>
         </v-text-field>
       </v-col>
     </v-row>
@@ -23,6 +26,9 @@
           hide-details
           @input="update_key(index,$event.target.value)"
           v-model="server.name">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="ssm_servers" />
+          </template>
         </v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4">
@@ -32,6 +38,9 @@
           :items="ssTags"
           @update:model-value="update_value(index,$event)"
           v-model="server.value">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="ssm_servers" />
+          </template>
         </v-select>
       </v-col>
     </v-row>
@@ -39,19 +48,25 @@
 </template>
 
 <script lang="ts">
+import FieldHint from '@/components/FieldHint.vue'
 
 type Server = {
   name: string
   value: string
 }
 export default {
-  props: ['data', 'ssTags'],
+  props: {
+    data: { type: Object, required: true },
+    ssTags: { type: Array, default: () => [] },
+    fieldHints: { type: Object, default: () => ({}) },
+  },
   data() {
     return {}
   },
   methods: {
     add_server() {
-      this.servers = [...this.servers, {name: "/ss" + this.servers.length, value: this.ssTags[0] || ""}]
+      const firstTag = typeof this.ssTags[0] === 'string' ? this.ssTags[0] : ''
+      this.servers = [...this.servers, {name: "/ss" + this.servers.length, value: firstTag}]
     },
     del_server(i:number) {
       let h = this.servers
@@ -118,5 +133,6 @@ export default {
       }
     }
   },
+  components: { FieldHint },
 }
 </script>

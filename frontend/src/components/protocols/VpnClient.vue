@@ -7,6 +7,9 @@
           :label="$t('types.vpn.address')"
           :placeholder="'10.0.0.2'"
           hide-details>
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="address" />
+          </template>
         </v-text-field>
       </v-col>
       <v-col cols="12" sm="6">
@@ -14,8 +17,11 @@
           v-model="data.key"
           :label="$t('types.vpn.key')"
           hide-details
-          append-inner-icon="mdi-refresh"
-          @click:append-inner="data.key = genKey()">
+          append-icon="mdi-refresh"
+          @click:append="data.key = genKey()">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="vpn_user" />
+          </template>
         </v-text-field>
       </v-col>
     </v-row>
@@ -39,23 +45,25 @@
 
 <script lang="ts">
 import RandomUtil from '@/plugins/randomUtil'
+import FieldHint from '@/components/FieldHint.vue'
 
 export default {
-  props: { data: { type: Object, required: true } },
+  props: {
+    data: { type: Object, required: true },
+    fieldHints: { type: Object, default: () => ({}) },
+  },
   data() {
     return {
       outboundError: "",
     }
   },
-  created() {
-    if (typeof this.$props.data.outbound != 'object' || this.$props.data.outbound == null) {
-      this.$props.data.outbound = {}
-    }
-  },
   computed: {
     outboundJson: {
       get(): string {
-        return JSON.stringify(this.$props.data.outbound ?? {}, null, 2)
+        const outbound = typeof this.$props.data.outbound == 'object' && !Array.isArray(this.$props.data.outbound) && this.$props.data.outbound != null
+          ? this.$props.data.outbound
+          : {}
+        return JSON.stringify(outbound, null, 2)
       },
       set(v: string) {
         if (v.trim().length === 0) {
@@ -82,5 +90,6 @@ export default {
       return RandomUtil.randomUUID()
     },
   },
+  components: { FieldHint },
 }
 </script>

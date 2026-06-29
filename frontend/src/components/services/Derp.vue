@@ -6,6 +6,9 @@
         :label="$t('types.derp.configPath')"
         hide-details
         v-model="data.config_path">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="config_path" />
+          </template>
         </v-text-field>
       </v-col>
     </v-row>
@@ -16,6 +19,9 @@
         hide-details
         placeholder="blank | http[s]://example.com:port/path"
         v-model="data.home">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="home" />
+          </template>
         </v-text-field>
       </v-col>
     </v-row>
@@ -27,6 +33,9 @@
         :items="tsTags"
         multiple
         v-model="data.verify_client_endpoint">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="verify_client_endpoint" />
+          </template>
         </v-select>
       </v-col>
     </v-row>
@@ -49,6 +58,9 @@
             :label="$t('types.derp.verifyClientUrl')"
             hide-details
             v-model="clientUrl.url">
+              <template #append-inner>
+                <FieldHint :field-hints="fieldHints" field="verify_client_url" />
+              </template>
             </v-text-field>
             <Dial :dial="clientUrl" />     
           </v-col>
@@ -76,6 +88,9 @@
                 :label="$t('out.addr')"
                 hide-details
                 v-model="mesh.server">
+                  <template #append-inner>
+                    <FieldHint :field-hints="fieldHints" field="mesh_with" />
+                  </template>
                 </v-text-field>
               </v-col>
               <v-col cols="12" sm="6" md="4">
@@ -122,6 +137,9 @@
             :label="$t('types.derp.meshPskFile')"
             hide-details
             v-model="data.mesh_psk_file">
+              <template #append-inner>
+                <FieldHint :field-hints="fieldHints" field="mesh_psk" />
+              </template>
           </v-text-field>
         </v-col>
       </v-row>
@@ -131,13 +149,20 @@
             :label="$t('types.derp.meshPsk')"
             hide-details
             v-model="data.mesh_psk">
+              <template #append-inner>
+                <FieldHint :field-hints="fieldHints" field="mesh_psk" />
+              </template>
           </v-text-field>
         </v-col>
       </v-row>
     </template>
     <template v-if="optionStun">
       <v-card :title="$t('types.derp.stun')" class="border" style="padding: 8px;" rounded="xl">
-        <Listen :data="data.stun" :inTags="inTags" />
+        <div class="d-flex align-center ga-1 mb-2">
+          <span>{{ $t('types.derp.stun') }}</span>
+          <FieldHint :field-hints="fieldHints" field="stun" />
+        </div>
+        <Listen :data="data.stun" :inTags="inTags" :field-hints="fieldHints" />
       </v-card>
     </template>
     <v-card-actions>
@@ -174,8 +199,14 @@
 import Dial from '@/components/Dial.vue'
 import OutTLS from '../tls/OutTLS.vue'
 import Listen from '../Listen.vue'
+import FieldHint from '@/components/FieldHint.vue'
 export default {
-  props: ['data', 'tsTags', 'inTags'],
+  props: {
+    data: { type: Object, required: true },
+    tsTags: { type: Array, default: () => [] },
+    inTags: { type: Array, default: () => [] },
+    fieldHints: { type: Object, default: () => ({}) },
+  },
   data() {
     return {
       menu: false,
@@ -214,6 +245,6 @@ export default {
       set(v: boolean) { this.$props.data.stun = v ? {enabled: true} : undefined }
     }
   },
-  components: { Dial, Listen, OutTLS },
+  components: { Dial, Listen, OutTLS, FieldHint },
 }
 </script>

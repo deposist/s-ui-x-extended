@@ -38,7 +38,7 @@
           :items="congestionControllers"
           v-model="data.congestion_controller">
           <template #append-inner>
-            <FieldHint :field-hints="fieldHints" field="congestion_control" />
+            <FieldHint :field-hints="fieldHints" field="congestion_controller" />
           </template>
         </v-select>
       </v-col>
@@ -80,7 +80,6 @@
 </template>
 
 <script lang="ts">
-import { RECOMMENDED } from '@/types/recommended'
 import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 import FieldHint from '@/components/FieldHint.vue'
 
@@ -96,15 +95,9 @@ export default {
       congestionControllers: ['bbr', 'bbr_standard', 'bbr2', 'bbr2_variant', 'cubic', 'reno'],
     }
   },
-  created() {
-    if (!this.$props.data.multiplex) this.$props.data.multiplex = {}
-  },
-  mounted() {
-    this.$props.data.congestion_controller ??= RECOMMENDED.trustTunnelCongestion
-  },
   computed: {
     mux(): any {
-      return this.$props.data.multiplex
+      return this.$props.data.multiplex ?? {}
     },
   },
 }

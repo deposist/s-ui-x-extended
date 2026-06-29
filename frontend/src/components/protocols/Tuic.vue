@@ -18,6 +18,9 @@
           clearable
           @click:clear="delete data.udp_relay_mode"
           v-model="data.udp_relay_mode">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="udp_relay_mode" />
+          </template>
         </v-select>
       </v-col>
       <v-col cols="12" sm="6" md="4">

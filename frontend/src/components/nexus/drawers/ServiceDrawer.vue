@@ -18,33 +18,42 @@
             :items="Object.keys(srvTypes).map((key,index) => ({title: key, value: Object.values(srvTypes)[index]}))"
             v-model="srv.type"
             @update:modelValue="changeType">
+            <template #append-inner>
+              <SettingInfo v-if="fieldHint('type')" :text="fieldHint('type')" />
+            </template>
           </v-select>
         </v-col>
         <v-col cols="12" sm="6">
-          <v-text-field v-model="srv.tag" :label="$t('objects.tag')" hide-details></v-text-field>
+          <v-text-field v-model="srv.tag" :label="$t('objects.tag')" hide-details>
+            <template #append-inner>
+              <SettingInfo v-if="fieldHint('tag')" :text="fieldHint('tag')" />
+            </template>
+          </v-text-field>
+        </v-col>
+        <v-col cols="12" v-if="showServiceRecommendedPreset">
+          <v-btn
+            color="primary"
+            prepend-icon="mdi-star-plus"
+            variant="tonal"
+            @click="applyCurrentServiceRecommendations">
+            {{ $t('types.service.recommendedPreset') }}
+          </v-btn>
         </v-col>
       </v-row>
-      <RecommendedValues
-        :model="srv"
-        :specs="recommendationSpecs"
-        :context="recommendationContext"
-        class="mb-3"
-        @apply="applyRecommended"
-      />
 
-      <Listen v-if="!NoListen.includes(srv.type)" :data="srv" :inTags="inTags" />
-      <Derp v-if="srv.type == srvTypes.DERP" :data="srv" :inTags="inTags" :tsTags="tsTags" />
-      <SSMapi v-if="srv.type == srvTypes.SSMAPI" :data="srv" :ssTags="ssTags" />
-      <Ocm v-if="srv.type == srvTypes.OCM" :data="srv" />
-      <Ccm v-if="srv.type == srvTypes.CCM" :data="srv" />
-      <OomKiller v-if="srv.type == srvTypes.OOMKiller" :data="srv" />
-      <Profiler v-if="srv.type == srvTypes.Profiler" :data="srv" />
+      <Listen v-if="!NoListen.includes(srv.type)" :data="srv" :inTags="inTags" :field-hints="currentFieldHints" />
+      <Derp v-if="srv.type == srvTypes.DERP" :data="srv" :inTags="inTags" :tsTags="tsTags" :field-hints="currentFieldHints" />
+      <SSMapi v-if="srv.type == srvTypes.SSMAPI" :data="srv" :ssTags="ssTags" :field-hints="currentFieldHints" />
+      <Ocm v-if="srv.type == srvTypes.OCM" :data="srv" :field-hints="currentFieldHints" />
+      <Ccm v-if="srv.type == srvTypes.CCM" :data="srv" :field-hints="currentFieldHints" />
+      <OomKiller v-if="srv.type == srvTypes.OOMKiller" :data="srv" :field-hints="currentFieldHints" />
+      <Profiler v-if="srv.type == srvTypes.Profiler" :data="srv" :field-hints="currentFieldHints" />
       <div v-if="srv.type == srvTypes.Resolved" style="margin-top: 8px;">
         <v-alert type="info" variant="tonal" density="compact">
           Resolved DNS service has no type-specific settings beyond Listen.
         </v-alert>
       </div>
-      <InTLS v-if="HasTls.includes(srv.type)"  :inbound="srv" :tlsConfigs="tlsConfigs" :tls_id="srv.tls_id" />
+      <InTLS v-if="HasTls.includes(srv.type)"  :inbound="srv" :tlsConfigs="tlsConfigs" :tls_id="srv.tls_id" :field-hints="currentFieldHints" />
     </form-section>
   </entity-drawer>
 </template>
@@ -63,9 +72,8 @@ import SSMapi from '@/components/services/SSMAPI.vue'
 import Data from '@/store/modules/data'
 import EntityDrawer from './EntityDrawer.vue'
 import FormSection from './FormSection.vue'
-import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
-import { applyRecommendation } from '@/utils/recommendations'
-import { serviceRecommendationSpecs } from '@/utils/defaultRecommendations'
+import SettingInfo from '@/components/SettingInfo.vue'
+import { applyServiceRecommendedValues, hasServiceRecommendedPreset, serviceFieldHintsForType } from '@/utils/defaultRecommendations'
 export default {
   inheritAttrs: false,
   props: ['visible', 'data', 'id', 'inTags', 'tsTags', 'ssTags', 'tlsConfigs'],
@@ -79,7 +87,6 @@ export default {
       srvTypes: SrvTypes,
       HasTls: [SrvTypes.DERP, SrvTypes.SSMAPI, SrvTypes.OCM, SrvTypes.CCM],
       NoListen: [SrvTypes.OOMKiller, SrvTypes.Profiler],
-      recommendationSpecs: serviceRecommendationSpecs,
     }
   },
   methods: {
@@ -100,8 +107,14 @@ export default {
       }
       this.snapshot = JSON.stringify(this.srv)
     },
-    applyRecommended(spec: any) {
-      applyRecommendation(this.srv, spec, this.recommendationContext, { force: true })
+    fieldHint(key: string): string {
+      const hintKey = (this.currentFieldHints as Record<string, string>)[key]
+      if (!hintKey) return ''
+      const translated = this.$t(hintKey)
+      return translated === hintKey ? '' : translated
+    },
+    applyCurrentServiceRecommendations() {
+      applyServiceRecommendedValues(this.srv)
     },
     changeType() {
       // Tag change only in add service
@@ -138,8 +151,11 @@ export default {
     dirty(): boolean {
       return this.snapshot !== "" && JSON.stringify(this.srv) !== this.snapshot
     },
-    recommendationContext() {
-      return { model: this.srv, mode: this.$props.id > 0 ? 'edit' : 'create', type: this.srv.type }
+    currentFieldHints(): Record<string, string> {
+      return serviceFieldHintsForType(this.srv.type)
+    },
+    showServiceRecommendedPreset(): boolean {
+      return this.$props.id == 0 && hasServiceRecommendedPreset(this.srv.type)
     },
   },
   watch: {
@@ -149,6 +165,6 @@ export default {
       }
     },
   },
-  components: { EntityDrawer, FormSection, RecommendedValues, Listen, InTLS, Derp, Ocm, Ccm, OomKiller, Profiler, SSMapi },
+  components: { EntityDrawer, FormSection, SettingInfo, Listen, InTLS, Derp, Ocm, Ccm, OomKiller, Profiler, SSMapi },
 }
 </script>

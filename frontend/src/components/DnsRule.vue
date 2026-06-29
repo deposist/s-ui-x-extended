@@ -193,7 +193,10 @@
       <v-spacer></v-spacer>
       <v-menu v-model="menu" :close-on-content-click="false" location="start">
         <template v-slot:activator="{ props }">
-          <v-btn v-bind="props" hide-details variant="tonal">{{ $t('rule.options') }}</v-btn>
+          <div class="d-flex align-center ga-1">
+            <v-btn v-bind="props" hide-details variant="tonal">{{ $t('rule.options') }}</v-btn>
+            <FieldHint :field-hints="fieldHints" field="match_fields" />
+          </div>
         </template>
         <v-card>
           <v-list>
@@ -244,12 +247,13 @@
 </template>
 
 <script lang="ts">
+import FieldHint from '@/components/FieldHint.vue'
 import RuleInterfaceAddress from '@/components/RuleInterfaceAddress.vue'
 import RuleNetworkState from '@/components/RuleNetworkState.vue'
 
 export default {
-  components: { RuleInterfaceAddress, RuleNetworkState },
-  props: ['rule', 'clients', 'inTags', 'rsTags', 'deleteable', 'ruleSets'],
+  components: { FieldHint, RuleInterfaceAddress, RuleNetworkState },
+  props: ['rule', 'clients', 'inTags', 'rsTags', 'deleteable', 'ruleSets', 'fieldHints'],
   data() {
     return {
       menu: false,

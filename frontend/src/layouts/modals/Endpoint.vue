@@ -15,21 +15,31 @@
             :items="Object.keys(epTypes).map((key,index) => ({title: key, value: Object.values(epTypes)[index]}))"
             v-model="endpoint.type"
             @update:modelValue="changeType">
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('type')" :text="fieldHint('type')" />
+              </template>
             </v-select>
           </v-col>
           <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="endpoint.tag" :label="$t('objects.tag')" hide-details></v-text-field>
+            <v-text-field v-model="endpoint.tag" :label="$t('objects.tag')" hide-details>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('tag')" :text="fieldHint('tag')" />
+              </template>
+            </v-text-field>
+          </v-col>
+          <v-col cols="12" v-if="showEndpointRecommendedPreset">
+            <v-btn
+              color="primary"
+              prepend-icon="mdi-star-plus"
+              variant="tonal"
+              @click="applyCurrentEndpointRecommendations">
+              {{ $t('types.endpoint.recommendedPreset') }}
+            </v-btn>
           </v-col>
         </v-row>
-        <RecommendedValues
-          :model="endpoint"
-          :specs="recommendationSpecs"
-          :context="recommendationContext"
-          class="mb-3"
-          @apply="applyRecommended"
-        />
         <Wireguard v-if="endpoint.type == epTypes.Wireguard"
           :data="endpoint"
+          :field-hints="currentFieldHints"
           @getWgPubKey="getWgPubKey"
           @newWgKey="newWgKey"
           @addPeer="addWgPeer"
@@ -37,9 +47,9 @@
           @refreshPeerKey="refreshWgPeerKey" />
         <Warp v-if="endpoint.type == epTypes.Warp" :data="endpoint" />
         <TailscaleVue v-if="endpoint.type == epTypes.Tailscale" :data="endpoint" />
-        <VpnServer v-if="endpoint.type == epTypes.VpnServer" :data="endpoint" />
-        <VpnClient v-if="endpoint.type == epTypes.VpnClient" :data="endpoint" />
-        <Dial v-if="!noDial.includes(endpoint.type)" :dial="endpoint" />
+        <VpnServer v-if="endpoint.type == epTypes.VpnServer" :data="endpoint" :field-hints="currentFieldHints" />
+        <VpnClient v-if="endpoint.type == epTypes.VpnClient" :data="endpoint" :field-hints="currentFieldHints" />
+        <Dial v-if="!noDial.includes(endpoint.type)" :dial="endpoint" :field-hints="currentFieldHints" />
       </v-card-text>
       <v-card-actions>
         <v-spacer></v-spacer>
@@ -77,9 +87,8 @@ import HttpUtils from '@/plugins/httputil'
 import { push } from 'notivue'
 import { i18n } from '@/locales'
 import Data from '@/store/modules/data'
-import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
-import { applyRecommendation } from '@/utils/recommendations'
-import { endpointRecommendationSpecs } from '@/utils/defaultRecommendations'
+import SettingInfo from '@/components/SettingInfo.vue'
+import { applyEndpointRecommendedValues, endpointFieldHintsForType, hasEndpointRecommendedPreset } from '@/utils/defaultRecommendations'
 export default {
   props: ['visible', 'data', 'id', 'tags'],
   emits: ['close'],
@@ -91,7 +100,6 @@ export default {
       loading: false,
       epTypes: EpTypes,
       noDial: [EpTypes.VpnServer, EpTypes.VpnClient],
-      recommendationSpecs: endpointRecommendationSpecs,
     }
   },
   methods: {
@@ -109,8 +117,14 @@ export default {
       }
       this.tab = "t1"
     },
-    applyRecommended(spec: any) {
-      applyRecommendation(this.endpoint, spec, this.recommendationContext, { force: true })
+    fieldHint(key: string): string {
+      const hintKey = (this.currentFieldHints as Record<string, string>)[key]
+      if (!hintKey) return ''
+      const translated = this.$t(hintKey)
+      return translated === hintKey ? '' : translated
+    },
+    applyCurrentEndpointRecommendations() {
+      applyEndpointRecommendedValues(this.endpoint)
     },
     async changeType() {
       // Tag change only in add endpoint
@@ -255,8 +269,11 @@ export default {
     },
   },
   computed: {
-    recommendationContext() {
-      return { model: this.endpoint, mode: this.$props.id > 0 ? 'edit' : 'create', type: this.endpoint.type }
+    currentFieldHints(): Record<string, string> {
+      return endpointFieldHintsForType(this.endpoint.type)
+    },
+    showEndpointRecommendedPreset(): boolean {
+      return this.$props.id == 0 && hasEndpointRecommendedPreset(this.endpoint.type)
     },
   },
   watch: {
@@ -266,6 +283,6 @@ export default {
       }
     },
   },
-  components: { RecommendedValues, Dial, Wireguard, Warp, TailscaleVue, VpnServer, VpnClient }
+  components: { SettingInfo, Dial, Wireguard, Warp, TailscaleVue, VpnServer, VpnClient }
 }
 </script>

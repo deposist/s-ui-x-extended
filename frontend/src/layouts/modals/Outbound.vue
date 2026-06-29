@@ -28,25 +28,37 @@
                   })"
                   v-model="outbound.type"
                   @update:modelValue="changeType">
+                    <template #append-inner>
+                      <SettingInfo v-if="fieldHint('type')" :text="fieldHint('type')" />
+                    </template>
                   </v-select>
                 </v-col>
                 <v-col cols="12" sm="6" md="4">
-                  <v-text-field v-model="outbound.tag" :label="$t('objects.tag')" hide-details></v-text-field>
+                  <v-text-field v-model="outbound.tag" :label="$t('objects.tag')" hide-details>
+                    <template #append-inner>
+                      <SettingInfo v-if="fieldHint('tag')" :text="fieldHint('tag')" />
+                    </template>
+                  </v-text-field>
+                </v-col>
+                <v-col cols="12" v-if="showOutboundRecommendedPreset">
+                  <v-btn
+                    color="primary"
+                    prepend-icon="mdi-star-plus"
+                    variant="tonal"
+                    @click="applyCurrentOutboundRecommendations">
+                    {{ $t('types.outbound.recommendedPreset') }}
+                  </v-btn>
                 </v-col>
               </v-row>
-              <RecommendedValues
-                :model="outbound"
-                :specs="recommendationSpecs"
-                :context="recommendationContext"
-                class="mb-3"
-                @apply="applyRecommended"
-              />
               <v-row v-if="!NoServer.includes(outbound.type)">
                 <v-col cols="12" sm="6" md="4">
                   <v-text-field
                   :label="$t('out.addr')"
                   hide-details
                   v-model="outbound.server">
+                    <template #append-inner>
+                      <SettingInfo v-if="fieldHint('server')" :text="fieldHint('server')" />
+                    </template>
                   </v-text-field>
                 </v-col>
                 <v-col cols="12" sm="6" md="4">
@@ -56,28 +68,31 @@
                   min="0"
                   hide-details
                   v-model.number="outbound.server_port">
+                    <template #append-inner>
+                      <SettingInfo v-if="fieldHint('server_port')" :text="fieldHint('server_port')" />
+                    </template>
                   </v-text-field>
                 </v-col>
               </v-row>
               <Socks v-if="outbound.type == outTypes.SOCKS" :data="outbound" />
               <Http v-if="outbound.type == outTypes.HTTP" :data="outbound" />
-              <Shadowsocks v-if="outbound.type == outTypes.Shadowsocks" direction="out" :data="outbound" />
-              <Vmess v-if="outbound.type == outTypes.VMess" :data="outbound" />
-              <Trojan v-if="outbound.type == outTypes.Trojan" direction="out" :data="outbound" />
-              <Hysteria v-if="outbound.type == outTypes.Hysteria" direction="out" :data="outbound" />
-              <Naive v-if="outbound.type == outTypes.Naive" direction="out" :data="outbound" />
-              <ShadowTls v-if="outbound.type == outTypes.ShadowTLS" :data="outbound" />
-              <Vless v-if="outbound.type == outTypes.VLESS" :data="outbound" />
-              <Tuic v-if="outbound.type == outTypes.TUIC" direction="out" :data="outbound" />
-              <Hysteria2 v-if="outbound.type == outTypes.Hysteria2" direction="out" :data="outbound" />
-              <AnyTls v-if="outbound.type == outTypes.AnyTls" :data="outbound" direction="out" />
+              <Shadowsocks v-if="outbound.type == outTypes.Shadowsocks" direction="out" :data="outbound" :field-hints="currentFieldHints" />
+              <Vmess v-if="outbound.type == outTypes.VMess" :data="outbound" :field-hints="currentFieldHints" />
+              <Trojan v-if="outbound.type == outTypes.Trojan" direction="out" :data="outbound" :field-hints="currentFieldHints" />
+              <Hysteria v-if="outbound.type == outTypes.Hysteria" direction="out" :data="outbound" :field-hints="currentFieldHints" />
+              <Naive v-if="outbound.type == outTypes.Naive" direction="out" :data="outbound" :field-hints="currentFieldHints" />
+              <ShadowTls v-if="outbound.type == outTypes.ShadowTLS" :data="outbound" :field-hints="currentFieldHints" />
+              <Vless v-if="outbound.type == outTypes.VLESS" :data="outbound" :field-hints="currentFieldHints" />
+              <Tuic v-if="outbound.type == outTypes.TUIC" direction="out" :data="outbound" :field-hints="currentFieldHints" />
+              <Hysteria2 v-if="outbound.type == outTypes.Hysteria2" direction="out" :data="outbound" :field-hints="currentFieldHints" />
+              <AnyTls v-if="outbound.type == outTypes.AnyTls" :data="outbound" direction="out" :field-hints="currentFieldHints" />
               <Tor v-if="outbound.type == outTypes.Tor" :data="outbound" />
-              <Ssh v-if="outbound.type == outTypes.SSH" :data="outbound" />
-              <Mieru v-if="outbound.type == outTypes.Mieru" direction="out" :data="outbound" />
-              <Sudoku v-if="outbound.type == outTypes.Sudoku" direction="out" :data="outbound" />
-              <TrustTunnel v-if="outbound.type == outTypes.TrustTunnel" direction="out" :data="outbound" />
+              <Ssh v-if="outbound.type == outTypes.SSH" :data="outbound" :field-hints="currentFieldHints" />
+              <Mieru v-if="outbound.type == outTypes.Mieru" direction="out" :data="outbound" :field-hints="currentFieldHints" />
+              <Sudoku v-if="outbound.type == outTypes.Sudoku" direction="out" :data="outbound" :field-hints="currentFieldHints" />
+              <TrustTunnel v-if="outbound.type == outTypes.TrustTunnel" direction="out" :data="outbound" :field-hints="currentFieldHints" />
               <Masque v-if="outbound.type == outTypes.MASQUE" :data="outbound" />
-              <OpenVpn v-if="outbound.type == outTypes.OpenVPN" :data="outbound" />
+              <OpenVpn v-if="outbound.type == outTypes.OpenVPN" :data="outbound" :field-hints="currentFieldHints" />
               <Parser v-if="outbound.type == outTypes.Parser" :data="outbound" />
               <Selector v-if="outbound.type == outTypes.Selector" :data="outbound" :tags="tags" />
               <UrlTest v-if="outbound.type == outTypes.URLTest" :data="outbound" :tags="tags" />
@@ -91,10 +106,10 @@
               <TrafficLimiter v-if="outbound.type == outTypes.TrafficLimiter" :data="outbound" :tags="tags" />
               <RateLimiter v-if="outbound.type == outTypes.RateLimiter" :data="outbound" :tags="tags" />
 
-              <Transport v-if="Object.hasOwn(outbound,'transport')" :data="outbound" />
-              <OutTLS v-if="Object.hasOwn(outbound,'tls') && ![outTypes.MASQUE, outTypes.OpenVPN].includes(outbound.type)" :outbound="outbound" />
-              <Multiplex v-if="Object.hasOwn(outbound,'multiplex') && outbound.type != outTypes.TrustTunnel" direction="out" :data="outbound" />
-              <Dial v-if="!NoDial.includes(outbound.type)" :dial="outbound" />
+              <Transport v-if="Object.hasOwn(outbound,'transport')" :data="outbound" :field-hints="currentFieldHints" />
+              <OutTLS v-if="Object.hasOwn(outbound,'tls') && ![outTypes.MASQUE, outTypes.OpenVPN].includes(outbound.type)" :outbound="outbound" :field-hints="currentFieldHints" />
+              <Multiplex v-if="Object.hasOwn(outbound,'multiplex') && outbound.type != outTypes.TrustTunnel" direction="out" :data="outbound" :field-hints="currentFieldHints" />
+              <Dial v-if="!NoDial.includes(outbound.type)" :dial="outbound" :field-hints="currentFieldHints" />
             </v-window-item>
             <v-window-item value="t2">
               <v-row>
@@ -174,9 +189,8 @@ import RateLimiter from '@/components/protocols/RateLimiter.vue'
 import HttpUtils from '@/plugins/httputil'
 import AnyTls from '@/components/protocols/AnyTls.vue'
 import Data from '@/store/modules/data'
-import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
-import { applyRecommendation } from '@/utils/recommendations'
-import { outboundRecommendationSpecs } from '@/utils/defaultRecommendations'
+import SettingInfo from '@/components/SettingInfo.vue'
+import { applyOutboundRecommendedValues, hasOutboundRecommendedPreset, outboundFieldHintsForType } from '@/utils/defaultRecommendations'
 export default {
   props: ['visible', 'data', 'id', 'tags'],
   emits: ['close'],
@@ -191,7 +205,6 @@ export default {
       unavailableOutboundTypes: <string[]>[],
       NoDial: [OutTypes.Selector, OutTypes.URLTest, OutTypes.Bond, OutTypes.Failover, OutTypes.Block, OutTypes.CoreFailover, OutTypes.Fallback, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter],
       NoServer: [OutTypes.Direct, OutTypes.Selector, OutTypes.URLTest, OutTypes.Tor, OutTypes.OpenVPN, OutTypes.MASQUE, OutTypes.Parser, OutTypes.Bond, OutTypes.Failover, OutTypes.Block, OutTypes.CoreFailover, OutTypes.Fallback, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter],
-      recommendationSpecs: outboundRecommendationSpecs,
     }
   },
   async mounted() {
@@ -220,8 +233,14 @@ export default {
       }
       this.tab = "t1"
     },
-    applyRecommended(spec: any) {
-      applyRecommendation(this.outbound, spec, this.recommendationContext, { force: true })
+    fieldHint(key: string): string {
+      const hintKey = (this.currentFieldHints as Record<string, string>)[key]
+      if (!hintKey) return ''
+      const translated = this.$t(hintKey)
+      return translated === hintKey ? '' : translated
+    },
+    applyCurrentOutboundRecommendations() {
+      applyOutboundRecommendedValues(this.outbound)
     },
     changeType() {
       // Tag change only in add outbound
@@ -265,8 +284,11 @@ export default {
     }
   },
   computed: {
-    recommendationContext() {
-      return { model: this.outbound, mode: this.$props.id > 0 ? 'edit' : 'create', type: this.outbound.type, unavailableTypes: this.unavailableOutboundTypes }
+    currentFieldHints(): Record<string, string> {
+      return outboundFieldHintsForType(this.outbound.type)
+    },
+    showOutboundRecommendedPreset(): boolean {
+      return this.$props.id == 0 && hasOutboundRecommendedPreset(this.outbound.type) && !this.unavailableOutboundTypes.includes(this.outbound.type)
     },
   },
   watch: {
@@ -276,7 +298,7 @@ export default {
       }
     },
   },
-  components: { RecommendedValues, Dial, Multiplex, Transport, OutTLS,
+  components: { SettingInfo, Dial, Multiplex, Transport, OutTLS,
     Direct, Socks, Http, Shadowsocks, Vmess, Trojan,
     Wireguard, Hysteria, Naive, ShadowTls, Vless, Tuic,
     Hysteria2, AnyTls, Tor, Ssh, Mieru, Sudoku, TrustTunnel, Masque, OpenVpn, Parser, Selector, UrlTest, Bond, Failover, Block, CoreFailover, Fallback,

@@ -71,11 +71,6 @@ export default {
       mieruMultiplexing,
     }
   },
-  mounted() {
-    if (this.$props.direction == 'out') {
-      this.$props.data.multiplexing ??= 'MULTIPLEXING_LOW'
-    }
-  },
   methods: {
     setPorts(v: string[]) {
       const key = this.$props.direction == 'in' ? 'listen_ports' : 'server_ports'

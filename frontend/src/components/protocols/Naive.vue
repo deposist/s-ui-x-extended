@@ -83,6 +83,9 @@
             @click:clear="delete data.quic_congestion_control"
             clearable
             v-model="data.quic_congestion_control">
+            <template #append-inner>
+              <FieldHint :field-hints="fieldHints" field="quic_congestion_control" />
+            </template>
           </v-select>
         </v-col>
       </v-row>

@@ -6,6 +6,9 @@
           :label="$t('types.ocm.credentialPath')"
           hide-details
           v-model="data.credential_path">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="credential_path" />
+          </template>
         </v-text-field>
       </v-col>
       <v-col cols="12" sm="6">
@@ -13,6 +16,9 @@
           :label="$t('types.ocm.usagesPath')"
           hide-details
           v-model="data.usages_path">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="usages_path" />
+          </template>
         </v-text-field>
       </v-col>
       <v-col cols="12" sm="6">
@@ -21,6 +27,9 @@
           hide-details
           :items="outTags"
           v-model="data.detour">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="detour" />
+          </template>
         </v-select>
       </v-col>
     </v-row>
@@ -35,10 +44,18 @@
           <v-icon @click="delUser(index)" color="error" icon="mdi-delete" />
         </v-col>
         <v-col cols="12" sm="4">
-          <v-text-field :label="$t('types.ocm.userName')" hide-details v-model="user.name" />
+          <v-text-field :label="$t('types.ocm.userName')" hide-details v-model="user.name">
+            <template #append-inner>
+              <FieldHint :field-hints="fieldHints" field="users" />
+            </template>
+          </v-text-field>
         </v-col>
         <v-col cols="12" sm="6">
-          <v-text-field :label="$t('types.ocm.userToken')" hide-details type="password" v-model="user.token" />
+          <v-text-field :label="$t('types.ocm.userToken')" hide-details type="password" v-model="user.token">
+            <template #append-inner>
+              <FieldHint :field-hints="fieldHints" field="users" />
+            </template>
+          </v-text-field>
         </v-col>
       </v-row>
     </v-card>
@@ -48,10 +65,14 @@
 <script lang="ts">
 import Data from '@/store/modules/data'
 import Headers from '@/components/Headers.vue'
+import FieldHint from '@/components/FieldHint.vue'
 
 export default {
-  props: ['data'],
-  components: { Headers },
+  props: {
+    data: { type: Object, required: true },
+    fieldHints: { type: Object, default: () => ({}) },
+  },
+  components: { Headers, FieldHint },
   computed: {
     outTags() {
       return [...Data().outbounds?.map((o: any) => o.tag) ?? [], ...Data().endpoints?.map((e: any) => e.tag) ?? []]

@@ -2,7 +2,10 @@
   <v-card :subtitle="$t('objects.tls')">
     <v-row v-if="tlsOptional">
       <v-col cols="12" sm="6" md="4">
-        <v-switch color="primary" :label="$t('tls.enable')" v-model="tlsEnable" hide-details></v-switch>
+        <div class="d-flex align-center ga-1">
+          <v-switch color="primary" :label="$t('tls.enable')" v-model="tlsEnable" hide-details></v-switch>
+          <FieldHint :field-hints="fieldHints" field="tls_enable" />
+        </div>
       </v-col>
     </v-row>
     <template v-if="tls.enabled">
@@ -76,6 +79,9 @@
             :label="$t('tls.minVer')"
             :items="tlsVersions"
             v-model="tls.min_version">
+            <template #append-inner>
+              <FieldHint :field-hints="fieldHints" field="tls_min_version" />
+            </template>
           </v-select>
         </v-col>
         <v-col cols="12" sm="6" md="4" v-if="tls.max_version">
@@ -164,6 +170,9 @@
             label="Fingerprint"
             :items="fingerprints"
             v-model="tls.utls.fingerprint">
+            <template #append-inner>
+              <FieldHint :field-hints="fieldHints" field="tls_utls" />
+            </template>
           </v-select>
         </v-col>
       </v-row>
@@ -325,8 +334,12 @@
 
 <script lang="ts">
 import { oTls, defaultOutTls } from '@/types/tls'
+import FieldHint from '@/components/FieldHint.vue'
 export default {
-  props: ['outbound'],
+  props: {
+    outbound: { type: Object, required: true },
+    fieldHints: { type: Object, default: () => ({}) },
+  },
   data() {
     return {
       menu: false,
@@ -509,6 +522,7 @@ export default {
       get(): number { return parseInt(this.tls.fragment_fallback_delay?.replace('ms','')?? '500')?? 500 },
       set(v:number) { this.$props.outbound.tls.fragment_fallback_delay = v>0 ? `${v}ms` : undefined }
     }
-  }
+  },
+  components: { FieldHint }
 }
 </script>

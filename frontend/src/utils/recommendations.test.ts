@@ -1,8 +1,37 @@
 import { reactive } from 'vue'
 import { describe, expect, it } from 'vitest'
+import { DnsTypes } from '@/types/dns'
+import { EpTypes } from '@/types/endpoints'
 import { InTypes } from '@/types/inbounds'
 import { OutTypes } from '@/types/outbounds'
-import { applyInboundRecommendedValues, applyVlessInboundRecommendedValues, hasInboundRecommendedPreset, outboundRecommendationSpecs } from './defaultRecommendations'
+import { SrvTypes } from '@/types/services'
+import {
+  applyDnsRuleRecommendedValues,
+  applyDnsServerRecommendedValues,
+  applyEndpointRecommendedValues,
+  applyInboundRecommendedValues,
+  applyOutboundRecommendedValues,
+  applyRouteRuleRecommendedValues,
+  applyServiceRecommendedValues,
+  applyTlsRecommendedValues,
+  applyVlessInboundRecommendedValues,
+  dnsRuleFieldHints,
+  dnsServerFieldHintsForType,
+  endpointFieldHintsForType,
+  hasDnsRuleRecommendedPreset,
+  hasDnsServerRecommendedPreset,
+  hasEndpointRecommendedPreset,
+  hasInboundRecommendedPreset,
+  hasOutboundRecommendedPreset,
+  hasRouteRuleRecommendedPreset,
+  hasServiceRecommendedPreset,
+  hasTlsRecommendedPreset,
+  outboundFieldHintsForType,
+  outboundRecommendationSpecs,
+  routeRuleFieldHints,
+  serviceFieldHintsForType,
+  tlsFieldHintsForType,
+} from './defaultRecommendations'
 import {
   applyRecommendation,
   applyRecommendations,
@@ -188,6 +217,124 @@ describe('recommendation helpers', () => {
     expect(hasInboundRecommendedPreset(InTypes.Bond)).toBe(false)
     expect(hasInboundRecommendedPreset(InTypes.CoreFailover)).toBe(false)
     expect(hasInboundRecommendedPreset(InTypes.VMess)).toBe(true)
+  })
+
+  it('applies explicit outbound presets only for supported protocols', () => {
+    const vless: any = {
+      type: OutTypes.VLESS,
+      tag: 'keep-me',
+      server: 'edge.example.com',
+      server_port: 0,
+      packet_encoding: '',
+      tls: {},
+    }
+
+    applyOutboundRecommendedValues(vless)
+
+    expect(vless.tag).toBe('keep-me')
+    expect(vless.server).toBe('edge.example.com')
+    expect(vless.server_port).toBe(443)
+    expect(vless.packet_encoding).toBe('xudp')
+    expect(vless.tls.enabled).toBeUndefined()
+    expect(vless.tls.min_version).toBeUndefined()
+
+    const hysteria2: any = { type: OutTypes.Hysteria2, tls: {} }
+    applyOutboundRecommendedValues(hysteria2)
+    expect(hysteria2.server_port).toBe(443)
+    expect(hysteria2.tls.enabled).toBe(true)
+    expect(hysteria2.tls.min_version).toBe('1.3')
+    expect(hysteria2.tls.utls).toEqual({ enabled: true, fingerprint: 'chrome' })
+    expect(hysteria2.up_mbps).toBe(100)
+    expect(hysteria2.down_mbps).toBe(100)
+
+    const vmess: any = { type: OutTypes.VMess, tls: {}, security: 'legacy' }
+    applyOutboundRecommendedValues(vmess)
+    expect(vmess.server_port).toBe(443)
+    expect(vmess.security).toBe('auto')
+    expect(vmess.packet_encoding).toBe('xudp')
+    expect(vmess.global_padding).toBe(true)
+    expect(vmess.authenticated_length).toBe(true)
+
+    const direct: any = { type: OutTypes.Direct, server_port: 0, tls: {} }
+    applyOutboundRecommendedValues(direct)
+    expect(direct).toEqual({ type: OutTypes.Direct, server_port: 0, tls: {} })
+
+    expect(hasOutboundRecommendedPreset(OutTypes.Direct)).toBe(false)
+    expect(hasOutboundRecommendedPreset(OutTypes.Shadowsocks)).toBe(false)
+    expect(hasOutboundRecommendedPreset(OutTypes.SSH)).toBe(false)
+    expect(hasOutboundRecommendedPreset(OutTypes.VLESS)).toBe(true)
+    expect(hasOutboundRecommendedPreset(OutTypes.VMess)).toBe(true)
+    expect(hasOutboundRecommendedPreset(OutTypes.OpenVPN)).toBe(true)
+  })
+
+  it('uses outbound-specific field-hint keys for outbound dial and shared sections', () => {
+    const hints = outboundFieldHintsForType(OutTypes.VLESS)
+
+    expect(hints.dial_options).toBe('types.outbound.hint.dial_options')
+    expect(hints.transport_enable).toBe('types.outbound.hint.transport_enable')
+    expect(hints.out_multiplex_enable).toBe('types.outbound.hint.out_multiplex_enable')
+    expect(hints.tls_enable).toBe('types.outbound.hint.tls_enable')
+  })
+
+  it('applies explicit service, endpoint, TLS, DNS and rule presets safely', () => {
+    const service: any = { type: SrvTypes.DERP, listen_port: 3478 }
+    applyServiceRecommendedValues(service)
+    expect(service.listen).toBe('::')
+
+    const profiler: any = { type: SrvTypes.Profiler }
+    applyServiceRecommendedValues(profiler)
+    expect(profiler.listen).toBeUndefined()
+    expect(hasServiceRecommendedPreset(SrvTypes.Profiler)).toBe(false)
+    expect(serviceFieldHintsForType(SrvTypes.DERP).listen).toBe('types.service.hint.listen')
+
+    const wg: any = { type: EpTypes.Wireguard, mtu: 0 }
+    applyEndpointRecommendedValues(wg)
+    expect(wg.mtu).toBe(1420)
+
+    const vpnServer: any = { type: EpTypes.VpnServer, users: [] }
+    applyEndpointRecommendedValues(vpnServer)
+    expect(vpnServer.address).toBe('10.0.0.1')
+    expect(vpnServer.users).toEqual([{ address: '10.0.0.2', key: '' }])
+    expect(hasEndpointRecommendedPreset(EpTypes.VpnClient)).toBe(false)
+    expect(endpointFieldHintsForType(EpTypes.Wireguard).mtu).toBe('types.endpoint.hint.mtu')
+
+    const tls: any = { server: {}, client: {} }
+    applyTlsRecommendedValues(tls)
+    expect(tls.server.min_version).toBe('1.3')
+    expect(tls.server.max_version).toBe('1.3')
+    expect(tls.server.alpn).toEqual(['h3', 'h2', 'http/1.1'])
+    expect(tls.client.utls).toEqual({ enabled: true, fingerprint: 'chrome' })
+
+    const reality: any = { server: { reality: { handshake: {} } }, client: { reality: {} } }
+    applyTlsRecommendedValues(reality)
+    expect(reality.server.reality.handshake.server).toBeTruthy()
+    expect(reality.server.reality.handshake.server_port).toBe(443)
+    expect(hasTlsRecommendedPreset('reality')).toBe(true)
+    expect(tlsFieldHintsForType('tls').min_version).toBe('types.tls.hint.min_version')
+
+    const dns: any = { type: DnsTypes.HTTPS, tls: {} }
+    applyDnsServerRecommendedValues(dns)
+    expect(dns.server).toBe('cloudflare-dns.com')
+    expect(dns.path).toBe('/dns-query')
+    expect(dns.server_port).toBe(443)
+    expect(dns.tls.enabled).toBe(true)
+    expect(dns.tls.min_version).toBe('1.3')
+    expect(hasDnsServerRecommendedPreset(DnsTypes.Local)).toBe(false)
+    expect(dnsServerFieldHintsForType(DnsTypes.HTTPS).server).toBe('types.dns.hint.server')
+
+    const dnsRule: any = { type: 'logical', action: 'route' }
+    applyDnsRuleRecommendedValues(dnsRule)
+    expect(dnsRule.mode).toBe('or')
+    expect(dnsRule.strategy).toBe('prefer_ipv4')
+    expect(hasDnsRuleRecommendedPreset()).toBe(true)
+    expect(dnsRuleFieldHints().action).toBe('types.dnsRule.hint.action')
+
+    const routeRule: any = { type: 'logical', action: 'route-options' }
+    applyRouteRuleRecommendedValues(routeRule)
+    expect(routeRule.mode).toBe('or')
+    expect(routeRule.udp_timeout).toBe('5m')
+    expect(hasRouteRuleRecommendedPreset()).toBe(true)
+    expect(routeRuleFieldHints().action).toBe('types.rule.hint.action')
   })
 
   it('filters default recommendation specs by unavailable protocol capabilities', () => {
