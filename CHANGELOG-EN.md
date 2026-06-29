@@ -11,13 +11,14 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 ## [1.0.1-beta2] - 2026-06-29 - frontend guidance and documentation
 
-Frontend guidance and documentation update. No database migration is required.
+Frontend and documentation release. No database migration is required.
 
-- Dashboard: Traffic statistics now include a timezone selector that defaults to the browser timezone, persists the selected timezone in `localStorage`, formats chart labels as `YYYY-MM-DD HH:MM`, and shows the selected timezone in KPI metadata.
-- Guided inbound setup: Add inbound forms now expose protocol-specific recommendations through create-mode actions and field help. VLESS and other supported protocols get safe presets only when the operator clicks Apply inbound recommendations; edit forms keep existing empty values.
+- Dashboard: Traffic statistics now has a timezone selector in the KPI controls. It defaults to the browser timezone, persists the selected timezone in `localStorage`, formats chart labels as `YYYY-MM-DD HH:MM`, and shows the active timezone next to the range selector. The menu opens with a short default list and searches the full IANA list only while text is entered.
+- Configuration forms: Outbound, Service, Endpoint, TLS, DNS server, DNS rule, and route rule forms now use field-level help and create-mode preset buttons where safe. Settings, Subscription JSON, and Subscription Clash show field help without apply buttons. Edit forms are not auto-filled.
+- Inbound setup: add inbound forms use protocol-aware guidance. VLESS has a dedicated preset, other supported protocols get presets only where defaults are safe, and deployment-specific protocols show guidance without a preset button.
 - Inbound safety: Shadowsocks and Sudoku credentials are generated when new inbounds are created, ShadowTLS passwords are generated only for version 2, and TLS/Reality templates are filtered so Reality is shown only for VLESS and Trojan.
-- Locales and tests: New inbound recommendation hints were added for all supported UI locales, with tests covering locale parity, recommendation helpers, inbound credential generation, and TLS template compatibility.
-- Documentation: README now documents the Dashboard Traffic statistics timezone selector behavior and refreshes the supported-protocol list from repository capability/configuration documentation.
+- Locales and tests: new recommendation hints were added for all supported UI locales. Tests cover locale coverage, recommendation helpers, inbound credential generation, TLS template compatibility, and Dashboard timezone selection.
+- Documentation: README was shortened into an English entry point, `README-RU.md` was added, supported protocols were refreshed from the capability matrix and configuration docs, and README beta links now point to `v1.0.1-beta2`.
 
 Full release notes: [`.github/RELEASE_NOTES_v1.0.1-beta2.md`](.github/RELEASE_NOTES_v1.0.1-beta2.md).
 

@@ -10,13 +10,14 @@
 
 ## [1.0.1-beta2] - 2026-06-29 - 前端引导与文档
 
-前端与文档更新。无需手动迁移数据库。
+前端与文档版本。无需手动迁移数据库。
 
-- Dashboard：Traffic statistics 新增时区选择器，默认使用浏览器时区；选择结果保存在 `localStorage`；图表标签使用 `YYYY-MM-DD HH:MM` 格式；KPI metadata 显示当前选择的时区。
-- Inbound 引导：Add inbound 表单现在通过创建模式下的显式操作和字段提示显示协议相关建议。VLESS 和其他受支持协议只会在操作员点击 Apply inbound recommendations 后应用安全 preset；编辑表单会保留已有的空值。
-- Inbound 安全：新建 Shadowsocks 和 Sudoku inbound 时会生成 credentials；ShadowTLS 只在 version 2 生成 password；TLS/Reality template 会按协议过滤，Reality 只对 VLESS 和 Trojan 显示。
-- 本地化与测试：新的 inbound recommendation 提示已加入所有受支持 UI 语言，并增加测试覆盖 locale parity、recommendation helpers、inbound credential 生成和 TLS template 兼容性。
-- 文档：README 现在说明 Dashboard Traffic statistics 时区选择器行为，并根据仓库 capability/configuration documentation 刷新支持协议列表。
+- Dashboard：Traffic statistics 在 KPI controls 中加入时区选择器。默认使用浏览器时区，选择结果保存在 `localStorage`，图表标签使用 `YYYY-MM-DD HH:MM` 格式，并在 range selector 旁显示当前时区。菜单默认显示短列表，只有输入搜索文本时才查询完整 IANA 时区列表。
+- 配置表单：Outbound、Service、Endpoint、TLS、DNS server、DNS rule 和 route rule 表单现在使用字段级提示，并在安全时提供创建模式 preset 按钮。Settings、Subscription JSON 和 Subscription Clash 只显示字段提示，不提供 apply 按钮。编辑表单不会被自动填充。
+- Inbound 引导：Add inbound 表单现在按协议显示提示。VLESS 有单独的 preset，其他受支持协议只在默认值安全时显示 preset，依赖部署选择的协议只显示提示。
+- Inbound 安全：新建 Shadowsocks 和 Sudoku inbound 时生成 credentials；ShadowTLS 只在 version 2 生成 password；TLS/Reality templates 会按协议过滤，Reality 只对 VLESS 和 Trojan 显示。
+- 本地化与测试：新的 recommendation hints 已加入所有受支持 UI locales。测试覆盖 locale coverage、recommendation helpers、inbound credential 生成、TLS template 兼容性和 Dashboard 时区选择。
+- 文档：README 已缩短为英文入口页，新增 `README-RU.md`，supported protocols 已根据 capability matrix 和 configuration docs 刷新，README beta 链接现在指向 `v1.0.1-beta2`。
 
 完整发布说明：[`.github/RELEASE_NOTES_v1.0.1-beta2.md`](.github/RELEASE_NOTES_v1.0.1-beta2.md)。
 

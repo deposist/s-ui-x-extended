@@ -1,142 +1,137 @@
 # S-UI-X-Extended v1.0.1-beta2
 
-Frontend and documentation update. No database migration is required.
+This release updates frontend guidance and documentation. No database migration is required.
 
 ## Dashboard
 
-- Dashboard Traffic statistics now has a timezone selector. The default value
-  comes from the browser timezone.
+- Traffic statistics now has a timezone selector in the KPI controls. The first value comes from the browser timezone.
 
-- The selected timezone is saved in `localStorage`, so the Dashboard keeps the
-  same statistics timezone after reloads and across browser sessions.
+- The selected timezone is stored in `localStorage`, so it survives page reloads and browser restarts.
 
-- Traffic chart labels now use `YYYY-MM-DD HH:MM`. The selected timezone is
-  shown in the KPI metadata next to the range selector, which makes bucket
-  times easier to read when the browser and server use different timezones.
+- The timezone menu opens with a short default list. The search field filters the full IANA timezone list only while text is entered.
 
-## Guided inbound setup
+- Traffic chart labels use `YYYY-MM-DD HH:MM` in the selected timezone. The active timezone is shown next to the range selector.
 
-- Add inbound forms now show protocol-aware recommendations as explicit
-  actions. The UI does not apply these values automatically. Operators choose
-  when to apply the suggested settings.
+## Configuration forms
 
-- The VLESS inbound form has a dedicated recommended setup action. It sets a
-  safe baseline for new VLESS inbounds: `decryption: none`, sniffing enabled,
-  `sniff_override_destination` enabled, `sniff_timeout: 300ms`, clean transport
-  settings, and `xudp` packet encoding. It does not choose TLS, Reality, or a
-  transport type for the operator.
+- Migrated configuration forms no longer use the generic `RecommendedValues` block. They now use field-level help and explicit preset buttons where a safe preset exists.
 
-- Other supported inbound protocols now have the same create-mode pattern:
-  field hints plus an Apply inbound recommendations button where a safe preset
-  exists. Protocols that need an operator decision, including ShadowTLS,
-  MTProxy, Tun, Bond, and Core Failover, show guidance only.
+- Presets run only after the operator clicks the apply button in create or add mode. Edit forms are not auto-filled, and existing empty values stay empty.
 
-- Existing inbound configs are not rewritten in edit mode. Empty advanced
-  fields stay empty unless the operator changes them.
+- Outbound, Service, Endpoint, TLS, DNS server, DNS rule, and route rule forms now show field help. Settings, Subscription JSON, and Subscription Clash editors show field help without apply buttons.
 
-- New Shadowsocks and Sudoku inbounds now generate credentials at creation
-  time. ShadowTLS generates a password only for version 2, matching the current
-  version 3 form behavior.
+- Presets are type-aware. They cover cases such as port `443` for common TLS or QUIC outbounds, TLS 1.3 and uTLS client defaults where the form supports them, WireGuard MTU `1420`, VPN server seed addresses, common DNS transport ports, the standard DoH path, logical OR mode for grouped rules, and `5m` UDP timeout for route options.
 
-- TLS template selection is filtered for inbounds. Reality templates are shown
-  only where the protocol supports them, currently VLESS and Trojan.
+- Forms that depend on deployment layout no longer show broad “depends on deployment” alerts. Guidance is kept at the field level.
 
-- Field help now includes recommended values or clear guidance to leave a field
-  empty or disabled. The new inbound help text is available in all supported UI
-  locales.
+## Inbound setup
+
+- Inbound forms use the same pattern with protocol-aware help. Create-mode presets are available only where the form can recommend values without guessing deployment-specific choices.
+
+- VLESS inbound has a dedicated preset. It sets `decryption: none`, enables sniffing, enables `sniff_override_destination`, sets `sniff_timeout: 300ms`, resets transport settings, and uses `xudp` packet encoding. It does not choose TLS, Reality, or a transport type.
+
+- Other supported inbound protocols use presets only when the defaults are safe. ShadowTLS, MTProxy, Tun, Bond, Core Failover, Redirect, Mixed, SOCKS, and HTTP show guidance without a preset button.
+
+- New Shadowsocks and Sudoku inbounds generate credentials at creation time. ShadowTLS generates a password only for version 2, matching the version 3 form behavior.
+
+- TLS template selection is filtered for inbound protocols. Reality templates are shown only for protocols that support them, currently VLESS and Trojan.
+
+## Locales and tests
+
+- New recommendation and field-help text was added to English, Russian, Persian, Vietnamese, Simplified Chinese, and Traditional Chinese locale files.
+
+- Frontend tests cover locale coverage, recommendation helpers, inbound credential generation, TLS template compatibility, and the Dashboard timezone selector.
 
 ## Documentation
 
-- README now documents the Dashboard Traffic statistics timezone selector,
-  including the browser default, `localStorage` persistence,
-  `YYYY-MM-DD HH:MM` chart labels, and the KPI timezone label.
+- README was reorganized into a shorter English entry point with links to guides, changelogs, and release notes.
 
-- The README supported-protocol list was refreshed from the repository
-  capability and configuration docs.
+- Added `README-RU.md` with the Russian project overview.
+
+- The README supported-protocol list was refreshed from the repository capability matrix and configuration docs.
+
+- README beta links now point to `v1.0.1-beta2`.
 
 ## Verification
 
-- Frontend build, lint, and the full frontend test suite passed before this
-  release draft was updated.
+- `cd frontend && npm run build` passed.
+- `cd frontend && npm run lint` passed.
+- `cd frontend && npm test` passed with 37 test files and 186 tests.
+- `cd frontend && npm test -- src/components/nexus/overview/selectors/overviewSelectors.test.ts` passed before the overview commit.
 
 ## Operator notes
 
-- No configuration or database migration is required for this release.
-- Clearing site storage resets the Dashboard timezone selector to the browser
-  timezone.
-- Recommendation buttons affect only newly created inbound forms and only after
-  the operator clicks them.
-- Existing inbound configurations are preserved.
+- No database or configuration migration is required.
+- Clearing browser site storage resets the Dashboard traffic timezone selector to the browser timezone.
+- Recommendation presets affect a form only after the operator clicks the apply button.
+- Existing saved forms are preserved when opened for editing.
 
 ---
 
 # S-UI-X-Extended v1.0.1-beta2
 
-Обновление фронтенда и документации. Миграция базы не требуется.
+Этот релиз обновляет фронтенд и документацию. Миграция базы не требуется.
 
 ## Dashboard
 
-- В Dashboard Traffic statistics добавлен выбор часового пояса. По умолчанию
-  используется часовой пояс браузера.
+- В KPI Traffic statistics добавлен выбор часового пояса. Начальное значение берется из часового пояса браузера.
 
-- Выбранный часовой пояс сохраняется в `localStorage`, поэтому Dashboard
-  сохраняет его после перезагрузки страницы и между сессиями браузера.
+- Выбранный часовой пояс сохраняется в `localStorage`, поэтому он переживает перезагрузку страницы и перезапуск браузера.
 
-- Подписи на графиках трафика теперь используют формат `YYYY-MM-DD HH:MM`.
-  Выбранный часовой пояс показан в метаданных KPI рядом с выбором диапазона,
-  поэтому интервалы проще читать, если браузер и сервер работают в разных
-  часовых поясах.
+- Меню часовых поясов открывается с коротким списком. Полный список IANA фильтруется только при вводе текста в поле поиска.
 
-## Настройка inbound
+- Подписи графика трафика используют формат `YYYY-MM-DD HH:MM` в выбранном часовом поясе. Активная зона показана рядом с выбором диапазона.
 
-- Формы добавления inbound теперь показывают рекомендации с учетом протокола.
-  Они применяются только явным действием. UI не меняет значения сам.
+## Configuration forms
 
-- Для VLESS inbound добавлено отдельное действие с рекомендуемой настройкой.
-  Оно задает безопасную базу для нового inbound: `decryption: none`, включенный
-  sniffing, включенный `sniff_override_destination`, `sniff_timeout: 300ms`,
-  чистые настройки transport и packet encoding `xudp`. TLS, Reality и тип
-  transport оператор выбирает сам.
+- Мигрированные формы больше не используют общий блок `RecommendedValues`. Вместо него используются подсказки у полей и явные кнопки preset там, где есть безопасный preset.
 
-- Для других поддержанных inbound-протоколов используется та же схема в режиме
-  создания: подсказки у полей и кнопка применения рекомендаций там, где есть
-  безопасный preset. Протоколы, где нужен выбор оператора, включая ShadowTLS,
-  MTProxy, Tun, Bond и Core Failover, получают только подсказки.
+- Preset применяется только после клика оператора в режиме create или add. Формы редактирования не заполняются автоматически, а существующие пустые значения остаются пустыми.
 
-- Существующие inbound-конфиги не переписываются при редактировании. Пустые
-  advanced-поля остаются пустыми, пока оператор сам их не изменит.
+- Формы Outbound, Service, Endpoint, TLS, DNS server, DNS rule и route rule теперь показывают подсказки у полей. Settings, Subscription JSON и Subscription Clash показывают подсказки без apply-кнопок.
 
-- Новые Shadowsocks и Sudoku inbound теперь получают credentials при создании.
-  ShadowTLS генерирует password только для version 2, что соответствует текущему
-  поведению формы для version 3.
+- Preset учитывает тип формы. Он покрывает такие случаи, как порт `443` для распространенных TLS или QUIC outbounds, TLS 1.3 и uTLS client defaults там, где форма их поддерживает, MTU `1420` для WireGuard, стартовые адреса VPN server, стандартные порты DNS transport, обычный DoH path, logical OR для grouped rules и UDP timeout `5m` для route options.
 
-- Выбор TLS template для inbound теперь фильтруется. Reality templates
-  показываются только там, где протокол их поддерживает: сейчас это VLESS и
-  Trojan.
+- Формы, зависящие от схемы развертывания, больше не показывают широкие alerts в стиле “depends on deployment”. Подсказки оставлены на уровне конкретных полей.
 
-- Подсказки у полей теперь показывают рекомендуемое значение или прямое
-  указание оставить поле пустым или выключенным. Новый текст подсказок для
-  inbound добавлен во все поддерживаемые локали UI.
+## Inbound setup
+
+- Inbound forms используют ту же схему с подсказками по протоколу. Create-mode presets доступны только там, где форма может рекомендовать значения без угадывания deployment-specific choices.
+
+- Для VLESS inbound есть отдельный preset. Он задает `decryption: none`, включает sniffing, включает `sniff_override_destination`, ставит `sniff_timeout: 300ms`, сбрасывает transport settings и использует packet encoding `xudp`. TLS, Reality и transport type оператор выбирает сам.
+
+- Другие поддерживаемые inbound-протоколы получают presets только там, где defaults безопасны. ShadowTLS, MTProxy, Tun, Bond, Core Failover, Redirect, Mixed, SOCKS и HTTP показывают подсказки без preset-кнопки.
+
+- Новые Shadowsocks и Sudoku inbounds получают credentials при создании. ShadowTLS генерирует password только для version 2, что соответствует поведению формы для version 3.
+
+- Выбор TLS template для inbound фильтруется по протоколу. Reality templates показываются только для протоколов, которые их поддерживают: сейчас это VLESS и Trojan.
+
+## Локали и тесты
+
+- Новый текст рекомендаций и подсказок добавлен в английскую, русскую, персидскую, вьетнамскую, упрощенную китайскую и традиционную китайскую локали.
+
+- Frontend tests покрывают locale coverage, recommendation helpers, генерацию inbound credentials, совместимость TLS template и selector часового пояса на Dashboard.
 
 ## Документация
 
-- README теперь описывает выбор часового пояса для Dashboard Traffic statistics:
-  дефолт из браузера, сохранение в `localStorage`, подписи
-  `YYYY-MM-DD HH:MM` и отображение часового пояса в KPI.
+- README переработан в короткую английскую стартовую страницу со ссылками на guides, changelogs и release notes.
 
-- Список поддерживаемых протоколов в README обновлен по capability и
-  configuration docs репозитория.
+- Добавлен `README-RU.md` с русским обзором проекта.
+
+- Список поддерживаемых протоколов в README обновлен по capability matrix и configuration docs репозитория.
+
+- Beta-ссылки в README теперь указывают на `v1.0.1-beta2`.
 
 ## Проверка
 
-- Frontend build, lint и полный frontend test suite прошли перед обновлением
-  этого release draft.
+- `cd frontend && npm run build` прошел.
+- `cd frontend && npm run lint` прошел.
+- `cd frontend && npm test` прошел: 37 test files, 186 tests.
+- `cd frontend && npm test -- src/components/nexus/overview/selectors/overviewSelectors.test.ts` прошел перед overview commit.
 
 ## Заметки для операторов
 
-- Для этого релиза не требуется менять конфигурацию или выполнять миграцию базы.
-- Очистка site storage сбрасывает selector часового пояса Dashboard к часовому
-  поясу браузера.
-- Кнопки рекомендаций влияют только на новые формы inbound и только после
-  явного клика оператора.
-- Существующие inbound-конфиги сохраняются без изменений.
+- Миграция базы или конфигурации не требуется.
+- Очистка browser site storage сбрасывает selector часового пояса Traffic statistics к часовому поясу браузера.
+- Recommendation presets влияют на форму только после клика по apply button.
+- Существующие сохраненные формы не меняются при открытии на редактирование.

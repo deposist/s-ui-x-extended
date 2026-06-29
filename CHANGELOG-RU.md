@@ -11,13 +11,14 @@
 
 ## [1.0.1-beta2] - 2026-06-29 - frontend guidance and documentation
 
-Обновление фронтенда и документации. Миграция базы не требуется.
+Релиз фронтенда и документации. Миграция базы не требуется.
 
-- Dashboard: Traffic statistics теперь включает выбор часового пояса с дефолтом из browser timezone; выбор сохраняется в `localStorage`, подписи графиков используют формат `YYYY-MM-DD HH:MM`, а выбранный часовой пояс отображается в KPI metadata.
-- Настройка inbound: формы добавления inbound теперь показывают рекомендации с учетом протокола через явные действия в режиме создания и подсказки у полей. VLESS и другие поддержанные протоколы получают безопасные presets только после клика Apply inbound recommendations; формы редактирования сохраняют существующие пустые значения.
-- Безопасность inbound: Shadowsocks и Sudoku credentials генерируются при создании новых inbound, ShadowTLS password генерируется только для version 2, а TLS/Reality templates фильтруются так, что Reality показывается только для VLESS и Trojan.
-- Локали и тесты: новые подсказки inbound-рекомендаций добавлены во все поддерживаемые локали UI, а тесты покрывают parity локалей, recommendation helpers, генерацию inbound credentials и совместимость TLS template.
-- Документация: README теперь описывает поведение selector часового пояса для Dashboard Traffic statistics и обновляет список поддерживаемых протоколов по repository capability/configuration documentation.
+- Dashboard: Traffic statistics получил выбор часового пояса в KPI controls. Значение по умолчанию берется из browser timezone, выбор сохраняется в `localStorage`, подписи графиков используют формат `YYYY-MM-DD HH:MM`, а активная зона показана рядом с выбором диапазона. Меню открывается с коротким списком и ищет по полному IANA list только при вводе текста.
+- Configuration forms: формы Outbound, Service, Endpoint, TLS, DNS server, DNS rule и route rule теперь используют подсказки у полей и create-mode preset buttons там, где это безопасно. Settings, Subscription JSON и Subscription Clash показывают подсказки без apply-кнопок. Формы редактирования не заполняются автоматически.
+- Inbound setup: формы добавления inbound используют подсказки с учетом протокола. У VLESS есть отдельный preset, другие поддерживаемые протоколы получают preset только там, где defaults безопасны, а deployment-specific protocols показывают подсказки без preset-кнопки.
+- Inbound safety: credentials для Shadowsocks и Sudoku создаются при добавлении новых inbound, ShadowTLS password генерируется только для version 2, а TLS/Reality templates фильтруются так, что Reality показывается только для VLESS и Trojan.
+- Локали и тесты: новые recommendation hints добавлены во все поддерживаемые UI locales. Тесты покрывают locale coverage, recommendation helpers, генерацию inbound credentials, совместимость TLS template и выбор часового пояса на Dashboard.
+- Документация: README сокращен до английской стартовой страницы, добавлен `README-RU.md`, supported protocols обновлены по capability matrix и configuration docs, а beta-ссылки в README теперь указывают на `v1.0.1-beta2`.
 
 Полные release notes: [`.github/RELEASE_NOTES_v1.0.1-beta2.md`](.github/RELEASE_NOTES_v1.0.1-beta2.md).
 
