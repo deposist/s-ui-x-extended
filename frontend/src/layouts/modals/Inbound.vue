@@ -23,16 +23,30 @@
               v-model="inbound.type"
               @update:modelValue="changeType">
                 <template #append-inner>
-                  <SettingInfo v-if="inbound.type == inTypes.VLESS && vlessHint('type')" :text="vlessHint('type')" />
+                  <SettingInfo v-if="fieldHint('type')" :text="fieldHint('type')" />
                 </template>
               </v-select>
             </v-col>
             <v-col cols="12" sm="6" md="4">
               <v-text-field v-model="inbound.tag" :label="$t('objects.tag')" hide-details>
                 <template #append-inner>
-                  <SettingInfo v-if="inbound.type == inTypes.VLESS && vlessHint('tag')" :text="vlessHint('tag')" />
+                  <SettingInfo v-if="fieldHint('tag')" :text="fieldHint('tag')" />
                 </template>
               </v-text-field>
+            </v-col>
+            <v-col cols="12" v-if="showInboundRecommendedPreset">
+              <v-btn
+                color="primary"
+                prepend-icon="mdi-star-plus"
+                variant="tonal"
+                @click="applyCurrentInboundRecommendations">
+                {{ $t('types.inbound.recommendedPreset') }}
+              </v-btn>
+            </v-col>
+            <v-col cols="12" v-if="showInboundProtocolNote">
+              <v-alert type="info" variant="tonal" density="compact">
+                {{ fieldHint('protocol_note') }}
+              </v-alert>
             </v-col>
           </v-row>
           <v-card
@@ -76,45 +90,45 @@
           </v-tabs>
           <v-window v-model="side" style="margin-top: 10px;">
             <v-window-item value="s">
-              <Listen :data="inbound" :inTags="inTags" :field-hints="inbound.type == inTypes.VLESS ? vlessFieldHints : {}" v-if="inbound.type != inTypes.Tun" />
-              <Direct v-if="inbound.type == inTypes.Direct" :data="inbound" />
-              <Shadowsocks v-if="inbound.type == inTypes.Shadowsocks" direction="in" :data="inbound" />
-              <Hysteria v-if="inbound.type == inTypes.Hysteria" direction="in" :data="inbound" />
-              <Hysteria2 v-if="inbound.type == inTypes.Hysteria2" direction="in" :data="inbound" />
-              <Naive v-if="inbound.type == inTypes.Naive" direction="in" :data="inbound" />
-              <Trojan v-if="inbound.type == inTypes.Trojan" direction="in" :data="inbound" />
-              <ShadowTls v-if="inbound.type == inTypes.ShadowTLS" direction="in" :data="inbound" />
-              <Tuic v-if="inbound.type == inTypes.TUIC" direction="in" :data="inbound" />
-              <Tun v-if="inbound.type == inTypes.Tun" :data="inbound" />
-              <AnyTls v-if="inbound.type == inTypes.AnyTls" :data="inbound" direction="in" />
-              <VlessInbound v-if="inbound.type == inTypes.VLESS" :data="inbound" :mode="id == 0 ? 'create' : 'edit'" :field-hints="vlessFieldHints" />
-              <Mieru v-if="inbound.type == inTypes.Mieru" direction="in" :data="inbound" />
-              <Sudoku v-if="inbound.type == inTypes.Sudoku" direction="in" :data="inbound" />
-              <TrustTunnel v-if="inbound.type == inTypes.TrustTunnel" direction="in" :data="inbound" />
-              <SshInbound v-if="inbound.type == inTypes.SSH" :data="inbound" />
-              <MTProxy v-if="inbound.type == inTypes.MTProxy" :data="inbound" />
+              <Listen :data="inbound" :inTags="inTags" :field-hints="currentFieldHints" v-if="inbound.type != inTypes.Tun" />
+              <Direct v-if="inbound.type == inTypes.Direct" :data="inbound" :field-hints="currentFieldHints" />
+              <Shadowsocks v-if="inbound.type == inTypes.Shadowsocks" direction="in" :data="inbound" :field-hints="currentFieldHints" />
+              <Hysteria v-if="inbound.type == inTypes.Hysteria" direction="in" :data="inbound" :field-hints="currentFieldHints" />
+              <Hysteria2 v-if="inbound.type == inTypes.Hysteria2" direction="in" :data="inbound" :field-hints="currentFieldHints" />
+              <Naive v-if="inbound.type == inTypes.Naive" direction="in" :data="inbound" :field-hints="currentFieldHints" />
+              <Trojan v-if="inbound.type == inTypes.Trojan" direction="in" :data="inbound" :field-hints="currentFieldHints" />
+              <ShadowTls v-if="inbound.type == inTypes.ShadowTLS" direction="in" :data="inbound" :field-hints="currentFieldHints" />
+              <Tuic v-if="inbound.type == inTypes.TUIC" direction="in" :data="inbound" :field-hints="currentFieldHints" />
+              <Tun v-if="inbound.type == inTypes.Tun" :data="inbound" :field-hints="currentFieldHints" />
+              <AnyTls v-if="inbound.type == inTypes.AnyTls" :data="inbound" direction="in" :field-hints="currentFieldHints" />
+              <VlessInbound v-if="inbound.type == inTypes.VLESS" :data="inbound" :mode="id == 0 ? 'create' : 'edit'" :field-hints="currentFieldHints" />
+              <Mieru v-if="inbound.type == inTypes.Mieru" direction="in" :data="inbound" :field-hints="currentFieldHints" />
+              <Sudoku v-if="inbound.type == inTypes.Sudoku" direction="in" :data="inbound" :field-hints="currentFieldHints" />
+              <TrustTunnel v-if="inbound.type == inTypes.TrustTunnel" direction="in" :data="inbound" :field-hints="currentFieldHints" />
+              <SshInbound v-if="inbound.type == inTypes.SSH" :data="inbound" :field-hints="currentFieldHints" />
+              <MTProxy v-if="inbound.type == inTypes.MTProxy" :data="inbound" :field-hints="currentFieldHints" />
               <BondInbound v-if="inbound.type == inTypes.Bond" :data="inbound" :inTags="inTags" />
               <CoreFailoverInbound v-if="inbound.type == inTypes.CoreFailover" :data="inbound" :inTags="inTags" />
-              <TProxy v-if="inbound.type == inTypes.TProxy" :inbound="inbound" />
-              <Transport v-if="Object.hasOwn(inbound,'transport')" :data="inbound" :field-hints="inbound.type == inTypes.VLESS ? vlessFieldHints : {}" />
-              <Users v-if="hasUser" :clients="clients" :data="initUsers" :field-hints="inbound.type == inTypes.VLESS ? vlessFieldHints : {}" />
-              <InTls v-if="HasTls.includes(inbound.type)"  :inbound="inbound" :tlsConfigs="tlsConfigs" :tls_id="inbound.tls_id" :field-hints="inbound.type == inTypes.VLESS ? vlessFieldHints : {}" :allowed-template-kinds="allowedTlsTemplateKinds" />
-              <Multiplex v-if="MuxAvailable.includes(inbound.type)" direction="in" :data="inbound" :field-hints="inbound.type == inTypes.VLESS ? vlessFieldHints : {}" />
+              <TProxy v-if="inbound.type == inTypes.TProxy" :inbound="inbound" :field-hints="currentFieldHints" />
+              <Transport v-if="Object.hasOwn(inbound,'transport')" :data="inbound" :field-hints="currentFieldHints" />
+              <Users v-if="hasUser" :clients="clients" :data="initUsers" :field-hints="currentFieldHints" />
+              <InTls v-if="HasTls.includes(inbound.type)"  :inbound="inbound" :tlsConfigs="tlsConfigs" :tls_id="inbound.tls_id" :field-hints="currentFieldHints" :allowed-template-kinds="allowedTlsTemplateKinds" />
+              <Multiplex v-if="MuxAvailable.includes(inbound.type)" direction="in" :data="inbound" :field-hints="currentFieldHints" />
             </v-window-item>
             <v-window-item value="c">
-              <OutJsonVue :inData="inbound" :type="inbound.type" :field-hints="inbound.type == inTypes.VLESS ? vlessFieldHints : {}" />
-              <Multiplex v-if="Object.hasOwn(inbound,'multiplex')" direction="out" :data="inbound.out_json" :field-hints="inbound.type == inTypes.VLESS ? vlessFieldHints : {}" />
-              <Dial v-if="inbound.out_json" :dial="inbound.out_json" mode="client" :field-hints="inbound.type == inTypes.VLESS ? vlessFieldHints : {}" />
+              <OutJsonVue v-if="inbound.out_json" :inData="inbound" :type="inbound.type" :field-hints="currentFieldHints" />
+              <Multiplex v-if="Object.hasOwn(inbound,'multiplex')" direction="out" :data="inbound.out_json" :field-hints="currentFieldHints" />
+              <Dial v-if="inbound.out_json" :dial="inbound.out_json" mode="client" :field-hints="currentFieldHints" />
               <v-card>
                 <v-card-text>
                   <v-card-subtitle class="d-flex align-center ga-1">{{ $t('in.multiDomain') }}
-                    <SettingInfo v-if="inbound.type == inTypes.VLESS && vlessHint('multi_domain')" :text="vlessHint('multi_domain')" />
+                    <SettingInfo v-if="fieldHint('multi_domain')" :text="fieldHint('multi_domain')" />
                     <v-chip color="primary" density="compact" variant="elevated" @click="add_addr"><v-icon icon="mdi-plus" /></v-chip>
                   </v-card-subtitle>
                   <template v-for="addr,index in inbound.addrs">
                     {{ $t('in.addr') }} #{{ (index+1) }} <v-icon icon="mdi-delete" color="error" @click="inbound.addrs?.splice(index,1)" />
                     <v-divider></v-divider>
-                    <AddrVue :addr="addr" :hasTls="HasTls.includes(inbound.type)" :field-hints="inbound.type == inTypes.VLESS ? vlessFieldHints : {}" />
+                    <AddrVue :addr="addr" :hasTls="HasTls.includes(inbound.type)" :field-hints="currentFieldHints" />
                   </template>
                 </v-card-text>
               </v-card>
@@ -181,7 +195,7 @@ import OutJsonVue from '@/components/OutJson.vue'
 import Data from '@/store/modules/data'
 import { push } from 'notivue'
 import SettingInfo from '@/components/SettingInfo.vue'
-import { vlessInboundFieldHints } from '@/utils/defaultRecommendations'
+import { applyInboundRecommendedValues, hasInboundRecommendedPreset, inboundFieldHintsForType } from '@/utils/defaultRecommendations'
 import { inboundAllowedTlsTemplateKinds, isInboundTlsTemplateCompatible } from '@/utils/tlsCompatibility'
 export default {
   props: ['visible', 'id', 'inTags', 'tlsConfigs'],
@@ -209,7 +223,6 @@ export default {
       unavailableTypes: <string[]>[],
       requiredInitialUsers: [InTypes.Mieru, InTypes.TrustTunnel, InTypes.SSH, InTypes.MTProxy],
       editHadOutJson: true,
-      vlessFieldHints: vlessInboundFieldHints,
     }
   },
   async created() {
@@ -230,9 +243,6 @@ export default {
       const inboundArray = await Data().loadInbounds([id])
       this.inbound = inboundArray[0]
       this.editHadOutJson = this.inbound.out_json != null
-      if (this.HasInData.includes(this.inbound.type) && this.inbound.out_json == null) {
-        this.inbound.out_json = {}
-      }
       this.loading = false
     },
     updateData(id: number) {
@@ -259,11 +269,14 @@ export default {
         values: [],
       }
     },
-    vlessHint(key: string): string {
-      const hintKey = (this.vlessFieldHints as Record<string, string>)[key]
+    fieldHint(key: string): string {
+      const hintKey = (this.currentFieldHints as Record<string, string>)[key]
       if (!hintKey) return ''
       const translated = this.$t(hintKey)
       return translated === hintKey ? '' : translated
+    },
+    applyCurrentInboundRecommendations() {
+      applyInboundRecommendedValues(this.inbound)
     },
     changeType() {
       if (!this.inbound.listen_port) this.inbound.listen_port = RandomUtil.randomIntRange(10000, 60000)
@@ -377,6 +390,15 @@ export default {
     },
     allowedTlsTemplateKinds() {
       return inboundAllowedTlsTemplateKinds(this.inbound.type)
+    },
+    currentFieldHints(): Record<string, string> {
+      return inboundFieldHintsForType(this.inbound.type)
+    },
+    showInboundRecommendedPreset(): boolean {
+      return this.$props.id == 0 && hasInboundRecommendedPreset(this.inbound.type)
+    },
+    showInboundProtocolNote(): boolean {
+      return this.$props.id == 0 && this.inbound.type !== InTypes.VLESS && !hasInboundRecommendedPreset(this.inbound.type) && Boolean(this.fieldHint('protocol_note'))
     },
     selectedTlsTemplateCompatible(): boolean {
       if (!this.inbound?.tls_id) return true

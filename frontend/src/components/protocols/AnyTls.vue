@@ -8,6 +8,9 @@
         auto-grow
         hide-details
         v-model="padding_scheme">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="padding_scheme" />
+          </template>
         </v-textarea>
       </v-col>
     </v-row>
@@ -49,16 +52,17 @@
         </v-text-field>
       </v-col>
     </v-row>
-    <InboundAdvanced :data="data" />
+    <InboundAdvanced :data="data" :field-hints="fieldHints" />
   </v-card>
 </template>
 
 <script lang="ts">
 import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
+import FieldHint from '@/components/FieldHint.vue'
 
 export default {
-  props: ['data', 'direction'],
-  components: {InboundAdvanced},
+  props: ['data', 'direction', 'fieldHints'],
+  components: {InboundAdvanced, FieldHint},
   data() {
     return {}
   },

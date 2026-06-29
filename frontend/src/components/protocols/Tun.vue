@@ -174,7 +174,7 @@
         </template>
       </v-row>
     </template>
-    <InboundAdvanced :data="data" />
+    <InboundAdvanced :data="data" :field-hints="fieldHints" />
   </v-card>
 </template>
 
@@ -183,7 +183,7 @@ import Data from '@/store/modules/data'
 import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
-  props: ['data'],
+  props: ['data', 'fieldHints'],
   components: {InboundAdvanced},
   data() {
     return {

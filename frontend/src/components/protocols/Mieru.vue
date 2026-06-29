@@ -54,7 +54,7 @@
         </v-text-field>
       </v-col>
     </v-row>
-    <InboundAdvanced :data="data" />
+    <InboundAdvanced :data="data" :field-hints="fieldHints" />
   </v-card>
 </template>
 
@@ -63,7 +63,7 @@ import { mieruTransport, mieruMultiplexing } from '@/types/recommended'
 import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
-  props: ['direction', 'data'],
+  props: ['direction', 'data', 'fieldHints'],
   components: {InboundAdvanced},
   data() {
     return {

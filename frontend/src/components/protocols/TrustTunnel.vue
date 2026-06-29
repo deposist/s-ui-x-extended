@@ -17,6 +17,9 @@
           :label="$t('network')"
           :items="['tcp', 'udp']"
           v-model="data.network">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="network" />
+          </template>
         </v-select>
       </v-col>
       <v-col cols="6" sm="3" md="2">
@@ -34,6 +37,9 @@
           :label="$t('types.trusttunnel.congestion')"
           :items="congestionControllers"
           v-model="data.congestion_controller">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="congestion_control" />
+          </template>
         </v-select>
       </v-col>
       <v-col cols="12" sm="6" md="4">
@@ -69,20 +75,22 @@
         </v-row>
       </v-card-text>
     </v-card>
-    <InboundAdvanced :data="data" />
+    <InboundAdvanced :data="data" :field-hints="fieldHints" />
   </v-card>
 </template>
 
 <script lang="ts">
 import { RECOMMENDED } from '@/types/recommended'
 import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
+import FieldHint from '@/components/FieldHint.vue'
 
 export default {
   props: {
     direction: { type: String },
     data: { type: Object, required: true },
+    fieldHints: { type: Object, default: () => ({}) },
   },
-  components: {InboundAdvanced},
+  components: {InboundAdvanced, FieldHint},
   data() {
     return {
       congestionControllers: ['bbr', 'bbr_standard', 'bbr2', 'bbr2_variant', 'cubic', 'reno'],

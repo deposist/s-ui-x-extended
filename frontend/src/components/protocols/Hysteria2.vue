@@ -12,6 +12,9 @@
         :suffix="$t('stats.Mbps')"
         min="0"
         v-model.number="up_mbps">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="up_mbps" />
+          </template>
         </v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4" v-if="!data.ignore_client_bandwidth">
@@ -22,6 +25,9 @@
         :suffix="$t('stats.Mbps')"
         min="0"
         v-model.number="down_mbps">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="down_mbps" />
+          </template>
         </v-text-field>
       </v-col>
     </v-row>
@@ -109,7 +115,7 @@
           </v-text-field>
         </v-col>
         <v-col cols="12" sm="6" md="4">
-          <Network :data="data" />
+          <Network :data="data" :field-hints="fieldHints" />
         </v-col>
         <v-col cols="12" sm="8" v-if="optionMPort">
           <v-text-field
@@ -156,7 +162,7 @@
         </v-card>
       </v-menu>
     </v-card-actions>
-    <InboundAdvanced :data="data" />
+    <InboundAdvanced :data="data" :field-hints="fieldHints" />
   </v-card>
 </template>
 
@@ -165,9 +171,10 @@ import Network from '@/components/Network.vue'
 import Headers from '@/components/Headers.vue'
 import { i18n } from '@/locales'
 import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
+import FieldHint from '@/components/FieldHint.vue'
 
 export default {
-  props: ['direction', 'data'],
+  props: ['direction', 'data', 'fieldHints'],
   data() {
     return {
       menu: false,
@@ -229,6 +236,6 @@ export default {
       }
     }
   },
-  components: {Network, Headers, InboundAdvanced}
+  components: {Network, Headers, InboundAdvanced, FieldHint}
 }
 </script>

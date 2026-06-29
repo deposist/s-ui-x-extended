@@ -40,13 +40,22 @@
             :label="$t('types.vmess.security')"
             :items="vmessSecurities"
             v-model="inData.out_json.security">
+            <template #append-inner>
+              <SettingInfo v-if="hint('security')" :text="hint('security')" />
+            </template>
           </v-select>
         </v-col>
         <v-col cols="12" sm="6" md="4">
-          <v-switch v-model="inData.out_json.global_padding" color="primary" :label="$t('types.vmess.globalPadding')" hide-details></v-switch>
+          <div class="d-flex align-center ga-1">
+            <v-switch v-model="inData.out_json.global_padding" color="primary" :label="$t('types.vmess.globalPadding')" hide-details></v-switch>
+            <SettingInfo v-if="hint('global_padding')" :text="hint('global_padding')" />
+          </div>
         </v-col>
         <v-col cols="12" sm="6" md="4">
-          <v-switch v-model="inData.out_json.authenticated_length" color="primary" :label="$t('types.vmess.authLen')" hide-details></v-switch>
+          <div class="d-flex align-center ga-1">
+            <v-switch v-model="inData.out_json.authenticated_length" color="primary" :label="$t('types.vmess.authLen')" hide-details></v-switch>
+            <SettingInfo v-if="hint('authenticated_length')" :text="hint('authenticated_length')" />
+          </div>
         </v-col>
       </template>
       <v-col cols="12" sm="6" md="4" v-if="type == inTypes.Hysteria">
@@ -92,8 +101,8 @@
       </v-col>
     </v-row>
     <Headers :data="inData.out_json" v-if="type == inTypes.HTTP" />
-    <AnyTls v-if="type == inTypes.AnyTls" :data="inData.out_json" direction="out_json" />
-    <Naive v-if="type == inTypes.Naive" :data="inData.out_json" direction="out_json" />
+    <AnyTls v-if="type == inTypes.AnyTls" :data="inData.out_json" direction="out_json" :field-hints="fieldHints" />
+    <Naive v-if="type == inTypes.Naive" :data="inData.out_json" direction="out_json" :field-hints="fieldHints" />
   </v-card>
 </template>
 

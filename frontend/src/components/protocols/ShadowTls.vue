@@ -101,7 +101,7 @@
       </v-row>
       <Dial :dial="value" />
     </v-card>
-    <InboundAdvanced :data="data" />
+    <InboundAdvanced :data="data" :field-hints="fieldHints" />
   </v-card>
 </template>
 
@@ -111,7 +111,7 @@ import Dial from '../Dial.vue'
 import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
-  props: ['direction', 'data'],
+  props: ['direction', 'data', 'fieldHints'],
   data() {
     return {
       handshake_server: ''

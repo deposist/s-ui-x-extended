@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { vlessInboundFieldHintKeys } from '@/utils/defaultRecommendations'
+import { commonInboundFieldHintKeys, vlessInboundFieldHintKeys } from '@/utils/defaultRecommendations'
 import en from './en'
 import fa from './fa'
 import ru from './ru'
@@ -17,14 +17,16 @@ const getByPath = (obj: Record<string, unknown>, path: string): unknown => {
   }, obj)
 }
 
-describe('VLESS reference recommendation locale coverage', () => {
+describe('inbound recommendation locale coverage', () => {
   const requiredKeys = [
     'types.vless.recommendedPreset',
+    'types.inbound.recommendedPreset',
     'tls.incompatibleTemplate',
     ...Object.values(vlessInboundFieldHintKeys),
+    ...Object.values(commonInboundFieldHintKeys),
   ]
 
-  it('defines every VLESS recommendation hint in all supported locale files', () => {
+  it('defines every inbound recommendation hint in all supported locale files', () => {
     for (const [locale, messages] of Object.entries(locales)) {
       const missing = requiredKeys.filter((key) => typeof getByPath(messages, key) !== 'string' || getByPath(messages, key) === '')
       expect(missing, `${locale} is missing keys: ${missing.join(', ')}`).toEqual([])

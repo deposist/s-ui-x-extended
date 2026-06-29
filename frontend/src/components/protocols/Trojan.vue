@@ -5,7 +5,7 @@
         <v-text-field v-model="data.password" :label="$t('types.pw')" hide-details></v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4">
-        <Network :data="data" />
+        <Network :data="data" :field-hints="fieldHints" />
       </v-col>
     </v-row>
     <template v-if="direction == 'in'">
@@ -74,7 +74,7 @@
         </v-row>
       </v-card>
     </template>
-    <InboundAdvanced :data="data" />
+    <InboundAdvanced :data="data" :field-hints="fieldHints" />
   </v-card>
 </template>
 
@@ -83,7 +83,7 @@ import Network from '@/components/Network.vue'
 import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
-  props: ['direction', 'data'],
+  props: ['direction', 'data', 'fieldHints'],
   data() {
     return {
       fallbackAlpnCounter: 0

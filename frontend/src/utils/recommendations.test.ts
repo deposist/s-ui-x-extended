@@ -2,7 +2,7 @@ import { reactive } from 'vue'
 import { describe, expect, it } from 'vitest'
 import { InTypes } from '@/types/inbounds'
 import { OutTypes } from '@/types/outbounds'
-import { applyVlessInboundRecommendedValues, outboundRecommendationSpecs } from './defaultRecommendations'
+import { applyInboundRecommendedValues, applyVlessInboundRecommendedValues, hasInboundRecommendedPreset, outboundRecommendationSpecs } from './defaultRecommendations'
 import {
   applyRecommendation,
   applyRecommendations,
@@ -155,6 +155,39 @@ describe('recommendation helpers', () => {
     expect(inbound.udp_disable_domain_unmapping).toBeUndefined()
     expect(inbound.multiplex).toBeUndefined()
     expect(inbound.out_json.multiplex).toBeUndefined()
+  })
+
+  it('applies explicit remaining-inbound presets only for supported protocols', () => {
+    const vmess: any = {
+      type: InTypes.VMess,
+      listen_port: 23456,
+      proxy_protocol: true,
+      out_json: {},
+    }
+
+    applyInboundRecommendedValues(vmess)
+
+    expect(vmess.listen).toBe('::')
+    expect(vmess.sniff).toBe(true)
+    expect(vmess.sniff_override_destination).toBe(true)
+    expect(vmess.sniff_timeout).toBe('300ms')
+    expect(vmess.proxy_protocol).toBeUndefined()
+    expect(vmess.out_json.security).toBe('auto')
+    expect(vmess.out_json.packet_encoding).toBe('xudp')
+    expect(vmess.out_json.global_padding).toBe(true)
+    expect(vmess.out_json.authenticated_length).toBe(true)
+
+    const shadowTls: any = { type: InTypes.ShadowTLS, listen_port: 23457 }
+    applyInboundRecommendedValues(shadowTls)
+    expect(shadowTls.listen).toBeUndefined()
+    expect(shadowTls.sniff).toBeUndefined()
+
+    expect(hasInboundRecommendedPreset(InTypes.ShadowTLS)).toBe(false)
+    expect(hasInboundRecommendedPreset(InTypes.MTProxy)).toBe(false)
+    expect(hasInboundRecommendedPreset(InTypes.Tun)).toBe(false)
+    expect(hasInboundRecommendedPreset(InTypes.Bond)).toBe(false)
+    expect(hasInboundRecommendedPreset(InTypes.CoreFailover)).toBe(false)
+    expect(hasInboundRecommendedPreset(InTypes.VMess)).toBe(true)
   })
 
   it('filters default recommendation specs by unavailable protocol capabilities', () => {

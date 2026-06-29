@@ -25,7 +25,7 @@
         </v-col>
       </v-row>
       <Headers :data="data" />
-      <InboundAdvanced :data="data" />
+      <InboundAdvanced :data="data" :field-hints="fieldHints" />
     </template>
     <template v-else>
       <v-row>
@@ -60,6 +60,7 @@ export default {
   props: {
     data: { type: Object, required: true },
     direction: { type: String, default: 'out' },
+    fieldHints: { type: Object, default: () => ({}) },
   },
   data() {
     return {}

@@ -8,7 +8,7 @@
         <v-text-field v-model="data.password" :label="$t('types.pw')" hide-details></v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4">
-        <Network :data="data" />
+        <Network :data="data" :field-hints="fieldHints" />
       </v-col>
       <v-col cols="12" sm="6" md="4">
         <v-select
@@ -31,6 +31,9 @@
           :label="$t('types.tuic.congControl')"
           :items="congestion_controls"
           v-model="data.congestion_control">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="congestion_control" />
+          </template>
         </v-select>
       </v-col>
       <v-col cols="12" sm="6" md="4">
@@ -59,16 +62,17 @@
         </v-text-field>
       </v-col>
     </v-row>
-    <InboundAdvanced :data="data" />
+    <InboundAdvanced :data="data" :field-hints="fieldHints" />
   </v-card>
 </template>
 
 <script lang="ts">
 import Network from '@/components/Network.vue'
 import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
+import FieldHint from '@/components/FieldHint.vue'
 
 export default {
-  props: ['direction', 'data'],
+  props: ['direction', 'data', 'fieldHints'],
   data() {
     return {
       congestion_controls: [
@@ -86,6 +90,6 @@ export default {
       set(newValue:number) { this.$props.data.heartbeat = newValue ? newValue + 's' : '' }
     }
   },
-  components: {Network, InboundAdvanced}
+  components: {Network, InboundAdvanced, FieldHint}
 }
 </script>

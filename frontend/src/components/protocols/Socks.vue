@@ -27,13 +27,13 @@
           </v-select>
         </v-col>
         <v-col cols="12" sm="6" md="4">
-          <Network :data="data" />
+          <Network :data="data" :field-hints="fieldHints" />
         </v-col>
         <v-col cols="12" sm="6" md="4">
           <UoT :data="data" />
         </v-col>
       </v-row>
-      <InboundAdvanced :data="data" />
+      <InboundAdvanced :data="data" :field-hints="fieldHints" />
     </template>
     <template v-else>
       <v-alert type="info" variant="tonal" density="compact">
@@ -52,6 +52,7 @@ export default {
   props: {
     data: { type: Object, required: true },
     direction: { type: String, default: 'out' },
+    fieldHints: { type: Object, default: () => ({}) },
   },
   data() {
     return {}

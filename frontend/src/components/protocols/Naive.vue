@@ -5,7 +5,7 @@
     <template v-if="direction === 'in'">
       <v-row>
         <v-col cols="12" sm="6" md="4">
-          <Network :data="data" />
+          <Network :data="data" :field-hints="fieldHints" />
         </v-col>
         <v-col cols="12" sm="6" md="4">
           <v-select
@@ -15,6 +15,9 @@
             v-model="data.quic_congestion_control"
             @click:clear="delete data.quic_congestion_control"
             clearable>
+            <template #append-inner>
+              <FieldHint :field-hints="fieldHints" field="quic_congestion_control" />
+            </template>
           </v-select>
         </v-col>
       </v-row>
@@ -85,7 +88,7 @@
       </v-row>
       <Headers :data="extra_headers" />
     </template>
-    <InboundAdvanced :data="data" />
+    <InboundAdvanced :data="data" :field-hints="fieldHints" />
   </v-card>
 </template>
 
@@ -94,9 +97,10 @@ import Network from '@/components/Network.vue'
 import Headers from '@/components/Headers.vue'
 import UoT from '@/components/UoT.vue'
 import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
+import FieldHint from '@/components/FieldHint.vue'
 
 export default {
-  props: ['data', 'direction'],
+  props: ['data', 'direction', 'fieldHints'],
   data() {
     return {
       inbCngs: [
@@ -139,6 +143,6 @@ export default {
       })
     },
   },
-  components: {Network, Headers, UoT, InboundAdvanced}
+  components: {Network, Headers, UoT, InboundAdvanced, FieldHint}
 }
 </script>

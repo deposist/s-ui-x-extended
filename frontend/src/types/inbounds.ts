@@ -1,3 +1,4 @@
+import RandomUtil from "@/plugins/randomUtil"
 import { iMultiplex } from "./multiplex"
 import { iTls } from "./tls"
 import { Dial } from "./dial"
@@ -366,7 +367,40 @@ const defaultValues: Record<InType, Inbound> = {
   'core-failover': { type: InTypes.CoreFailover, inbounds: [] } as unknown as CoreFailoverInbound,
 }
 
+function hasOwn(value: object | undefined, key: string): boolean {
+  return value != null && Object.hasOwn(value, key)
+}
+
+function randomShadowsocksPassword(method: string): string {
+  if (method.startsWith('2022')) {
+    return method == '2022-blake3-aes-128-gcm'
+      ? RandomUtil.randomShadowsocksPassword(16)
+      : RandomUtil.randomShadowsocksPassword(32)
+  }
+  return RandomUtil.randomSeq(10)
+}
+
+function applyCreateSecrets<T extends Inbound>(type: InType, inbound: Inbound, json?: Partial<T>): void {
+  const target = inbound as any
+  const source = json as Record<string, unknown> | undefined
+  switch (type) {
+    case InTypes.Shadowsocks:
+      if (!hasOwn(source, 'method')) target.method = '2022-blake3-aes-256-gcm'
+      if (!hasOwn(source, 'password') && typeof target.method === 'string' && target.method.length > 0 && target.method !== 'none') {
+        target.password = randomShadowsocksPassword(target.method)
+      }
+      break
+    case InTypes.ShadowTLS:
+      if (target.version === 2 && !hasOwn(source, 'password')) target.password = RandomUtil.randomSeq(16)
+      break
+    case InTypes.Sudoku:
+      if (!hasOwn(source, 'key')) target.key = RandomUtil.randomShadowsocksPassword(32)
+      break
+  }
+}
+
 export function createInbound<T extends Inbound>(type: InType,json?: Partial<T>): Inbound {
   const defaultObject: Inbound = { ...defaultValues[type] ?? {}, ...(json ?? {}) }
+  applyCreateSecrets(type, defaultObject, json)
   return defaultObject
 }

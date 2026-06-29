@@ -7,6 +7,18 @@ import { RECOMMENDED, dnsResolvers, dohPaths, sniFrontHosts, tlsAlpn } from '@/t
 import type { Inbound } from '@/types/inbounds'
 import type { RecommendationContext, RecommendationSpec } from '@/utils/recommendations'
 
+const anyTlsRecommendedPaddingScheme = [
+  'stop=8',
+  '0=30-30',
+  '1=100-400',
+  '2=400-500,c,500-1000,c,500-1000,c,500-1000,c,500-1000',
+  '3=9-9,500-1000',
+  '4=500-1000',
+  '5=500-1000',
+  '6=500-1000',
+  '7=500-1000',
+]
+
 function typeAvailable(context: RecommendationContext<any>): boolean {
   return !context.type || !context.unavailableTypes?.includes(context.type)
 }
@@ -79,6 +91,175 @@ export const vlessInboundFieldHintKeys: Record<string, string> = {
 }
 
 export const vlessInboundFieldHints = vlessInboundFieldHintKeys
+
+export const commonInboundFieldHintKeys: Record<string, string> = {
+  type: 'types.inbound.hint.type',
+  tag: 'types.inbound.hint.tag',
+  listen: 'types.inbound.hint.listen',
+  listen_port: 'types.inbound.hint.listen_port',
+  listen_detour: 'types.inbound.hint.listen_detour',
+  bind_interface: 'types.inbound.hint.bind_interface',
+  routing_mark: 'types.inbound.hint.routing_mark',
+  reuse_addr: 'types.inbound.hint.reuse_addr',
+  netns: 'types.inbound.hint.netns',
+  tcp_fast_open: 'types.inbound.hint.tcp_fast_open',
+  tcp_multi_path: 'types.inbound.hint.tcp_multi_path',
+  udp_fragment: 'types.inbound.hint.udp_fragment',
+  udp_timeout: 'types.inbound.hint.udp_timeout',
+  disable_tcp_keep_alive: 'types.inbound.hint.disable_tcp_keep_alive',
+  tcp_keep_alive: 'types.inbound.hint.tcp_keep_alive',
+  tcp_keep_alive_interval: 'types.inbound.hint.tcp_keep_alive_interval',
+  network: 'types.inbound.hint.network',
+  sniff: 'types.inbound.hint.sniff',
+  sniff_override_destination: 'types.inbound.hint.sniff_override_destination',
+  sniff_timeout: 'types.inbound.hint.sniff_timeout',
+  proxy_protocol: 'types.inbound.hint.proxy_protocol',
+  proxy_protocol_accept_no_header: 'types.inbound.hint.proxy_protocol_accept_no_header',
+  domain_strategy: 'types.inbound.hint.domain_strategy',
+  udp_disable_domain_unmapping: 'types.inbound.hint.udp_disable_domain_unmapping',
+  transport_enable: 'types.inbound.hint.transport_enable',
+  transport_type: 'types.inbound.hint.transport_type',
+  users: 'types.inbound.hint.users',
+  users_group: 'types.inbound.hint.users_group',
+  users_client: 'types.inbound.hint.users_client',
+  tls_id: 'types.inbound.hint.tls_id',
+  inbound_multiplex_enable: 'types.inbound.hint.inbound_multiplex_enable',
+  inbound_multiplex_padding: 'types.inbound.hint.inbound_multiplex_padding',
+  inbound_multiplex_brutal: 'types.inbound.hint.inbound_multiplex_brutal',
+  inbound_multiplex_brutal_up_mbps: 'types.inbound.hint.inbound_multiplex_brutal_up_mbps',
+  inbound_multiplex_brutal_down_mbps: 'types.inbound.hint.inbound_multiplex_brutal_down_mbps',
+  out_json_network: 'types.inbound.hint.out_json_network',
+  out_json_packet_encoding: 'types.inbound.hint.out_json_packet_encoding',
+  dial_options: 'types.inbound.hint.dial_options',
+  dial_tcp_fast_open: 'types.inbound.hint.dial_tcp_fast_open',
+  dial_tcp_multi_path: 'types.inbound.hint.dial_tcp_multi_path',
+  dial_udp_fragment: 'types.inbound.hint.dial_udp_fragment',
+  dial_connect_timeout: 'types.inbound.hint.dial_connect_timeout',
+  dial_disable_tcp_keep_alive: 'types.inbound.hint.dial_disable_tcp_keep_alive',
+  dial_tcp_keep_alive: 'types.inbound.hint.dial_tcp_keep_alive',
+  dial_tcp_keep_alive_interval: 'types.inbound.hint.dial_tcp_keep_alive_interval',
+  multi_domain: 'types.inbound.hint.multi_domain',
+  addr_server: 'types.inbound.hint.addr_server',
+  addr_server_port: 'types.inbound.hint.addr_server_port',
+  addr_remark: 'types.inbound.hint.addr_remark',
+  addr_tls: 'types.inbound.hint.addr_tls',
+  out_multiplex_enable: 'types.inbound.hint.out_multiplex_enable',
+  out_multiplex_protocol: 'types.inbound.hint.out_multiplex_protocol',
+  out_multiplex_max_connections: 'types.inbound.hint.out_multiplex_max_connections',
+  out_multiplex_min_streams: 'types.inbound.hint.out_multiplex_min_streams',
+  out_multiplex_max_streams: 'types.inbound.hint.out_multiplex_max_streams',
+  out_multiplex_padding: 'types.inbound.hint.out_multiplex_padding',
+  out_multiplex_brutal: 'types.inbound.hint.out_multiplex_brutal',
+  out_multiplex_brutal_up_mbps: 'types.inbound.hint.out_multiplex_brutal_up_mbps',
+  out_multiplex_brutal_down_mbps: 'types.inbound.hint.out_multiplex_brutal_down_mbps',
+  override_address: 'types.inbound.hint.override_address',
+  override_port: 'types.inbound.hint.override_port',
+  set_system_proxy: 'types.inbound.hint.set_system_proxy',
+  method: 'types.inbound.hint.method',
+  password: 'types.inbound.hint.password',
+  managed: 'types.inbound.hint.managed',
+  security: 'types.inbound.hint.security',
+  global_padding: 'types.inbound.hint.global_padding',
+  authenticated_length: 'types.inbound.hint.authenticated_length',
+  quic_congestion_control: 'types.inbound.hint.quic_congestion_control',
+  congestion_control: 'types.inbound.hint.congestion_control',
+  up_mbps: 'types.inbound.hint.up_mbps',
+  down_mbps: 'types.inbound.hint.down_mbps',
+  padding_scheme: 'types.inbound.hint.padding_scheme',
+  server_version: 'types.inbound.hint.server_version',
+  max_auth_tries: 'types.inbound.hint.max_auth_tries',
+  protocol_note: 'types.inbound.hint.protocol_note',
+}
+
+const inboundTypesWithoutPreset = new Set<string>([
+  InTypes.ShadowTLS,
+  InTypes.MTProxy,
+  InTypes.Tun,
+  InTypes.Bond,
+  InTypes.CoreFailover,
+  InTypes.Redirect,
+  InTypes.Mixed,
+  InTypes.SOCKS,
+  InTypes.HTTP,
+])
+
+export function inboundFieldHintsForType(type: string): Record<string, string> {
+  if (type === InTypes.VLESS) return vlessInboundFieldHints
+  return commonInboundFieldHintKeys
+}
+
+export function hasInboundRecommendedPreset(type: string): boolean {
+  return !inboundTypesWithoutPreset.has(type) && type !== InTypes.VLESS
+}
+
+function applyRecommendedListen(target: Record<string, any>): void {
+  target.listen = target.listen || '::'
+}
+
+function applyRecommendedAdvanced(target: Record<string, any>): void {
+  target.sniff = true
+  target.sniff_override_destination = true
+  target.sniff_timeout = '300ms'
+  delete target.proxy_protocol
+  delete target.proxy_protocol_accept_no_header
+  delete target.domain_strategy
+  delete target.udp_disable_domain_unmapping
+}
+
+export function applyInboundRecommendedValues(inbound: Inbound): void {
+  const target = inbound as Record<string, any>
+  if (target.type === InTypes.VLESS) {
+    applyVlessInboundRecommendedValues(inbound)
+    return
+  }
+
+  if (!hasInboundRecommendedPreset(target.type)) return
+
+  applyRecommendedListen(target)
+  applyRecommendedAdvanced(target)
+
+  switch (target.type) {
+    case InTypes.VMess:
+      target.out_json = target.out_json && typeof target.out_json === 'object' ? target.out_json : {}
+      target.out_json.security = 'auto'
+      target.out_json.packet_encoding = RECOMMENDED.vlessPacketEncoding
+      target.out_json.global_padding = true
+      target.out_json.authenticated_length = true
+      break
+    case InTypes.Naive:
+      target.quic_congestion_control = 'bbr'
+      break
+    case InTypes.TUIC:
+      target.congestion_control = 'bbr'
+      break
+    case InTypes.Hysteria:
+    case InTypes.Hysteria2:
+      target.up_mbps = 100
+      target.down_mbps = 100
+      break
+    case InTypes.AnyTls:
+      target.padding_scheme = [...anyTlsRecommendedPaddingScheme]
+      break
+    case InTypes.Mieru:
+      target.transport = 'TCP'
+      break
+    case InTypes.Sudoku:
+      target.aead_method = RECOMMENDED.sudokuAead
+      target.padding_min = RECOMMENDED.sudokuPaddingMin
+      target.padding_max = RECOMMENDED.sudokuPaddingMax
+      target.handshake_timeout = RECOMMENDED.sudokuHandshakeTimeout
+      target.enable_pure_downlink = true
+      break
+    case InTypes.TrustTunnel:
+      target.network = ['tcp', 'udp']
+      target.congestion_controller = RECOMMENDED.trustTunnelCongestion
+      break
+    case InTypes.SSH:
+      target.server_version = 'SSH-2.0-OpenSSH_9.7'
+      target.max_auth_tries = 3
+      break
+  }
+}
 
 export function applyVlessInboundRecommendedValues(inbound: Inbound): void {
   const target = inbound as Record<string, any>

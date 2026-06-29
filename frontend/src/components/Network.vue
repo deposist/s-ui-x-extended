@@ -5,7 +5,7 @@
     :items="networks"
     v-model="Network">
     <template #append-inner>
-      <SettingInfo v-if="hint" :text="hint" />
+      <SettingInfo v-if="resolvedHint" :text="resolvedHint" />
     </template>
   </v-select>
 </template>
@@ -17,6 +17,8 @@ export default {
   props: {
     data: { type: Object, required: true },
     hint: { type: String, default: '' },
+    fieldHints: { type: Object, default: () => ({}) },
+    field: { type: String, default: 'network' },
   },
   data() {
     return {
@@ -28,6 +30,13 @@ export default {
     }
   },
   computed: {
+    resolvedHint(): string {
+      if (this.$props.hint) return this.$props.hint
+      const hintKey = (this.$props.fieldHints as Record<string, string>)[this.$props.field]
+      if (!hintKey) return ''
+      const translated = this.$t(hintKey)
+      return translated === hintKey ? '' : translated
+    },
     Network: {
       get():string { return this.$props.data.network?? '' },
       set(v:string) { this.$props.data.network = v != '' ? v : undefined }

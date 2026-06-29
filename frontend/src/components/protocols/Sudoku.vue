@@ -86,7 +86,7 @@
         </v-row>
       </v-card-text>
     </v-card>
-    <InboundAdvanced :data="data" />
+    <InboundAdvanced :data="data" :field-hints="fieldHints" />
   </v-card>
 </template>
 
@@ -98,6 +98,7 @@ export default {
   props: {
     direction: { type: String },
     data: { type: Object, required: true },
+    fieldHints: { type: Object, default: () => ({}) },
   },
   components: {InboundAdvanced},
   data() {
