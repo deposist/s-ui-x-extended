@@ -7,6 +7,9 @@
         hide-details
         required
         v-model="data.listen">
+          <template #append-inner>
+            <SettingInfo v-if="hint('listen')" :text="hint('listen')" />
+          </template>
         </v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4">
@@ -17,7 +20,11 @@
         min="1"
         max="65535"
         required
-        v-model.number="data.listen_port"></v-text-field>
+        v-model.number="data.listen_port">
+          <template #append-inner>
+            <SettingInfo v-if="hint('listen_port')" :text="hint('listen_port')" />
+          </template>
+        </v-text-field>
       </v-col>
     </v-row>
     <v-row>
@@ -27,32 +34,59 @@
         hide-details
         :items="inTags"
         v-model="data.detour">
+          <template #append-inner>
+            <SettingInfo v-if="hint('listen_detour')" :text="hint('listen_detour')" />
+          </template>
         </v-select>
       </v-col>
       <v-col cols="12" sm="6" md="4" v-if="optionBind">
-        <v-text-field v-model="data.bind_interface" hide-details :label="$t('dial.bindIf')"></v-text-field>
+        <v-text-field v-model="data.bind_interface" hide-details :label="$t('dial.bindIf')">
+          <template #append-inner>
+            <SettingInfo v-if="hint('bind_interface')" :text="hint('bind_interface')" />
+          </template>
+        </v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4" v-if="optionRoutingMark">
-        <v-text-field v-model="routingMark" hide-details :label="$t('singbox.linuxRoutingMark')" placeholder="0x2024"></v-text-field>
+        <v-text-field v-model="routingMark" hide-details :label="$t('singbox.linuxRoutingMark')" placeholder="0x2024">
+          <template #append-inner>
+            <SettingInfo v-if="hint('routing_mark')" :text="hint('routing_mark')" />
+          </template>
+        </v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4" v-if="optionReuseAddr">
-        <v-switch v-model="data.reuse_addr" color="primary" :label="$t('dial.reuseAddr')" hide-details></v-switch>
+        <div class="d-flex align-center ga-1">
+          <v-switch v-model="data.reuse_addr" color="primary" :label="$t('dial.reuseAddr')" hide-details></v-switch>
+          <SettingInfo v-if="hint('reuse_addr')" :text="hint('reuse_addr')" />
+        </div>
       </v-col>
       <v-col cols="12" sm="6" md="4" v-if="optionNetns">
-        <v-text-field v-model="data.netns" hide-details :label="$t('singbox.networkNamespace')"></v-text-field>
+        <v-text-field v-model="data.netns" hide-details :label="$t('singbox.networkNamespace')">
+          <template #append-inner>
+            <SettingInfo v-if="hint('netns')" :text="hint('netns')" />
+          </template>
+        </v-text-field>
       </v-col>
     </v-row>
     <v-row v-if="optionTCP">
       <v-col cols="12" sm="6" md="4">
-        <v-switch v-model="data.tcp_fast_open" color="primary" label="TCP Fast Open" hide-details></v-switch>
+        <div class="d-flex align-center ga-1">
+          <v-switch v-model="data.tcp_fast_open" color="primary" label="TCP Fast Open" hide-details></v-switch>
+          <SettingInfo v-if="hint('tcp_fast_open')" :text="hint('tcp_fast_open')" />
+        </div>
       </v-col>
       <v-col cols="12" sm="6" md="4">
-        <v-switch v-model="data.tcp_multi_path" color="primary" label="TCP Multi Path" hide-details></v-switch>
+        <div class="d-flex align-center ga-1">
+          <v-switch v-model="data.tcp_multi_path" color="primary" label="TCP Multi Path" hide-details></v-switch>
+          <SettingInfo v-if="hint('tcp_multi_path')" :text="hint('tcp_multi_path')" />
+        </div>
       </v-col>
     </v-row>
     <v-row v-if="optionUDP">
       <v-col cols="12" sm="6" md="4">
-        <v-switch v-model="data.udp_fragment" color="primary" label="UDP Fragment" hide-details></v-switch>
+        <div class="d-flex align-center ga-1">
+          <v-switch v-model="data.udp_fragment" color="primary" label="UDP Fragment" hide-details></v-switch>
+          <SettingInfo v-if="hint('udp_fragment')" :text="hint('udp_fragment')" />
+        </div>
       </v-col>
       <v-col cols="12" sm="6" md="4">
         <v-text-field
@@ -61,18 +95,33 @@
         type="number"
         min="1"
         :suffix="$t('date.m')"
-        v-model.number="udpTimeout"></v-text-field>
+        v-model.number="udpTimeout">
+          <template #append-inner>
+            <SettingInfo v-if="hint('udp_timeout')" :text="hint('udp_timeout')" />
+          </template>
+        </v-text-field>
       </v-col>
     </v-row>
     <v-row v-if="optionTcpKeepAlive">
       <v-col cols="12" sm="6" md="4">
-        <v-switch v-model="data.disable_tcp_keep_alive" color="primary" :label="$t('listen.disableTcpKeepAlive')" hide-details></v-switch>
+        <div class="d-flex align-center ga-1">
+          <v-switch v-model="data.disable_tcp_keep_alive" color="primary" :label="$t('listen.disableTcpKeepAlive')" hide-details></v-switch>
+          <SettingInfo v-if="hint('disable_tcp_keep_alive')" :text="hint('disable_tcp_keep_alive')" />
+        </div>
       </v-col>
       <v-col cols="12" sm="6" md="4">
-        <v-text-field v-model="data.tcp_keep_alive" :label="$t('listen.tcpKeepAlive')" hide-details></v-text-field>
+        <v-text-field v-model="data.tcp_keep_alive" :label="$t('listen.tcpKeepAlive')" hide-details>
+          <template #append-inner>
+            <SettingInfo v-if="hint('tcp_keep_alive')" :text="hint('tcp_keep_alive')" />
+          </template>
+        </v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4">
-        <v-text-field v-model="data.tcp_keep_alive_interval" :label="$t('listen.tcpKeepAliveInterval')" hide-details></v-text-field>
+        <v-text-field v-model="data.tcp_keep_alive_interval" :label="$t('listen.tcpKeepAliveInterval')" hide-details>
+          <template #append-inner>
+            <SettingInfo v-if="hint('tcp_keep_alive_interval')" :text="hint('tcp_keep_alive_interval')" />
+          </template>
+        </v-text-field>
       </v-col>
     </v-row>
     <v-card-actions class="pt-0">
@@ -84,28 +133,52 @@
         <v-card>
           <v-list>
             <v-list-item>
-              <v-switch v-model="optionDetour" color="primary" :label="$t('listen.detour')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="optionDetour" color="primary" :label="$t('listen.detour')" hide-details></v-switch>
+                <SettingInfo v-if="hint('listen_detour')" :text="hint('listen_detour')" />
+              </div>
             </v-list-item>
             <v-list-item>
-              <v-switch v-model="optionBind" color="primary" :label="$t('dial.bindIf')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="optionBind" color="primary" :label="$t('dial.bindIf')" hide-details></v-switch>
+                <SettingInfo v-if="hint('bind_interface')" :text="hint('bind_interface')" />
+              </div>
             </v-list-item>
             <v-list-item>
-              <v-switch v-model="optionRoutingMark" color="primary" :label="$t('singbox.routingMark')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="optionRoutingMark" color="primary" :label="$t('singbox.routingMark')" hide-details></v-switch>
+                <SettingInfo v-if="hint('routing_mark')" :text="hint('routing_mark')" />
+              </div>
             </v-list-item>
             <v-list-item>
-              <v-switch v-model="optionReuseAddr" color="primary" :label="$t('dial.reuseAddr')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="optionReuseAddr" color="primary" :label="$t('dial.reuseAddr')" hide-details></v-switch>
+                <SettingInfo v-if="hint('reuse_addr')" :text="hint('reuse_addr')" />
+              </div>
             </v-list-item>
             <v-list-item>
-              <v-switch v-model="optionNetns" color="primary" :label="$t('singbox.networkNamespace')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="optionNetns" color="primary" :label="$t('singbox.networkNamespace')" hide-details></v-switch>
+                <SettingInfo v-if="hint('netns')" :text="hint('netns')" />
+              </div>
             </v-list-item>
             <v-list-item>
-              <v-switch v-model="optionTCP" color="primary" :label="$t('listen.tcpOptions')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="optionTCP" color="primary" :label="$t('listen.tcpOptions')" hide-details></v-switch>
+                <SettingInfo v-if="hint('tcp_fast_open') || hint('tcp_multi_path')" :text="[hint('tcp_fast_open'), hint('tcp_multi_path')].filter(Boolean).join('\n')" />
+              </div>
             </v-list-item>
             <v-list-item>
-              <v-switch v-model="optionUDP" color="primary" :label="$t('listen.udpOptions')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="optionUDP" color="primary" :label="$t('listen.udpOptions')" hide-details></v-switch>
+                <SettingInfo v-if="hint('udp_fragment') || hint('udp_timeout')" :text="[hint('udp_fragment'), hint('udp_timeout')].filter(Boolean).join('\n')" />
+              </div>
             </v-list-item>
             <v-list-item>
-              <v-switch v-model="optionTcpKeepAlive" color="primary" :label="$t('listen.tcpKeepAlive')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="optionTcpKeepAlive" color="primary" :label="$t('listen.tcpKeepAlive')" hide-details></v-switch>
+                <SettingInfo v-if="hint('disable_tcp_keep_alive') || hint('tcp_keep_alive') || hint('tcp_keep_alive_interval')" :text="[hint('disable_tcp_keep_alive'), hint('tcp_keep_alive'), hint('tcp_keep_alive_interval')].filter(Boolean).join('\n')" />
+              </div>
             </v-list-item>
           </v-list>
         </v-card>
@@ -115,12 +188,26 @@
 </template>
 
 <script lang="ts">
+import SettingInfo from '@/components/SettingInfo.vue'
+
 export default {
-  props: ['data', 'inTags'],
+  props: {
+    data: { type: Object, required: true },
+    inTags: { type: Array, default: () => [] },
+    fieldHints: { type: Object, default: () => ({}) },
+  },
   data() {
     return {
       menu: false
     }
+  },
+  methods: {
+    hint(key: string): string {
+      const hintKey = (this.$props.fieldHints as Record<string, string>)[key]
+      if (!hintKey) return ''
+      const translated = this.$t(hintKey)
+      return translated === hintKey ? '' : translated
+    },
   },
   computed: {
     udpTimeout: {
@@ -197,6 +284,7 @@ export default {
         }
       }
     }
-  }
+  },
+  components: { SettingInfo },
 }
 </script>

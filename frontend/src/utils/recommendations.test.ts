@@ -1,7 +1,8 @@
 import { reactive } from 'vue'
 import { describe, expect, it } from 'vitest'
+import { InTypes } from '@/types/inbounds'
 import { OutTypes } from '@/types/outbounds'
-import { outboundRecommendationSpecs } from './defaultRecommendations'
+import { applyVlessInboundRecommendedValues, outboundRecommendationSpecs } from './defaultRecommendations'
 import {
   applyRecommendation,
   applyRecommendations,
@@ -117,6 +118,43 @@ describe('recommendation helpers', () => {
     const resolved = resolveRecommendations(specs, { mode: 'edit', model, type: 'direct' })
 
     expect(resolved.map((item) => item.label)).toEqual(['Visible'])
+  })
+
+  it('applies the explicit VLESS inbound preset without choosing TLS or transport', () => {
+    const inbound: any = {
+      type: InTypes.VLESS,
+      listen_port: 443,
+      listen: '',
+      tls_id: 0,
+      decryption: '',
+      sniff: false,
+      sniff_override_destination: false,
+      proxy_protocol: true,
+      proxy_protocol_accept_no_header: true,
+      domain_strategy: 'prefer_ipv4',
+      udp_disable_domain_unmapping: true,
+      transport: { type: 'ws' },
+      multiplex: { enabled: true },
+      out_json: { multiplex: { enabled: true } },
+    }
+
+    applyVlessInboundRecommendedValues(inbound)
+
+    expect(inbound.listen).toBe('::')
+    expect(inbound.listen_port).toBe(443)
+    expect(inbound.tls_id).toBe(0)
+    expect(inbound.decryption).toBe('none')
+    expect(inbound.sniff).toBe(true)
+    expect(inbound.sniff_override_destination).toBe(true)
+    expect(inbound.sniff_timeout).toBe('300ms')
+    expect(inbound.transport).toEqual({})
+    expect(inbound.out_json.packet_encoding).toBe('xudp')
+    expect(inbound.proxy_protocol).toBeUndefined()
+    expect(inbound.proxy_protocol_accept_no_header).toBeUndefined()
+    expect(inbound.domain_strategy).toBeUndefined()
+    expect(inbound.udp_disable_domain_unmapping).toBeUndefined()
+    expect(inbound.multiplex).toBeUndefined()
+    expect(inbound.out_json.multiplex).toBeUndefined()
   })
 
   it('filters default recommendation specs by unavailable protocol capabilities', () => {

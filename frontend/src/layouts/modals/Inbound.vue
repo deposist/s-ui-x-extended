@@ -22,19 +22,19 @@
               :item-props="itemProps"
               v-model="inbound.type"
               @update:modelValue="changeType">
+                <template #append-inner>
+                  <SettingInfo v-if="inbound.type == inTypes.VLESS && vlessHint('type')" :text="vlessHint('type')" />
+                </template>
               </v-select>
             </v-col>
             <v-col cols="12" sm="6" md="4">
-              <v-text-field v-model="inbound.tag" :label="$t('objects.tag')" hide-details></v-text-field>
+              <v-text-field v-model="inbound.tag" :label="$t('objects.tag')" hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="inbound.type == inTypes.VLESS && vlessHint('tag')" :text="vlessHint('tag')" />
+                </template>
+              </v-text-field>
             </v-col>
           </v-row>
-          <RecommendedValues
-            :model="inbound"
-            :specs="recommendationSpecs"
-            :context="recommendationContext"
-            class="mb-3"
-            @apply="applyRecommended"
-          />
           <v-card
             v-if="[inTypes.HTTP, inTypes.Mixed].includes(inbound.type)"
             border
@@ -76,7 +76,7 @@
           </v-tabs>
           <v-window v-model="side" style="margin-top: 10px;">
             <v-window-item value="s">
-              <Listen :data="inbound" :inTags="inTags" v-if="inbound.type != inTypes.Tun" />
+              <Listen :data="inbound" :inTags="inTags" :field-hints="inbound.type == inTypes.VLESS ? vlessFieldHints : {}" v-if="inbound.type != inTypes.Tun" />
               <Direct v-if="inbound.type == inTypes.Direct" :data="inbound" />
               <Shadowsocks v-if="inbound.type == inTypes.Shadowsocks" direction="in" :data="inbound" />
               <Hysteria v-if="inbound.type == inTypes.Hysteria" direction="in" :data="inbound" />
@@ -87,7 +87,7 @@
               <Tuic v-if="inbound.type == inTypes.TUIC" direction="in" :data="inbound" />
               <Tun v-if="inbound.type == inTypes.Tun" :data="inbound" />
               <AnyTls v-if="inbound.type == inTypes.AnyTls" :data="inbound" direction="in" />
-              <VlessInbound v-if="inbound.type == inTypes.VLESS" :data="inbound" />
+              <VlessInbound v-if="inbound.type == inTypes.VLESS" :data="inbound" :mode="id == 0 ? 'create' : 'edit'" :field-hints="vlessFieldHints" />
               <Mieru v-if="inbound.type == inTypes.Mieru" direction="in" :data="inbound" />
               <Sudoku v-if="inbound.type == inTypes.Sudoku" direction="in" :data="inbound" />
               <TrustTunnel v-if="inbound.type == inTypes.TrustTunnel" direction="in" :data="inbound" />
@@ -96,24 +96,25 @@
               <BondInbound v-if="inbound.type == inTypes.Bond" :data="inbound" :inTags="inTags" />
               <CoreFailoverInbound v-if="inbound.type == inTypes.CoreFailover" :data="inbound" :inTags="inTags" />
               <TProxy v-if="inbound.type == inTypes.TProxy" :inbound="inbound" />
-              <Transport v-if="Object.hasOwn(inbound,'transport')" :data="inbound" />
-              <Users v-if="hasUser" :clients="clients" :data="initUsers" />
-              <InTls v-if="HasTls.includes(inbound.type)"  :inbound="inbound" :tlsConfigs="tlsConfigs" :tls_id="inbound.tls_id" />
-              <Multiplex v-if="MuxAvailable.includes(inbound.type)" direction="in" :data="inbound" />
+              <Transport v-if="Object.hasOwn(inbound,'transport')" :data="inbound" :field-hints="inbound.type == inTypes.VLESS ? vlessFieldHints : {}" />
+              <Users v-if="hasUser" :clients="clients" :data="initUsers" :field-hints="inbound.type == inTypes.VLESS ? vlessFieldHints : {}" />
+              <InTls v-if="HasTls.includes(inbound.type)"  :inbound="inbound" :tlsConfigs="tlsConfigs" :tls_id="inbound.tls_id" :field-hints="inbound.type == inTypes.VLESS ? vlessFieldHints : {}" :allowed-template-kinds="allowedTlsTemplateKinds" />
+              <Multiplex v-if="MuxAvailable.includes(inbound.type)" direction="in" :data="inbound" :field-hints="inbound.type == inTypes.VLESS ? vlessFieldHints : {}" />
             </v-window-item>
             <v-window-item value="c">
-              <OutJsonVue :inData="inbound" :type="inbound.type" />
-              <Multiplex v-if="Object.hasOwn(inbound,'multiplex')" direction="out" :data="inbound.out_json" />
-              <Dial v-if="inbound.out_json" :dial="inbound.out_json" mode="client" />
+              <OutJsonVue :inData="inbound" :type="inbound.type" :field-hints="inbound.type == inTypes.VLESS ? vlessFieldHints : {}" />
+              <Multiplex v-if="Object.hasOwn(inbound,'multiplex')" direction="out" :data="inbound.out_json" :field-hints="inbound.type == inTypes.VLESS ? vlessFieldHints : {}" />
+              <Dial v-if="inbound.out_json" :dial="inbound.out_json" mode="client" :field-hints="inbound.type == inTypes.VLESS ? vlessFieldHints : {}" />
               <v-card>
                 <v-card-text>
-                  <v-card-subtitle>{{ $t('in.multiDomain') }}
+                  <v-card-subtitle class="d-flex align-center ga-1">{{ $t('in.multiDomain') }}
+                    <SettingInfo v-if="inbound.type == inTypes.VLESS && vlessHint('multi_domain')" :text="vlessHint('multi_domain')" />
                     <v-chip color="primary" density="compact" variant="elevated" @click="add_addr"><v-icon icon="mdi-plus" /></v-chip>
                   </v-card-subtitle>
                   <template v-for="addr,index in inbound.addrs">
                     {{ $t('in.addr') }} #{{ (index+1) }} <v-icon icon="mdi-delete" color="error" @click="inbound.addrs?.splice(index,1)" />
                     <v-divider></v-divider>
-                    <AddrVue :addr="addr" :hasTls="HasTls.includes(inbound.type)" />
+                    <AddrVue :addr="addr" :hasTls="HasTls.includes(inbound.type)" :field-hints="inbound.type == inTypes.VLESS ? vlessFieldHints : {}" />
                   </template>
                 </v-card-text>
               </v-card>
@@ -179,9 +180,9 @@ import AddrVue from '@/components/Addr.vue'
 import OutJsonVue from '@/components/OutJson.vue'
 import Data from '@/store/modules/data'
 import { push } from 'notivue'
-import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
-import { applyRecommendation } from '@/utils/recommendations'
-import { inboundRecommendationSpecs } from '@/utils/defaultRecommendations'
+import SettingInfo from '@/components/SettingInfo.vue'
+import { vlessInboundFieldHints } from '@/utils/defaultRecommendations'
+import { inboundAllowedTlsTemplateKinds, isInboundTlsTemplateCompatible } from '@/utils/tlsCompatibility'
 export default {
   props: ['visible', 'id', 'inTags', 'tlsConfigs'],
   emits: ['close'],
@@ -207,8 +208,8 @@ export default {
       // (from /api/capabilities). Such types are shown disabled in the picker.
       unavailableTypes: <string[]>[],
       requiredInitialUsers: [InTypes.Mieru, InTypes.TrustTunnel, InTypes.SSH, InTypes.MTProxy],
-      recommendationSpecs: inboundRecommendationSpecs,
       editHadOutJson: true,
+      vlessFieldHints: vlessInboundFieldHints,
     }
   },
   async created() {
@@ -258,8 +259,11 @@ export default {
         values: [],
       }
     },
-    applyRecommended(spec: any) {
-      applyRecommendation(this.inbound, spec, this.recommendationContext, { force: true })
+    vlessHint(key: string): string {
+      const hintKey = (this.vlessFieldHints as Record<string, string>)[key]
+      if (!hintKey) return ''
+      const translated = this.$t(hintKey)
+      return translated === hintKey ? '' : translated
     },
     changeType() {
       if (!this.inbound.listen_port) this.inbound.listen_port = RandomUtil.randomIntRange(10000, 60000)
@@ -346,6 +350,7 @@ export default {
       if (this.inbound.tag == "") return false
       if (this.inbound.listen_port > 65535 || this.inbound.listen_port < 1) return false
       if (this.OnlyTLS.includes(this.inbound.type) && this.inbound.tls_id == 0) return false
+      if (!this.selectedTlsTemplateCompatible) return false
       return true
     },
     clients() {
@@ -370,8 +375,13 @@ export default {
       if ((<any>this.inbound).managed) return false
       return true
     },
-    recommendationContext() {
-      return { model: this.inbound, mode: this.$props.id > 0 ? 'edit' : 'create', type: this.inbound.type, unavailableTypes: this.unavailableTypes }
+    allowedTlsTemplateKinds() {
+      return inboundAllowedTlsTemplateKinds(this.inbound.type)
+    },
+    selectedTlsTemplateCompatible(): boolean {
+      if (!this.inbound?.tls_id) return true
+      const selected = (this.$props.tlsConfigs ?? []).find((tlsConfig: any) => tlsConfig.id === this.inbound.tls_id)
+      return selected == null || isInboundTlsTemplateCompatible(this.inbound.type, selected)
     },
     setSystemProxy: {
       get(): boolean {
@@ -398,7 +408,7 @@ export default {
     Users, Hysteria, ShadowTls, TProxy, Multiplex, Tuic, Tun,
     Trojan, AnyTls, Transport, AddrVue, OutJsonVue, Dial, DomainResolver,
     Mieru, Sudoku, TrustTunnel, SshInbound, MTProxy, BondInbound, CoreFailoverInbound, VlessInbound,
-    RecommendedValues
+    SettingInfo
   }
 }
 </script>

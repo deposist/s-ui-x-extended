@@ -2,7 +2,10 @@
   <v-card :subtitle="$t('objects.multiplex')">
     <v-row>
       <v-col cols="12" sm="6" md="4">
-        <v-switch color="primary" :label="$t('mux.enable')" v-model="muxEnable" hide-details></v-switch>
+        <div class="d-flex align-center ga-1">
+          <v-switch color="primary" :label="$t('mux.enable')" v-model="muxEnable" hide-details></v-switch>
+          <SettingInfo v-if="hint('enable')" :text="hint('enable')" />
+        </div>
       </v-col>
       <template v-if="muxEnable">
         <template v-if="direction=='out'">
@@ -14,6 +17,9 @@
               clearable
               @click:clear="delete mux?.protocol"
               v-model="mux.protocol">
+              <template #append-inner>
+                <SettingInfo v-if="hint('protocol')" :text="hint('protocol')" />
+              </template>
             </v-select>
           </v-col>
           <v-col cols="12" sm="6" md="4">
@@ -23,6 +29,9 @@
             type="number"
             min=0
             v-model.number="max_connections">
+              <template #append-inner>
+                <SettingInfo v-if="hint('max_connections')" :text="hint('max_connections')" />
+              </template>
             </v-text-field>
           </v-col>
           <v-col cols="12" sm="6" md="4">
@@ -32,6 +41,9 @@
             type="number"
             min=0
             v-model.number="min_streams">
+              <template #append-inner>
+                <SettingInfo v-if="hint('min_streams')" :text="hint('min_streams')" />
+              </template>
             </v-text-field>
           </v-col>
           <v-col cols="12" sm="6" md="4">
@@ -41,14 +53,23 @@
             type="number"
             :min="min_streams"
             v-model.number="max_streams">
+              <template #append-inner>
+                <SettingInfo v-if="hint('max_streams')" :text="hint('max_streams')" />
+              </template>
             </v-text-field>
           </v-col>
         </template>
         <v-col cols="12" sm="6" md="4">
-          <v-switch color="primary" :label="$t('mux.padding')" v-model="padding" hide-details></v-switch>
+          <div class="d-flex align-center ga-1">
+            <v-switch color="primary" :label="$t('mux.padding')" v-model="padding" hide-details></v-switch>
+            <SettingInfo v-if="hint('padding')" :text="hint('padding')" />
+          </div>
         </v-col>
         <v-col cols="12" sm="6" md="4">
-          <v-switch color="primary" :label="$t('mux.enableBrutal')" v-model="burtalEnable" hide-details></v-switch>
+          <div class="d-flex align-center ga-1">
+            <v-switch color="primary" :label="$t('mux.enableBrutal')" v-model="burtalEnable" hide-details></v-switch>
+            <SettingInfo v-if="hint('brutal')" :text="hint('brutal')" />
+          </div>
         </v-col>
       </template>
     </v-row>
@@ -60,6 +81,9 @@
         type="number"
         :suffix="$t('stats.Mbps')"
         v-model.number="up_mbps">
+          <template #append-inner>
+            <SettingInfo v-if="hint('brutal_up_mbps')" :text="hint('brutal_up_mbps')" />
+          </template>
         </v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4">
@@ -70,6 +94,9 @@
         :suffix="$t('stats.Mbps')"
         min="0"
         v-model.number="down_mbps">
+          <template #append-inner>
+            <SettingInfo v-if="hint('brutal_down_mbps')" :text="hint('brutal_down_mbps')" />
+          </template>
         </v-text-field>
       </v-col>
     </v-row>
@@ -78,10 +105,24 @@
 
 <script lang="ts">
 import { oMultiplex } from '@/types/multiplex'
+import SettingInfo from '@/components/SettingInfo.vue'
 export default {
-  props: ['data', 'direction'],
+  props: {
+    data: { type: Object, required: true },
+    direction: { type: String, default: 'out' },
+    fieldHints: { type: Object, default: () => ({}) },
+  },
   data() {
     return {}
+  },
+  methods: {
+    hint(field: string): string {
+      const prefix = this.$props.direction == 'in' ? 'inbound_multiplex' : 'out_multiplex'
+      const hintKey = (this.$props.fieldHints as Record<string, string>)[`${prefix}_${field}`]
+      if (!hintKey) return ''
+      const translated = this.$t(hintKey)
+      return translated === hintKey ? '' : translated
+    },
   },
   computed: {
     mux(): oMultiplex {
@@ -113,7 +154,7 @@ export default {
     },
     down_mbps: {
       get() { return this.mux?.brutal && this.mux.brutal.down_mbps ? this.mux.brutal.down_mbps : 0 },
-      set(newValue:any) { 
+      set(newValue:any) {
         if (this.mux.brutal){
           this.mux.brutal.down_mbps = newValue.length != 0 ? newValue : 0
         }
@@ -127,6 +168,7 @@ export default {
         }
       }
     },
-  }
+  },
+  components: { SettingInfo }
 }
 </script>

@@ -10,7 +10,7 @@
         </v-select>
       </v-col>
       <v-col cols="12" sm="6" md="4" v-if="needNetwork">
-        <Network :data="inData.out_json" />
+        <Network :data="inData.out_json" :hint="hint('out_json_network')" />
       </v-col>
       <v-col cols="12" sm="6" md="4" v-if="needUot">
         <UoT :data="inData.out_json" />
@@ -28,6 +28,9 @@
           :label="$t('types.vless.udpEnc')"
           :items="['none','packetaddr','xudp']"
           v-model="packet_encoding">
+          <template #append-inner>
+            <SettingInfo v-if="hint('out_json_packet_encoding')" :text="hint('out_json_packet_encoding')" />
+          </template>
         </v-select>
       </v-col>
       <template v-if="type == inTypes.VMess">
@@ -101,9 +104,14 @@ import UoT from './UoT.vue'
 import Headers from './Headers.vue'
 import AnyTls from './protocols/AnyTls.vue'
 import Naive from './protocols/Naive.vue'
+import SettingInfo from '@/components/SettingInfo.vue'
 
 export default {
-  props: ['inData', 'type'],
+  props: {
+    inData: { type: Object, required: true },
+    type: { type: String, required: true },
+    fieldHints: { type: Object, default: () => ({}) },
+  },
   data() {
     return {
       inTypes: InTypes,
@@ -131,6 +139,14 @@ export default {
       ],
     }
   },
+  methods: {
+    hint(key: string): string {
+      const hintKey = (this.$props.fieldHints as Record<string, string>)[key]
+      if (!hintKey) return ''
+      const translated = this.$t(hintKey)
+      return translated === hintKey ? '' : translated
+    },
+  },
   computed: {
     needNetwork():boolean { return this.haveNetwork.includes(this.$props.type) },
     needUot():boolean { return this.havUoT.includes(this.$props.type) },
@@ -147,6 +163,6 @@ export default {
       set(v:number) { this.$props.inData.out_json.hop_interval = v>0 ? v + 's' : undefined }
     },
   },
-  components: { Network, UoT, Headers, AnyTls, Naive }
+  components: { Network, UoT, Headers, AnyTls, Naive, SettingInfo }
 }
 </script>

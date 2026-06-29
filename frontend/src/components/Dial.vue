@@ -59,26 +59,46 @@
     </v-row>
     <v-row v-if="optionTCP">
       <v-col cols="12" sm="6" md="4">
-        <v-switch v-model="dial.tcp_fast_open" color="primary" label="TCP Fast Open" hide-details></v-switch>
+        <div class="d-flex align-center ga-1">
+          <v-switch v-model="dial.tcp_fast_open" color="primary" label="TCP Fast Open" hide-details></v-switch>
+          <SettingInfo v-if="hint('dial_tcp_fast_open')" :text="hint('dial_tcp_fast_open')" />
+        </div>
       </v-col>
       <v-col cols="12" sm="6" md="4">
-        <v-switch v-model="dial.tcp_multi_path" color="primary" label="TCP Multi Path" hide-details></v-switch>
+        <div class="d-flex align-center ga-1">
+          <v-switch v-model="dial.tcp_multi_path" color="primary" label="TCP Multi Path" hide-details></v-switch>
+          <SettingInfo v-if="hint('dial_tcp_multi_path')" :text="hint('dial_tcp_multi_path')" />
+        </div>
       </v-col>
     </v-row>
     <v-row v-if="optionTcpKeepAlive">
       <v-col cols="12" sm="6" md="4">
-        <v-switch v-model="dial.disable_tcp_keep_alive" color="primary" :label="$t('dial.disableTcpKeepAlive')" hide-details></v-switch>
+        <div class="d-flex align-center ga-1">
+          <v-switch v-model="dial.disable_tcp_keep_alive" color="primary" :label="$t('dial.disableTcpKeepAlive')" hide-details></v-switch>
+          <SettingInfo v-if="hint('dial_disable_tcp_keep_alive')" :text="hint('dial_disable_tcp_keep_alive')" />
+        </div>
       </v-col>
       <v-col cols="12" sm="6" md="4">
-        <v-text-field v-model="dial.tcp_keep_alive" :label="$t('dial.tcpKeepAlive')" hide-details></v-text-field>
+        <v-text-field v-model="dial.tcp_keep_alive" :label="$t('dial.tcpKeepAlive')" hide-details>
+          <template #append-inner>
+            <SettingInfo v-if="hint('dial_tcp_keep_alive')" :text="hint('dial_tcp_keep_alive')" />
+          </template>
+        </v-text-field>
       </v-col>
       <v-col cols="12" sm="6" md="4">
-        <v-text-field v-model="dial.tcp_keep_alive_interval" :label="$t('dial.tcpKeepAliveInterval')" hide-details></v-text-field>
+        <v-text-field v-model="dial.tcp_keep_alive_interval" :label="$t('dial.tcpKeepAliveInterval')" hide-details>
+          <template #append-inner>
+            <SettingInfo v-if="hint('dial_tcp_keep_alive_interval')" :text="hint('dial_tcp_keep_alive_interval')" />
+          </template>
+        </v-text-field>
       </v-col>
     </v-row>
     <v-row>
       <v-col cols="12" sm="6" md="4" v-if="optionUDP">
-        <v-switch v-model="dial.udp_fragment" color="primary" label="UDP Fragment" hide-details></v-switch>
+        <div class="d-flex align-center ga-1">
+          <v-switch v-model="dial.udp_fragment" color="primary" label="UDP Fragment" hide-details></v-switch>
+          <SettingInfo v-if="hint('dial_udp_fragment')" :text="hint('dial_udp_fragment')" />
+        </div>
       </v-col>
       <v-col cols="12" sm="6" md="4" v-if="optionCT">
         <v-text-field
@@ -87,7 +107,11 @@
         type="number"
         min="1"
         :suffix="$t('date.s')"
-        v-model.number="connectTimeout"></v-text-field>
+        v-model.number="connectTimeout">
+          <template #append-inner>
+            <SettingInfo v-if="hint('dial_connect_timeout')" :text="hint('dial_connect_timeout')" />
+          </template>
+        </v-text-field>
       </v-col>
     </v-row>
     <DomainResolver v-if="optionDR" :data="dial" field="domain_resolver" />
@@ -149,7 +173,10 @@
       <v-spacer></v-spacer>
       <v-menu v-model="menu" :close-on-content-click="false" location="start">
         <template v-slot:activator="{ props }">
-          <v-btn v-bind="props" hide-details variant="tonal">{{ $t('dial.options') }}</v-btn>
+          <div class="d-flex align-center ga-1">
+            <v-btn v-bind="props" hide-details variant="tonal">{{ $t('dial.options') }}</v-btn>
+            <SettingInfo v-if="hint('dial_options')" :text="hint('dial_options')" />
+          </div>
         </template>
         <v-card>
           <v-list>
@@ -181,16 +208,28 @@
               <v-switch v-model="optionNetns" color="primary" :label="$t('singbox.networkNamespace')" hide-details></v-switch>
             </v-list-item>
             <v-list-item>
-              <v-switch v-model="optionTCP" color="primary" :label="$t('listen.tcpOptions')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="optionTCP" color="primary" :label="$t('listen.tcpOptions')" hide-details></v-switch>
+                <SettingInfo v-if="hint('dial_tcp_fast_open') || hint('dial_tcp_multi_path')" :text="[hint('dial_tcp_fast_open'), hint('dial_tcp_multi_path')].filter(Boolean).join('\n')" />
+              </div>
             </v-list-item>
             <v-list-item>
-              <v-switch v-model="optionUDP" color="primary" :label="$t('listen.udpOptions')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="optionUDP" color="primary" :label="$t('listen.udpOptions')" hide-details></v-switch>
+                <SettingInfo v-if="hint('dial_udp_fragment')" :text="hint('dial_udp_fragment')" />
+              </div>
             </v-list-item>
             <v-list-item>
-              <v-switch v-model="optionCT" color="primary" :label="$t('dial.connTimeout')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="optionCT" color="primary" :label="$t('dial.connTimeout')" hide-details></v-switch>
+                <SettingInfo v-if="hint('dial_connect_timeout')" :text="hint('dial_connect_timeout')" />
+              </div>
             </v-list-item>
             <v-list-item>
-              <v-switch v-model="optionTcpKeepAlive" color="primary" :label="$t('dial.tcpKeepAlive')" hide-details></v-switch>
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="optionTcpKeepAlive" color="primary" :label="$t('dial.tcpKeepAlive')" hide-details></v-switch>
+                <SettingInfo v-if="hint('dial_disable_tcp_keep_alive') || hint('dial_tcp_keep_alive') || hint('dial_tcp_keep_alive_interval')" :text="[hint('dial_disable_tcp_keep_alive'), hint('dial_tcp_keep_alive'), hint('dial_tcp_keep_alive_interval')].filter(Boolean).join('\n')" />
+              </div>
             </v-list-item>
             <v-list-item v-if="mode != 'client'">
               <v-switch v-model="optionDR" color="primary" :label="$t('dial.domainResolver')" hide-details></v-switch>
@@ -211,13 +250,26 @@
 <script lang="ts">
 import Data from '@/store/modules/data'
 import DomainResolver from '@/components/DomainResolver.vue'
+import SettingInfo from '@/components/SettingInfo.vue'
 
 export default {
-  props: ['dial', 'mode'],
+  props: {
+    dial: { type: Object, required: true },
+    mode: { type: String, default: '' },
+    fieldHints: { type: Object, default: () => ({}) },
+  },
   data() {
     return {
       menu: false
     }
+  },
+  methods: {
+    hint(key: string): string {
+      const hintKey = (this.$props.fieldHints as Record<string, string>)[key]
+      if (!hintKey) return ''
+      const translated = this.$t(hintKey)
+      return translated === hintKey ? '' : translated
+    },
   },
   computed: {
     outTags() { return [...Data().outbounds?.map((o:any) => o.tag), ...Data().endpoints?.map((e:any) => e.tag)] },
@@ -377,6 +429,6 @@ export default {
     },
     dnsTags() {return Data().config.dns?.servers?.map((d:any) => d.tag) ?? []}
   },
-  components: { DomainResolver }
+  components: { DomainResolver, SettingInfo }
 }
 </script>
