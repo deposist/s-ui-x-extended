@@ -19,6 +19,8 @@ Compatibility release for sing-box 1.11+. The database migration runs automatica
 - `sniff_override_destination` is removed because sing-box has no equivalent route-action field.
 - Migrated rules are inserted before existing routing rules and duplicate equivalent rules are skipped. The old `config.json` import path now preserves migrated inbound sniff-related settings during import.
 - Option coverage marks the deprecated inbound sniff fields as intentionally hidden from panel TS types.
+- Post-release fix: WARP and WireGuard endpoint config generation now strips unsupported `peers[].reserved` fields before handing JSON to sing-box. This fixes `endpoints[0].peers[0].reserved: json: unknown field "reserved"` after saving WARP.
+- The WARP form now reads reserved bytes safely from old rows without requiring `reserved` inside the peer object.
 
 Full release notes: [`.github/RELEASE_NOTES_v1.0.1-beta3.md`](.github/RELEASE_NOTES_v1.0.1-beta3.md).
 

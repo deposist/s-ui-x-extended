@@ -61,7 +61,7 @@
             </tr>
             <tr>
               <td>Reserved</td>
-              <td>[{{ data.peers[0].reserved.join(',') }}]</td>
+              <td>[{{ displayedReserved.join(',') }}]</td>
             </tr>
           </tbody>
         </table>
@@ -223,6 +223,9 @@ export default {
     optionDomainStrategy: {
       get(): boolean { return this.$props.data.domain_strategy != undefined },
       set(v:boolean) { v ? this.$props.data.domain_strategy = 'prefer_ipv4' : delete this.$props.data.domain_strategy }
+    },
+    displayedReserved() {
+      return this.$props.data.reserved ?? this.$props.data.peers?.[0]?.reserved ?? []
     },
     reserved: {
       get() { return this.$props.data.reserved?.join(',') ?? '' },

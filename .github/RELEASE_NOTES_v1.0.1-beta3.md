@@ -36,10 +36,20 @@ This release fixes the sing-box 1.11+ legacy inbound field warning. The database
 
 - Legacy inbound fields submitted by old or external clients are removed after save. The stored inbound options and generated core config no longer keep those keys.
 
+## Post-release fixes
+
+- WARP endpoint generation no longer sends `reserved` inside `peers[]`. The current sing-box-extended endpoint schema rejects that field and returned `endpoints[0].peers[0].reserved: json: unknown field "reserved"` after save.
+
+- Existing WARP and WireGuard endpoint rows are filtered while core config is generated, so stale stored `peers[].reserved` data does not reach sing-box.
+
+- The WARP form now displays reserved bytes safely for old rows without requiring the field on the peer object.
+
 ## Verification
 
 - `go test ./cmd/migration ./database/migrateutil ./database/model ./database ./service -run 'TestTo12MovesLegacy|TestMigrateLegacy|TestInboundJSONDrops|TestAdapt|TestConfigRoundTripVLESSInboundLegacyFieldsMigrateToRouteRules'` passed.
+- `go test ./database/model ./service -run 'TestEndpointMarshalDropsUnsupportedWireGuardPeerReserved|TestWarpUnmarshalDropsReservedBeforeStore|TestConfigRoundTripWarpEndpointDropsUnsupportedReservedFields|TestSetWarp|TestConfigRoundTrip' -count=1` passed.
 - `go test ./core -run TestOptionCoverageNoMissingFields` passed.
+- `go test ./...` passed.
 - `cd frontend && npm test -- --run` passed.
 - `cd frontend && npm run build` passed.
 - `cd frontend && npm run lint` passed.
@@ -84,10 +94,20 @@ This release fixes the sing-box 1.11+ legacy inbound field warning. The database
 
 - Legacy inbound fields, отправленные старыми или внешними клиентами, удаляются после сохранения. Stored inbound options и generated core config больше не держат эти ключи.
 
+## Исправления после релиза
+
+- Генерация WARP endpoint больше не отправляет `reserved` внутри `peers[]`. Текущая schema sing-box-extended для endpoint peer отвергает это поле и возвращала `endpoints[0].peers[0].reserved: json: unknown field "reserved"` после сохранения.
+
+- Существующие WARP и WireGuard endpoint rows фильтруются при генерации core config, поэтому старые сохраненные `peers[].reserved` данные не попадают в sing-box.
+
+- Форма WARP теперь безопасно показывает reserved bytes для старых записей и не требует это поле внутри peer object.
+
 ## Проверка
 
 - `go test ./cmd/migration ./database/migrateutil ./database/model ./database ./service -run 'TestTo12MovesLegacy|TestMigrateLegacy|TestInboundJSONDrops|TestAdapt|TestConfigRoundTripVLESSInboundLegacyFieldsMigrateToRouteRules'` прошел.
+- `go test ./database/model ./service -run 'TestEndpointMarshalDropsUnsupportedWireGuardPeerReserved|TestWarpUnmarshalDropsReservedBeforeStore|TestConfigRoundTripWarpEndpointDropsUnsupportedReservedFields|TestSetWarp|TestConfigRoundTrip' -count=1` прошел.
 - `go test ./core -run TestOptionCoverageNoMissingFields` прошел.
+- `go test ./...` прошел.
 - `cd frontend && npm test -- --run` прошел.
 - `cd frontend && npm run build` прошел.
 - `cd frontend && npm run lint` прошел.

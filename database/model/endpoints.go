@@ -31,6 +31,10 @@ func (o *Endpoint) UnmarshalJSON(data []byte) error {
 	o.Ext, _ = json.MarshalIndent(raw["ext"], "", "  ")
 	delete(raw, "ext")
 
+	if o.Type == "warp" {
+		normalizeWarpWireGuardOptions(raw)
+	}
+
 	// Remaining fields
 	o.Options, err = json.MarshalIndent(raw, "", "  ")
 	return err
@@ -53,6 +57,9 @@ func (o Endpoint) MarshalJSON() ([]byte, error) {
 		if err := json.Unmarshal(o.Options, &restFields); err != nil {
 			return nil, err
 		}
+		if o.Type == "warp" || o.Type == "wireguard" {
+			normalizeWarpWireGuardRawOptions(restFields)
+		}
 
 		for k, v := range restFields {
 			combined[k] = v
@@ -60,4 +67,45 @@ func (o Endpoint) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(combined)
+}
+
+func normalizeWarpWireGuardOptions(raw map[string]interface{}) {
+	delete(raw, "reserved")
+	peers, ok := raw["peers"].([]interface{})
+	if !ok {
+		return
+	}
+	for _, item := range peers {
+		peer, ok := item.(map[string]interface{})
+		if ok {
+			delete(peer, "reserved")
+		}
+	}
+}
+
+func normalizeWarpWireGuardRawOptions(raw map[string]json.RawMessage) {
+	delete(raw, "reserved")
+	peersRaw, ok := raw["peers"]
+	if !ok {
+		return
+	}
+	var peers []map[string]json.RawMessage
+	if err := json.Unmarshal(peersRaw, &peers); err != nil {
+		return
+	}
+	changed := false
+	for _, peer := range peers {
+		if _, ok := peer["reserved"]; ok {
+			delete(peer, "reserved")
+			changed = true
+		}
+	}
+	if !changed {
+		return
+	}
+	encoded, err := json.Marshal(peers)
+	if err != nil {
+		return
+	}
+	raw["peers"] = encoded
 }

@@ -89,6 +89,62 @@ func hasRouteRuleForInbound(rules []map[string]any, action string, inbound strin
 	return false
 }
 
+func TestConfigRoundTripWarpEndpointDropsUnsupportedReservedFields(t *testing.T) {
+	initSettingTestDB(t)
+	if err := database.GetDB().Create(&model.Endpoint{
+		Type: "warp",
+		Tag:  "warp-reserved",
+		Options: json.RawMessage(`{
+			"address":["172.16.0.2/32"],
+			"private_key":"yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=",
+			"listen_port":0,
+			"reserved":[1,2,3],
+			"peers":[{
+				"address":"162.159.192.1",
+				"port":2408,
+				"public_key":"HIgo9xNzJMWLKASShiTqIybxZ0U3wGLiUeJ1PKf8ykw=",
+				"allowed_ips":["0.0.0.0/0","::/0"],
+				"reserved":[1,2,3]
+			}]
+		}`),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	configService := NewConfigServiceWithRuntime(NewRuntimeWithCoreProvider(nil))
+	rawConfig, err := configService.GetConfig(`{"log":{"disabled":true}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoints := decodedConfigArray(t, *rawConfig, "endpoints")
+	if len(endpoints) != 1 {
+		t.Fatalf("endpoints = %#v, want one", endpoints)
+	}
+	endpoint := endpoints[0]
+	if endpoint["type"] != "wireguard" {
+		t.Fatalf("warp panel endpoint should still emit wireguard core type, got %#v", endpoint["type"])
+	}
+	if _, ok := endpoint["reserved"]; ok {
+		t.Fatalf("top-level reserved leaked into generated config: %s", string(*rawConfig))
+	}
+	peers, ok := endpoint["peers"].([]any)
+	if !ok || len(peers) != 1 {
+		t.Fatalf("peers = %#v, want one", endpoint["peers"])
+	}
+	peer, ok := peers[0].(map[string]any)
+	if !ok {
+		t.Fatalf("peer = %#v", peers[0])
+	}
+	if _, ok := peer["reserved"]; ok {
+		t.Fatalf("peer reserved leaked into generated config: %s", string(*rawConfig))
+	}
+	if err := core.ValidateConfig(*rawConfig); err != nil {
+		if !strings.Contains(err.Error(), "WireGuard is not included in this build") {
+			t.Fatalf("generated WARP config must not fail on reserved schema fields: %v\n%s", err, string(*rawConfig))
+		}
+	}
+}
+
 func TestConfigRoundTripNewNativeTypesProduceCoreConfig(t *testing.T) {
 	initSettingTestDB(t)
 	db := database.GetDB()

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -233,8 +232,6 @@ func (s *WarpService) RegisterWarp(ep *model.Endpoint) error {
 	}
 
 	warpConfig, _ := warpDetails["config"].(map[string]interface{})
-	clientId, _ := warpConfig["client_id"].(string)
-	reserved := s.getReserved(clientId)
 	interfaceConfig, _ := warpConfig["interface"].(map[string]interface{})
 	addresses, _ := interfaceConfig["addresses"].(map[string]interface{})
 	v4, _ := addresses["v4"].(string)
@@ -268,7 +265,6 @@ func (s *WarpService) RegisterWarp(ep *model.Endpoint) error {
 			"port":        peerPort,
 			"public_key":  peerPublicKey,
 			"allowed_ips": []string{"0.0.0.0/0", "::/0"},
-			"reserved":    reserved,
 		},
 	}
 
@@ -292,34 +288,10 @@ func (s *WarpService) RegisterWarp(ep *model.Endpoint) error {
 	epOptions["address"] = []string{fmt.Sprintf("%s/32", v4), fmt.Sprintf("%s/128", v6)}
 	epOptions["listen_port"] = 0
 	epOptions["peers"] = peerConfigs
+	delete(epOptions, "reserved")
 
 	ep.Options, err = json.MarshalIndent(epOptions, "", "  ")
 	return err
-}
-
-func (s *WarpService) getReserved(clientID string) []int {
-	var reserved []int
-	decoded, err := base64.StdEncoding.DecodeString(clientID)
-	if err != nil {
-		return nil
-	}
-
-	hexString := ""
-	for _, char := range decoded {
-		hex := fmt.Sprintf("%02x", char)
-		hexString += hex
-	}
-
-	for i := 0; i < len(hexString); i += 2 {
-		hexByte := hexString[i : i+2]
-		decValue, err := strconv.ParseInt(hexByte, 16, 32)
-		if err != nil {
-			return nil
-		}
-		reserved = append(reserved, int(decValue))
-	}
-
-	return reserved
 }
 
 func uniqueWarpAPIVersions(preferred string) []string {
