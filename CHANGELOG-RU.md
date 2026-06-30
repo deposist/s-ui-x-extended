@@ -9,6 +9,17 @@
 
 - Нет незарелизенных изменений.
 
+## [1.0.1-beta4] - 2026-06-30 - исправление WARP endpoint reserved field
+
+Эта beta сохраняет совместимость WARP и WireGuard endpoint output с sing-box-extended core, который используется в этой сборке. Ручная миграция базы не требуется.
+
+- Регистрация WARP больше не записывает `reserved` внутри `peers[]`. Текущая schema endpoint отвергает это поле и возвращала `endpoints[0].peers[0].reserved: json: unknown field "reserved"` после сохранения.
+- Генерация core config теперь удаляет неподдерживаемые `peers[].reserved` поля из WARP и WireGuard endpoints, поэтому старые rows больше не ломают запуск sing-box.
+- Форма WARP теперь безопасно читает reserved bytes из старых записей и не требует `reserved` внутри peer object.
+- Добавлены backend regression tests для сохраненных WARP и WireGuard endpoint rows с legacy `reserved` fields.
+
+Полные release notes: [`.github/RELEASE_NOTES_v1.0.1-beta4.md`](.github/RELEASE_NOTES_v1.0.1-beta4.md).
+
 ## [1.0.1-beta3] - 2026-06-30 - миграция inbound sniff для sing-box
 
 Compatibility-релиз для sing-box 1.11+. Миграция базы запускается автоматически.
@@ -19,8 +30,6 @@ Compatibility-релиз для sing-box 1.11+. Миграция базы зап
 - `sniff_override_destination` удаляется, потому что в sing-box нет соответствующего route-action поля.
 - Мигрированные rules вставляются перед существующими routing rules, а эквивалентные дубликаты пропускаются. Старый путь импорта `config.json` теперь сохраняет перенесенные inbound sniff settings при импорте.
 - Option coverage помечает deprecated inbound sniff fields как намеренно скрытые из panel TS types.
-- Исправление после релиза: генерация WARP и WireGuard endpoint config теперь удаляет неподдерживаемые `peers[].reserved` поля перед передачей JSON в sing-box. Это исправляет `endpoints[0].peers[0].reserved: json: unknown field "reserved"` после сохранения WARP.
-- Форма WARP теперь безопасно читает reserved bytes из старых записей и не требует `reserved` внутри peer object.
 
 Полные release notes: [`.github/RELEASE_NOTES_v1.0.1-beta3.md`](.github/RELEASE_NOTES_v1.0.1-beta3.md).
 

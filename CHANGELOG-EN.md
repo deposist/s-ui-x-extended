@@ -9,6 +9,17 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.1-beta4] - 2026-06-30 - WARP endpoint reserved field fix
+
+This beta keeps WARP and WireGuard endpoint output compatible with the sing-box-extended core used by this build. No manual database migration is required.
+
+- WARP registration no longer writes `reserved` inside `peers[]`. The current endpoint schema rejects that field and returned `endpoints[0].peers[0].reserved: json: unknown field "reserved"` after save.
+- Core config generation now strips unsupported `peers[].reserved` fields from WARP and WireGuard endpoints, so stale stored rows no longer break sing-box startup.
+- The WARP form now reads reserved bytes safely from old rows without requiring `reserved` inside the peer object.
+- Added backend regression tests for stored WARP and WireGuard endpoint rows with legacy `reserved` fields.
+
+Full release notes: [`.github/RELEASE_NOTES_v1.0.1-beta4.md`](.github/RELEASE_NOTES_v1.0.1-beta4.md).
+
 ## [1.0.1-beta3] - 2026-06-30 - sing-box inbound sniff migration
 
 Compatibility release for sing-box 1.11+. The database migration runs automatically.
@@ -19,8 +30,6 @@ Compatibility release for sing-box 1.11+. The database migration runs automatica
 - `sniff_override_destination` is removed because sing-box has no equivalent route-action field.
 - Migrated rules are inserted before existing routing rules and duplicate equivalent rules are skipped. The old `config.json` import path now preserves migrated inbound sniff-related settings during import.
 - Option coverage marks the deprecated inbound sniff fields as intentionally hidden from panel TS types.
-- Post-release fix: WARP and WireGuard endpoint config generation now strips unsupported `peers[].reserved` fields before handing JSON to sing-box. This fixes `endpoints[0].peers[0].reserved: json: unknown field "reserved"` after saving WARP.
-- The WARP form now reads reserved bytes safely from old rows without requiring `reserved` inside the peer object.
 
 Full release notes: [`.github/RELEASE_NOTES_v1.0.1-beta3.md`](.github/RELEASE_NOTES_v1.0.1-beta3.md).
 

@@ -8,6 +8,17 @@
 
 - 暂无未发布变更。
 
+## [1.0.1-beta4] - 2026-06-30 - 修复 WARP endpoint reserved 字段
+
+此 beta 让 WARP 和 WireGuard endpoint output 与本次构建使用的 sing-box-extended core 保持兼容。无需手动迁移数据库。
+
+- WARP 注册不再把 `reserved` 写入 `peers[]`。当前 endpoint schema 会拒绝该字段，并在保存后返回 `endpoints[0].peers[0].reserved: json: unknown field "reserved"`。
+- 生成 core config 时会从 WARP 和 WireGuard endpoints 中移除不支持的 `peers[].reserved` 字段，旧 rows 不再让 sing-box 启动失败。
+- WARP 表单现在可以安全读取旧 rows 中的 reserved bytes，不再要求 peer object 内有 `reserved` 字段。
+- 增加了 backend regression tests，覆盖带 legacy `reserved` fields 的已保存 WARP 和 WireGuard endpoint rows。
+
+完整发布说明：[`.github/RELEASE_NOTES_v1.0.1-beta4.md`](.github/RELEASE_NOTES_v1.0.1-beta4.md)。
+
 ## [1.0.1-beta3] - 2026-06-30 - sing-box inbound sniff 迁移
 
 sing-box 1.11+ 兼容性版本。数据库迁移会自动运行。
@@ -18,8 +29,6 @@ sing-box 1.11+ 兼容性版本。数据库迁移会自动运行。
 - `sniff_override_destination` 会被移除，因为 sing-box 没有对应的 route-action 字段。
 - 迁移后的 rules 会插入到现有 routing rules 前面，并跳过等价的重复规则。旧的 `config.json` 导入路径现在会在导入时保留已迁移的 inbound sniff 相关设置。
 - Option coverage 将 deprecated inbound sniff fields 标记为从 panel TS types 中有意隐藏。
-- 发布后修复：WARP 和 WireGuard endpoint config 生成时会在交给 sing-box 前移除不支持的 `peers[].reserved` 字段。保存 WARP 后出现的 `endpoints[0].peers[0].reserved: json: unknown field "reserved"` 已修复。
-- WARP 表单现在可以安全读取旧 rows 中的 reserved bytes，不再要求 peer object 内有 `reserved` 字段。
 
 完整发布说明：[`.github/RELEASE_NOTES_v1.0.1-beta3.md`](.github/RELEASE_NOTES_v1.0.1-beta3.md)。
 

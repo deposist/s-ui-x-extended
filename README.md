@@ -64,7 +64,7 @@ Release history and upgrade notes:
 - Russian changelog: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - Simplified Chinese changelog: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
 - Latest stable notes: [`docs/releases/v1.0.0.md`](docs/releases/v1.0.0.md)
-- Latest pre-release notes: [`.github/RELEASE_NOTES_v1.0.1-beta3.md`](.github/RELEASE_NOTES_v1.0.1-beta3.md)
+- Latest pre-release notes: [`.github/RELEASE_NOTES_v1.0.1-beta4.md`](.github/RELEASE_NOTES_v1.0.1-beta4.md)
 - Upstream parity reference: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 ## How this differs from `alireza0/s-ui`
@@ -218,7 +218,7 @@ Use the stable build for normal installations. Use beta releases only if you wan
 | Channel | Version | Notes |
 |---|---|---|
 | Stable | `v1.0.0` | First stable release. Includes the extended protocol panel, panel-managed groups, failover health, full option coverage checks, and release artifacts built with the supported protocol tags. Release notes: [`docs/releases/v1.0.0.md`](docs/releases/v1.0.0.md). |
-| Beta | `v1.0.1-beta3` | Latest beta release. Migrates deprecated inbound sniff settings for sing-box 1.11+. Release notes: [`.github/RELEASE_NOTES_v1.0.1-beta3.md`](.github/RELEASE_NOTES_v1.0.1-beta3.md). |
+| Beta | `v1.0.1-beta4` | Latest beta release. Fixes WARP endpoint saves with the sing-box-extended schema used by this build. Release notes: [`.github/RELEASE_NOTES_v1.0.1-beta4.md`](.github/RELEASE_NOTES_v1.0.1-beta4.md). |
 
 ### Linux/macOS, stable
 
@@ -239,7 +239,7 @@ sudo bash install.sh v1.0.0
 ### Windows
 
 - Stable: download `v1.0.0` from [its release page](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0), extract the ZIP, and run `install-windows.bat` as Administrator.
-- Beta: `v1.0.1-beta3` is available on [its release page](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.1-beta3).
+- Beta: `v1.0.1-beta4` is available on [its release page](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.1-beta4).
 
 Existing installations keep their settings, users, inbounds, outbounds, clients, TLS, services, and tokens. Database migrations run automatically on first start. Upgrade and rollback notes are in the changelog files: [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), [中文](CHANGELOG-ZH.md).
 
