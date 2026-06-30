@@ -2,6 +2,7 @@ package database
 
 import (
 	"github.com/deposist/s-ui-x-extended/config"
+	"github.com/deposist/s-ui-x-extended/database/migrateutil"
 	"github.com/deposist/s-ui-x-extended/database/model"
 	"github.com/deposist/s-ui-x-extended/logger"
 	"github.com/deposist/s-ui-x-extended/util/common"
@@ -33,6 +34,9 @@ func AdaptToCurrentVersion() error {
 		return err
 	}
 	if err := rehashLegacyPasswords(db); err != nil {
+		return err
+	}
+	if err := migrateutil.MigrateLegacyInboundRuleActionFields(db); err != nil {
 		return err
 	}
 	if err := bumpVersionSetting(db); err != nil {
@@ -95,13 +99,13 @@ func bumpVersionSetting(tx *gorm.DB) error {
 		return nil
 	}
 	dbSem, okDB := config.ParseSemver(existing.Value)
-		curSem, okCur := config.ParseSemver(current)
-		if okDB && okCur && dbSem.Major != curSem.Major {
-			cmp, ok := config.CompareVersions(existing.Value, current)
-			if ok && cmp > 0 {
-				return nil // don't downgrade a future-version DB
-			}
+	curSem, okCur := config.ParseSemver(current)
+	if okDB && okCur && dbSem.Major != curSem.Major {
+		cmp, ok := config.CompareVersions(existing.Value, current)
+		if ok && cmp > 0 {
+			return nil // don't downgrade a future-version DB
 		}
+	}
 	return tx.Model(model.Setting{}).Where("key = ?", "version").Update("value", current).Error
 }
 

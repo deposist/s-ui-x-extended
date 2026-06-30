@@ -2,25 +2,61 @@ package service
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
+
+	"gorm.io/gorm"
 )
 
 func initDoctorTestDB(t *testing.T) {
 	t.Helper()
-	if err := database.InitDB(filepath.Join(t.TempDir(), "s-ui.db")); err != nil {
+	tempDir, err := os.MkdirTemp("", "s-ui-doctor-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SUI_DB_FOLDER", tempDir)
+	closeDoctorTestDB(database.GetDB())
+	if err := database.InitDB(filepath.Join(tempDir, "s-ui.db")); err != nil {
+		removeDoctorTestDir(t, tempDir)
+		if strings.Contains(err.Error(), "go-sqlite3 requires cgo") {
+			t.Skip(err)
+		}
 		t.Fatalf("InitDB: %v", err)
 	}
+	db := database.GetDB()
 	t.Cleanup(func() {
-		if db := database.GetDB(); db != nil {
-			if sqlDB, err := db.DB(); err == nil {
-				_ = sqlDB.Close()
-			}
-		}
+		closeDoctorTestDB(db)
+		removeDoctorTestDir(t, tempDir)
 	})
+}
+
+func closeDoctorTestDB(db *gorm.DB) {
+	if db == nil {
+		return
+	}
+	_ = db.Exec("PRAGMA wal_checkpoint(TRUNCATE)").Error
+	if sqlDB, err := db.DB(); err == nil {
+		_ = sqlDB.Close()
+	}
+}
+
+func removeDoctorTestDir(t *testing.T, dir string) {
+	t.Helper()
+	var err error
+	for i := 0; i < 20; i++ {
+		err = os.RemoveAll(dir)
+		if err == nil || os.IsNotExist(err) {
+			return
+		}
+		time.Sleep(time.Duration(i+1) * 10 * time.Millisecond)
+	}
+	t.Errorf("remove doctor test dir %q: %v", dir, err)
 }
 
 func TestDoctorRunReportsMalformedConfig(t *testing.T) {

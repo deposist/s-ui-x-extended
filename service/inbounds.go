@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/deposist/s-ui-x-extended/database"
+	"github.com/deposist/s-ui-x-extended/database/migrateutil"
 	"github.com/deposist/s-ui-x-extended/database/model"
 	"github.com/deposist/s-ui-x-extended/util"
 	"github.com/deposist/s-ui-x-extended/util/common"
@@ -232,6 +233,9 @@ func (s *InboundService) saveInboundUpsert(tx *gorm.DB, act string, data json.Ra
 		}
 	}
 	if err := tx.Save(&inbound).Error; err != nil {
+		return nil, err
+	}
+	if err := migrateutil.MigrateLegacyInboundRuleActionFields(tx); err != nil {
 		return nil, err
 	}
 	var err error

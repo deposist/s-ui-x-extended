@@ -9,6 +9,19 @@
 
 - Нет незарелизенных изменений.
 
+## [1.0.1-beta3] - 2026-06-30 - миграция inbound sniff для sing-box
+
+Compatibility-релиз для sing-box 1.11+. Миграция базы запускается автоматически.
+
+- Inbound advanced settings больше не показывают `sniff`, `sniff_override_destination` и `sniff_timeout`, а Apply inbound recommendations больше не записывает эти deprecated inbound fields.
+- Backend фильтрует legacy rule-action fields из inbound JSON перед передачей конфига в sing-box: `sniff`, `sniff_override_destination`, `sniff_timeout`, `domain_strategy` и `udp_disable_domain_unmapping`.
+- Существующие inbound `sniff` переносятся в scoped `route.rules` с `action: "sniff"`; `sniff_timeout` становится `timeout`, `domain_strategy` становится `action: "resolve"`, а `udp_disable_domain_unmapping` становится `action: "route-options"`.
+- `sniff_override_destination` удаляется, потому что в sing-box нет соответствующего route-action поля.
+- Мигрированные rules вставляются перед существующими routing rules, а эквивалентные дубликаты пропускаются. Старый путь импорта `config.json` теперь сохраняет перенесенные inbound sniff settings при импорте.
+- Option coverage помечает deprecated inbound sniff fields как намеренно скрытые из panel TS types.
+
+Полные release notes: [`.github/RELEASE_NOTES_v1.0.1-beta3.md`](.github/RELEASE_NOTES_v1.0.1-beta3.md).
+
 ## [1.0.1-beta2] - 2026-06-29 - frontend guidance and documentation
 
 Релиз фронтенда и документации. Миграция базы не требуется.

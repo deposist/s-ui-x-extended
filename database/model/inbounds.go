@@ -2,6 +2,14 @@ package model
 
 import "encoding/json"
 
+var legacyInboundRuleActionFields = map[string]struct{}{
+	"sniff":                        {},
+	"sniff_override_destination":   {},
+	"sniff_timeout":                {},
+	"domain_strategy":              {},
+	"udp_disable_domain_unmapping": {},
+}
+
 type Inbound struct {
 	Id   uint   `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
 	Type string `json:"type" form:"type"`
@@ -71,6 +79,9 @@ func (i Inbound) MarshalJSON() ([]byte, error) {
 		}
 
 		for k, v := range restFields {
+			if _, deprecated := legacyInboundRuleActionFields[k]; deprecated {
+				continue
+			}
 			combined[k] = v
 		}
 	}
@@ -94,6 +105,9 @@ func (i Inbound) MarshalFull() (*map[string]interface{}, error) {
 		}
 
 		for k, v := range restFields {
+			if _, deprecated := legacyInboundRuleActionFields[k]; deprecated {
+				continue
+			}
 			combined[k] = v
 		}
 	}

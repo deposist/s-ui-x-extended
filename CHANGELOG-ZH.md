@@ -8,6 +8,19 @@
 
 - 暂无未发布变更。
 
+## [1.0.1-beta3] - 2026-06-30 - sing-box inbound sniff 迁移
+
+sing-box 1.11+ 兼容性版本。数据库迁移会自动运行。
+
+- Inbound advanced settings 不再显示 `sniff`、`sniff_override_destination` 和 `sniff_timeout`，Apply inbound recommendations 也不再写入这些 deprecated inbound fields。
+- Backend 在把配置交给 sing-box 前，会从 inbound JSON 中过滤 legacy rule-action fields：`sniff`、`sniff_override_destination`、`sniff_timeout`、`domain_strategy` 和 `udp_disable_domain_unmapping`。
+- 现有 inbound `sniff` 会迁移到 scoped `route.rules`，使用 `action: "sniff"`；`sniff_timeout` 迁移为 `timeout`，`domain_strategy` 迁移为 `action: "resolve"`，`udp_disable_domain_unmapping` 迁移为 `action: "route-options"`。
+- `sniff_override_destination` 会被移除，因为 sing-box 没有对应的 route-action 字段。
+- 迁移后的 rules 会插入到现有 routing rules 前面，并跳过等价的重复规则。旧的 `config.json` 导入路径现在会在导入时保留已迁移的 inbound sniff 相关设置。
+- Option coverage 将 deprecated inbound sniff fields 标记为从 panel TS types 中有意隐藏。
+
+完整发布说明：[`.github/RELEASE_NOTES_v1.0.1-beta3.md`](.github/RELEASE_NOTES_v1.0.1-beta3.md)。
+
 ## [1.0.1-beta2] - 2026-06-29 - 前端引导与文档
 
 前端与文档版本。无需手动迁移数据库。

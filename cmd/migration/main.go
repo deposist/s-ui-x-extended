@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/deposist/s-ui-x-extended/config"
+	"github.com/deposist/s-ui-x-extended/database/migrateutil"
 	"github.com/deposist/s-ui-x-extended/database/model"
 
 	"gorm.io/driver/sqlite"
@@ -71,7 +72,17 @@ func MigrateDbWithOptions(options Options) error {
 	fmt.Println("Current version:", currentVersion, "\nDatabase version:", dbVersion)
 
 	if currentVersion == dbVersion {
-		fmt.Println("Database is up to date, no need to migrate")
+		if err = migrateutil.MigrateLegacyInboundRuleActionFields(tx); err != nil {
+			return fmt.Errorf("migration of legacy inbound fields: %w", err)
+		}
+		if err = tx.Commit().Error; err != nil {
+			return fmt.Errorf("commit migration: %w", err)
+		}
+		committed = true
+		if err = checkpointWAL(db); err != nil {
+			fmt.Println("Warning: WAL checkpoint skipped:", err)
+		}
+		fmt.Println("Database is up to date, no schema migration needed")
 		return nil
 	}
 	// s-ui-x-extended uses its own versioning line (1.0.0-betaN) which is
@@ -143,6 +154,10 @@ func MigrateDbWithOptions(options Options) error {
 			return fmt.Errorf("migration to 1.7: %w", err)
 		}
 		dbVersion = "1.7"
+	}
+
+	if err = migrateutil.MigrateLegacyInboundRuleActionFields(tx); err != nil {
+		return fmt.Errorf("migration of legacy inbound fields: %w", err)
 	}
 
 	// Persist the new version only if the DB version is from the same major

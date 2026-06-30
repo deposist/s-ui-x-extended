@@ -1,55 +1,128 @@
 {
   "hidden": {
     "SocksInboundOptions": {
-      "users": "managed by panel client/user system, not directly in inbound type"
+      "users": "managed by panel client/user system, not directly in inbound type",
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
     },
     "HTTPMixedInboundOptions": {
-      "users": "managed by panel client/user system, not directly in inbound type"
+      "users": "managed by panel client/user system, not directly in inbound type",
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
     },
     "ShadowsocksInboundOptions": {
-      "users": "managed by panel client/user system, not directly in inbound type"
+      "users": "managed by panel client/user system, not directly in inbound type",
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
     },
     "VMessInboundOptions": {
-      "users": "managed by panel client/user system, not directly in inbound type"
+      "users": "managed by panel client/user system, not directly in inbound type",
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
     },
     "VLESSInboundOptions": {
-      "users": "managed by panel client/user system, not directly in inbound type"
+      "users": "managed by panel client/user system, not directly in inbound type",
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
     },
     "TrojanInboundOptions": {
-      "users": "managed by panel client/user system, not directly in inbound type"
+      "users": "managed by panel client/user system, not directly in inbound type",
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
     },
     "NaiveInboundOptions": {
-      "users": "managed by panel client/user system, not directly in inbound type"
+      "users": "managed by panel client/user system, not directly in inbound type",
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
     },
     "HysteriaInboundOptions": {
-      "users": "managed by panel client/user system, not directly in inbound type"
+      "users": "managed by panel client/user system, not directly in inbound type",
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
     },
     "Hysteria2InboundOptions": {
-      "users": "managed by panel client/user system, not directly in inbound type"
+      "users": "managed by panel client/user system, not directly in inbound type",
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
     },
     "TUICInboundOptions": {
-      "users": "managed by panel client/user system, not directly in inbound type"
+      "users": "managed by panel client/user system, not directly in inbound type",
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
     },
     "AnyTLSInboundOptions": {
-      "users": "managed by panel client/user system, not directly in inbound type"
+      "users": "managed by panel client/user system, not directly in inbound type",
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
     },
     "ShadowTLSInboundOptions": {
       "users": "managed by panel client/user system, not directly in inbound type",
-      "handshake": "server-side handshake server definition, not for client delivery"
+      "handshake": "server-side handshake server definition, not for client delivery",
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
     },
     "MieruInboundOptions": {
-      "users": "managed by panel client/user system, not directly in inbound type"
+      "users": "managed by panel client/user system, not directly in inbound type",
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
     },
     "TrustTunnelInboundOptions": {
-      "users": "managed by panel client/user system, not directly in inbound type"
+      "users": "managed by panel client/user system, not directly in inbound type",
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
     },
     "SSHInboundOptions": {
       "users": "managed by panel client/user system, not directly in inbound type",
       "host_key": "server-only private key, must not appear in client config",
-      "host_key_path": "server-only private key path, must not appear in client config"
+      "host_key_path": "server-only private key path, must not appear in client config",
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
     },
     "MTProxyInboundOptions": {
-      "users": "managed by panel client/user system, not directly in inbound type"
+      "users": "managed by panel client/user system, not directly in inbound type",
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
+    },
+    "DirectInboundOptions": {
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
+    },
+    "SudokuInboundOptions": {
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
+    },
+    "TunInboundOptions": {
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
+    },
+    "RedirectInboundOptions": {
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
+    },
+    "TProxyInboundOptions": {
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
     }
   }
 }

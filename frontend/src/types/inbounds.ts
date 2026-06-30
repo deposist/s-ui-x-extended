@@ -57,9 +57,6 @@ export interface Listen {
   disable_tcp_keep_alive?: boolean
   tcp_keep_alive?: string
   tcp_keep_alive_interval?: string
-  sniff?: boolean
-  sniff_override_destination?: boolean
-  sniff_timeout?: string
   proxy_protocol?: boolean
   proxy_protocol_accept_no_header?: boolean
   domain_strategy?: string

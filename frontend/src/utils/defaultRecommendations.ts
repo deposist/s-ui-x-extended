@@ -46,9 +46,6 @@ export const vlessInboundFieldHintKeys: Record<string, string> = {
   tcp_keep_alive: 'types.vless.hint.tcp_keep_alive',
   tcp_keep_alive_interval: 'types.vless.hint.tcp_keep_alive_interval',
   decryption: 'types.vless.hint.decryption',
-  sniff: 'types.vless.hint.sniff',
-  sniff_override_destination: 'types.vless.hint.sniff_override_destination',
-  sniff_timeout: 'types.vless.hint.sniff_timeout',
   proxy_protocol: 'types.vless.hint.proxy_protocol',
   proxy_protocol_accept_no_header: 'types.vless.hint.proxy_protocol_accept_no_header',
   domain_strategy: 'types.vless.hint.domain_strategy',
@@ -110,9 +107,6 @@ export const commonInboundFieldHintKeys: Record<string, string> = {
   tcp_keep_alive: 'types.inbound.hint.tcp_keep_alive',
   tcp_keep_alive_interval: 'types.inbound.hint.tcp_keep_alive_interval',
   network: 'types.inbound.hint.network',
-  sniff: 'types.inbound.hint.sniff',
-  sniff_override_destination: 'types.inbound.hint.sniff_override_destination',
-  sniff_timeout: 'types.inbound.hint.sniff_timeout',
   proxy_protocol: 'types.inbound.hint.proxy_protocol',
   proxy_protocol_accept_no_header: 'types.inbound.hint.proxy_protocol_accept_no_header',
   domain_strategy: 'types.inbound.hint.domain_strategy',
@@ -197,9 +191,9 @@ function applyRecommendedListen(target: Record<string, any>): void {
 }
 
 function applyRecommendedAdvanced(target: Record<string, any>): void {
-  target.sniff = true
-  target.sniff_override_destination = true
-  target.sniff_timeout = '300ms'
+  delete target.sniff
+  delete target.sniff_override_destination
+  delete target.sniff_timeout
   delete target.proxy_protocol
   delete target.proxy_protocol_accept_no_header
   delete target.domain_strategy
@@ -266,11 +260,11 @@ export function applyVlessInboundRecommendedValues(inbound: Inbound): void {
 
   target.listen = target.listen || '::'
   target.decryption = 'none'
-  target.sniff = true
-  target.sniff_override_destination = true
-  target.sniff_timeout = '300ms'
   target.transport = {}
 
+  delete target.sniff
+  delete target.sniff_override_destination
+  delete target.sniff_timeout
   delete target.proxy_protocol
   delete target.proxy_protocol_accept_no_header
   delete target.domain_strategy

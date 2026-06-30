@@ -158,6 +158,7 @@ describe('recommendation helpers', () => {
       decryption: '',
       sniff: false,
       sniff_override_destination: false,
+      sniff_timeout: 'legacy',
       proxy_protocol: true,
       proxy_protocol_accept_no_header: true,
       domain_strategy: 'prefer_ipv4',
@@ -173,9 +174,9 @@ describe('recommendation helpers', () => {
     expect(inbound.listen_port).toBe(443)
     expect(inbound.tls_id).toBe(0)
     expect(inbound.decryption).toBe('none')
-    expect(inbound.sniff).toBe(true)
-    expect(inbound.sniff_override_destination).toBe(true)
-    expect(inbound.sniff_timeout).toBe('300ms')
+    expect(inbound.sniff).toBeUndefined()
+    expect(inbound.sniff_override_destination).toBeUndefined()
+    expect(inbound.sniff_timeout).toBeUndefined()
     expect(inbound.transport).toEqual({})
     expect(inbound.out_json.packet_encoding).toBe('xudp')
     expect(inbound.proxy_protocol).toBeUndefined()
@@ -197,9 +198,9 @@ describe('recommendation helpers', () => {
     applyInboundRecommendedValues(vmess)
 
     expect(vmess.listen).toBe('::')
-    expect(vmess.sniff).toBe(true)
-    expect(vmess.sniff_override_destination).toBe(true)
-    expect(vmess.sniff_timeout).toBe('300ms')
+    expect(vmess.sniff).toBeUndefined()
+    expect(vmess.sniff_override_destination).toBeUndefined()
+    expect(vmess.sniff_timeout).toBeUndefined()
     expect(vmess.proxy_protocol).toBeUndefined()
     expect(vmess.out_json.security).toBe('auto')
     expect(vmess.out_json.packet_encoding).toBe('xudp')

@@ -49,6 +49,7 @@ verify-*.txt
 # Internal development log / local UI mockups (not needed by end users)
 docs/project-context.md
 docs/default-values-ui-mockup.html
+docs/mockups/
 dc42e16-files.txt
 docs/audit/
 tests/baseline/*

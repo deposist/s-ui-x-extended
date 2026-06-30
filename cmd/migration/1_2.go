@@ -45,6 +45,7 @@ func moveJsonToDb(db *gorm.DB) error {
 	}
 
 	oldInbounds := oldConfig["inbounds"].([]interface{})
+	legacyInboundRules := make([]interface{}, 0)
 	if err := db.Migrator().DropTable(&model.Inbound{}); err != nil {
 		return err
 	}
@@ -112,11 +113,14 @@ func moveJsonToDb(db *gorm.DB) error {
 			inbObj["out_json"] = json.RawMessage("{}")
 			inbObj["addrs"] = json.RawMessage("[]")
 		}
-		// Delete deprecated fields
+		legacyInboundRules = appendLegacyInboundRuleActions(legacyInboundRules, tag, inbObj)
+		// Delete deprecated fields after their rule-action equivalents were
+		// collected above. sing-box 1.11+ rejects these fields on inbounds.
 		delete(inbObj, "sniff")
 		delete(inbObj, "sniff_override_destination")
 		delete(inbObj, "sniff_timeout")
 		delete(inbObj, "domain_strategy")
+		delete(inbObj, "udp_disable_domain_unmapping")
 		inbJson, _ := json.Marshal(inbObj)
 
 		var newInbound model.Inbound
@@ -212,16 +216,23 @@ func moveJsonToDb(db *gorm.DB) error {
 					}
 				}
 				if !isBlock && !isDns {
-					ruleObj["action"] = "route"
+					if _, hasAction := ruleObj["action"]; !hasAction {
+						ruleObj["action"] = "route"
+					}
 				}
 				rules[index] = ruleObj
 			}
 			if hasDns {
 				rules = append(rules, map[string]interface{}{"action": "sniff"})
 			}
+			rules = appendMissingLegacyInboundRules(rules, legacyInboundRules)
 			routingRules["rules"] = rules
+		} else if len(legacyInboundRules) > 0 {
+			routingRules["rules"] = legacyInboundRules
 		}
 		oldConfig["route"] = routingRules
+	} else if len(legacyInboundRules) > 0 {
+		oldConfig["route"] = map[string]interface{}{"rules": legacyInboundRules}
 	}
 
 	// Remove v2rayapi and clashapi from experimental config
@@ -243,6 +254,140 @@ func moveJsonToDb(db *gorm.DB) error {
 	}).Error
 }
 
+func appendLegacyInboundRuleActions(rules []interface{}, inboundTag string, inbound map[string]interface{}) []interface{} {
+	if inboundTag == "" {
+		return rules
+	}
+	if strategy, _ := inbound["domain_strategy"].(string); strategy != "" {
+		rules = append(rules, map[string]interface{}{
+			"inbound":  []interface{}{inboundTag},
+			"action":   "resolve",
+			"strategy": strategy,
+		})
+	}
+	if sniff, _ := inbound["sniff"].(bool); sniff {
+		rule := map[string]interface{}{
+			"inbound": []interface{}{inboundTag},
+			"action":  "sniff",
+		}
+		if timeout, _ := inbound["sniff_timeout"].(string); timeout != "" {
+			rule["timeout"] = timeout
+		}
+		rules = append(rules, rule)
+	}
+	if disableUnmapping, _ := inbound["udp_disable_domain_unmapping"].(bool); disableUnmapping {
+		rules = append(rules, map[string]interface{}{
+			"inbound":                      []interface{}{inboundTag},
+			"action":                       "route-options",
+			"udp_disable_domain_unmapping": true,
+		})
+	}
+	return rules
+}
+
+func appendMissingLegacyInboundRules(rules []interface{}, legacyRules []interface{}) []interface{} {
+	prependRules := make([]interface{}, 0)
+	for _, legacyRule := range legacyRules {
+		legacyMap, ok := legacyRule.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		duplicate := false
+		for _, rule := range rules {
+			ruleMap, ok := rule.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if legacyRouteRulesEquivalent(ruleMap, legacyMap) {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			for _, rule := range prependRules {
+				ruleMap, ok := rule.(map[string]interface{})
+				if ok && legacyRouteRulesEquivalent(ruleMap, legacyMap) {
+					duplicate = true
+					break
+				}
+			}
+		}
+		if !duplicate {
+			prependRules = append(prependRules, legacyRule)
+		}
+	}
+	if len(prependRules) == 0 {
+		return rules
+	}
+	return append(prependRules, rules...)
+}
+
+func legacyRouteRulesEquivalent(left map[string]interface{}, right map[string]interface{}) bool {
+	if left["action"] != right["action"] {
+		return false
+	}
+	if !legacySameInbound(left["inbound"], right["inbound"]) {
+		return false
+	}
+	if !legacySameRulePayload(left, right) {
+		return false
+	}
+	return true
+}
+
+func legacySameRulePayload(left map[string]interface{}, right map[string]interface{}) bool {
+	for key, value := range right {
+		if key == "action" || key == "inbound" {
+			continue
+		}
+		if left[key] != value {
+			return false
+		}
+	}
+	for key, value := range left {
+		if key == "action" || key == "inbound" {
+			continue
+		}
+		if rightValue, ok := right[key]; !ok || rightValue != value {
+			return false
+		}
+	}
+	return true
+}
+
+func legacySameInbound(left interface{}, right interface{}) bool {
+	return legacyStringSetEqual(legacyStringSet(left), legacyStringSet(right))
+}
+
+func legacyStringSet(value interface{}) map[string]bool {
+	set := map[string]bool{}
+	switch typed := value.(type) {
+	case string:
+		if typed != "" {
+			set[typed] = true
+		}
+	case []interface{}:
+		for _, item := range typed {
+			if s, ok := item.(string); ok && s != "" {
+				set[s] = true
+			}
+		}
+	}
+	return set
+}
+
+func legacyStringSetEqual(left map[string]bool, right map[string]bool) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for value := range left {
+		if !right[value] {
+			return false
+		}
+	}
+	return true
+}
+
 func migrateTls(db *gorm.DB) error {
 	if !db.Migrator().HasColumn(&model.Tls{}, "inbounds") {
 		return nil
@@ -255,6 +400,10 @@ func migrateTls(db *gorm.DB) error {
 	err = db.Model(model.Tls{}).Scan(&tlsConfig).Error
 	if err != nil {
 		return err
+	}
+
+	if len(tlsConfig) == 0 {
+		return nil
 	}
 
 	for index, tls := range tlsConfig {
@@ -289,6 +438,10 @@ func migrateClients(db *gorm.DB) error {
 	err := db.Model(model.Client{}).Scan(&oldClients).Error
 	if err != nil {
 		return err
+	}
+
+	if len(oldClients) == 0 {
+		return nil
 	}
 
 	for index, oldClient := range oldClients {

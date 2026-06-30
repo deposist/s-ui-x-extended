@@ -23,10 +23,10 @@ func decodedConfigArray(t *testing.T, raw []byte, key string) []map[string]any {
 	return items
 }
 
-func TestConfigRoundTripVLESSInboundAdvancedFields(t *testing.T) {
+func TestConfigRoundTripVLESSInboundLegacyFieldsMigrateToRouteRules(t *testing.T) {
 	initSettingTestDB(t)
 	configService := NewConfigServiceWithRuntime(NewRuntimeWithCoreProvider(nil))
-	payload := json.RawMessage(`{"type":"vless","tag":"vless-advanced","listen":"127.0.0.1","listen_port":0,"sniff":true,"domain_strategy":"prefer_ipv4","users":[]}`)
+	payload := json.RawMessage(`{"type":"vless","tag":"vless-advanced","listen":"127.0.0.1","listen_port":0,"sniff":true,"sniff_timeout":"1s","sniff_override_destination":true,"domain_strategy":"prefer_ipv4","udp_disable_domain_unmapping":true,"users":[]}`)
 	if _, err := configService.Save("inbounds", "new", payload, "", "admin", "example.com"); err != nil {
 		t.Fatalf("save vless inbound: %v", err)
 	}
@@ -39,12 +39,54 @@ func TestConfigRoundTripVLESSInboundAdvancedFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if (*full)["sniff"] != true {
-		t.Fatalf("sniff = %#v, want true", (*full)["sniff"])
+	for _, key := range []string{"sniff", "sniff_timeout", "sniff_override_destination", "domain_strategy", "udp_disable_domain_unmapping"} {
+		if _, ok := (*full)[key]; ok {
+			t.Fatalf("legacy inbound key %s leaked into MarshalFull: %#v", key, *full)
+		}
 	}
-	if (*full)["domain_strategy"] != "prefer_ipv4" {
-		t.Fatalf("domain_strategy = %#v, want prefer_ipv4", (*full)["domain_strategy"])
+
+	rawConfig, err := configService.GetConfig("")
+	if err != nil {
+		t.Fatal(err)
 	}
+	var cfg struct {
+		Route struct {
+			Rules []map[string]any `json:"rules"`
+		} `json:"route"`
+	}
+	if err := json.Unmarshal(*rawConfig, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	if !hasRouteRuleForInbound(cfg.Route.Rules, "resolve", "vless-advanced", "strategy", "prefer_ipv4") {
+		t.Fatalf("resolve rule was not migrated: %#v", cfg.Route.Rules)
+	}
+	if !hasRouteRuleForInbound(cfg.Route.Rules, "sniff", "vless-advanced", "timeout", "1s") {
+		t.Fatalf("sniff rule was not migrated: %#v", cfg.Route.Rules)
+	}
+	if !hasRouteRuleForInbound(cfg.Route.Rules, "route-options", "vless-advanced", "udp_disable_domain_unmapping", true) {
+		t.Fatalf("route-options rule was not migrated: %#v", cfg.Route.Rules)
+	}
+}
+
+func hasRouteRuleForInbound(rules []map[string]any, action string, inbound string, key string, value any) bool {
+	for _, rule := range rules {
+		if rule["action"] != action || rule[key] != value {
+			continue
+		}
+		switch inbounds := rule["inbound"].(type) {
+		case string:
+			if inbounds == inbound {
+				return true
+			}
+		case []any:
+			for _, item := range inbounds {
+				if item == inbound {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func TestConfigRoundTripNewNativeTypesProduceCoreConfig(t *testing.T) {

@@ -3,25 +3,6 @@
     <v-col cols="12" class="v-card-subtitle">{{ $t('inboundAdvanced.title') }}</v-col>
     <v-col cols="12" sm="6" md="4">
       <div class="d-flex align-center ga-1">
-        <v-switch color="primary" hide-details :label="$t('inboundAdvanced.sniff')" v-model="data.sniff"></v-switch>
-        <SettingInfo v-if="hint('sniff')" :text="hint('sniff')" />
-      </div>
-    </v-col>
-    <v-col cols="12" sm="6" md="4">
-      <div class="d-flex align-center ga-1">
-        <v-switch color="primary" hide-details :label="$t('inboundAdvanced.sniffOverrideDestination')" v-model="data.sniff_override_destination"></v-switch>
-        <SettingInfo v-if="hint('sniff_override_destination')" :text="hint('sniff_override_destination')" />
-      </div>
-    </v-col>
-    <v-col cols="12" sm="6" md="4">
-      <v-text-field hide-details :label="$t('inboundAdvanced.sniffTimeout')" v-model="data.sniff_timeout" placeholder="300ms">
-        <template #append-inner>
-          <SettingInfo v-if="hint('sniff_timeout')" :text="hint('sniff_timeout')" />
-        </template>
-      </v-text-field>
-    </v-col>
-    <v-col cols="12" sm="6" md="4">
-      <div class="d-flex align-center ga-1">
         <v-switch color="primary" hide-details :label="$t('inboundAdvanced.proxyProtocol')" v-model="data.proxy_protocol"></v-switch>
         <SettingInfo v-if="hint('proxy_protocol')" :text="hint('proxy_protocol')" />
       </div>

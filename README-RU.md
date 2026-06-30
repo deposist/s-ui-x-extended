@@ -64,7 +64,7 @@ S-UI-X Extended это веб-панель на базе [`sing-box-extended`](h
 - Русский changelog: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - Changelog на упрощенном китайском: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
 - Заметки последнего стабильного релиза: [`docs/releases/v1.0.0.md`](docs/releases/v1.0.0.md)
-- Заметки последней опубликованной beta-версии: [`.github/RELEASE_NOTES_v1.0.1-beta2.md`](.github/RELEASE_NOTES_v1.0.1-beta2.md)
+- Заметки последней опубликованной beta-версии: [`.github/RELEASE_NOTES_v1.0.1-beta3.md`](.github/RELEASE_NOTES_v1.0.1-beta3.md)
 - Справка по паритету с upstream: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 ## Чем отличается от `alireza0/s-ui`
@@ -218,7 +218,7 @@ S-UI-X Extended это веб-панель на базе [`sing-box-extended`](h
 | Канал | Версия | Заметки |
 |---|---|---|
 | Stable | `v1.0.0` | Первый стабильный релиз. Включает extended protocol panel, группы под управлением панели, failover health, проверки полного покрытия options и release artifacts с поддерживаемыми protocol tags. Release notes: [`docs/releases/v1.0.0.md`](docs/releases/v1.0.0.md). |
-| Beta | `v1.0.1-beta2` | Последняя beta. Включает guided configuration forms и selector часового пояса Dashboard Traffic statistics. Release notes: [`.github/RELEASE_NOTES_v1.0.1-beta2.md`](.github/RELEASE_NOTES_v1.0.1-beta2.md). |
+| Beta | `v1.0.1-beta3` | Последняя beta. Мигрирует deprecated inbound sniff settings для sing-box 1.11+. Release notes: [`.github/RELEASE_NOTES_v1.0.1-beta3.md`](.github/RELEASE_NOTES_v1.0.1-beta3.md). |
 
 ### Linux/macOS, stable
 
@@ -239,7 +239,7 @@ sudo bash install.sh v1.0.0
 ### Windows
 
 - Stable: скачайте `v1.0.0` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.0), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
-- Beta: `v1.0.1-beta2` доступна на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.1-beta2).
+- Beta: `v1.0.1-beta3` доступна на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.1-beta3).
 
 Существующие установки сохраняют settings, users, inbounds, outbounds, clients, TLS, services и tokens. Миграции базы запускаются автоматически при первом старте. Заметки по обновлению и откату находятся в changelog: [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), [中文](CHANGELOG-ZH.md).
 
