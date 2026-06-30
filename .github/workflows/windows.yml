@@ -79,17 +79,6 @@ jobs:
           cache: false
           go-version-file: go.mod
 
-      - name: Install zip for Windows
-        if: matrix.arch == 'amd64'
-        shell: powershell
-        run: |
-          if (!(Get-Command choco -ErrorAction SilentlyContinue)) {
-            Set-ExecutionPolicy Bypass -Scope Process -Force
-            [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-            iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-          }
-          choco install zip -y
-
       - name: Build s-ui
         shell: bash
         run: |
@@ -123,9 +112,12 @@ jobs:
           echo "${CRONET_SHA256}  s-ui-windows/libcronet.dll" | sha256sum -c -
 
       - name: Package
-        shell: bash
+        shell: python
         run: |
-          zip -r "s-ui-windows-${{ matrix.arch }}.zip" s-ui-windows
+          import shutil
+
+          archive = shutil.make_archive("s-ui-windows-${{ matrix.arch }}", "zip", ".", "s-ui-windows")
+          print(f"Created {archive}")
 
       - name: Upload build artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
