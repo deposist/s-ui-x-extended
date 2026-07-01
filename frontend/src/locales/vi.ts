@@ -430,6 +430,7 @@ export default {
     password: "Mật khẩu",
     pwRules: "Mật khẩu không thể trống",
     invalidCredentials: "Tên người dùng hoặc mật khẩu không hợp lệ.",
+    forcePasswordReset: "Bắt buộc đặt lại mật khẩu.",
   },
   menu: {
     logout: "Đăng xuất",

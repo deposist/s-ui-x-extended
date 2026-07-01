@@ -52,6 +52,9 @@ func TestGetClientBySubIdPrefersSecretAndSupportsLegacyName(t *testing.T) {
 	if _, err := (&service.SettingService{}).GetAllSetting(); err != nil {
 		t.Fatal(err)
 	}
+	if err := database.GetDB().Model(model.Setting{}).Where("key = ?", "subSecretRequired").Update("value", "false").Error; err != nil {
+		t.Fatal(err)
+	}
 	client := model.Client{
 		Enable:    true,
 		Name:      "legacy-name",

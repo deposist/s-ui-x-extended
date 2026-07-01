@@ -89,6 +89,41 @@ func findCookieByName(cookies []*http.Cookie) *http.Cookie {
 	return nil
 }
 
+func TestForcePasswordResetSessionOnlyAllowsResetEndpoints(t *testing.T) {
+	settingService := initSessionTestDB(t)
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(sessions.Sessions("s-ui", cookie.NewStore([]byte("test-secret"))))
+	router.GET("/force-login", func(c *gin.Context) {
+		generation, err := settingService.GetSessionGeneration()
+		if err != nil {
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+		if err := SetForcePasswordResetUser(c, "admin", 0, generation); err != nil {
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+		c.Status(http.StatusNoContent)
+	})
+	router.GET("/app/api/csrf", checkLogin, func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	router.GET("/app/api/settings", checkLogin, func(c *gin.Context) { c.Status(http.StatusNoContent) })
+
+	login := performSessionRequest(router, "/force-login")
+	cookie := findCookieByName(login.Result().Cookies())
+	if cookie == nil {
+		t.Fatal("force login did not set session cookie")
+	}
+	csrf := performSessionRequest(router, "/app/api/csrf", cookie)
+	if csrf.Code != http.StatusNoContent {
+		t.Fatalf("csrf endpoint should be allowed during forced reset, got %d", csrf.Code)
+	}
+	settings := performSessionRequest(router, "/app/api/settings", cookie)
+	if settings.Code != http.StatusForbidden {
+		t.Fatalf("protected endpoint should be forbidden during forced reset, got %d", settings.Code)
+	}
+}
+
 func TestSessionCookieSecureForcedByEnv(t *testing.T) {
 	settingService := initSessionTestDB(t)
 	t.Setenv("SUI_FORCE_COOKIE_SECURE", "true")

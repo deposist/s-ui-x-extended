@@ -8,6 +8,18 @@
 
 - 暂无未发布变更。
 
+## [1.5.10-beta10] - 2026-07-02 - 管理端安全加固
+
+安全加固版本。无需手动迁移数据库。
+
+- 删除、启用、停用 API token 现在要求 token 属于当前管理员。
+- 新安装默认使用 `subSecretRequired=true`；已有安装保留当前设置。
+- 带 `force_password_reset=true` 的管理员现在只能获得受限会话，必须先修改密码才能进入面板。
+- 需要重置密码的管理员，其 API token 会被拒绝，直到密码修改完成。
+- 登录页现在支持 forced password reset 流程。
+
+完整发布说明：[`.github/RELEASE_NOTES_v1.5.10-beta10.md`](.github/RELEASE_NOTES_v1.5.10-beta10.md)。
+
 ## [1.0.1-beta4] - 2026-06-30 - 修复 WARP endpoint reserved 字段
 
 此 beta 让 WARP 和 WireGuard endpoint output 与本次构建使用的 sing-box-extended core 保持兼容。无需手动迁移数据库。

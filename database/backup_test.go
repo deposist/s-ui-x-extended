@@ -40,6 +40,9 @@ func closeMainDB(t *testing.T) {
 	if err := sqlDB.Close(); err != nil {
 		t.Logf("close main db: %v", err)
 	}
+	if runtime.GOOS == "windows" {
+		time.Sleep(50 * time.Millisecond)
+	}
 
 	// Best-effort sidecar cleanup. We do not have the original DSN handy,
 	// so just nuke common candidates the tests use.

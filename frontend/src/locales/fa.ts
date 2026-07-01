@@ -430,6 +430,7 @@ export default {
     password: "کلمه عبور",
     pwRules: "کلمه عبور نمی‌تواند خالی باشد",
     invalidCredentials: "نام کاربری یا کلمه عبور نامعتبر است.",
+    forcePasswordReset: "تغییر کلمه عبور الزامی است.",
   },
   menu: {
     logout: "خروج",

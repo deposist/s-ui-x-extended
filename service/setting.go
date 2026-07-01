@@ -72,7 +72,7 @@ var defaultValueMap = map[string]string{
 	"subUpdates":                  "12",
 	"subEncode":                   "true",
 	"subShowInfo":                 "false",
-	"subSecretRequired":           "false",
+	"subSecretRequired":           "true",
 	"subRateLimitPerIP":           "60",
 	"subLinkEnable":               "true",
 	"subJsonEnable":               "true",

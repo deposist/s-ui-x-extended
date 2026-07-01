@@ -2,6 +2,17 @@ package service
 
 import "testing"
 
+func TestDefaultSubSecretRequiredIsSecure(t *testing.T) {
+	settingService := initSettingTestDB(t)
+	required, err := settingService.GetSubSecretRequired()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !required {
+		t.Fatal("subSecretRequired should default to true")
+	}
+}
+
 func TestValidateSubscriptionPathSettingsRejectsPhase2Conflicts(t *testing.T) {
 	settingService := &SettingService{}
 	tests := []map[string]string{

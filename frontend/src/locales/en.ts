@@ -882,6 +882,7 @@ export default {
     password: "Password",
     pwRules: "Password can not be empty",
     invalidCredentials: "Invalid username or password.",
+    forcePasswordReset: "Password reset required.",
   },
   menu: {
     logout: "Logout",

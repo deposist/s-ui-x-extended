@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	loginUser              = "LOGIN_USER"
-	loginSessionGeneration = "LOGIN_SESSION_GENERATION"
+	loginUser               = "LOGIN_USER"
+	loginSessionGeneration  = "LOGIN_SESSION_GENERATION"
+	loginForcePasswordReset = "LOGIN_FORCE_PASSWORD_RESET"
 )
 
 func init() {
@@ -21,6 +22,14 @@ func init() {
 }
 
 func SetLoginUser(c *gin.Context, userName string, maxAge int, sessionGeneration string) error {
+	return setLoginUser(c, userName, maxAge, sessionGeneration, false)
+}
+
+func SetForcePasswordResetUser(c *gin.Context, userName string, maxAge int, sessionGeneration string) error {
+	return setLoginUser(c, userName, maxAge, sessionGeneration, true)
+}
+
+func setLoginUser(c *gin.Context, userName string, maxAge int, sessionGeneration string, forcePasswordReset bool) error {
 	options := sessions.Options{
 		Path:     "/",
 		Secure:   resolveCookieSecure(c, &service.SettingService{}),
@@ -35,6 +44,11 @@ func SetLoginUser(c *gin.Context, userName string, maxAge int, sessionGeneration
 	s.Set(loginUser, userName)
 	if sessionGeneration != "" {
 		s.Set(loginSessionGeneration, sessionGeneration)
+	}
+	if forcePasswordReset {
+		s.Set(loginForcePasswordReset, true)
+	} else {
+		s.Delete(loginForcePasswordReset)
 	}
 	ResetSessionCSRF(s)
 	// Rotate the session ID on login so a planted pre-auth (CSRF) session cannot
@@ -88,7 +102,13 @@ func sessionGenerationValid(s sessions.Session) bool {
 }
 
 func IsLogin(c *gin.Context) bool {
-	return GetLoginUser(c) != ""
+	return GetLoginUser(c) != "" && !SessionRequiresPasswordReset(c)
+}
+
+func SessionRequiresPasswordReset(c *gin.Context) bool {
+	s := sessions.Default(c)
+	required, ok := s.Get(loginForcePasswordReset).(bool)
+	return ok && required
 }
 
 func ClearSession(c *gin.Context) {

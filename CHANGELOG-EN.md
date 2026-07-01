@@ -9,6 +9,18 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.5.10-beta10] - 2026-07-02 - admin security hardening
+
+Security hardening release. No manual database migration is required.
+
+- API token delete and enable/disable now require token ownership.
+- Fresh installs now default `subSecretRequired` to `true`; existing installs keep their saved setting.
+- `force_password_reset=true` admins now receive a restricted session and must change the password before accessing the panel.
+- API tokens for admins that must reset a password are rejected until the password changes.
+- The login page now supports the forced password reset flow.
+
+Full release notes: [`.github/RELEASE_NOTES_v1.5.10-beta10.md`](.github/RELEASE_NOTES_v1.5.10-beta10.md).
+
 ## [1.0.1-beta4] - 2026-06-30 - WARP endpoint reserved field fix
 
 This beta keeps WARP and WireGuard endpoint output compatible with the sing-box-extended core used by this build. No manual database migration is required.

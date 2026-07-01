@@ -15,13 +15,14 @@ import (
 )
 
 type TokenInMemory struct {
-	ID          uint   `json:"id"`
-	TokenHash   string `json:"tokenHash"`
-	TokenPrefix string `json:"tokenPrefix"`
-	Scope       string `json:"scope"`
-	Enabled     bool   `json:"enabled"`
-	Expiry      int64  `json:"expiry"`
-	Username    string `json:"username"`
+	ID                 uint   `json:"id"`
+	TokenHash          string `json:"tokenHash"`
+	TokenPrefix        string `json:"tokenPrefix"`
+	Scope              string `json:"scope"`
+	Enabled            bool   `json:"enabled"`
+	Expiry             int64  `json:"expiry"`
+	Username           string `json:"username"`
+	ForcePasswordReset bool   `json:"forcePasswordReset"`
 }
 
 type APIv2Handler struct {
@@ -88,7 +89,7 @@ var apiV2ActionScopes = map[string][]string{
 	"inbounds":  {"read", "write"},
 	"outbounds": {"read", "write"},
 	"endpoints": {"read", "write"},
-	"providers":  {"read", "write"},
+	"providers": {"read", "write"},
 	"services":  {"read", "write"},
 	"tls":       {"read", "write"},
 	"clients":   {"read", "write"},
@@ -204,6 +205,9 @@ func (a *APIv2Handler) findUsername(c *gin.Context) string {
 		return ""
 	}
 	if t.Expiry > 0 && t.Expiry < now {
+		return ""
+	}
+	if t.ForcePasswordReset {
 		return ""
 	}
 	if legacyHeader {

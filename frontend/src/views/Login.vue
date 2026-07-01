@@ -5,11 +5,18 @@
           <v-card>
             <v-card-title class="headline" v-text="$t('login.title')"></v-card-title>
             <v-card-text>
-              <v-form @submit.prevent="login" ref="form">
+              <v-form v-if="!forcePasswordReset" @submit.prevent="login" ref="form">
                 <v-text-field v-model="username" :label="$t('login.username')" :rules="usernameRules" required @update:modelValue="errorMsg = ''"></v-text-field>
                 <v-text-field v-model="password" :label="$t('login.password')" :rules="passwordRules" type="password" required @update:modelValue="errorMsg = ''"></v-text-field>
                 <v-alert v-if="errorMsg" type="error" density="compact" variant="tonal" class="mt-1">{{ errorMsg }}</v-alert>
                 <v-btn :loading="loading" type="submit" color="primary" block class="mt-2" v-text="$t('actions.submit')"></v-btn>
+              </v-form>
+              <v-form v-else @submit.prevent="changeForcedPassword">
+                <v-alert type="warning" density="compact" variant="tonal" class="mb-2">{{ $t('login.forcePasswordReset') }}</v-alert>
+                <v-text-field v-model="resetUsername" :label="$t('admin.newUname')" :rules="usernameRules" required @update:modelValue="errorMsg = ''"></v-text-field>
+                <v-text-field v-model="resetPassword" :label="$t('admin.newPass')" :rules="passwordRules" type="password" required @update:modelValue="errorMsg = ''"></v-text-field>
+                <v-alert v-if="errorMsg" type="error" density="compact" variant="tonal" class="mt-1">{{ errorMsg }}</v-alert>
+                <v-btn :loading="loading" type="submit" color="primary" block class="mt-2" v-text="$t('actions.save')"></v-btn>
               </v-form>
               <v-select
                 density="compact"
@@ -79,6 +86,9 @@ const usernameRules = [
 ]
 
 const password = ref('')
+const resetUsername = ref('')
+const resetPassword = ref('')
+const forcePasswordReset = ref(false)
 const passwordRules = [
   (value: string) => {
     if (value?.length > 0) return true
@@ -95,6 +105,13 @@ const login = async () => {
   errorMsg.value = ''
   loading.value=true
   const response = await HttpUtil.post('api/login',{user: username.value, pass: password.value})
+  if(response.obj?.forcePasswordReset){
+    forcePasswordReset.value = true
+    resetUsername.value = response.obj.username || username.value
+    resetPassword.value = ''
+    loading.value=false
+    return
+  }
   if(response.success){
     resetInvalidLoginHandling()
     markLoginSuccess()
@@ -106,6 +123,21 @@ const login = async () => {
     // localized "invalid credentials" message for the common wrong-password case.
     errorMsg.value = response.msg || i18n.global.t('login.invalidCredentials')
   }
+}
+
+const changeForcedPassword = async () => {
+  if (resetUsername.value == '' || resetPassword.value == '') return
+  errorMsg.value = ''
+  loading.value = true
+  const response = await HttpUtil.post('api/changePass',{oldPass: password.value, newUsername: resetUsername.value, newPass: resetPassword.value})
+  loading.value = false
+  if(response.success){
+    resetInvalidLoginHandling()
+    markLoginSuccess()
+    router.push('/')
+    return
+  }
+  errorMsg.value = response.msg || i18n.global.t('login.invalidCredentials')
 }
 const changeLocale = async (l: string | null) => {
   const selectedLocale = await setI18nLocale(l ?? 'en')

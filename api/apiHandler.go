@@ -1,6 +1,8 @@
 package api
 
 import (
+	"net/http"
+
 	"github.com/deposist/s-ui-x-extended/paidsub"
 
 	"github.com/gin-gonic/gin"
@@ -51,7 +53,7 @@ func (a *APIHandler) cachedAuthExemptPaths() map[string]struct{} {
 
 func (a *APIHandler) registerGroupedRoutes(g *gin.RouterGroup) {
 	g.POST("/login", a.ApiService.Login)
-	g.POST("/changePass", a.ApiService.ChangePass)
+	g.POST("/changePass", a.reloadTokensAfter(a.ApiService.ChangePass))
 	g.POST("/addAdmin", a.ApiService.AddAdmin)
 	g.POST("/deleteAdmin", a.reloadTokensAfter(a.ApiService.DeleteAdmin))
 	g.POST("/save", a.save)
@@ -60,7 +62,7 @@ func (a *APIHandler) registerGroupedRoutes(g *gin.RouterGroup) {
 	g.POST("/linkConvert", a.ApiService.LinkConvert)
 	g.POST("/subConvert", a.ApiService.SubConvert)
 	g.POST("/importdb", a.ApiService.ImportDb)
-	registerImportXUIRoutes(g, &a.ApiService)
+	a.registerBrowserImportXUIRoutes(g)
 	g.POST("/addToken", a.reloadTokensAfter(a.ApiService.AddToken))
 	g.POST("/deleteToken", a.reloadTokensAfter(a.ApiService.DeleteToken))
 	g.POST("/setTokenEnabled", a.reloadTokensAfter(a.ApiService.SetTokenEnabled))
@@ -144,6 +146,20 @@ func (a *APIHandler) loadPartialData(action string) gin.HandlerFunc {
 		err := a.ApiService.LoadPartialData(c, []string{action})
 		if err != nil {
 			jsonMsg(c, action, err)
+		}
+	}
+}
+
+func (a *APIHandler) registerBrowserImportXUIRoutes(g *gin.RouterGroup) {
+	for _, spec := range importXUIRouteSpecs {
+		handler := spec.handler(&a.ApiService)
+		switch spec.method {
+		case http.MethodGet:
+			g.GET(spec.path, handler)
+		case http.MethodPost:
+			g.POST(spec.path, a.reloadTokensAfter(handler))
+		default:
+			panic("unsupported import-xui route method: " + spec.method)
 		}
 	}
 }

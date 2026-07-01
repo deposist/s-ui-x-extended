@@ -107,6 +107,24 @@ func TestAPIV2LegacyTokenHeaderRejectedAfterSunsetIssue34(t *testing.T) {
 	}
 }
 
+func TestAPIV2RejectsTokenWhenPasswordResetRequired(t *testing.T) {
+	initSessionTestDB(t)
+	if err := database.GetDB().Create(&model.Tokens{Desc: "legacy", Token: "legacy-token", Expiry: 0, UserId: 1, Enabled: true}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.GetDB().Model(&model.User{}).Where("id = ?", 1).Update("force_password_reset", true).Error; err != nil {
+		t.Fatal(err)
+	}
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	NewAPIv2Handler(router.Group("/apiv2"))
+
+	recorder := performAPIV2TokenRequest(router, "Authorization", "Bearer legacy-token")
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("unexpected status %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+}
+
 func TestAPIV2BearerTokenAcceptedAfterLegacySunsetIssue34(t *testing.T) {
 	withAPITokenNow(t, legacyTokenHeaderSunsetAt.Add(time.Second))
 	router := newAPIV2TokenTestRouter(t)

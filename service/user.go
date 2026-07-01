@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -37,6 +38,8 @@ const (
 	defaultAPITokenScope = "admin"
 	maxAPITokenScopeLen  = len("observability")
 )
+
+var ErrForcePasswordReset = errors.New("password reset required")
 
 var allowedAPITokenScopes = []string{
 	"admin",
@@ -87,13 +90,13 @@ func (s *UserService) UpdateFirstUser(username string, password string) error {
 	return db.Save(user).Error
 }
 
-func (s *UserService) Login(username string, password string, remoteIP string) (string, error) {
+func (s *UserService) Login(username string, password string, remoteIP string) (string, bool, error) {
 	user, needsMigration := s.CheckUser(username, password, remoteIP)
 	if user == nil {
-		return "", common.NewError("wrong user or password! IP: ", remoteIP)
+		return "", false, common.NewError("wrong user or password! IP: ", remoteIP)
 	}
 	if needsMigration {
-		if err := s.updatePasswordHash(user, password); err != nil {
+		if err := s.updatePasswordHash(user, password, !user.ForcePasswordReset); err != nil {
 			logger.Warning("password migration failed:", err)
 		}
 	}
@@ -101,7 +104,10 @@ func (s *UserService) Login(username string, password string, remoteIP string) (
 	// previous last_logins, then record this login. Both are best-effort.
 	s.detectNewLoginIP(user, remoteIP)
 	s.RecordLogin(username, remoteIP)
-	return user.Username, nil
+	if user.ForcePasswordReset {
+		return user.Username, true, ErrForcePasswordReset
+	}
+	return user.Username, false, nil
 }
 
 // CheckUser is a pure query (Command-Query Separation): it validates the
@@ -324,15 +330,16 @@ func parseUserID(raw string) (uint, error) {
 	return uint(id), nil
 }
 
-func (s *UserService) updatePasswordHash(user *model.User, password string) error {
+func (s *UserService) updatePasswordHash(user *model.User, password string, clearForceReset bool) error {
 	passwordHash, err := common.HashPassword(password)
 	if err != nil {
 		return err
 	}
-	return database.GetDB().Model(model.User{}).Where("id = ?", user.Id).Updates(map[string]any{
-		"password":             passwordHash,
-		"force_password_reset": false,
-	}).Error
+	updates := map[string]any{"password": passwordHash}
+	if clearForceReset {
+		updates["force_password_reset"] = false
+	}
+	return database.GetDB().Model(model.User{}).Where("id = ?", user.Id).Updates(updates).Error
 }
 
 func (s *UserService) LoadTokens() ([]byte, error) {
@@ -353,13 +360,14 @@ func (s *UserService) LoadTokens() ([]byte, error) {
 			continue
 		}
 		result = append(result, map[string]interface{}{
-			"id":          t.Id,
-			"tokenHash":   t.TokenHash,
-			"tokenPrefix": t.TokenPrefix,
-			"scope":       normalizeTokenScope(t.Scope),
-			"enabled":     t.Enabled,
-			"expiry":      t.Expiry,
-			"username":    t.User.Username,
+			"id":                 t.Id,
+			"tokenHash":          t.TokenHash,
+			"tokenPrefix":        t.TokenPrefix,
+			"scope":              normalizeTokenScope(t.Scope),
+			"enabled":            t.Enabled,
+			"expiry":             t.Expiry,
+			"username":           t.User.Username,
+			"forcePasswordReset": t.User.ForcePasswordReset,
 		})
 	}
 	jsonResult, _ := json.MarshalIndent(result, "", "  ")
@@ -426,18 +434,34 @@ func (s *UserService) AddToken(username string, expiry int64, desc string, scope
 	return plainToken, nil
 }
 
-func (s *UserService) DeleteToken(id string) error {
+func (s *UserService) DeleteToken(username string, id string) error {
 	db := database.GetDB()
-	return db.Model(model.Tokens{}).Where("id = ?", id).Delete(&model.Tokens{}).Error
+	result := db.Model(model.Tokens{}).
+		Where("id = ? AND user_id = (select id from users where username = ?)", id, username).
+		Delete(&model.Tokens{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return common.NewError("token not found")
+	}
+	return nil
 }
 
-func (s *UserService) SetTokenEnabled(id string, enabled bool) error {
-	return database.GetDB().Model(model.Tokens{}).
-		Where("id = ?", id).
+func (s *UserService) SetTokenEnabled(username string, id string, enabled bool) error {
+	result := database.GetDB().Model(model.Tokens{}).
+		Where("id = ? AND user_id = (select id from users where username = ?)", id, username).
 		Updates(map[string]interface{}{
 			"enabled":    enabled,
 			"updated_at": time.Now().Unix(),
-		}).Error
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return common.NewError("token not found")
+	}
+	return nil
 }
 
 func (s *UserService) RecordTokenUse(id uint, ip string) error {

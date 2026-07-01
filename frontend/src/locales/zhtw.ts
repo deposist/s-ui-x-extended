@@ -430,6 +430,7 @@ export default {
     password: "密碼",
     pwRules: "密碼不能為空",
     invalidCredentials: "使用者名稱或密碼無效。",
+    forcePasswordReset: "必須重設密碼。",
   },
   menu: {
     logout: "登出",

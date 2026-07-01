@@ -237,6 +237,15 @@ func pureJsonMsg(c *gin.Context, success bool, msg string) {
 }
 
 func checkLogin(c *gin.Context) {
+	if SessionRequiresPasswordReset(c) {
+		if passwordResetAllowedPath(c.Request.Method, c.Request.URL.Path) {
+			c.Next()
+			return
+		}
+		c.JSON(http.StatusForbidden, Msg{Success: false, Msg: service.ErrForcePasswordReset.Error(), Obj: gin.H{"forcePasswordReset": true}})
+		c.Abort()
+		return
+	}
 	if !IsLogin(c) {
 		if c.GetHeader("X-Requested-With") == "XMLHttpRequest" {
 			pureJsonMsg(c, false, "Invalid login")
@@ -246,6 +255,21 @@ func checkLogin(c *gin.Context) {
 		c.Abort()
 	} else {
 		c.Next()
+	}
+}
+
+func passwordResetAllowedPath(method string, path string) bool {
+	webPath, err := (&service.SettingService{}).GetWebPath()
+	if err != nil {
+		webPath = "/"
+	}
+	switch path {
+	case joinURL(webPath, "api/csrf"):
+		return method == http.MethodGet
+	case joinURL(webPath, "api/changePass"), joinURL(webPath, "api/logout"):
+		return method == http.MethodPost
+	default:
+		return false
 	}
 }
 

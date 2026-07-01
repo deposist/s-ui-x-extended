@@ -882,6 +882,7 @@ export default {
     password: "Пароль",
     pwRules: "Пароль не может быть пустым",
     invalidCredentials: "Неверное имя пользователя или пароль.",
+    forcePasswordReset: "Требуется смена пароля.",
   },
   menu: {
     logout: "Выйти",
