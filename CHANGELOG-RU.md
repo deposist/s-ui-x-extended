@@ -9,7 +9,7 @@
 
 - Нет незарелизенных изменений.
 
-## [1.5.10-beta10] - 2026-07-02 - усиление безопасности админки
+## [1.0.1-beta5] - 2026-07-02 - усиление безопасности админки
 
 Релиз с усилением безопасности. Ручная миграция базы не требуется.
 
@@ -19,7 +19,7 @@
 - API-токены админов с обязательной сменой пароля отклоняются до смены пароля.
 - Страница логина теперь поддерживает forced password reset flow.
 
-Полные release notes: [`.github/RELEASE_NOTES_v1.5.10-beta10.md`](.github/RELEASE_NOTES_v1.5.10-beta10.md).
+Полные release notes: [`.github/RELEASE_NOTES_v1.0.1-beta5.md`](.github/RELEASE_NOTES_v1.0.1-beta5.md).
 
 ## [1.0.1-beta4] - 2026-06-30 - исправление WARP endpoint reserved field
 

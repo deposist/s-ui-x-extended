@@ -9,7 +9,7 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
-## [1.5.10-beta10] - 2026-07-02 - admin security hardening
+## [1.0.1-beta5] - 2026-07-02 - admin security hardening
 
 Security hardening release. No manual database migration is required.
 
@@ -19,7 +19,7 @@ Security hardening release. No manual database migration is required.
 - API tokens for admins that must reset a password are rejected until the password changes.
 - The login page now supports the forced password reset flow.
 
-Full release notes: [`.github/RELEASE_NOTES_v1.5.10-beta10.md`](.github/RELEASE_NOTES_v1.5.10-beta10.md).
+Full release notes: [`.github/RELEASE_NOTES_v1.0.1-beta5.md`](.github/RELEASE_NOTES_v1.0.1-beta5.md).
 
 ## [1.0.1-beta4] - 2026-06-30 - WARP endpoint reserved field fix
 

@@ -1,4 +1,4 @@
-# S-UI-X-Extended v1.5.10-beta10
+# S-UI-X-Extended v1.0.1-beta5
 
 Security hardening release for admin sessions, API tokens, and public subscription URLs.
 
@@ -29,7 +29,7 @@ Security hardening release for admin sessions, API tokens, and public subscripti
 
 ---
 
-# S-UI-X-Extended v1.5.10-beta10
+# S-UI-X-Extended v1.0.1-beta5
 
 Релиз с усилением безопасности админ-сессий, API-токенов и публичных subscription URL.
 

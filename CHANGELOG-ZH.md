@@ -8,7 +8,7 @@
 
 - 暂无未发布变更。
 
-## [1.5.10-beta10] - 2026-07-02 - 管理端安全加固
+## [1.0.1-beta5] - 2026-07-02 - 管理端安全加固
 
 安全加固版本。无需手动迁移数据库。
 
@@ -18,7 +18,7 @@
 - 需要重置密码的管理员，其 API token 会被拒绝，直到密码修改完成。
 - 登录页现在支持 forced password reset 流程。
 
-完整发布说明：[`.github/RELEASE_NOTES_v1.5.10-beta10.md`](.github/RELEASE_NOTES_v1.5.10-beta10.md)。
+完整发布说明：[`.github/RELEASE_NOTES_v1.0.1-beta5.md`](.github/RELEASE_NOTES_v1.0.1-beta5.md)。
 
 ## [1.0.1-beta4] - 2026-06-30 - 修复 WARP endpoint reserved 字段
 
