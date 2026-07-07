@@ -230,6 +230,26 @@ func (a *ApiService) TestTelegram(c *gin.Context) {
 	jsonObj(c, result, nil)
 }
 
+func (a *ApiService) DetectTelegramChat(c *gin.Context) {
+	if !a.requireTokenScopeAny(c, "telegram", "admin") {
+		return
+	}
+	result := a.TelegramService.DetectTelegramChat(c.Request.FormValue("telegramBotToken"))
+	severity := service.AuditSeverityInfo
+	details := map[string]any{
+		"success": result.Success,
+	}
+	if result.ChatID != "" {
+		details["chatType"] = result.ChatType
+	}
+	if !result.Success {
+		severity = service.AuditSeverityWarn
+		details["errorClass"] = result.ErrorClass
+	}
+	a.recordAudit(c, requestActor(c), "telegram_detect_chat", "telegram", severity, details)
+	jsonObj(c, result, nil)
+}
+
 func (a *ApiService) BackupToTelegram(c *gin.Context) {
 	a.runTelegramBackupManual(c)
 }

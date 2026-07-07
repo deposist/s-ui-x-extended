@@ -28,8 +28,22 @@
         </v-col>
         <v-col cols="12" sm="6" md="4">
           <v-text-field v-model="settings.telegramChatID" :label="$t('telegram.chatId')" placeholder="123456789" persistent-placeholder hide-details>
-            <template v-slot:append-inner><SettingInfo :text="$t('telegram.hint.chatId')" /></template>
+            <template v-slot:append-inner>
+              <SettingInfo :text="$t('telegram.hint.chatId')" />
+            </template>
           </v-text-field>
+          <v-btn
+            class="mt-2"
+            size="small"
+            variant="text"
+            color="primary"
+            :loading="detectChatLoading"
+            :disabled="detectChatLoading"
+            @click="detectTelegramChat"
+          >
+            <v-icon icon="mdi-magnify" class="me-1" />
+            {{ $t('telegram.detectChatId') }}
+          </v-btn>
         </v-col>
         <v-col cols="12" sm="6" md="4">
           <v-text-field
@@ -295,6 +309,15 @@ type BackupRunStatus = {
   errorClass?: string
 }
 
+type TelegramChatDetectionResult = {
+  success: boolean
+  chatID?: string
+  chatType?: string
+  title?: string
+  username?: string
+  errorClass?: string
+}
+
 const defaultTelegramSettings: TelegramSettingsMap = {
   telegramEnabled: 'false',
   telegramBotToken: '',
@@ -322,6 +345,7 @@ const defaultTelegramSettings: TelegramSettingsMap = {
 
 const loading = ref(false)
 const testLoading = ref(false)
+const detectChatLoading = ref(false)
 const backupRunLoading = ref(false)
 const settings = ref<TelegramSettingsMap>({ ...defaultTelegramSettings })
 const oldSettings = ref<TelegramSettingsMap>({ ...defaultTelegramSettings })
@@ -466,11 +490,7 @@ const handleTelegramBackupScheduleModeChange = () => {
   updateTelegramBackupCronFromSchedule()
 }
 
-const save = async () => {
-  if (telegramBackupScheduleErrors.value.length > 0 || telegramBackupPassphraseErrors.value.length > 0) {
-    return
-  }
-  loading.value = true
+const telegramSettingsPayload = () => {
   const payload = stripSecretPlaceholders(pickTelegramSettings(settings.value))
   if (payload.telegramEnabled !== 'true') {
     delete payload.telegramBackupEnabled
@@ -480,21 +500,69 @@ const save = async () => {
     delete payload.telegramBackupExcludeTables
     delete payload.telegramBackupMaxSizeMB
   }
+  return payload
+}
+
+const persistTelegramSettings = async (showToast = true): Promise<boolean> => {
+  if (telegramBackupScheduleErrors.value.length > 0 || telegramBackupPassphraseErrors.value.length > 0) {
+    return false
+  }
+  loading.value = true
+  const payload = telegramSettingsPayload()
   const msg = await HttpUtils.post('api/save', { object: 'settings', action: 'set', data: JSON.stringify(payload) })
   if (msg.success) {
-    push.success({
-      title: i18n.global.t('success'),
-      duration: 5000,
-      message: i18n.global.t('actions.set') + ' ' + i18n.global.t('telegram.title'),
-    })
+    if (showToast) {
+      push.success({
+        title: i18n.global.t('success'),
+        duration: 5000,
+        message: i18n.global.t('actions.set') + ' ' + i18n.global.t('telegram.title'),
+      })
+    }
     setData(msg.obj.settings)
   }
   loading.value = false
+  return msg.success
+}
+
+const save = async () => {
+  await persistTelegramSettings(true)
+}
+
+const detectTelegramChat = async () => {
+  detectChatLoading.value = true
+  const token = settings.value.telegramBotToken.trim()
+  const payload = token ? { telegramBotToken: token } : {}
+  const msg = await HttpUtils.post('api/telegram/detect-chat', payload)
+  if (msg.success) {
+    const result = msg.obj as TelegramChatDetectionResult
+    if (result.success && result.chatID) {
+      settings.value.telegramChatID = result.chatID
+      push.success({
+        title: i18n.global.t('success'),
+        duration: 5000,
+        message: i18n.global.t('telegram.detectChatSuccess'),
+      })
+    } else {
+      push.warning({
+        title: i18n.global.t('telegram.detectChatFailed'),
+        duration: 8000,
+        message: i18n.global.t('telegram.detectChatErrors.' + (result.errorClass ?? 'unknown')),
+      })
+    }
+  }
+  detectChatLoading.value = false
 }
 
 const testTelegram = async () => {
   testLoading.value = true
   testResult.value = null
+  if (stateChange.value) {
+    const saved = await persistTelegramSettings(false)
+    if (!saved) {
+      testLoading.value = false
+      return
+    }
+  }
   const msg = await HttpUtils.post('api/telegram/test', {})
   if (msg.success) {
     testResult.value = msg.obj as TelegramResult

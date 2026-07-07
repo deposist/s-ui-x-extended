@@ -8,6 +8,17 @@
 
 - 暂无未发布变更。
 
+## [1.0.1] - 2026-07-07 - 稳定版 1.0.1
+
+稳定版 v1.0.1 汇总 v1.0.1 beta 线，并加入 Telegram Chat ID 设置修复。无需手动迁移数据库或配置。
+
+- Telegram 设置新增 Detect Chat ID 操作。机器人收到 `/start` 或任意消息后，面板可以读取 Telegram updates 并填写 Chat ID 字段。
+- 检测可使用刚输入的 bot token，也可使用面板中已保存的 encrypted token。已保存的 token 不会返回给浏览器。
+- Telegram Test 现在会先保存已修改的 Telegram 设置，再发送测试消息，因此刚输入或检测到的 Chat ID 会立即生效。
+- 包含 v1.0.1 beta 线的 hardening：API token ownership checks、新安装更安全的 `subSecretRequired` 默认值、forced password reset sessions、WARP/WireGuard `reserved` fields cleanup，以及 inbound sniff 迁移。
+
+完整 release notes: [`docs/releases/v1.0.1.md`](docs/releases/v1.0.1.md)。
+
 ## [1.0.1-beta5] - 2026-07-02 - 管理端安全加固
 
 安全加固版本。无需手动迁移数据库。

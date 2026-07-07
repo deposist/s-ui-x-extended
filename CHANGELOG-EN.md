@@ -9,6 +9,17 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.1] - 2026-07-07 - stable 1.0.1 release
+
+Stable v1.0.1 promotes the v1.0.1 beta line and adds the Telegram Chat ID setup fix. No manual database or configuration migration is required.
+
+- Added a Detect Chat ID action to Telegram settings. After the bot receives `/start` or any message, the panel can read Telegram updates and fill the Chat ID field.
+- Detection works with a newly typed bot token or with the encrypted token already saved in the panel. Saved tokens are not returned to the browser.
+- Telegram Test now saves changed Telegram settings before sending the test message, so a freshly entered or detected Chat ID is used immediately.
+- Includes the v1.0.1 beta-line hardening: API token ownership checks, safer `subSecretRequired` default for fresh installs, forced password reset sessions, WARP/WireGuard reserved-field cleanup, and inbound sniff migration.
+
+Full release notes: [`docs/releases/v1.0.1.md`](docs/releases/v1.0.1.md).
+
 ## [1.0.1-beta5] - 2026-07-02 - admin security hardening
 
 Security hardening release. No manual database migration is required.

@@ -273,6 +273,67 @@ func TestTelegramInvalidProxySettingFailsBeforeOutbound(t *testing.T) {
 	}
 }
 
+func TestDetectTelegramChatUsesLatestUpdate(t *testing.T) {
+	settingService := initSettingTestDB(t)
+	if _, err := settingService.GetAllSetting(); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.GetDB().Model(model.Setting{}).Where("key = ?", "telegramBotToken").Update("value", "123456:test-token").Error; err != nil {
+		t.Fatal(err)
+	}
+
+	var gotPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		if got := r.Method; got != http.MethodPost {
+			t.Fatalf("unexpected method: %s", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true,"result":[{"message":{"chat":{"id":111,"type":"private","first_name":"Old"}}},{"message":{"chat":{"id":-100222,"type":"supergroup","title":"Ops"}}}]}`))
+	}))
+	defer server.Close()
+	baseURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restoreClient := setTelegramHTTPClient(&http.Client{
+		Transport: telegramServerRoundTripper{base: baseURL, transport: http.DefaultTransport},
+		Timeout:   time.Second,
+	})
+	defer restoreClient()
+
+	result := (&TelegramService{}).DetectTelegramChat("")
+	if !strings.Contains(gotPath, "/bot123456:test-token/getUpdates") {
+		t.Fatalf("unexpected telegram path: %s", gotPath)
+	}
+	if !result.Success || result.ChatID != "-100222" || result.ChatType != "supergroup" || result.Title != "Ops" {
+		t.Fatalf("unexpected detection result: %#v", result)
+	}
+}
+
+func TestDetectTelegramChatReportsNoUpdates(t *testing.T) {
+	initSettingTestDB(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true,"result":[]}`))
+	}))
+	defer server.Close()
+	baseURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restoreClient := setTelegramHTTPClient(&http.Client{
+		Transport: telegramServerRoundTripper{base: baseURL, transport: http.DefaultTransport},
+		Timeout:   time.Second,
+	})
+	defer restoreClient()
+
+	result := (&TelegramService{}).DetectTelegramChat("123456:test-token")
+	if result.Success || result.ErrorClass != "no_updates" {
+		t.Fatalf("unexpected detection result: %#v", result)
+	}
+}
+
 func TestTelegramStatusErrorClassMapping(t *testing.T) {
 	settingService := initSettingTestDB(t)
 	enableTelegramForTest(t, settingService)

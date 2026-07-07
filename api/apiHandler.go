@@ -114,6 +114,7 @@ func (a *APIHandler) registerGroupedRoutes(g *gin.RouterGroup) {
 
 	telegram := g.Group("/telegram")
 	telegram.POST("/test", a.ApiService.TestTelegram)
+	telegram.POST("/detect-chat", a.ApiService.DetectTelegramChat)
 	telegram.POST("/backup", a.ApiService.BackupToTelegram)
 	telegram.POST("/backup/run", a.ApiService.RunTelegramBackup)
 

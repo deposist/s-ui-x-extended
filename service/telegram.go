@@ -12,6 +12,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -40,6 +42,45 @@ type TelegramResult struct {
 	Success    bool          `json:"success"`
 	ErrorClass string        `json:"errorClass,omitempty"`
 	RetryAfter time.Duration `json:"-"`
+}
+
+type TelegramChatDetectionResult struct {
+	Success    bool   `json:"success"`
+	ChatID     string `json:"chatID,omitempty"`
+	ChatType   string `json:"chatType,omitempty"`
+	Title      string `json:"title,omitempty"`
+	Username   string `json:"username,omitempty"`
+	ErrorClass string `json:"errorClass,omitempty"`
+}
+
+type telegramDetectedChat struct {
+	ID        int64  `json:"id"`
+	Type      string `json:"type"`
+	Title     string `json:"title"`
+	Username  string `json:"username"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+}
+
+type telegramChatUpdatePayload struct {
+	Chat telegramDetectedChat `json:"chat"`
+}
+
+type telegramGetUpdatesItem struct {
+	Message           *telegramChatUpdatePayload `json:"message"`
+	EditedMessage     *telegramChatUpdatePayload `json:"edited_message"`
+	ChannelPost       *telegramChatUpdatePayload `json:"channel_post"`
+	EditedChannelPost *telegramChatUpdatePayload `json:"edited_channel_post"`
+	MyChatMember      *telegramChatUpdatePayload `json:"my_chat_member"`
+}
+
+func (u telegramGetUpdatesItem) chat() *telegramDetectedChat {
+	for _, payload := range []*telegramChatUpdatePayload{u.Message, u.EditedMessage, u.ChannelPost, u.EditedChannelPost, u.MyChatMember} {
+		if payload != nil && payload.Chat.ID != 0 {
+			return &payload.Chat
+		}
+	}
+	return nil
 }
 
 const (
@@ -354,6 +395,88 @@ func (s *TelegramService) TestTelegram() TelegramResult {
 	return s.send("S-UI Telegram notification test")
 }
 
+func (s *TelegramService) DetectTelegramChat(tokenOverride string) TelegramChatDetectionResult {
+	token := strings.TrimSpace(tokenOverride)
+	if token == "" {
+		var err error
+		token, err = s.getString("telegramBotToken")
+		if err != nil {
+			return TelegramChatDetectionResult{ErrorClass: "settings"}
+		}
+		token = strings.TrimSpace(token)
+	}
+	if token == "" {
+		return TelegramChatDetectionResult{ErrorClass: "missing_token"}
+	}
+
+	payload, err := json.Marshal(map[string]int{"limit": 100})
+	if err != nil {
+		return TelegramChatDetectionResult{ErrorClass: "payload"}
+	}
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://api.telegram.org/bot"+token+"/getUpdates", bytes.NewReader(payload))
+	if err != nil {
+		return TelegramChatDetectionResult{ErrorClass: "request"}
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client, err := s.getTelegramHTTPClient()
+	if err != nil {
+		return TelegramChatDetectionResult{ErrorClass: "proxy"}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return TelegramChatDetectionResult{ErrorClass: "network"}
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return TelegramChatDetectionResult{ErrorClass: telegramStatusErrorClass(resp.StatusCode)}
+	}
+
+	var apiResp struct {
+		OK          bool                     `json:"ok"`
+		ErrorCode   int                      `json:"error_code"`
+		Description string                   `json:"description"`
+		Result      []telegramGetUpdatesItem `json:"result"`
+	}
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		return TelegramChatDetectionResult{ErrorClass: "payload"}
+	}
+	if !apiResp.OK {
+		if apiResp.ErrorCode > 0 {
+			return TelegramChatDetectionResult{ErrorClass: telegramStatusErrorClass(apiResp.ErrorCode)}
+		}
+		return TelegramChatDetectionResult{ErrorClass: "unknown"}
+	}
+	for i := len(apiResp.Result) - 1; i >= 0; i-- {
+		chat := apiResp.Result[i].chat()
+		if chat == nil {
+			continue
+		}
+		return TelegramChatDetectionResult{
+			Success:  true,
+			ChatID:   strconv.FormatInt(chat.ID, 10),
+			ChatType: chat.Type,
+			Title:    telegramDetectedChatTitle(*chat),
+			Username: chat.Username,
+		}
+	}
+	return TelegramChatDetectionResult{ErrorClass: "no_updates"}
+}
+
+func telegramDetectedChatTitle(chat telegramDetectedChat) string {
+	if chat.Title != "" {
+		return chat.Title
+	}
+	name := strings.TrimSpace(strings.TrimSpace(chat.FirstName) + " " + strings.TrimSpace(chat.LastName))
+	if name != "" {
+		return name
+	}
+	if chat.Username != "" {
+		return "@" + chat.Username
+	}
+	return ""
+}
+
 func EncryptTelegramBackup(plain []byte) ([]byte, []byte, error) {
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
@@ -438,8 +561,8 @@ func (s *TelegramService) SendTelegramDocument(filename string, data []byte, cap
 		return TelegramResult{ErrorClass: telegramStatusErrorClass(resp.StatusCode)}
 	}
 	var tgResp struct {
-		OK          bool `json:"ok"`
-		ErrorCode   int `json:"error_code"`
+		OK          bool   `json:"ok"`
+		ErrorCode   int    `json:"error_code"`
 		Description string `json:"description"`
 	}
 	if len(respData) > 0 {
