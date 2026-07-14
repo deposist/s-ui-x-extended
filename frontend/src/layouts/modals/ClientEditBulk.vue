@@ -1,7 +1,7 @@
 <template>
   <FormShell
     :loading="loading"
-    :save-disabled="loading || selectedClients.values.length == 0"
+    :save-disabled="loading || targetClientCount === 0"
     :title="$t('actions.editbulk')"
     @close="closeModal"
     @save="saveChanges"
@@ -101,6 +101,11 @@ export default {
         values: [] as any[],
       },
     }
+  },
+  computed: {
+    targetClientCount(): number {
+      return this.getTargetClients().length
+    },
   },
   methods: {
     onActionChange() {

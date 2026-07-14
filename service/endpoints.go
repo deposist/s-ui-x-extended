@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -26,6 +27,10 @@ func (s *EndpointService) runtime() *Runtime {
 
 func (o *EndpointService) GetAll() (*[]map[string]interface{}, error) {
 	db := database.GetDB()
+	managedTag := ""
+	if settings, settingsErr := (&SettingService{}).GetAWGSettings(); settingsErr == nil && settings.Enabled {
+		managedTag = settings.EndpointTag
+	}
 	endpoints := []*model.Endpoint{}
 	err := db.Model(model.Endpoint{}).Scan(&endpoints).Error
 	if err != nil {
@@ -34,10 +39,11 @@ func (o *EndpointService) GetAll() (*[]map[string]interface{}, error) {
 	var data []map[string]interface{}
 	for _, endpoint := range endpoints {
 		epData := map[string]interface{}{
-			"id":   endpoint.Id,
-			"type": endpoint.Type,
-			"tag":  endpoint.Tag,
-			"ext":  endpoint.Ext,
+			"id":         endpoint.Id,
+			"type":       endpoint.Type,
+			"tag":        endpoint.Tag,
+			"ext":        endpoint.Ext,
+			"awgManaged": managedTag != "" && endpoint.Tag == managedTag,
 		}
 		if endpoint.Options != nil {
 			var restFields map[string]json.RawMessage
@@ -85,6 +91,18 @@ func (s *EndpointService) saveEndpointUpsert(tx *gorm.DB, act string, data json.
 	var endpoint model.Endpoint
 	if err := endpoint.UnmarshalJSON(data); err != nil {
 		return nil, err
+	}
+	if act == "edit" && endpoint.Id > 0 {
+		settings, settingsErr := (&SettingService{}).GetAWGSettings()
+		if settingsErr == nil && settings.Enabled {
+			var current model.Endpoint
+			if err := tx.Select("tag", "options").First(&current, endpoint.Id).Error; err != nil {
+				return nil, err
+			}
+			if current.Tag == settings.EndpointTag && !awgEndpointPeersEqual(current.Options, endpoint.Options) {
+				return nil, fmt.Errorf("managed AWG endpoint peers are controlled by the device manager")
+			}
+		}
 	}
 
 	if endpoint.Type == "warp" {
@@ -143,6 +161,22 @@ func (s *EndpointService) saveEndpointUpsert(tx *gorm.DB, act string, data json.
 		change.removeTags = []string{oldTag}
 	}
 	return change, nil
+}
+
+func awgEndpointPeersEqual(current, next json.RawMessage) bool {
+	var currentOptions, nextOptions map[string]json.RawMessage
+	if json.Unmarshal(current, &currentOptions) != nil || json.Unmarshal(next, &nextOptions) != nil {
+		return false
+	}
+	currentPeers := bytes.TrimSpace(currentOptions["peers"])
+	nextPeers := bytes.TrimSpace(nextOptions["peers"])
+	if len(currentPeers) == 0 {
+		currentPeers = []byte("[]")
+	}
+	if len(nextPeers) == 0 {
+		nextPeers = []byte("[]")
+	}
+	return bytes.Equal(currentPeers, nextPeers)
 }
 
 func (s *EndpointService) saveEndpointDelete(tx *gorm.DB, data json.RawMessage) (*entityCoreChange, error) {

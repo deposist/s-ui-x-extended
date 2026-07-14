@@ -108,11 +108,11 @@ func legacyInboundRuleActionRows(tx *gorm.DB) ([]legacyInboundRuleActionRow, err
 			continue
 		}
 		snapshot := legacyInboundRuleActionSnapshot{ID: inbound.Id, Tag: inbound.Tag}
-		snapshot.Sniff, _ = boolOption(options, "sniff")
-		snapshot.SniffTimeout, _ = stringOption(options, "sniff_timeout")
-		snapshot.SniffOverrideDestination, _ = boolOption(options, "sniff_override_destination")
-		snapshot.DomainStrategy, _ = stringOption(options, "domain_strategy")
-		snapshot.UDPDisableDomainUnmapping, _ = boolOption(options, "udp_disable_domain_unmapping")
+		snapshot.Sniff = boolOption(options, "sniff")
+		snapshot.SniffTimeout = stringOption(options, "sniff_timeout")
+		snapshot.SniffOverrideDestination = boolOption(options, "sniff_override_destination")
+		snapshot.DomainStrategy = stringOption(options, "domain_strategy")
+		snapshot.UDPDisableDomainUnmapping = boolOption(options, "udp_disable_domain_unmapping")
 		for key := range legacyInboundRuleActionFields {
 			delete(options, key)
 		}
@@ -339,24 +339,18 @@ func stringSet(value any) map[string]bool {
 	return out
 }
 
-func boolOption(options map[string]any, key string) (bool, bool) {
-	value, ok := options[key]
-	if !ok {
-		return false, false
-	}
+func boolOption(options map[string]any, key string) bool {
+	value := options[key]
 	if typed, ok := value.(bool); ok {
-		return typed, true
+		return typed
 	}
-	return false, true
+	return false
 }
 
-func stringOption(options map[string]any, key string) (string, bool) {
-	value, ok := options[key]
-	if !ok {
-		return "", false
-	}
+func stringOption(options map[string]any, key string) string {
+	value := options[key]
 	if typed, ok := value.(string); ok {
-		return typed, true
+		return typed
 	}
-	return "", true
+	return ""
 }

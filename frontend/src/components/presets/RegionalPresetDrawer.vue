@@ -28,17 +28,7 @@
           </v-alert>
 
           <v-row class="mb-2">
-            <v-col cols="12" sm="6">
-              <v-select
-                v-model="proxyOutbound"
-                density="compact"
-                hide-details
-                :items="outboundItems"
-                :label="t('regionalPresets.proxyOutbound')"
-                variant="outlined"
-              />
-            </v-col>
-            <v-col cols="12" sm="6">
+            <v-col cols="12">
               <v-select
                 v-model="directOutbound"
                 density="compact"
@@ -52,9 +42,6 @@
 
           <v-alert v-if="!hasOutbounds" density="compact" type="warning" variant="tonal" class="mb-4">
             {{ t('regionalPresets.selectOutbounds') }}
-          </v-alert>
-          <v-alert v-else-if="sameOutbound" density="compact" type="warning" variant="tonal" class="mb-4">
-            {{ t('regionalPresets.sameOutboundWarning') }}
           </v-alert>
 
           <section class="regional-preset-drawer__cards">
@@ -88,85 +75,9 @@
                 <div v-show="r.state.enabled">
                   <v-divider />
                   <div class="pa-4">
-                    <!-- Direction Choice -->
-                    <div class="text-caption font-weight-bold mb-2">
-                      {{ t('regionalPresets.proxyOutbound') }} / {{ t('regionalPresets.directOutbound') }}
-                    </div>
-                    <v-radio-group
-                      v-model="r.state.direction"
-                      hide-details
-                      class="mt-0"
-                    >
-                      <v-radio value="direct" class="mb-2">
-                        <template #label>
-                          <div>
-                            <div class="text-body-2 font-weight-bold text-high-emphasis">{{ t('regionalPresets.direction.direct.title') }}</div>
-                            <div class="text-caption text-medium-emphasis">{{ t('regionalPresets.direction.direct.description') }}</div>
-                          </div>
-                        </template>
-                      </v-radio>
-                      <v-radio value="proxy">
-                        <template #label>
-                          <div>
-                            <div class="text-body-2 font-weight-bold text-high-emphasis">{{ t('regionalPresets.direction.proxy.title') }}</div>
-                            <div class="text-caption text-medium-emphasis">{{ t('regionalPresets.direction.proxy.description') }}</div>
-                          </div>
-                        </template>
-                      </v-radio>
-                    </v-radio-group>
-
-                    <!-- DNS Text -->
-                    <div class="mt-4 pa-3 bg-surface-variant rounded-lg text-caption text-medium-emphasis d-flex align-center">
+                    <div class="pa-3 bg-surface-variant rounded-lg text-caption text-medium-emphasis d-flex align-center">
                       <v-icon icon="mdi-information-outline" size="small" class="mr-2" />
                       <span>{{ r.dnsText }}</span>
-                    </div>
-
-                    <!-- Exceptions Panel -->
-                    <div class="mt-4">
-                      <v-expansion-panels variant="accordion" class="border border-opacity-25 rounded-lg">
-                        <v-expansion-panel elevation="0">
-                          <v-expansion-panel-title class="text-caption font-weight-bold py-2 px-3 min-height-0">
-                            {{ t('regionalPresets.advanced.title') }}
-                          </v-expansion-panel-title>
-                          <v-expansion-panel-text class="px-0 pt-2">
-                            <div class="text-caption text-medium-emphasis mb-3">
-                              {{ t('regionalPresets.advanced.exceptionsHelp') }}
-                            </div>
-                            
-                            <div class="d-flex align-start">
-                              <v-text-field
-                                v-model="exceptionInputs[r.key]"
-                                density="compact"
-                                :error-messages="exceptionErrors[r.key]"
-                                hide-details="auto"
-                                :label="t('regionalPresets.advanced.exceptions')"
-                                variant="outlined"
-                                @keydown.enter="handleAddException(r.key)"
-                              />
-                              <v-btn variant="tonal" height="40" class="ml-2" @click="handleAddException(r.key)">
-                                {{ t('regionalPresets.advanced.addDomain') }}
-                              </v-btn>
-                            </div>
-
-                            <div v-if="r.state.exceptions.length === 0" class="text-caption text-medium-emphasis mt-3 text-center style-italic">
-                              {{ t('regionalPresets.advanced.noExceptions') }}
-                            </div>
-                            <div v-else class="d-flex flex-wrap gap-2 mt-3">
-                              <v-chip
-                                v-for="(item, index) in r.state.exceptions"
-                                :key="item"
-                                closable
-                                size="small"
-                                variant="tonal"
-                                class="mr-2 mb-2"
-                                @click:close="removeException(r.key, index)"
-                              >
-                                {{ item }}
-                              </v-chip>
-                            </div>
-                          </v-expansion-panel-text>
-                        </v-expansion-panel>
-                      </v-expansion-panels>
                     </div>
                   </div>
                 </div>
@@ -317,8 +228,6 @@ import {
   applyPresets,
   computePreview,
   detectPresetState,
-  isPresetManagedItem,
-  type PresetDirection,
   type PresetPreviewGroup,
   type PresetRegion,
   type PresetRegionKey,
@@ -340,14 +249,11 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const drawerWidth = 520
 const step = ref<'selection' | 'preview' | 'success' | 'error'>('selection')
-const proxyOutbound = ref('')
 const directOutbound = ref('direct')
 const errorMessage = ref('')
 
 const ruState = reactive<RegionalPresetState>({ region: 'RU', enabled: false, direction: 'direct', exceptions: [] })
 const zhState = reactive<RegionalPresetState>({ region: 'ZH', enabled: false, direction: 'direct', exceptions: [] })
-const exceptionErrors = reactive<Record<PresetRegionKey, string>>({ ru: '', zh: '' })
-const exceptionInputs = reactive<Record<PresetRegionKey, string>>({ ru: '', zh: '' })
 
 const visible = computed({
   get: () => props.modelValue,
@@ -359,8 +265,7 @@ const outboundItems = computed(() => {
   return [...tags].map(tag => ({ title: tag, value: tag }))
 })
 
-const hasOutbounds = computed(() => proxyOutbound.value.length > 0 && directOutbound.value.length > 0)
-const sameOutbound = computed(() => hasOutbounds.value && proxyOutbound.value === directOutbound.value)
+const hasOutbounds = computed(() => directOutbound.value.length > 0)
 const hasEnabledRegion = computed(() => ruState.enabled || zhState.enabled)
 
 const hasChanges = computed(() => {
@@ -386,7 +291,6 @@ const preview = computed(() => {
     }
   }
   return computePreview(props.config, ruState, zhState, {
-    proxyOutbound: proxyOutbound.value,
     directOutbound: directOutbound.value,
   })
 })
@@ -435,44 +339,13 @@ const resetFromConfig = () => {
   const detected = detectPresetState(props.config)
   assignState(ruState, detected.ru)
   assignState(zhState, detected.zh)
-  proxyOutbound.value = props.outboundTags.find(tag => tag && tag !== 'direct') ?? ''
   directOutbound.value = outboundItems.value.some(item => item.value === 'direct') ? 'direct' : (props.outboundTags[0] ?? '')
-  exceptionErrors.ru = ''
-  exceptionErrors.zh = ''
-  exceptionInputs.ru = ''
-  exceptionInputs.zh = ''
   errorMessage.value = ''
   step.value = 'selection'
 }
 
 const closeDrawer = () => {
   visible.value = false
-}
-
-const isValidDomain = (value: string) => {
-  const domain = value.trim().replace(/^\.+|\.+$/g, '').toLowerCase()
-  if (!domain || domain.includes('/') || domain.includes('*') || domain.includes(' ')) return false
-  return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(domain)
-}
-
-const handleAddException = (region: PresetRegionKey) => {
-  const value = exceptionInputs[region] || ''
-  const normalized = value.trim().replace(/^\.+|\.+$/g, '').toLowerCase()
-  exceptionErrors[region] = ''
-  if (!isValidDomain(normalized)) {
-    exceptionErrors[region] = t('regionalPresets.advanced.invalidDomain')
-    return
-  }
-  const target = region === 'ru' ? ruState : zhState
-  if (!target.exceptions.includes(normalized)) {
-    target.exceptions.push(normalized)
-  }
-  exceptionInputs[region] = ''
-}
-
-const removeException = (region: PresetRegionKey, index: number) => {
-  const target = region === 'ru' ? ruState : zhState
-  target.exceptions.splice(index, 1)
 }
 
 const dnsText = (state: RegionalPresetState, label: string) => t('regionalPresets.dns.behavior', {
@@ -509,7 +382,6 @@ const openPreview = () => {
 const applySelectedPresets = () => {
   try {
     const result = applyPresets(props.config, ruState, zhState, {
-      proxyOutbound: proxyOutbound.value,
       directOutbound: directOutbound.value,
     })
     emit('apply', result.config)

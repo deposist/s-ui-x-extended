@@ -20,6 +20,7 @@ require (
 	golang.org/x/net v0.55.0
 	golang.org/x/sync v0.20.0
 	golang.org/x/term v0.43.0
+	golang.org/x/text v0.37.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/sqlite v1.6.0
@@ -206,7 +207,6 @@ require (
 	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
@@ -219,10 +219,10 @@ require (
 
 replace github.com/quic-go/quic-go => github.com/quic-go/quic-go v0.57.1
 
-// s-ui-x-extended: swap sing-box core to shtorm-7/sing-box-extended.
-// The fork keeps the same module path (drop-in via replace). Go ignores `replace`
+// s-ui-x-extended: use the managed sing-box-extended fork with WireGuard IPC access.
+// It keeps the upstream module path (drop-in via replace). Go ignores `replace`
 // directives from dependencies, so the fork's nested replaces are duplicated here.
-replace github.com/sagernet/sing-box => github.com/shtorm-7/sing-box-extended v1.13.14-extended-2.5.0
+replace github.com/sagernet/sing-box => github.com/deposist/sing-box-extended v1.13.14-extended-2.5.1
 
 replace github.com/sagernet/sing => github.com/shtorm-7/sing v0.8.10-extended-1.2.0
 

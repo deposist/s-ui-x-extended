@@ -146,6 +146,16 @@ var defaultValueMap = map[string]string{
 	"paidSubOrderTTLMinutes":      "30",
 	"paidSubGreeting":             "",
 	"paidSubRefundRevoke":         "true",
+	// Managed AmneziaWG devices.
+	"awgEnabled":              "false",
+	"awgEndpointTag":          "",
+	"awgPublicEndpoint":       "",
+	"awgSubnet":               "10.77.0.0/16",
+	"awgDNS":                  "1.1.1.1,1.0.0.1",
+	"awgDefaultDeviceLimit":   "3",
+	"awgReconcileIntervalSec": "30",
+	"awgStatsIntervalSec":     "60",
+	"awgMTU":                  "0",
 	// IP TLS certificate (Let's Encrypt shortlived profile, RFC 8738) issued
 	// in-process via go-acme/lego. User-editable controls + machine-managed
 	// state (account key, issued paths, expiry). See IpCertificateService.
@@ -937,6 +947,9 @@ func (s *SettingService) validateAll(settings map[string]string) error {
 			return err
 		}
 		if err := validatePaidSubSettingInput(key, obj); err != nil {
+			return err
+		}
+		if err := validateAWGSettingInput(key, obj); err != nil {
 			return err
 		}
 		if err := validateIpCertSettingInput(key, obj); err != nil {

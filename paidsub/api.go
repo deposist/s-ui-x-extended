@@ -8,6 +8,7 @@ import (
 
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
+	"github.com/deposist/s-ui-x-extended/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -40,7 +41,41 @@ func RegisterRoutes(g *gin.RouterGroup, deps Deps) {
 	grp.GET("/orders", h.listOrders)
 	grp.POST("/refund", h.refund)
 	grp.GET("/status", h.status)
+	grp.GET("/awg/status", h.awgStatus)
 	grp.POST("/broadcast", h.broadcast)
+}
+
+func (h *apiHandlers) awgStatus(c *gin.Context) {
+	settings, err := (&service.SettingService{}).GetAWGSettings()
+	if err != nil {
+		respFail(c, "invalid AWG settings")
+		return
+	}
+	var counts struct {
+		Desired     int64
+		Provisioned int64
+		Pending     int64
+		Errors      int64
+	}
+	db := database.GetDB()
+	if err := db.Model(&model.AWGDevice{}).Where("desired_enabled = ?", true).Count(&counts.Desired).Error; err != nil {
+		respFail(c, "AWG status unavailable")
+		return
+	}
+	_ = db.Model(&model.AWGDevice{}).Where("provisioned = ?", true).Count(&counts.Provisioned).Error
+	_ = db.Model(&model.AWGDevice{}).Where("sync_state <> ?", "in_sync").Count(&counts.Pending).Error
+	_ = db.Model(&model.AWGDevice{}).Where("last_error <> ''").Count(&counts.Errors).Error
+	coreReachable := false
+	if core := service.DefaultRuntime().Core(); core != nil {
+		coreReachable = core.IsRunning()
+	}
+	_, encryptionErr := service.NewAWGCipherFromEnv()
+	respOK(c, map[string]any{
+		"enabled": settings.Enabled, "endpointTag": settings.EndpointTag,
+		"coreReachable": coreReachable, "encryptionKeyAvailable": encryptionErr == nil,
+		"desired": counts.Desired, "provisioned": counts.Provisioned,
+		"pending": counts.Pending, "errors": counts.Errors,
+	})
 }
 
 type broadcastRequest struct {

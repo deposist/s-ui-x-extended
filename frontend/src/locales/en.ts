@@ -87,6 +87,7 @@ export default {
       stars: "Stars",
       addDays: "+Days",
       addTraffic: "+Traffic",
+      maxAwgDevices: "Max AWG devices",
       enabled: "Enabled",
       id: "ID",
       clientName: "Client Name",
@@ -118,6 +119,7 @@ export default {
       starsAmount: "Stars amount (XTR)",
       addDays: "+Days",
       addTrafficGB: "+Traffic (GB, 0 = unlimited)",
+      maxAwgDevices: "Max AWG devices (0 = global default)",
       sort: "Sort",
       enabledField: "Enabled",
     },
@@ -1309,6 +1311,7 @@ export default {
     },
     endpoint: {
       recommendedPreset: "Apply endpoint recommendations",
+      awgManagedPeers: "Peers are managed automatically by AmneziaWG devices and cannot be edited here.",
       hint: {
         type: "Endpoint type. Recommended: choose the endpoint that matches the network integration.",
         tag: "Unique endpoint tag used by rules and outbounds. Recommended: keep the generated tag or use a clear unique name.",

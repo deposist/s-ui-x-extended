@@ -28,8 +28,9 @@ import (
 )
 
 type backupTable struct {
-	name  string
-	model any
+	name     string
+	model    any
+	optional bool
 }
 
 func backupTables() []backupTable {
@@ -48,6 +49,10 @@ func backupTables() []backupTable {
 		{name: "clients", model: &model.Client{}},
 		{name: "changes", model: &model.Changes{}},
 		{name: "audit_events", model: &model.AuditEvent{}},
+		{name: "paidsub_bindings", model: &model.PaidSubBinding{}, optional: true},
+		{name: "tariffs", model: &model.PaidSubTariff{}, optional: true},
+		{name: "payment_orders", model: &model.PaidSubPaymentOrder{}, optional: true},
+		{name: "awg_devices", model: &model.AWGDevice{}, optional: true},
 	}
 }
 
@@ -116,7 +121,7 @@ func PrepareDbBackup(exclude string) (backupPath string, cleanup func(), err err
 	}
 
 	for _, table := range tables {
-		if excludedTables[table.name] {
+		if excludedTables[table.name] || table.optional && !db.Migrator().HasTable(table.model) {
 			continue
 		}
 		sourceDB := db

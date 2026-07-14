@@ -146,6 +146,13 @@ func (s *ConfigService) GetConfig(data string) (*[]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if awgSettings, settingsErr := s.SettingService.GetAWGSettings(); settingsErr == nil {
+		var injectErr error
+		endpoints, injectErr = injectAWGManagedEndpointPeers(database.GetDB(), awgSettings, endpoints)
+		if injectErr != nil {
+			logger.Warning("managed AWG peers omitted from core config: ", injectErr)
+		}
+	}
 	singboxConfig["endpoints"], err = json.Marshal(endpoints)
 	if err != nil {
 		return nil, err
@@ -205,6 +212,9 @@ func (s *ConfigService) startCoreLocked(force bool) error {
 	}
 	runtime.markCoreStartSucceeded()
 	logger.Info("sing-box started")
+	if err := runtime.TriggerAWGReconcile(context.Background()); err != nil {
+		logger.Warning("AWG reconcile after core start failed: ", err)
+	}
 	return nil
 }
 

@@ -18,6 +18,7 @@ import (
 const botAPIBase = "https://api.telegram.org"
 
 const maxTelegramResponseBytes = 1 << 20
+const maxTelegramAWGDocumentBytes = 64 << 10
 
 // tgAPIError carries Telegram's error_code/description WITHOUT the request URL
 // (which contains the bot token). Safe to log.
@@ -193,5 +194,42 @@ func (b *Bot) sendPhoto(ctx context.Context, chatID int64, png []byte, caption s
 		return fmt.Errorf("telegram sendPhoto: status %d", resp.StatusCode)
 	}
 	_, err = parseTelegramResponse("sendPhoto", data)
+	return err
+}
+
+func (b *Bot) sendAWGDocument(ctx context.Context, chatID int64, deviceID uint, config []byte) error {
+	if deviceID == 0 || len(config) == 0 || len(config) > maxTelegramAWGDocumentBytes {
+		return fmt.Errorf("telegram sendDocument: invalid AWG document")
+	}
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	if err := w.WriteField("chat_id", strconv.FormatInt(chatID, 10)); err != nil {
+		return err
+	}
+	part, err := w.CreateFormFile("document", fmt.Sprintf("awg-device-%d.conf", deviceID))
+	if err != nil {
+		return err
+	}
+	if _, err := part.Write(config); err != nil {
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.apiURL("sendDocument"), &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	resp, err := b.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("telegram sendDocument: network error")
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, maxTelegramResponseBytes))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("telegram sendDocument: status %d", resp.StatusCode)
+	}
+	_, err = parseTelegramResponse("sendDocument", data)
 	return err
 }

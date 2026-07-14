@@ -1,10 +1,6 @@
 #!/bin/sh
 
-cd frontend
-npm i
-npm run build
-
-cd ..
+(cd frontend && npm i && npm run build) || exit 1
 echo "Backend"
 
 mkdir -p web/html

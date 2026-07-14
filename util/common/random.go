@@ -15,7 +15,6 @@ var (
 		'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
 	}
 
-	// #nosec G404 -- crypto-seeded fallback only; crypto/rand is the primary source above.
 	fallbackRand *mrand.Rand
 	fallbackMu   = sync.Mutex{}
 )
@@ -25,7 +24,9 @@ func init() {
 	if _, err := crand.Read(seedBytes[:]); err != nil {
 		panic("crypto/rand unavailable: " + err.Error())
 	}
-	seed := int64(binary.LittleEndian.Uint64(seedBytes[:]))
+	seed := int64(binary.LittleEndian.Uint32(seedBytes[:4])) |
+		int64(binary.LittleEndian.Uint32(seedBytes[4:])&0x7fffffff)<<32
+	// #nosec G404 -- crypto-seeded emergency fallback used only if a later crypto/rand call fails.
 	fallbackRand = mrand.New(mrand.NewSource(seed))
 }
 

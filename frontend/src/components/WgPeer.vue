@@ -3,22 +3,24 @@
     <v-col cols="12" sm="8">
       <v-text-field
         v-model="privateKey"
+        :disabled="readonly"
         :label="$t('types.wg.privKey')"
         append-icon="mdi-key-star"
         @click:append="refreshKey"
         hide-details></v-text-field>
     </v-col>
     <v-col cols="12" sm="8">
-      <v-text-field v-model="publicKey" :label="$t('types.wg.pubKey')" hide-details></v-text-field>
+      <v-text-field v-model="publicKey" :disabled="readonly" :label="$t('types.wg.pubKey')" hide-details></v-text-field>
     </v-col>
     <v-col cols="12" sm="8">
-      <v-text-field v-model="data.pre_shared_key" :label="$t('types.wg.psk')" hide-details></v-text-field>
+      <v-text-field v-model="data.pre_shared_key" :disabled="readonly" :label="$t('types.wg.psk')" hide-details></v-text-field>
     </v-col>
   </v-row>
   <v-row>
     <v-col cols="12" sm="6" md="4">
       <v-text-field
       :label="$t('out.addr')"
+      :disabled="readonly"
       hide-details
       v-model="address">
       </v-text-field>
@@ -26,6 +28,7 @@
     <v-col cols="12" sm="6" md="4">
       <v-text-field
       :label="$t('out.port')"
+      :disabled="readonly"
       type="number"
       min="0"
       hide-details
@@ -35,6 +38,7 @@
     <v-col cols="12" sm="6" md="4">
       <v-text-field
       label="KeepAlive"
+      :disabled="readonly"
       type="number"
       min="0"
       :suffix="$t('date.s')"
@@ -45,23 +49,24 @@
   </v-row>
   <v-row>
     <v-col cols="12" sm="6">
-      <v-text-field v-model="allowed_ips" :label="$t('types.wg.allowedIp') + ' ' + $t('commaSeparated')" hide-details></v-text-field>
+      <v-text-field v-model="allowed_ips" :disabled="readonly" :label="$t('types.wg.allowedIp') + ' ' + $t('commaSeparated')" hide-details></v-text-field>
     </v-col>
     <v-col cols="12" sm="6">
-      <v-text-field v-model="reserved" :label="'Reserved ' + $t('commaSeparated')" hide-details></v-text-field>
+      <v-text-field v-model="reserved" :disabled="readonly" :label="'Reserved ' + $t('commaSeparated')" hide-details></v-text-field>
     </v-col>
   </v-row>
 </template>
 
 <script lang="ts">
 export default {
-  props: ['data', 'ext'],
+  props: ['data', 'ext', 'readonly'],
   emits: ['refreshPeerKey'],
   data() {
     return {}
   },
   methods: {
     refreshKey() {
+      if (this.$props.readonly) return
       this.$emit('refreshPeerKey')
     }
   },

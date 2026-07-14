@@ -84,43 +84,6 @@ test-db/
 # Local user screenshots / temporary images
 /docs/screen1.jpg
 
-# Internal upstream-sync notes and root-level local instruction drafts
-/UPSTREAM-SYNC.md
-docs/UPSTREAM-SYNC.md
-/INBOUNDS-*.md
-/INSTRUCTIONS-*.md
-/MENUS-*.md
-
-# Local protocol/release planning handoffs (not for public repo)
-NEXT_PROTOCOL_PROMPT.md
-PLAN_PROTOCOL_COVERAGE.md
-TASKS_PROTOCOL_COVERAGE.md
-CHANGELOG-RU.md0
-
-# Local audit-generated test/bench/fuzz drafts (not part of release commit)
-.github/workflows/semgrep-custom.yml
-api/fuzz_test.go
-cmd/s_ui_shell_phase9_regression_test.go
-cmd/setting_phase9_regression_test.go
-core/bench_test.go
-database/importxui/plan_phase9_regression_test.go
-paidsub/bot_bench_test.go
-paidsub/broadcast_phase9_bench_test.go
-paidsub/broadcast_phase9_regression_test.go
-paidsub/fuzz_test.go
-paidsub/poll_bench_test.go
-paidsub/send_fuzz_test.go
-service/panel_update_apply_bench_test.go
-service/setting_phase9_regression_test.go
-sub/clashService_fuzz_regre_test.go
-sub/clashService_fuzz_test.go
-sub/clashService_phase9_regression_test.go
-sub/clashService_proxiesBranch_bench_test.go
-sub/jsonService_bench_test.go
-sub/subService_phase9_regression_test.go
-util/common/random_phase9_regression_test.go
-util/genLink_extras_bench_test.go
-
 # Windows reserved device-name files accidentally created by shell probes
 frontend/src/**/nul
 
@@ -137,12 +100,7 @@ frontend/src/**/nul
 !.crew/artifacts/.gitkeep
 !.crew/graphs/.gitkeep
 
-# Audit artifacts and handoff prompt (local only)
-AUDIT*.md
-AUDIT*.json
-semgrep_results.json
-semgrep_stderr.log
-NEXT_PROMPT.md
+# Local Semgrep configuration
 .semgrep-rules/
 .semgrepignore
 

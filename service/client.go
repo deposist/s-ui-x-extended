@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
@@ -21,10 +22,27 @@ import (
 	"gorm.io/gorm"
 )
 
-const clientTrafficOverLimitCondition = "volume > 0 AND (up > volume OR down > volume OR up > volume - down)"
-
 type ClientService struct {
 	Runtime *Runtime
+}
+
+// clientIsActiveAt is the shared source of truth for eligibility decisions that
+// must agree with depletion and AWG reconciliation. Expiry is an exclusive Unix
+// seconds boundary, and reaching the traffic quota exhausts it. The subtraction
+// form avoids overflowing when Up+Down exceeds int64.
+func clientIsActiveAt(client model.Client, now int64) bool {
+	if !client.Enable || (client.Expiry > 0 && client.Expiry <= now) {
+		return false
+	}
+	if client.Up < 0 || client.Down < 0 {
+		return false
+	}
+	if client.Volume <= 0 {
+		return true
+	}
+	return client.Up < client.Volume &&
+		client.Down < client.Volume &&
+		client.Up < client.Volume-client.Down
 }
 
 func (s *ClientService) runtime() *Runtime {
@@ -621,6 +639,7 @@ func (s *ClientService) UpdateLinksByInboundChange(tx *gorm.DB, inbounds *[]mode
 func (s *ClientService) DepleteClients() (inboundIds []uint, err error) {
 	var clients []model.Client
 	var changes []model.Changes
+	var depletedClientIDs []uint
 
 	dt := time.Now().Unix()
 	db := database.GetDB()
@@ -635,6 +654,13 @@ func (s *ClientService) DepleteClients() (inboundIds []uint, err error) {
 			if err1 := db.Exec("PRAGMA wal_checkpoint(FULL)").Error; err1 != nil {
 				logger.Error("Error checkpointing WAL: ", err1.Error())
 			}
+			if len(depletedClientIDs) > 0 {
+				if hook := s.runtime().AWGClientStateHook(); hook != nil {
+					if hookErr := hook.SuspendClients(context.Background(), depletedClientIDs); hookErr != nil {
+						logger.Warning("AWG suspend after client depletion failed: ", hookErr)
+					}
+				}
+			}
 		} else {
 			tx.Rollback()
 		}
@@ -646,11 +672,19 @@ func (s *ClientService) DepleteClients() (inboundIds []uint, err error) {
 		return nil, err
 	}
 
-	// Deplete clients
-	err = tx.Model(model.Client{}).Where("enable = true AND (("+clientTrafficOverLimitCondition+") OR (expiry > 0 AND expiry < ?))", dt).Scan(&clients).Error
+	// Deplete clients using the same overflow-safe boundary predicate as other
+	// client eligibility consumers.
+	err = tx.Model(model.Client{}).Where("enable = true").Scan(&clients).Error
 	if err != nil {
 		return nil, err
 	}
+	inactiveClients := clients[:0]
+	for _, client := range clients {
+		if !clientIsActiveAt(client, dt) {
+			inactiveClients = append(inactiveClients, client)
+		}
+	}
+	clients = inactiveClients
 
 	for _, client := range clients {
 		logger.Debug("Client ", client.Name, " is going to be disabled")
@@ -671,7 +705,12 @@ func (s *ClientService) DepleteClients() (inboundIds []uint, err error) {
 
 	// Save changes
 	if len(changes) > 0 {
-		err = tx.Model(model.Client{}).Where("enable = true AND (("+clientTrafficOverLimitCondition+") OR (expiry > 0 AND expiry < ?))", dt).Update("enable", false).Error
+		clientIDs := make([]uint, 0, len(clients))
+		for _, client := range clients {
+			clientIDs = append(clientIDs, client.Id)
+		}
+		depletedClientIDs = append(depletedClientIDs, clientIDs...)
+		err = tx.Model(model.Client{}).Where("enable = true AND id IN ?", clientIDs).Update("enable", false).Error
 		if err != nil {
 			return nil, err
 		}

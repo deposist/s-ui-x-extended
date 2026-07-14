@@ -186,8 +186,6 @@ t() {
     esac
 }
 
-cur_dir=$(pwd)
-
 ask_language
 
 [[ $EUID -ne 0 ]] && echo -e "${red}$(t run_as_root)${plain}\n" && exit 1
@@ -197,31 +195,35 @@ mkdir -p "$(dirname "${LANG_FILE}")"
 printf '%s\n' "${lang}" >"${LANG_FILE}" 2>/dev/null || true
 
 if [[ -f /etc/os-release ]]; then
+    # Standard system file, present only on target Linux hosts.
+    # shellcheck disable=SC1091
     source /etc/os-release
     release=$ID
 elif [[ -f /usr/lib/os-release ]]; then
+    # Standard system file, present only on target Linux hosts.
+    # shellcheck disable=SC1091
     source /usr/lib/os-release
     release=$ID
 else
-    echo "$(t detect_failed)" >&2
+    t detect_failed >&2
     exit 1
 fi
-echo "$(t current_release "${release}")"
+t current_release "${release}"
 
 arch() {
     case "$(uname -m)" in
     x86_64 | x64 | amd64) echo 'amd64' ;;
     i*86 | x86) echo '386' ;;
-    armv8* | armv8 | arm64 | aarch64) echo 'arm64' ;;
-    armv7* | armv7 | arm) echo 'armv7' ;;
-    armv6* | armv6) echo 'armv6' ;;
-    armv5* | armv5) echo 'armv5' ;;
+    armv8* | arm64 | aarch64) echo 'arm64' ;;
+    armv7* | arm) echo 'armv7' ;;
+    armv6*) echo 'armv6' ;;
+    armv5*) echo 'armv5' ;;
     s390x) echo 's390x' ;;
     *) echo -e "${green}$(t arch_unsupported)${plain}" && rm -f install.sh && exit 1 ;;
     esac
 }
 
-echo "$(t arch_label "$(arch)")"
+t arch_label "$(arch)"
 
 install_base() {
     case "${release}" in
@@ -437,13 +439,32 @@ prepare_services() {
     systemctl daemon-reload
 }
 
+download_file() {
+    local url="$1"
+    local destination="$2"
+    local temporary="${destination}.part"
+    local attempt
+
+    rm -f "${temporary}"
+    for attempt in 1 2 3 4 5; do
+        if curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --location \
+            --connect-timeout 20 --speed-limit 1024 --speed-time 60 \
+            --output "${temporary}" "${url}"; then
+            mv -f "${temporary}" "${destination}"
+            return 0
+        fi
+        rm -f "${temporary}"
+        [[ ${attempt} -eq 5 ]] || sleep 2
+    done
+    return 1
+}
+
 verify_download_checksum() {
     local artifact_name="$1"
     local checksum_url="$2"
     local checksum_name="${artifact_name}.sha256"
 
-    wget --no-cache --timeout=20 --tries=5 --retry-connrefused -O "/tmp/${checksum_name}" "${checksum_url}"
-    if [[ $? -ne 0 ]]; then
+    if ! download_file "${checksum_url}" "/tmp/${checksum_name}"; then
         echo -e "${red}$(t checksum_failed)${plain}"
         exit 1
     fi
@@ -465,8 +486,7 @@ install_s-ui() {
         fi
         echo -e "$(t fetching_latest "${last_version}")"
         url="https://github.com/deposist/s-ui-x-extended/releases/download/${last_version}/${artifact_name}"
-        wget --no-cache --timeout=20 --tries=5 --retry-connrefused -O "/tmp/${artifact_name}" "${url}"
-        if [[ $? -ne 0 ]]; then
+        if ! download_file "${url}" "/tmp/${artifact_name}"; then
             echo -e "${red}$(t download_failed)${plain}"
             exit 1
         fi
@@ -476,8 +496,7 @@ install_s-ui() {
         [[ "${last_version}" != v* ]] && last_version="v${last_version}"
         url="https://github.com/deposist/s-ui-x-extended/releases/download/${last_version}/${artifact_name}"
         echo -e "$(t installing_specific "${last_version}")"
-        wget --no-cache --timeout=20 --tries=5 --retry-connrefused -O "/tmp/${artifact_name}" "${url}"
-        if [[ $? -ne 0 ]]; then
+        if ! download_file "${url}" "/tmp/${artifact_name}"; then
             echo -e "${red}$(t download_failed_specific "${last_version}")${plain}"
             exit 1
         fi

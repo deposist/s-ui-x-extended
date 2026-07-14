@@ -51,7 +51,6 @@ test('unsaved Basics edit SURVIVES a background server-side config change (fix r
 
   await login(page)
   await page.goto('basics', { waitUntil: 'domcontentloaded' })
-  await page.locator('.v-expansion-panel-title', { hasText: 'Logs' }).first().click()
   const outputField = page.getByLabel('Output', { exact: true })
   await expect(outputField).toBeVisible()
 

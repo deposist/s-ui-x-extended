@@ -47,8 +47,70 @@ const mockAuthenticatedShell = async (page: Page) => {
   }))
 }
 
-// XFAIL: пункты 43, 44, 45, 46 реестра; полный happy path требует test-db/x-ui.db и test-db/s-ui.db.
-test.skip('upload synthetic db, build plan, apply, download JSON/Markdown report, and rollback', async () => {})
+test('upload synthetic db, build plan, apply, download JSON/Markdown report, and rollback', async ({ page }) => {
+  let rollbackBackup = ''
+  await mockAuthenticatedShell(page)
+  await page.route('**/api/import-xui/plan', async route => route.fulfill({
+    json: {
+      success: true,
+      msg: '',
+      obj: {
+        source: { hash: 'happy-path-hash' },
+        defaults: {},
+        items: [{
+          kind: 'inbound',
+          srcId: '1',
+          srcTag: 'demo-inbound',
+          dstTag: 'demo-inbound',
+          action: 'create',
+          conflict: false,
+          previewJson: { tag: 'demo-inbound' },
+        }],
+      },
+    },
+  }))
+  await page.route('**/api/import-xui/apply', async route => route.fulfill({
+    json: {
+      success: true,
+      msg: '',
+      obj: {
+        backupPath: 's-ui-pre-xui-import-happy.db',
+        summary: { inbounds: { created: 1 } },
+        warnings: ['synthetic warning'],
+      },
+    },
+  }))
+  await page.route('**/api/import-xui/rollback', async route => {
+    rollbackBackup = route.request().postData() ?? ''
+    await route.fulfill({ json: { success: true, msg: '', obj: null } })
+  })
+  await page.route('**/api/status**', async route => route.fulfill({
+    json: { success: true, msg: '', obj: { db: { clients: 0 } } },
+  }))
+
+  await page.goto('migrate-xui')
+  await expect(page.getByText('Migrate from 3x-ui')).toBeVisible()
+  await uploadSyntheticDb(page)
+  await page.getByTestId('migrate-xui-build-plan').click()
+  await expect(page.getByText('Review migration plan')).toBeVisible()
+  await expect(page.getByText('demo-inbound').first()).toBeVisible()
+  await page.getByTestId('migrate-xui-apply-plan').click()
+  await expect(page.getByText('Migration result')).toBeVisible()
+  await expect(page.locator('.backup-path')).toHaveText('s-ui-pre-xui-import-happy.db')
+
+  const jsonDownloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Download JSON', exact: true }).click()
+  const jsonDownload = await jsonDownloadPromise
+  expect(jsonDownload.suggestedFilename()).toBe('xui-import-report.json')
+
+  const markdownDownloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Download Markdown', exact: true }).click()
+  const markdownDownload = await markdownDownloadPromise
+  expect(markdownDownload.suggestedFilename()).toBe('xui-import-report.md')
+
+  await page.getByRole('button', { name: 'Restore previous database' }).click()
+  await expect.poll(() => rollbackBackup).toContain('s-ui-pre-xui-import-happy.db')
+})
 
 test('Issue43 shows inline apply failure on review step', async ({ page }) => {
   await mockAuthenticatedShell(page)
@@ -145,8 +207,50 @@ test('Issue44 waits for rollback database health before reload', async ({ page }
   await expect.poll(() => healthCalls).toBeGreaterThan(0)
 })
 
-// XFAIL: пункт 45 реестра; generated admin password должен быть скрыт до явного reveal.
-test.skip('generated admin password is shown once via reveal pattern, not raw JSON in DOM', async () => {})
+test('generated admin password is shown once via reveal pattern, not raw JSON in DOM', async ({ page }) => {
+  await mockAuthenticatedShell(page)
+  await page.route('**/api/import-xui/plan', async route => route.fulfill({
+    json: {
+      success: true,
+      msg: '',
+      obj: {
+        source: { hash: 'password-reveal-hash' },
+        defaults: {},
+        items: [{
+          kind: 'admin',
+          srcId: '1',
+          srcTag: 'migrated-admin',
+          dstTag: 'migrated-admin',
+          action: 'create',
+          conflict: false,
+          previewJson: { username: 'migrated-admin' },
+        }],
+      },
+    },
+  }))
+  await page.route('**/api/import-xui/apply', async route => route.fulfill({
+    json: {
+      success: true,
+      msg: '',
+      obj: {
+        backupPath: 's-ui-pre-xui-import-password.db',
+        summary: { admins: { created: 1 } },
+        generatedAdmins: [{ username: 'migrated-admin', password: 'one-time-secret' }],
+      },
+    },
+  }))
+
+  await page.goto('migrate-xui')
+  await uploadSyntheticDb(page)
+  await page.getByTestId('migrate-xui-build-plan').click()
+  await page.getByTestId('migrate-xui-apply-plan').click()
+  await expect(page.getByText('Migration result')).toBeVisible()
+  await expect(page.locator('body')).not.toContainText('one-time-secret')
+  await expect(page.getByTestId('migrate-xui-generated-admins-hidden')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Reveal passwords' }).click()
+  await expect(page.getByTestId('migrate-xui-generated-admins')).toContainText('one-time-secret')
+})
 
 test('Issue45 hides generated admin passwords until reveal and auto-clears them', async ({ page }) => {
   await page.addInitScript(() => {

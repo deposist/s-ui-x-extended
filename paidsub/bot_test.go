@@ -129,7 +129,7 @@ func callbackSet(kb *inlineKeyboard) map[string]bool {
 func TestMenuKeyboards(t *testing.T) {
 	b := &Bot{}
 	main := callbackSet(b.menuKeyboard(langEN))
-	for _, want := range []string{"links", "qr", "stats", "payment", "help"} {
+	for _, want := range []string{"links", "qr", "stats", "payment", "awg:list", "help"} {
 		if !main[want] {
 			t.Errorf("main menu missing callback %q", want)
 		}
@@ -143,6 +143,69 @@ func TestMenuKeyboards(t *testing.T) {
 		if !pay[want] {
 			t.Errorf("payment submenu missing callback %q", want)
 		}
+	}
+}
+
+func TestAWGCallbackDataFitsTelegramLimit(t *testing.T) {
+	for _, data := range []string{"awg:list", "awg:add", "awg:v:4294967295", "awg:c:4294967295", "awg:q:4294967295", "awg:r:4294967295", "awg:ry:4294967295:0123456789abcdef", "awg:d:4294967295", "awg:dy:4294967295"} {
+		if awgCallbackTooLong(data) {
+			t.Fatalf("callback exceeds Telegram limit: %q", data)
+		}
+	}
+}
+
+func TestAWGNameStateIsScopedExpiresAndClears(t *testing.T) {
+	b := newBot()
+	if !b.beginAWGName(10, 20, "request-a", 100) || !b.beginAWGName(10, 21, "request-b", 100) {
+		t.Fatal("failed to begin AWG name state")
+	}
+	if _, ok := b.takeAWGNameState(11, 20, 101); ok {
+		t.Fatal("state leaked to another Telegram user")
+	}
+	state, ok := b.takeAWGNameState(10, 20, 101)
+	if !ok || state.requestKey != "request-a" {
+		t.Fatalf("unexpected name state: %+v, %v", state, ok)
+	}
+	if _, ok := b.takeAWGNameState(10, 20, 101); ok {
+		t.Fatal("consumed state was returned twice")
+	}
+	if _, ok := b.takeAWGNameState(10, 21, 100+awgNameStateTTL); ok {
+		t.Fatal("expired state was accepted")
+	}
+	if !b.beginAWGName(10, 20, "request-c", 200) {
+		t.Fatal("failed to replace state")
+	}
+	b.clearAWGNameStates()
+	if _, ok := b.takeAWGNameState(10, 20, 201); ok {
+		t.Fatal("state survived bot shutdown cleanup")
+	}
+}
+
+func TestAWGRotationConfirmationUsesStablePerPromptNonce(t *testing.T) {
+	first, ok := awgOperationNonce("callback-one")
+	if !ok {
+		t.Fatal("callback id was rejected")
+	}
+	replay, _ := awgOperationNonce("callback-one")
+	second, _ := awgOperationNonce("callback-two")
+	if first != replay {
+		t.Fatal("callback replay did not produce the same nonce")
+	}
+	if first == second {
+		t.Fatal("separate confirmations reused a nonce")
+	}
+	data := "awg:ry:42:" + first
+	id, nonce, ok := parseAWGConfirmation(data, "awg:ry:")
+	if !ok || id != 42 || nonce != first || awgCallbackTooLong(data) {
+		t.Fatalf("confirmation callback did not round-trip: id=%d nonce=%q ok=%v", id, nonce, ok)
+	}
+	if _, _, ok := parseAWGConfirmation("awg:ry:42:not-hex", "awg:ry:"); ok {
+		t.Fatal("malformed nonce was accepted")
+	}
+	firstKey, _ := awgOperationKey("tg-rotate", 7, 42, "callback-one")
+	secondKey, _ := awgOperationKey("tg-rotate", 7, 42, "callback-two")
+	if firstKey == secondKey {
+		t.Fatal("separate rotation confirmations reused an idempotency key")
 	}
 }
 

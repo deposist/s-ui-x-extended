@@ -8,9 +8,7 @@ const screenshotDir = path.join(phase6Dir, 'admin-smoke')
 
 const unique = () => `${Date.now()}-${Math.floor(Math.random() * 10000)}`
 
-// Classic renders each admin as a rounded card; Nexus renders them as dense
-// table rows. Match both so the same assertions cover either mode.
-const userCards = (page: Page) => page.locator('.v-card.rounded-xl, tr.nexus-data-table__row')
+const userCards = (page: Page) => page.locator('tr.nexus-data-table__row')
 const userCard = (page: Page, username: string) => userCards(page).filter({ hasText: username })
 
 const disableNotificationPointerEvents = async (page: Page) => {
@@ -23,12 +21,11 @@ const login = async (
   page: Page,
   username = readServerState().username,
   password = readServerState().password,
-  initialMode: 'classic' | 'nexus' = 'classic',
 ) => {
-  await page.addInitScript(({ mode }) => {
+  await page.addInitScript(() => {
     window.localStorage.setItem('locale', 'en')
-    window.localStorage.setItem('sui:ui:mode', mode)
-  }, { mode: initialMode })
+    window.localStorage.setItem('sui:ui:mode', 'nexus')
+  })
 
   await page.goto('login', { waitUntil: 'domcontentloaded' })
   await disableNotificationPointerEvents(page)
@@ -45,18 +42,12 @@ const login = async (
   }).toBe(true)
 }
 
-const openAdmins = async (page: Page, mode: 'classic' | 'nexus') => {
+const openAdmins = async (page: Page) => {
   await page.goto('admins', { waitUntil: 'domcontentloaded' })
   await disableNotificationPointerEvents(page)
   await expect(page.getByRole('button', { name: 'Add admin' })).toBeVisible()
 
-  const desiredLabel = mode === 'classic' ? 'Switch to Nexus mode' : 'Switch to Classic mode'
-  const oppositeLabel = mode === 'classic' ? 'Switch to Classic mode' : 'Switch to Nexus mode'
-  const desired = page.getByRole('button', { name: desiredLabel })
-  if (await desired.count() === 0) {
-    await page.getByRole('button', { name: oppositeLabel }).click()
-  }
-  await expect(desired).toBeVisible()
+  await expect(page.locator('.nexus-shell')).toBeVisible()
 }
 
 const assertSelfDeleteHidden = async (page: Page) => {
@@ -120,7 +111,7 @@ const assertWrongDeleteRejected = async (page: Page, username: string) => {
 }
 
 const cleanupSmokeUsers = async (page: Page) => {
-  await openAdmins(page, 'classic')
+  await openAdmins(page)
   const texts = await userCards(page).allTextContents()
   const usernames = texts
     .map(text => text.split('Last login')[0].trim())
@@ -134,7 +125,7 @@ const cleanupSmokeUsers = async (page: Page) => {
   }
 }
 
-test('creates and deletes admins in classic and nexus', async ({ browser, page }) => {
+test('creates and deletes admins in nexus', async ({ browser, page }) => {
   test.setTimeout(90_000)
 
   fs.rmSync(screenshotDir, { recursive: true, force: true })
@@ -143,20 +134,18 @@ test('creates and deletes admins in classic and nexus', async ({ browser, page }
   await login(page)
   await cleanupSmokeUsers(page)
 
-  for (const mode of ['classic', 'nexus'] as const) {
-    await openAdmins(page, mode)
-    await assertSelfDeleteHidden(page)
+  await openAdmins(page)
+  await assertSelfDeleteHidden(page)
 
-    await assertWrongAddRejected(page, `${mode}-wrong-${unique()}`, 'smoke-admin-pass-123')
+  await assertWrongAddRejected(page, `nexus-wrong-${unique()}`, 'smoke-admin-pass-123')
 
-    const username = `${mode}-smoke-${unique()}`
-    await addAdmin(page, username, 'smoke-admin-pass-123', `${mode}-created.png`)
-    await assertWrongDeleteRejected(page, username)
-  }
+  const username = `nexus-smoke-${unique()}`
+  await addAdmin(page, username, 'smoke-admin-pass-123', 'nexus-created.png')
+  await assertWrongDeleteRejected(page, username)
 
   const cookieUsername = `cookie-smoke-${unique()}`
   const cookiePassword = 'cookie-smoke-pass-123'
-  await openAdmins(page, 'classic')
+  await openAdmins(page)
   await addAdmin(page, cookieUsername, cookiePassword, 'cookie-created.png')
 
   const targetContext = await browser.newContext({ baseURL: readServerState().baseURL })
@@ -165,7 +154,7 @@ test('creates and deletes admins in classic and nexus', async ({ browser, page }
   const beforeDelete = await targetPage.request.get('api/settings')
   expect((await beforeDelete.json()).success).toBe(true)
 
-  await openAdmins(page, 'classic')
+  await openAdmins(page)
   await deleteAdminSuccessfully(page, cookieUsername)
 
   const afterDelete = await targetPage.request.get('api/settings')

@@ -9,6 +9,15 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.2] - 2026-07-14 - stable 1.0.2 release
+
+- Added managed personal AmneziaWG 2.0 devices with encrypted keys, per-tariff limits, Telegram delivery, QR codes, traffic accounting, key rotation, revocation, and crash-safe reconciliation.
+- Managed endpoint peers are protected from manual edits. The core receives preshared keys only in memory.
+- Fixed `s-ui` waiting on standard input before showing the menu when a saved language exists.
+- Hardened release downloads with HTTPS-only curl retries, timeouts, and mandatory SHA-256 verification.
+
+Full release notes: [`docs/releases/v1.0.2.md`](docs/releases/v1.0.2.md).
+
 ## [1.0.1] - 2026-07-07 - stable 1.0.1 release
 
 Stable v1.0.1 promotes the v1.0.1 beta line and adds the Telegram Chat ID setup fix. No manual database or configuration migration is required.

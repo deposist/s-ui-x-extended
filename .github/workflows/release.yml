@@ -6,7 +6,7 @@ on:
       tag:
         description: "Release tag"
         required: true
-        default: "v1.0.1"
+        default: "v1.0.2"
         type: string
   push:
     tags:
@@ -25,6 +25,17 @@ env:
   RELEASE_BUILD_TAGS: "with_quic,with_grpc,with_utls,with_acme,with_gvisor,badlinkname,tfogo_checklinkname0,with_tailscale,with_dhcp,with_wireguard,with_masque,with_mtproxy,with_openvpn,with_sudoku,with_trusttunnel,with_ccm,with_ocm,with_oomkiller"
 
 jobs:
+  awg-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: AWG 2.0 live WireGuard integration
+        run: sudo -E go test -tags="integration with_wireguard with_gvisor" ./core -run TestAWG2ServerEndpoint -count=1
+
   build-frontend:
     runs-on: ubuntu-latest
     steps:
@@ -72,7 +83,7 @@ jobs:
 
   build-linux:
     name: Build-${{ matrix.platform }}
-    needs: build-frontend
+    needs: [build-frontend, awg-integration]
     strategy:
       fail-fast: false
       matrix:

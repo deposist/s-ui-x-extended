@@ -1,6 +1,7 @@
 package paidsub
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -8,7 +9,37 @@ import (
 
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
+	"github.com/deposist/s-ui-x-extended/service"
 )
+
+type paymentAWGHook struct {
+	resumed   []uint
+	suspended [][]uint
+}
+
+func (h *paymentAWGHook) ResumeClient(_ context.Context, id uint) error {
+	h.resumed = append(h.resumed, id)
+	return nil
+}
+
+func (h *paymentAWGHook) SuspendClients(_ context.Context, ids []uint) error {
+	h.suspended = append(h.suspended, append([]uint(nil), ids...))
+	return nil
+}
+
+func TestNewPaymentOrderSnapshotsAWGEntitlement(t *testing.T) {
+	client := &model.Client{Id: 7}
+	tariff := &Tariff{Id: 9, MaxAWGDevices: 4}
+	order := newPaymentOrder(client, tariff, ProviderStars, 11, 100, "XTR", 1_000, 15)
+
+	tariff.MaxAWGDevices = 1
+	if order.GrantedAWGDevices != 4 {
+		t.Fatalf("GrantedAWGDevices = %d; want immutable snapshot 4", order.GrantedAWGDevices)
+	}
+	if order.ClientId != 7 || order.TariffId != 9 || order.ExpiresAt != 1_900 {
+		t.Fatalf("unexpected order snapshot: %+v", order)
+	}
+}
 
 func TestApplyPaidOrderIdempotentRenewal(t *testing.T) {
 	db := openTestDB(t)
@@ -98,6 +129,42 @@ func TestApplyPaidOrderIdempotentRenewal(t *testing.T) {
 	}
 	if got2.Expiry != got.Expiry {
 		t.Errorf("expiry changed on replay: %d != %d", got2.Expiry, got.Expiry)
+	}
+}
+
+func TestApplyPaidOrderNotifiesAWGOnlyAfterSuccessfulCommit(t *testing.T) {
+	db := openTestDB(t)
+	if err := EnsureSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	hook := &paymentAWGHook{}
+	runtime := service.NewRuntimeWithCoreProvider(nil)
+	runtime.SetAWGClientStateHook(hook)
+	restore := service.ReplaceDefaultRuntimeForTest(runtime)
+	t.Cleanup(restore)
+	client := model.Client{Enable: false, Name: "renew-awg", Inbounds: json.RawMessage(`[]`)}
+	if err := db.Create(&client).Error; err != nil {
+		t.Fatal(err)
+	}
+	tariff := Tariff{Name: "Month", Price: 100, Currency: "RUB", AddDays: 30, Enabled: true}
+	if err := db.Create(&tariff).Error; err != nil {
+		t.Fatal(err)
+	}
+	order := PaymentOrder{ClientId: client.Id, TariffId: tariff.Id, Provider: "manual", Amount: 100, Currency: "RUB", Status: StatusPending, IdempotencyKey: "awg-hook"}
+	if err := db.Create(&order).Error; err != nil {
+		t.Fatal(err)
+	}
+	if applied, _, err := NewPaymentService().ApplyPaidOrder(order.Id, "charge", nil); err != nil || !applied {
+		t.Fatalf("applied=%v err=%v", applied, err)
+	}
+	if len(hook.resumed) != 1 || hook.resumed[0] != client.Id {
+		t.Fatalf("resumed=%v", hook.resumed)
+	}
+	if applied, _, err := NewPaymentService().ApplyPaidOrder(order.Id, "charge", nil); err != nil || applied {
+		t.Fatalf("replay applied=%v err=%v", applied, err)
+	}
+	if len(hook.resumed) != 1 {
+		t.Fatalf("replay notified AWG: %v", hook.resumed)
 	}
 }
 

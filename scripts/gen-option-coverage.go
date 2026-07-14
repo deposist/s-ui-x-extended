@@ -778,6 +778,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "marshal json: %v\n", err)
 		os.Exit(1)
 	}
+	// #nosec G306 -- generated documentation is intentionally world-readable.
 	if err := os.WriteFile("docs/option-coverage-matrix.json", jsonData, 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "write json: %v\n", err)
 		os.Exit(1)
@@ -827,12 +828,13 @@ func main() {
 	}
 
 	md.WriteString("## Summary\n\n")
-	md.WriteString(fmt.Sprintf("| Status | Count |\n|--------|-------|\n"))
+	md.WriteString("| Status | Count |\n|--------|-------|\n")
 	md.WriteString(fmt.Sprintf("| covered | %d |\n", coveredCount))
 	md.WriteString(fmt.Sprintf("| typed-only | %d |\n", typedOnlyCount))
 	md.WriteString(fmt.Sprintf("| intentionally-hidden | %d |\n", hiddenCount))
 	md.WriteString(fmt.Sprintf("| missing | %d |\n", missingCount))
 
+	// #nosec G306 -- generated documentation is intentionally world-readable.
 	if err := os.WriteFile("docs/option-coverage-matrix.md", []byte(md.String()), 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "write md: %v\n", err)
 		os.Exit(1)

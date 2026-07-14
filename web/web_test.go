@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -30,7 +31,10 @@ func TestLoginPageSendsClearSiteDataCacheHeader(t *testing.T) {
 	}
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/app/login", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "/app/login", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	engine.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {

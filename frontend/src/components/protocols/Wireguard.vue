@@ -155,16 +155,19 @@
     <Amnezia :data="data" :full="true" />
   </v-card>
   <v-card v-if="data.peers != undefined">
+    <v-alert v-if="peersManaged" type="info" variant="tonal" class="ma-4" data-testid="awg-managed-peers-warning">
+      {{ $t('types.endpoint.awgManagedPeers') }}
+    </v-alert>
     <v-card-subtitle>
       {{ $t('types.wg.peers') }}
-      <v-chip color="primary" density="compact" variant="elevated" @click="addPeer"><v-icon icon="mdi-plus" /></v-chip>
+      <v-chip v-if="!peersManaged" color="primary" density="compact" variant="elevated" @click="addPeer"><v-icon icon="mdi-plus" /></v-chip>
     </v-card-subtitle>
     <template v-for="(p, index) in data.peers">
       <v-card style="margin-top: 1rem;">
         <v-card-subtitle>
-          {{ $t('types.wg.peer') + ' ' + (Number(index)+1) }} <v-icon color="error" icon="mdi-delete" @click="delPeer(Number(index))" />
+          {{ $t('types.wg.peer') + ' ' + (Number(index)+1) }} <v-icon v-if="!peersManaged" color="error" icon="mdi-delete" @click="delPeer(Number(index))" />
         </v-card-subtitle>
-        <Peer :data="p" :ext="data.ext" @refreshPeerKey="$emit('refreshPeerKey', index)" />
+        <Peer :data="p" :ext="data.ext" :readonly="peersManaged" @refreshPeerKey="$emit('refreshPeerKey', index)" />
       </v-card>
     </template>
   </v-card>
@@ -179,6 +182,7 @@ export default {
   props: {
     data: { type: Object, required: true },
     fieldHints: { type: Object, default: () => ({}) },
+    peersManaged: { type: Boolean, default: false },
   },
   emits: ['newWgKey', 'getWgPubKey', 'addPeer', 'delPeer', 'refreshPeerKey'],
   data() {

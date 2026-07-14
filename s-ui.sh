@@ -22,7 +22,7 @@ load_language() {
     fi
     if [[ -f "${LANG_FILE}" ]]; then
         local saved
-        saved=$(tr -d '[:space:]')
+        saved=$(tr -d '[:space:]' < "${LANG_FILE}" 2>/dev/null)
         case "${saved}" in
             en|ru|zh) lang="${saved}"; return ;;
         esac
@@ -433,28 +433,32 @@ function LOGI() { echo -e "${green}$(t info_tag) $* ${plain}"; }
 [[ $EUID -ne 0 ]] && LOGE "$(t run_as_root)\n" && exit 1
 
 if [[ -f /etc/os-release ]]; then
+    # Standard system file, present only on target Linux hosts.
+    # shellcheck disable=SC1091
     source /etc/os-release
     release=$ID
 elif [[ -f /usr/lib/os-release ]]; then
+    # Standard system file, present only on target Linux hosts.
+    # shellcheck disable=SC1091
     source /usr/lib/os-release
     release=$ID
 else
-    echo "$(t detect_failed)" >&2
+    t detect_failed >&2
     exit 1
 fi
 
-echo "$(t current_release "${release}")"
+t current_release "${release}"
 
 confirm() {
     if [[ $# -gt 1 ]]; then
         echo && read -rp "$1 [$(t default_n "$2")]: " temp
-        if [[ x"${temp}" == x"" ]]; then
+        if [[ "${temp}" == "" ]]; then
             temp=$2
         fi
     else
 read -rp "$1 [y/n]: " temp
     fi
-    if [[ x"${temp}" == x"y" || x"${temp}" == x"Y" ]]; then
+    if [[ "${temp}" == "y" || "${temp}" == "Y" ]]; then
         return 0
     else
         return 1
@@ -462,8 +466,7 @@ read -rp "$1 [y/n]: " temp
 }
 
 confirm_restart() {
-    confirm "$(t restart_service_q "${1}")" "y"
-    if [[ $? == 0 ]]; then
+    if confirm "$(t restart_service_q "${1}")" "y"; then
         restart
     else
         show_menu
@@ -476,8 +479,7 @@ before_show_menu() {
 }
 
 install() {
-    bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh)
-    if [[ $? == 0 ]]; then
+    if bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh); then
         if [[ $# == 0 ]]; then
             start
         else
@@ -487,46 +489,43 @@ install() {
 }
 
 update() {
-    confirm "$(t install_force_q)" "n"
-    if [[ $? != 0 ]]; then
+    if ! confirm "$(t install_force_q)" "n"; then
         LOGE "$(t cancelled)"
         if [[ $# == 0 ]]; then
             before_show_menu
         fi
         return 0
     fi
-    bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh)
-    if [[ $? == 0 ]]; then
+    if bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh); then
         LOGI "$(t update_done)"
         exit 0
     fi
 }
 
 custom_version() {
-    echo "$(t enter_panel_version)"
+    t enter_panel_version
     read -r panel_version
 
     if [ -z "$panel_version" ]; then
-        echo "$(t version_required)"
+        t version_required
         exit 1
     fi
 
     [[ "${panel_version}" != v* ]] && panel_version="v${panel_version}"
 
     if [[ ! "${panel_version}" =~ ^v[0-9]+[.][0-9]+[.][0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
-        echo "$(t invalid_panel_version "${panel_version}")"
+        t invalid_panel_version "${panel_version}"
         exit 1
     fi
 
     download_link="https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh"
 
-    echo "$(t downloading_version "${panel_version}")"
+    t downloading_version "${panel_version}"
     bash <(curl -Ls "${download_link}") "${panel_version}"
 }
 
 uninstall() {
-    confirm "$(t uninstall_q)" "n"
-    if [[ $? != 0 ]]; then
+    if ! confirm "$(t uninstall_q)" "n"; then
         if [[ $# == 0 ]]; then
             show_menu
         fi
@@ -552,16 +551,15 @@ uninstall() {
 }
 
 reset_admin() {
-    echo "$(t reset_admin_warn)"
-    confirm "$(t reset_admin_q)" "n"
-    if [[ $? == 0 ]]; then
+    t reset_admin_warn
+    if confirm "$(t reset_admin_q)" "n"; then
         /usr/local/s-ui/sui admin -reset
     fi
     before_show_menu
 }
 
 set_admin() {
-    echo "$(t set_admin_warn)"
+    t set_admin_warn
 read -rp "$(t set_username_p)" config_account
 read -rp "$(t set_password_p)" config_password
     /usr/local/s-ui/sui admin -username "${config_account}" -password "${config_password}"
@@ -574,8 +572,7 @@ view_admin() {
 }
 
 reset_setting() {
-    confirm "$(t reset_settings_q)" "n"
-    if [[ $? == 0 ]]; then
+    if confirm "$(t reset_settings_q)" "n"; then
         /usr/local/s-ui/sui setting -reset
     fi
     before_show_menu
@@ -609,8 +606,7 @@ view_setting() {
 }
 
 clear_domain() {
-    confirm "$(t clear_domain_q)" "n"
-    if [[ $? == 0 ]]; then
+    if confirm "$(t clear_domain_q)" "n"; then
         /usr/local/s-ui/sui setting -clearDomain
     fi
     before_show_menu
@@ -672,8 +668,7 @@ generate_cookie_key() {
 
     if [[ -n "${existing}" ]]; then
         LOGI "$(t cookie_key_exists "${existing:0:8}...")"
-        confirm "$(t cookie_key_rotate_q)" "n"
-        if [[ $? != 0 ]]; then
+        if ! confirm "$(t cookie_key_rotate_q)" "n"; then
             LOGI "$(t cancelled)"
             before_show_menu
             return 0
@@ -704,8 +699,7 @@ generate_cookie_key() {
     echo -e "###############################################"
     LOGI "$(t "${restart_note}")"
 
-    confirm "$(t restart_service_q "s-ui")" "y"
-    if [[ $? == 0 ]]; then
+    if confirm "$(t restart_service_q "s-ui")" "y"; then
         restart s-ui
     else
         before_show_menu
@@ -713,8 +707,7 @@ generate_cookie_key() {
 }
 
 view_uri() {
-    info=$(/usr/local/s-ui/sui uri)
-    if [[ $? != 0 ]]; then
+    if ! info=$(/usr/local/s-ui/sui uri); then
         LOGE "$(t could_not_get_uri)"
         before_show_menu
         return
@@ -724,15 +717,13 @@ view_uri() {
 }
 
 start() {
-    check_status "$1"
-    if [[ $? == 0 ]]; then
+    if check_status "$1"; then
         echo ""
         LOGI "$(t already_running "${1}")"
     else
         systemctl start "$1"
         sleep 2
-        check_status "$1"
-        if [[ $? == 0 ]]; then
+        if check_status "$1"; then
             LOGI "$(t start_ok "${1}")"
         else
             LOGE "$(t start_fail "${1}")"
@@ -769,15 +760,13 @@ restart() {
     systemctl restart "$1"
     local waited=0
     while [[ $waited -lt 10 ]]; do
-        check_status "$1"
-        if [[ $? == 0 ]]; then
+        if check_status "$1"; then
             break
         fi
         sleep 1
         waited=$((waited + 1))
     done
-    check_status "$1"
-    if [[ $? == 0 ]]; then
+    if check_status "$1"; then
         LOGI "$(t restart_ok "${1}")"
     else
         LOGE "$(t restart_fail "${1}")"
@@ -795,8 +784,7 @@ status() {
 }
 
 enable() {
-    systemctl enable "$1"
-    if [[ $? == 0 ]]; then
+    if systemctl enable "$1"; then
         LOGI "$(t enable_ok "${1}")"
     else
         LOGE "$(t enable_fail "${1}")"
@@ -808,8 +796,7 @@ enable() {
 }
 
 disable() {
-    systemctl disable "$1"
-    if [[ $? == 0 ]]; then
+    if systemctl disable "$1"; then
         LOGI "$(t disable_ok "${1}")"
     else
         LOGE "$(t disable_fail "${1}")"
@@ -853,7 +840,7 @@ check_status() {
         return 2
     fi
     temp=$(systemctl is-active "$1" 2>/dev/null)
-    if [[ x"${temp}" == x"active" || x"${temp}" == x"activating" ]]; then
+    if [[ "${temp}" == "active" || "${temp}" == "activating" ]]; then
         return 0
     else
         return 1
@@ -862,7 +849,7 @@ check_status() {
 
 check_enabled() {
     temp=$(systemctl is-enabled "$1")
-    if [[ x"${temp}" == x"enabled" ]]; then
+    if [[ "${temp}" == "enabled" ]]; then
         return 0
     else
         return 1
@@ -915,8 +902,7 @@ show_status() {
 }
 
 show_enable_status() {
-    check_enabled "$1"
-    if [[ $? == 0 ]]; then
+    if check_enabled "$1"; then
         echo -e "${green}$(t autostart_yes "${1}")${plain}"
     else
         echo -e "${red}$(t autostart_no "${1}")${plain}"
@@ -932,7 +918,7 @@ bbr_menu() {
     0) show_menu ;;
     1) enable_bbr ;;
     2) disable_bbr ;;
-    *) echo "$(t invalid_choice)" ;;
+    *) t invalid_choice ;;
     esac
 }
 
@@ -986,8 +972,7 @@ install_acme() {
     # piped into a root shell), --proto '=https' forbids a downgrade/redirect to
     # plain http, and --tlsv1.2 sets a TLS floor. get.acme.sh is the vendor's
     # canonical installer; this only hardens how it is fetched.
-    curl -fsS --proto '=https' --tlsv1.2 https://get.acme.sh | sh
-    if [ $? -ne 0 ]; then
+    if ! curl -fsS --proto '=https' --tlsv1.2 https://get.acme.sh | sh; then
         LOGE "$(t acme_install_fail)"
         return 1
     else
@@ -1017,7 +1002,7 @@ ssl_cert_issue_main() {
             "${HOME}/.acme.sh/acme.sh" --renew -d "${domain}" --force ;;
         4) generate_self_signed_cert ;;
         5) ssl_cert_issue_ip ;;
-        *) echo "$(t invalid_choice)" ;;
+        *) t invalid_choice ;;
     esac
 }
 
@@ -1068,8 +1053,9 @@ read -rp "HTTP-01 challenge port (default 80) / Порт проверки HTTP-0
 
     # Restore the panel to its prior run state afterwards.
     local was_running=1
-    check_status s-ui
-    [[ $? == 0 ]] && was_running=0
+    if check_status s-ui; then
+        was_running=0
+    fi
 
     stop s-ui 0
 
@@ -1091,8 +1077,7 @@ read -rp "HTTP-01 challenge port (default 80) / Порт проверки HTTP-0
 ssl_cert_issue() {
     if ! command -v "${HOME}/.acme.sh/acme.sh" &>/dev/null; then
         echo "acme.sh not found, installing / acme.sh не найден, будет выполнена установка"
-        install_acme
-        if [ $? -ne 0 ]; then
+        if ! install_acme; then
             LOGE "Could not install acme / Не удалось установить acme"
             exit 1
         fi
@@ -1143,8 +1128,7 @@ read -rp "Port (default 80) / Порт (по умолчанию 80): " WebPort
         WebPort=80
     fi
     "${HOME}/.acme.sh/acme.sh" --set-default-ca --server letsencrypt
-    "${HOME}/.acme.sh/acme.sh" --issue -d "${domain}" --standalone --httpport "${WebPort}" $force_flag
-    if [ $? -ne 0 ]; then
+    if ! "${HOME}/.acme.sh/acme.sh" --issue -d "${domain}" --standalone --httpport "${WebPort}" $force_flag; then
         LOGE "Issue failed; aborting."
         rm -rf "${HOME}/.acme.sh/${domain}"
         exit 1
@@ -1200,7 +1184,7 @@ read -rp "Cloudflare account email / Email: " CF_AccountEmail
             show_menu
             ;;
         3) show_menu ;;
-        *) echo "$(t invalid_choice)"; show_menu ;;
+        *) t invalid_choice; show_menu ;;
     esac
 }
 
@@ -1229,11 +1213,10 @@ read -rp "Choice [1-5, default 1]: " cert_type
     # The script already requires root (see the EUID check), so call openssl
     # directly: prefixing sudo breaks on minimal root-only systems where sudo is
     # not installed ("sudo: command not found").
-    openssl req -x509 -nodes -days 3650 "${key_opt}" \
+    if openssl req -x509 -nodes -days 3650 "${key_opt}" \
         -keyout "${cert_dir}/self.key" \
         -out "${cert_dir}/self.crt" \
-        -subj "/CN=myserver"
-    if [[ $? -eq 0 ]]; then
+        -subj "/CN=myserver"; then
         chmod 600 "${cert_dir}/self."*
         LOGI "Self-signed certificate created."
         LOGI "Path: ${cert_dir}/self.crt"
@@ -1262,20 +1245,20 @@ choose_language() {
 }
 
 show_usage() {
-    echo "$(t usage_title)"
+    t usage_title
     echo "------------------------------------------"
-    echo "$(t usage_main)"
-    echo "$(t usage_start)"
-    echo "$(t usage_stop)"
-    echo "$(t usage_restart)"
-    echo "$(t usage_status)"
-    echo "$(t usage_enable)"
-    echo "$(t usage_disable)"
-    echo "$(t usage_log)"
-    echo "$(t usage_update)"
-    echo "$(t usage_install)"
-    echo "$(t usage_uninstall)"
-    echo "$(t usage_help)"
+    t usage_main
+    t usage_start
+    t usage_stop
+    t usage_restart
+    t usage_status
+    t usage_enable
+    t usage_disable
+    t usage_log
+    t usage_update
+    t usage_install
+    t usage_uninstall
+    t usage_help
     echo "------------------------------------------"
 }
 

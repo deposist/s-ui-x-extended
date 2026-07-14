@@ -112,6 +112,35 @@ func TestConfigSaveEndpointsEditHotReloadsWithoutCoreRestart(t *testing.T) {
 	}
 }
 
+func TestManagedAWGEndpointPeersCannotBeEdited(t *testing.T) {
+	initSettingTestDB(t)
+	db := database.GetDB()
+	for key, value := range validAWGSettingValues() {
+		if err := db.Where("key = ?", key).Assign(model.Setting{Value: value}).FirstOrCreate(&model.Setting{Key: key}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	endpoint := createTestEndpoint(t, "managed-awg")
+	changedPeers := json.RawMessage(fmt.Sprintf(
+		`{"id":%d,"type":"wireguard","tag":"managed-awg","system":false,"address":["10.0.0.2/32"],"private_key":%q,"peers":[{"public_key":%q,"allowed_ips":["10.77.0.2/32"]}],"mtu":1408}`,
+		endpoint.Id, testWireguardKey, testWireguardKey))
+	configService := NewConfigServiceWithRuntime(NewRuntimeWithCoreProvider(nil))
+	_, err := configService.Save("endpoints", "edit", changedPeers, "", "admin", "example.com")
+	if err == nil || !strings.Contains(err.Error(), "peers are controlled") {
+		t.Fatalf("managed peer edit error = %v", err)
+	}
+	if _, err := configService.Save("endpoints", "edit", endpointPayload(endpoint.Id, "managed-awg", 1400), "", "admin", "example.com"); err != nil {
+		t.Fatalf("non-peer managed endpoint edit was blocked: %v", err)
+	}
+	all, err := (&EndpointService{}).GetAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(*all) != 1 || (*all)[0]["awgManaged"] != true {
+		t.Fatalf("managed endpoint marker missing: %#v", all)
+	}
+}
+
 // An endpoint referenced only by a route rule (lazy lookup) stays hot.
 func TestConfigSaveEndpointsEditWithRouteRuleReferenceStaysHot(t *testing.T) {
 	initSettingTestDB(t)

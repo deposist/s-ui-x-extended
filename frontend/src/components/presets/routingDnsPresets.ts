@@ -6,7 +6,8 @@ export type PresetRegionKey = 'ru' | 'zh'
 
 export interface PresetSource {
   name: string
-  url: string
+  url?: string
+  path?: string
 }
 
 export interface RegionalPresetState {
@@ -23,14 +24,14 @@ export interface PresetManagedIdentity {
 }
 
 export interface ApplyPresetOptions {
-  proxyOutbound: string
+  proxyOutbound?: string
   directOutbound: string
   direction?: PresetDirection
   exceptions?: string[]
 }
 
 export interface ApplyPresetsOptions {
-  proxyOutbound: string
+  proxyOutbound?: string
   directOutbound: string
 }
 
@@ -56,7 +57,7 @@ export interface ApplyPresetsResult {
   preview: PresetPreview
 }
 
-export type PresetApplier = (config: Config, options: Required<ApplyPresetOptions>, changes: string[]) => void
+export type PresetApplier = (config: Config, options: ApplyPresetOptions, changes: string[]) => void
 
 export interface RoutingDnsPreset {
   id: string
@@ -74,18 +75,21 @@ export interface DetectedPresetState {
 }
 
 const SOURCE_URLS = {
+  ruSmartGeositeDat: 'https://github.com/wastrel-g/geosite-ru-smart/releases/latest/download/geosite.dat',
+  ruGeoip: 'https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geoip/geoip-ru.srs',
   cnGeosite: 'https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-cn.srs',
-  nonCnGeosite: 'https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-!cn.srs',
   cnGeoip: 'https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs',
-  ruBlocked: 'https://raw.githubusercontent.com/runetfreedom/russia-blocked-geoip/release/srs/re-filter.srs',
-  ruPrivate: 'https://raw.githubusercontent.com/runetfreedom/russia-blocked-geoip/release/srs/private.srs',
 } as const
+
+const MANAGED_RU_SMART_RULESET_PATH = 'rulesets/geosite-ru-smart/direct-ru.srs'
 
 const DNS_DIRECT_TAG = 'preset-dns-direct'
 const DNS_PROXY_TAG = 'preset-dns-proxy'
+const BUILTIN_DIRECT_OUTBOUND_TAG = 'direct'
 
-const RU_PRESET_NAMES = ['blocked', 'private', 'exceptions'] as const
-const ZH_PRESET_NAMES = ['geosite-cn', 'geoip-cn', 'geosite-non-cn', 'exceptions'] as const
+const COUNTRY_PRESET_NAMES = ['geosite', 'geoip'] as const
+const LEGACY_RU_PRESET_NAMES = ['blocked', 'private', 'exceptions'] as const
+const LEGACY_ZH_PRESET_NAMES = ['geosite-cn', 'geoip-cn', 'geosite-non-cn', 'exceptions'] as const
 
 const cloneConfig = (config: Config): Config => JSON.parse(JSON.stringify(config ?? {}))
 
@@ -96,6 +100,7 @@ const ensureConfigShape = (config: Config) => {
   if (!config.dns) config.dns = { servers: [], rules: [] }
   if (!Array.isArray(config.dns.servers)) config.dns.servers = []
   if (!Array.isArray(config.dns.rules)) config.dns.rules = []
+  if (!Array.isArray(config.outbounds)) config.outbounds = []
   if (!config.experimental) config.experimental = {}
   if (!config.experimental.cache_file) config.experimental.cache_file = {}
 }
@@ -106,8 +111,6 @@ const asArray = (value: unknown): string[] => {
   return []
 }
 
-const unique = (items: string[]) => [...new Set(items.filter(Boolean))]
-
 const regionKey = (region: PresetRegion): PresetRegionKey => region === 'RU' ? 'ru' : 'zh'
 
 const tagPrefix = (region: PresetRegion, direction: PresetDirection) =>
@@ -116,17 +119,19 @@ const tagPrefix = (region: PresetRegion, direction: PresetDirection) =>
 const presetRuleSetTag = (region: PresetRegion, direction: PresetDirection, name: string) =>
   `${tagPrefix(region, direction)}-${name}`
 
-const directionFromTag = (tag: string, region: PresetRegion): PresetDirection | undefined => {
-  if (tag.startsWith(`${tagPrefix(region, 'proxy')}-`)) return 'proxy'
-  if (tag.startsWith(`${tagPrefix(region, 'direct')}-`)) return 'direct'
-  return undefined
-}
+const currentRegionRuleSetTags = (region: PresetRegion): string[] =>
+  COUNTRY_PRESET_NAMES.map(name => presetRuleSetTag(region, 'direct', name))
 
-const regionRuleSetTags = (region: PresetRegion): string[] => {
-  const names = region === 'RU' ? RU_PRESET_NAMES : ZH_PRESET_NAMES
+const legacyRegionRuleSetTags = (region: PresetRegion): string[] => {
+  const names = region === 'RU' ? LEGACY_RU_PRESET_NAMES : LEGACY_ZH_PRESET_NAMES
   return (['direct', 'proxy'] as const).flatMap(direction =>
     names.map(name => presetRuleSetTag(region, direction, name)))
 }
+
+const regionRuleSetTags = (region: PresetRegion): string[] => [
+  ...currentRegionRuleSetTags(region),
+  ...legacyRegionRuleSetTags(region),
+]
 
 const allPresetRuleSetTags = () => [
   ...regionRuleSetTags('RU'),
@@ -152,37 +157,56 @@ const remoteRuleSet = (tag: string, url: string, downloadDetour: string) => ({
   update_interval: '24h',
 })
 
-const inlineExceptionRuleSet = (tag: string, exceptions: string[]) => ({
-  type: 'inline',
+const localRuleSet = (tag: string, path: string) => ({
+  type: 'local',
   tag,
-  rules: [
-    { domain_suffix: unique(exceptions) },
-  ],
+  format: 'binary',
+  path,
 })
 
-const dnsServer = (tag: string, server: string, detour: string) => ({
+const dnsServer = (tag: string, server: string, detour?: string) => ({
   type: 'udp',
   tag,
   server,
   server_port: 53,
-  detour,
+  ...(detour ? { detour } : {}),
 })
 
-const addCommonDnsServers = (config: Config, options: ApplyPresetsOptions, changes: string[]) => {
-  const servers = config.dns.servers as any[]
-  const upsert = (server: any) => {
-    const index = servers.findIndex(item => item?.tag === server.tag)
-    if (index === -1) {
-      servers.push(server)
-      changes.push(`add dns server ${server.tag}`)
-      return
-    }
-    servers[index] = { ...servers[index], ...server }
-    changes.push(`update dns server ${server.tag}`)
-  }
+const isMeaningfulOutboundValue = (value: unknown): boolean => {
+  if (value === undefined || value === null || value === '') return false
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value !== 0
+  if (Array.isArray(value)) return value.some(item => isMeaningfulOutboundValue(item))
+  if (typeof value === 'object') return Object.values(value).some(item => isMeaningfulOutboundValue(item))
+  return true
+}
 
-  upsert(dnsServer(DNS_DIRECT_TAG, '223.5.5.5', options.directOutbound))
-  upsert(dnsServer(DNS_PROXY_TAG, '1.1.1.1', options.proxyOutbound))
+const isEmptyBuiltinDirectOutbound = (config: Config, tag: string): boolean => {
+  if (tag !== BUILTIN_DIRECT_OUTBOUND_TAG) return false
+  const outbound = (config.outbounds as any[]).find(item => String(item?.tag ?? '') === tag)
+  if (!outbound) return true
+  if (String(outbound?.type ?? '') !== 'direct') return false
+  return !Object.entries(outbound)
+    .some(([key, value]) => !['id', 'type', 'tag'].includes(key) && isMeaningfulOutboundValue(value))
+}
+
+const dnsDetourForOutbound = (config: Config, outboundTag: string): string | undefined =>
+  isEmptyBuiltinDirectOutbound(config, outboundTag) ? undefined : outboundTag
+
+const upsertByTag = (items: any[], item: any) => {
+  const index = items.findIndex(existing => existing?.tag === item.tag)
+  if (index === -1) {
+    items.push(item)
+    return 'add'
+  }
+  items[index] = item
+  return 'update'
+}
+
+const addDirectDnsServer = (config: Config, directOutbound: string, changes: string[]) => {
+  const server = dnsServer(DNS_DIRECT_TAG, '223.5.5.5', dnsDetourForOutbound(config, directOutbound))
+  const action = upsertByTag(config.dns.servers as any[], server)
+  changes.push(`${action} dns server ${server.tag}`)
 }
 
 const addRuleSet = (config: Config, ruleSet: any, changes: string[]) => {
@@ -200,134 +224,65 @@ const addDnsRule = (config: Config, rule: any, label: string, changes: string[])
   changes.push(`add dns rule ${label}`)
 }
 
-const oppositeDirection = (direction: PresetDirection): PresetDirection =>
-  direction === 'direct' ? 'proxy' : 'direct'
+const countrySources = (region: PresetRegion) => region === 'RU'
+  ? {
+      geosite: MANAGED_RU_SMART_RULESET_PATH,
+      geositeType: 'local' as const,
+      geoip: SOURCE_URLS.ruGeoip,
+      names: [
+        { name: 'wastrel-g/geosite-ru-smart: direct-ru', url: SOURCE_URLS.ruSmartGeositeDat, path: MANAGED_RU_SMART_RULESET_PATH },
+        { name: 'runetfreedom/russia-v2ray-rules-dat: geoip-ru', url: SOURCE_URLS.ruGeoip },
+      ],
+    }
+  : {
+      geosite: SOURCE_URLS.cnGeosite,
+      geositeType: 'remote' as const,
+      geoip: SOURCE_URLS.cnGeoip,
+      names: [
+        { name: 'SagerNet/sing-geosite: geolocation-cn', url: SOURCE_URLS.cnGeosite },
+        { name: 'SagerNet/sing-geoip: cn', url: SOURCE_URLS.cnGeoip },
+      ],
+    }
 
-const outboundForDirection = (direction: PresetDirection, options: ApplyPresetsOptions) =>
-  direction === 'direct' ? options.directOutbound : options.proxyOutbound
+const applyRegionDirectPreset = (region: PresetRegion): PresetApplier => (config, options, changes) => {
+  const directOutbound = options.directOutbound
+  const sources = countrySources(region)
+  const geositeTag = presetRuleSetTag(region, 'direct', 'geosite')
+  const geoipTag = presetRuleSetTag(region, 'direct', 'geoip')
 
-const dnsForDirection = (direction: PresetDirection) =>
-  direction === 'direct' ? DNS_DIRECT_TAG : DNS_PROXY_TAG
-
-const normalizedExceptions = (exceptions: string[] = []) =>
-  unique(exceptions.map(item => item.trim().replace(/^\.+|\.+$/g, '').toLowerCase()).filter(Boolean))
-
-const addExceptionRules = (
-  config: Config,
-  region: PresetRegion,
-  direction: PresetDirection,
-  exceptions: string[],
-  options: ApplyPresetsOptions,
-  changes: string[],
-) => {
-  const normalized = normalizedExceptions(exceptions)
-  if (normalized.length === 0) return
-
-  const exceptionDirection = oppositeDirection(direction)
-  const exceptionTag = presetRuleSetTag(region, direction, 'exceptions')
-  addRuleSet(config, inlineExceptionRuleSet(exceptionTag, normalized), changes)
-  addRouteRule(config, { rule_set: [exceptionTag], outbound: outboundForDirection(exceptionDirection, options) }, `${exceptionTag}`, changes)
-  addDnsRule(config, { action: 'route', rule_set: [exceptionTag], server: dnsForDirection(exceptionDirection) }, `${exceptionTag}`, changes)
+  addRuleSet(
+    config,
+    sources.geositeType === 'local'
+      ? localRuleSet(geositeTag, sources.geosite)
+      : remoteRuleSet(geositeTag, sources.geosite, directOutbound),
+    changes,
+  )
+  addRuleSet(config, remoteRuleSet(geoipTag, sources.geoip, directOutbound), changes)
+  addRouteRule(config, { rule_set: [geositeTag, geoipTag], outbound: directOutbound }, `${geositeTag}, ${geoipTag}`, changes)
+  addDnsRule(config, { action: 'route', rule_set: [geositeTag], server: DNS_DIRECT_TAG }, geositeTag, changes)
 }
 
-const applyRuPreset: PresetApplier = (config, options, changes) => {
-  const direction = options.direction
-  const blockedTag = presetRuleSetTag('RU', direction, 'blocked')
-  const privateTag = presetRuleSetTag('RU', direction, 'private')
-  const blockedOutbound = direction === 'proxy' ? options.proxyOutbound : options.directOutbound
-  const blockedDns = direction === 'proxy' ? DNS_PROXY_TAG : DNS_DIRECT_TAG
+const applyRuDirect = applyRegionDirectPreset('RU')
+const applyZhDirect = applyRegionDirectPreset('ZH')
 
-  addExceptionRules(config, 'RU', direction, options.exceptions, options, changes)
-  addRuleSet(config, remoteRuleSet(blockedTag, SOURCE_URLS.ruBlocked, blockedOutbound), changes)
-  addRuleSet(config, remoteRuleSet(privateTag, SOURCE_URLS.ruPrivate, options.directOutbound), changes)
-  addRouteRule(config, { rule_set: [privateTag], outbound: options.directOutbound }, privateTag, changes)
-  addRouteRule(config, { rule_set: [blockedTag], outbound: blockedOutbound }, blockedTag, changes)
-  addDnsRule(config, { action: 'route', rule_set: [privateTag], server: DNS_DIRECT_TAG }, privateTag, changes)
-  addDnsRule(config, { action: 'route', rule_set: [blockedTag], server: blockedDns }, blockedTag, changes)
-}
-
-const applyZhPreset: PresetApplier = (config, options, changes) => {
-  const direction = options.direction
-  const cnTag = presetRuleSetTag('ZH', direction, 'geosite-cn')
-  const geoipTag = presetRuleSetTag('ZH', direction, 'geoip-cn')
-  const nonCnTag = presetRuleSetTag('ZH', direction, 'geosite-non-cn')
-  const regionalOutbound = outboundForDirection(direction, options)
-  const regionalDns = dnsForDirection(direction)
-  const nonRegionalDirection = oppositeDirection(direction)
-  const nonRegionalOutbound = outboundForDirection(nonRegionalDirection, options)
-  const nonRegionalDns = dnsForDirection(nonRegionalDirection)
-
-  addExceptionRules(config, 'ZH', direction, options.exceptions, options, changes)
-  addRuleSet(config, remoteRuleSet(cnTag, SOURCE_URLS.cnGeosite, regionalOutbound), changes)
-  addRuleSet(config, remoteRuleSet(geoipTag, SOURCE_URLS.cnGeoip, regionalOutbound), changes)
-  addRuleSet(config, remoteRuleSet(nonCnTag, SOURCE_URLS.nonCnGeosite, nonRegionalOutbound), changes)
-  addRouteRule(config, { rule_set: [cnTag, geoipTag], outbound: regionalOutbound }, `${cnTag}, ${geoipTag}`, changes)
-  addRouteRule(config, { rule_set: [nonCnTag], outbound: nonRegionalOutbound }, nonCnTag, changes)
-  addDnsRule(config, { action: 'route', rule_set: [cnTag], server: regionalDns }, cnTag, changes)
-  addDnsRule(config, { action: 'route', rule_set: [nonCnTag], server: nonRegionalDns }, nonCnTag, changes)
-}
-
-const applyRuDirect: PresetApplier = (config, options, changes) => applyRuPreset(config, { ...options, direction: 'direct' }, changes)
-const applyRuProxy: PresetApplier = (config, options, changes) => applyRuPreset(config, { ...options, direction: 'proxy' }, changes)
-const applyZhDirect: PresetApplier = (config, options, changes) => applyZhPreset(config, { ...options, direction: 'direct' }, changes)
-const applyZhProxy: PresetApplier = (config, options, changes) => applyZhPreset(config, { ...options, direction: 'proxy' }, changes)
+const makePreset = (region: PresetRegion, id: string): RoutingDnsPreset => ({
+  id,
+  region,
+  direction: 'direct',
+  titleKey: `regionalPresets.region.${regionKey(region)}.title`,
+  descriptionKey: `regionalPresets.region.${regionKey(region)}.description`,
+  sources: countrySources(region).names,
+  apply: region === 'RU' ? applyRuDirect : applyZhDirect,
+})
 
 export const routingDnsPresetCatalog: RoutingDnsPreset[] = [
-  {
-    id: 'ru-direct',
-    region: 'RU',
-    direction: 'direct',
-    titleKey: 'regionalPresets.region.ru.title',
-    descriptionKey: 'regionalPresets.region.ru.description',
-    sources: [
-      { name: 'runetfreedom/russia-blocked-geoip: re-filter', url: SOURCE_URLS.ruBlocked },
-      { name: 'runetfreedom/russia-blocked-geoip: private', url: SOURCE_URLS.ruPrivate },
-    ],
-    apply: applyRuDirect,
-  },
-  {
-    id: 'ru-proxy',
-    region: 'RU',
-    direction: 'proxy',
-    titleKey: 'regionalPresets.region.ru.title',
-    descriptionKey: 'regionalPresets.region.ru.description',
-    sources: [
-      { name: 'runetfreedom/russia-blocked-geoip: re-filter', url: SOURCE_URLS.ruBlocked },
-      { name: 'runetfreedom/russia-blocked-geoip: private', url: SOURCE_URLS.ruPrivate },
-    ],
-    apply: applyRuProxy,
-  },
-  {
-    id: 'zh-direct',
-    region: 'ZH',
-    direction: 'direct',
-    titleKey: 'regionalPresets.region.zh.title',
-    descriptionKey: 'regionalPresets.region.zh.description',
-    sources: [
-      { name: 'SagerNet/sing-geosite: geolocation-cn', url: SOURCE_URLS.cnGeosite },
-      { name: 'SagerNet/sing-geoip: cn', url: SOURCE_URLS.cnGeoip },
-      { name: 'SagerNet/sing-geosite: geolocation-!cn', url: SOURCE_URLS.nonCnGeosite },
-    ],
-    apply: applyZhDirect,
-  },
-  {
-    id: 'zh-proxy',
-    region: 'ZH',
-    direction: 'proxy',
-    titleKey: 'regionalPresets.region.zh.title',
-    descriptionKey: 'regionalPresets.region.zh.description',
-    sources: [
-      { name: 'SagerNet/sing-geosite: geolocation-cn', url: SOURCE_URLS.cnGeosite },
-      { name: 'SagerNet/sing-geoip: cn', url: SOURCE_URLS.cnGeoip },
-      { name: 'SagerNet/sing-geosite: geolocation-!cn', url: SOURCE_URLS.nonCnGeosite },
-    ],
-    apply: applyZhProxy,
-  },
+  makePreset('RU', 'ru-direct'),
+  makePreset('ZH', 'zh-direct'),
 ]
 
-const presetByRegionDirection = (region: PresetRegion, direction: PresetDirection) => {
-  const preset = routingDnsPresetCatalog.find(item => item.region === region && item.direction === direction)
-  if (!preset) throw new Error(`unknown preset for ${region}/${direction}`)
+const presetByRegion = (region: PresetRegion) => {
+  const preset = routingDnsPresetCatalog.find(item => item.region === region)
+  if (!preset) throw new Error(`unknown preset for ${region}`)
   return preset
 }
 
@@ -338,30 +293,18 @@ const defaultState = (region: PresetRegion): RegionalPresetState => ({
   exceptions: [],
 })
 
-const extractExceptions = (ruleSet: any): string[] => {
-  const rules = Array.isArray(ruleSet?.rules) ? ruleSet.rules : []
-  return unique(rules.flatMap((rule: any) => asArray(rule?.domain_suffix)))
-}
-
 const detectRegionState = (config: Config, region: PresetRegion): RegionalPresetState => {
   ensureConfigShape(config)
   const ruleSets = config.route.rule_set as any[]
-  const regionTags = new Set(regionRuleSetTags(region))
-  const matchingRuleSets = ruleSets.filter(item => regionTags.has(String(item?.tag ?? '')))
+  const tags = new Set(regionRuleSetTags(region))
+  const matchingRuleSets = ruleSets.filter(item => tags.has(String(item?.tag ?? '')))
 
   if (matchingRuleSets.length === 0) return defaultState(region)
-
-  const direction = matchingRuleSets.some(item => directionFromTag(String(item?.tag ?? ''), region) === 'proxy')
-    ? 'proxy'
-    : 'direct'
-  const exceptionRuleSet = matchingRuleSets.find(item => String(item?.tag ?? '') === presetRuleSetTag(region, direction, 'exceptions')) ??
-    matchingRuleSets.find(item => String(item?.tag ?? '').endsWith('-exceptions'))
-
   return {
     region,
     enabled: true,
-    direction,
-    exceptions: exceptionRuleSet ? extractExceptions(exceptionRuleSet) : [],
+    direction: 'direct',
+    exceptions: [],
   }
 }
 
@@ -447,12 +390,8 @@ const makeRegionPreview = (
   const after = cloneConfig(before)
   const changes: string[] = []
   removePresetManagedItems(after, state.region)
-  addCommonDnsServers(after, options, changes)
-  presetByRegionDirection(state.region, state.direction).apply(after, {
-    ...options,
-    direction: state.direction,
-    exceptions: normalizedExceptions(state.exceptions),
-  }, changes)
+  addDirectDnsServer(after, options.directOutbound, changes)
+  presetByRegion(state.region).apply(after, { directOutbound: options.directOutbound }, changes)
   pruneUnusedPresetDnsServers(after)
 
   const desired = existingManagedItemsForRegion(after, state.region)
@@ -475,14 +414,9 @@ const makeRegionPreview = (
     ;(existingDnsRuleKeys.has(key) ? preview.willChange : preview.willAdd).push(label)
   }
 
-  const removed = existingManagedItemsForRegion(before, state.region).routeRuleSets
-    .filter(item => !desired.routeRuleSets.some(next => next.tag === item.tag))
+  const desiredRuleSetTags = new Set(desired.routeRuleSets.map(item => String(item?.tag ?? '')))
+  const removed = existing.routeRuleSets.filter(item => !desiredRuleSetTags.has(String(item?.tag ?? '')))
   preview.willRemove.push(...removed.map(item => `rule-set ${item.tag}`))
-
-  if (state.direction === 'proxy') {
-    preview.securityWarnings.push('regionalPresets.security.dnsLeakRisk')
-    preview.securityWarnings.push('regionalPresets.security.routeExposureRisk')
-  }
 
   return preview
 }
@@ -503,8 +437,8 @@ export const applyPresets = (
   zhState: RegionalPresetState,
   options: ApplyPresetsOptions,
 ): ApplyPresetsResult => {
-  if (!options.proxyOutbound || !options.directOutbound) {
-    throw new Error('proxyOutbound and directOutbound are required')
+  if (!options.directOutbound) {
+    throw new Error('directOutbound is required')
   }
   if (!validatePresetCatalogShape()) {
     throw new Error('preset catalog contains invalid source URLs')
@@ -525,16 +459,12 @@ export const applyPresets = (
   }
 
   if (states.some(state => state.enabled)) {
-    addCommonDnsServers(config, options, changes)
+    addDirectDnsServer(config, options.directOutbound, changes)
   }
 
   for (const state of states) {
     if (!state.enabled) continue
-    presetByRegionDirection(state.region, state.direction).apply(config, {
-      ...options,
-      direction: state.direction,
-      exceptions: normalizedExceptions(state.exceptions),
-    }, changes)
+    presetByRegion(state.region).apply(config, { directOutbound: options.directOutbound }, changes)
   }
 
   pruneUnusedPresetDnsServers(config)
@@ -551,8 +481,8 @@ export const applyRoutingDnsPreset = (
   presetId: string,
   options: ApplyPresetOptions,
 ): ApplyPresetResult => {
-  if (!options.proxyOutbound || !options.directOutbound) {
-    throw new Error('proxyOutbound and directOutbound are required')
+  if (!options.directOutbound) {
+    throw new Error('directOutbound is required')
   }
 
   const preset = routingDnsPresetCatalog.find(item => item.id === presetId)
@@ -562,14 +492,14 @@ export const applyRoutingDnsPreset = (
   const state: RegionalPresetState = {
     region: preset.region,
     enabled: true,
-    direction: preset.direction,
-    exceptions: normalizedExceptions(options.exceptions ?? []),
+    direction: 'direct',
+    exceptions: [],
   }
   const result = applyPresets(
     input,
     preset.region === 'RU' ? state : detected.ru,
     preset.region === 'ZH' ? state : detected.zh,
-    { proxyOutbound: options.proxyOutbound, directOutbound: options.directOutbound },
+    { directOutbound: options.directOutbound },
   )
 
   return {
@@ -583,9 +513,13 @@ export const validatePresetCatalogShape = () => routingDnsPresetCatalog.every(pr
   typeof preset.apply === 'function' &&
   preset.sources.length > 0 &&
   preset.sources.every(source => {
-    const parsed = new URL(source.url)
-    return parsed.protocol === 'https:' &&
-      parsed.username === '' &&
-      parsed.password === '' &&
-      parsed.pathname.endsWith('.srs')
+    const hasSafeURL = !source.url || (() => {
+      const parsed = new URL(source.url)
+      return parsed.protocol === 'https:' &&
+        parsed.username === '' &&
+        parsed.password === '' &&
+        (parsed.pathname.endsWith('.srs') || parsed.pathname.endsWith('/geosite.dat'))
+    })()
+    const hasSafeManagedPath = !source.path || source.path === MANAGED_RU_SMART_RULESET_PATH
+    return hasSafeURL && hasSafeManagedPath && (Boolean(source.url) || Boolean(source.path))
   }))

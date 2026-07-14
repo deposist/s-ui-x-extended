@@ -14,6 +14,7 @@ interface EndpointBasics {
   id: number
   type: EpType
   tag: string
+  awgManaged?: boolean
 }
 
 export interface WgPeer {

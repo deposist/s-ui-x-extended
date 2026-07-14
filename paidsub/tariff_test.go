@@ -53,6 +53,35 @@ func TestTariffCRUD(t *testing.T) {
 
 // TestTariffRejectsNegativeValues pins F-14: negative money/duration/traffic/sort
 // must be refused on create and edit (not silently stored and ignored at apply).
+func TestEffectiveAWGDeviceLimit(t *testing.T) {
+	db := openTestDB(t)
+	if err := EnsureSchema(db); err != nil {
+		t.Fatalf("EnsureSchema: %v", err)
+	}
+	service := NewTariffService()
+	if got, err := service.EffectiveAWGDeviceLimit(7, 3); err != nil || got != 3 {
+		t.Fatalf("global fallback = %d, %v; want 3", got, err)
+	}
+	orders := []PaymentOrder{
+		{ClientId: 7, TariffId: 1, Provider: "test", Currency: "RUB", Status: StatusPaid, IdempotencyKey: "old", GrantedAWGDevices: 2},
+		{ClientId: 7, TariffId: 1, Provider: "test", Currency: "RUB", Status: StatusRefunded, IdempotencyKey: "refunded", GrantedAWGDevices: 9},
+		{ClientId: 7, TariffId: 1, Provider: "test", Currency: "RUB", Status: StatusPaid, IdempotencyKey: "zero", GrantedAWGDevices: 0},
+		{ClientId: 7, TariffId: 1, Provider: "test", Currency: "RUB", Status: StatusPaid, IdempotencyKey: "new", GrantedAWGDevices: 5},
+	}
+	if err := db.Create(&orders).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got, err := service.EffectiveAWGDeviceLimit(7, 3); err != nil || got != 5 {
+		t.Fatalf("paid override = %d, %v; want 5", got, err)
+	}
+	if err := db.Model(&PaymentOrder{}).Where("id = ?", orders[3].Id).Update("status", StatusRefunded).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got, err := service.EffectiveAWGDeviceLimit(7, 3); err != nil || got != 2 {
+		t.Fatalf("fallback after refund = %d, %v; want 2", got, err)
+	}
+}
+
 func TestTariffRejectsNegativeValues(t *testing.T) {
 	db := openTestDB(t)
 	if err := EnsureSchema(db); err != nil {
@@ -62,6 +91,9 @@ func TestTariffRejectsNegativeValues(t *testing.T) {
 
 	if err := ts.Save("new", json.RawMessage(`{"name":"Bad","price":10000,"addDays":-5,"enabled":true}`)); err == nil {
 		t.Fatal("new with negative addDays must be rejected")
+	}
+	if err := ts.Save("new", json.RawMessage(`{"name":"Too many","price":10000,"maxAwgDevices":101,"enabled":true}`)); err == nil {
+		t.Fatal("new above AWG device hard cap must be rejected")
 	}
 	if all, _ := ts.GetAll(); len(all) != 0 {
 		t.Fatalf("rejected tariff must not be persisted, got %d", len(all))

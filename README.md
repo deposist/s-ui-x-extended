@@ -63,7 +63,7 @@ Release history and upgrade notes:
 - English changelog: [`CHANGELOG-EN.md`](CHANGELOG-EN.md)
 - Russian changelog: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - Simplified Chinese changelog: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
-- Latest stable notes: [`docs/releases/v1.0.1.md`](docs/releases/v1.0.1.md)
+- Latest stable notes: [`docs/releases/v1.0.2.md`](docs/releases/v1.0.2.md)
 - Upstream parity reference: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 ## How this differs from `alireza0/s-ui`
@@ -216,12 +216,12 @@ Use the stable build for normal installations. Use beta releases only if you wan
 
 | Channel | Version | Notes |
 |---|---|---|
-| Stable | `v1.0.1` | Recommended for production. Includes the v1.0.1 hardening line and the Telegram Chat ID setup fix. Release notes: [`docs/releases/v1.0.1.md`](docs/releases/v1.0.1.md). |
+| Stable | `v1.0.2` | Recommended for production. Adds managed AmneziaWG 2.0 devices and fixes the saved-language `s-ui` menu startup. Release notes: [`docs/releases/v1.0.2.md`](docs/releases/v1.0.2.md). |
 
 ### Linux/macOS, stable
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.1/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.2/install.sh)
 ```
 
 The command above installs the latest stable release. Pass a version tag explicitly if you need a specific beta or older build.
@@ -229,14 +229,14 @@ The command above installs the latest stable release. Pass a version tag explici
 ### Local clone
 
 ```sh
-git clone --branch v1.0.1 --depth 1 https://github.com/deposist/s-ui-x-extended.git
+git clone --branch v1.0.2 --depth 1 https://github.com/deposist/s-ui-x-extended.git
 cd s-ui-x-extended
-sudo bash install.sh v1.0.1
+sudo bash install.sh v1.0.2
 ```
 
 ### Windows
 
-- Stable: download `v1.0.1` from [its release page](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.1), extract the ZIP, and run `install-windows.bat` as Administrator.
+- Stable: download `v1.0.2` from [its release page](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.2), extract the ZIP, and run `install-windows.bat` as Administrator.
 
 Existing installations keep their settings, users, inbounds, outbounds, clients, TLS, services, and tokens. Database migrations run automatically on first start. Upgrade and rollback notes are in the changelog files: [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), [中文](CHANGELOG-ZH.md).
 
@@ -248,7 +248,7 @@ Existing installations keep their settings, users, inbounds, outbounds, clients,
 ### Linux/macOS
 
 1. Download the latest S-UI-X Extended version for your system and architecture from GitHub: [https://github.com/deposist/s-ui-x-extended/releases/latest](https://github.com/deposist/s-ui-x-extended/releases/latest)
-2. Optional: download the latest `s-ui.sh`: [https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.1/s-ui.sh](https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.1/s-ui.sh)
+2. Optional: download the latest `s-ui.sh`: [https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.2/s-ui.sh](https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.2/s-ui.sh)
 3. Optional: copy `s-ui.sh` to `/usr/bin/` and run `chmod +x /usr/bin/s-ui`.
 4. Extract the S-UI-X Extended tar.gz archive to your chosen directory and enter the extracted folder.
 5. Copy the `*.service` files to `/etc/systemd/system/`, then run `systemctl daemon-reload`.

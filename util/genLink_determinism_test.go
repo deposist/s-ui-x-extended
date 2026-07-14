@@ -11,6 +11,7 @@ import (
 
 // wellFormedClientConfig carries one valid user-config block per protocol so
 // every link type in InboundTypeWithLink produces at least one link.
+// #nosec G101 -- synthetic credentials used only as link-generator test input.
 const wellFormedClientConfig = `{
 	"socks": {"username":"u","password":"p"},
 	"http": {"username":"u","password":"p"},

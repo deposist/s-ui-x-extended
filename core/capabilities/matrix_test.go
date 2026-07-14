@@ -22,6 +22,7 @@ func TestProtocolMatrixDoc(t *testing.T) {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatalf("mkdir docs: %v", err)
 		}
+		// #nosec G306 -- generated documentation is intentionally world-readable.
 		if err := os.WriteFile(path, []byte(want), 0o644); err != nil {
 			t.Fatalf("write matrix: %v", err)
 		}

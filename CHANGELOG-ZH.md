@@ -8,6 +8,15 @@
 
 - 暂无未发布变更。
 
+## [1.0.2] - 2026-07-14 - 稳定版 1.0.2
+
+- 新增托管的个人 AmneziaWG 2.0 设备，支持加密密钥、套餐设备上限、Telegram 配置与二维码下发、流量统计、密钥轮换、撤销和故障恢复。
+- 托管 endpoint 的 peers 禁止手动编辑。Preshared keys 只在内存中传给 core。
+- 修复已保存语言时 `s-ui` 在显示菜单前等待标准输入的问题。
+- 发布下载改用仅 HTTPS 的 curl，并加入重试、超时和强制 SHA-256 校验。
+
+完整 release notes: [`docs/releases/v1.0.2.md`](docs/releases/v1.0.2.md)。
+
 ## [1.0.1] - 2026-07-07 - 稳定版 1.0.1
 
 稳定版 v1.0.1 汇总 v1.0.1 beta 线，并加入 Telegram Chat ID 设置修复。无需手动迁移数据库或配置。

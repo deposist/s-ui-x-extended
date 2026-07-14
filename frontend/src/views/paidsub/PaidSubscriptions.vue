@@ -23,6 +23,10 @@
       {{ $t('paidSub.secretboxWarning') }}
     </v-alert>
 
+    <v-alert class="mb-3" :type="awgStatus?.enabled && awgStatus?.coreReachable && awgStatus?.encryptionKeyAvailable ? 'success' : 'warning'" variant="tonal">
+      AWG: {{ awgStatus?.enabled ? 'enabled' : 'disabled' }} · core {{ awgStatus?.coreReachable ? 'online' : 'offline' }} · desired {{ awgStatus?.desired ?? 0 }} · provisioned {{ awgStatus?.provisioned ?? 0 }} · pending {{ awgStatus?.pending ?? 0 }} · errors {{ awgStatus?.errors ?? 0 }}
+    </v-alert>
+
     <v-tabs v-model="tab" color="primary" class="px-2">
       <v-tab value="bindings">{{ $t('paidSub.tabs.bindings') }}</v-tab>
       <v-tab value="autoreg">{{ $t('paidSub.tabs.autoreg') }}</v-tab>
@@ -140,6 +144,19 @@
           <v-col cols="12" md="4">
             <v-text-field v-model="settings.paidSubStartRateLimitPerMin" type="number" :label="$t('paidSub.autoreg.rateLimit')" />
           </v-col>
+        </v-row>
+        <v-divider class="my-4" />
+        <div class="text-subtitle-2 mb-2">AmneziaWG 2.0</div>
+        <v-row>
+          <v-col cols="12" md="4"><v-switch v-model="awgEnabled" color="primary" label="Enable managed AWG devices" hide-details /></v-col>
+          <v-col cols="12" md="4"><v-text-field v-model="settings.awgEndpointTag" label="Managed endpoint tag" /></v-col>
+          <v-col cols="12" md="4"><v-text-field v-model="settings.awgPublicEndpoint" label="Public endpoint host:port" /></v-col>
+          <v-col cols="12" md="4"><v-text-field v-model="settings.awgSubnet" label="IPv4 subnet" /></v-col>
+          <v-col cols="12" md="4"><v-text-field v-model="settings.awgDNS" label="DNS" /></v-col>
+          <v-col cols="6" md="2"><v-text-field v-model="settings.awgDefaultDeviceLimit" type="number" label="Default device limit" /></v-col>
+          <v-col cols="6" md="2"><v-text-field v-model="settings.awgMTU" type="number" label="MTU (0 = endpoint)" /></v-col>
+          <v-col cols="6" md="2"><v-text-field v-model="settings.awgReconcileIntervalSec" type="number" label="Reconcile seconds" /></v-col>
+          <v-col cols="6" md="2"><v-text-field v-model="settings.awgStatsIntervalSec" type="number" label="Stats seconds" /></v-col>
         </v-row>
         <v-btn color="primary" :loading="loading" @click="saveSettings">{{ $t('actions.set') }}</v-btn>
       </v-window-item>
@@ -427,6 +444,7 @@
           <v-col cols="6"><v-text-field v-model.number="tariffEdit.starsAmount" type="number" :label="$t('paidSub.tariffs.starsAmount')" /></v-col>
           <v-col cols="6"><v-text-field v-model.number="tariffEdit.addDays" type="number" :label="$t('paidSub.tariffs.addDays')" /></v-col>
           <v-col cols="6"><v-text-field v-model.number="tariffEdit.addTrafficGB" type="number" :label="$t('paidSub.tariffs.addTrafficGB')" /></v-col>
+		  <v-col cols="6"><v-text-field v-model.number="tariffEdit.maxAwgDevices" type="number" min="0" max="100" :label="$t('paidSub.tariffs.maxAwgDevices')" /></v-col>
           <v-col cols="6"><v-text-field v-model.number="tariffEdit.sort" type="number" :label="$t('paidSub.tariffs.sort')" /></v-col>
         </v-row>
         <v-switch v-model="tariffEdit.enabled" color="primary" :label="$t('paidSub.tariffs.enabledField')" hide-details />
@@ -542,6 +560,7 @@ const tariffColumns: Column<any>[] = [
   { key: 'starsAmount', labelKey: 'paidSub.cols.stars' },
   { key: 'addDays', labelKey: 'paidSub.cols.addDays' },
   { key: 'addTrafficBytes', labelKey: 'paidSub.cols.addTraffic' },
+  { key: 'maxAwgDevices', labelKey: 'paidSub.cols.maxAwgDevices' },
   { key: 'enabled', labelKey: 'paidSub.cols.enabled' },
 ]
 const orderColumns: Column<any>[] = [
@@ -624,6 +643,15 @@ const defaults: SMap = {
   paidSubExternalUrlTemplate: '',
   paidSubOrderTTLMinutes: '30',
   paidSubGreeting: '',
+  awgEnabled: 'false',
+  awgEndpointTag: '',
+  awgPublicEndpoint: '',
+  awgSubnet: '10.77.0.0/16',
+  awgDNS: '1.1.1.1,1.0.0.1',
+  awgDefaultDeviceLimit: '3',
+  awgReconcileIntervalSec: '30',
+  awgStatsIntervalSec: '60',
+  awgMTU: '0',
 }
 
 const tab = ref('bindings')
@@ -658,6 +686,7 @@ const stripeEnabled = boolSetting('paidSubStripeEnabled')
 const paymasterEnabled = boolSetting('paidSubPayMasterEnabled')
 const cryptoEnabled = boolSetting('paidSubCryptoBotEnabled')
 const externalEnabled = boolSetting('paidSubExternalEnabled')
+const awgEnabled = boolSetting('awgEnabled')
 
 const autoInbounds = computed<number[]>({
   get: () => {
@@ -680,6 +709,12 @@ const loadStatus = async () => {
   const msg = await HttpUtils.get('api/paidsub/status')
   if (msg.success) secretboxKeySet.value = !!msg.obj?.secretboxKeySet
   else push.error({ title: i18n.global.t('failed'), message: i18n.global.t('pages.paidSub') + ': status' })
+}
+
+const awgStatus = ref<any>(null)
+const loadAWGStatus = async () => {
+  const msg = await HttpUtils.get('api/paidsub/awg/status')
+  if (msg.success) awgStatus.value = msg.obj
 }
 
 const saveSettings = async () => {
@@ -829,7 +864,7 @@ const tariffHeaders = [
   { title: '', key: 'actions', sortable: false, align: 'end' as const },
 ]
 const tariffDialog = ref(false)
-const blankTariff = () => ({ id: 0, name: '', description: '', priceMajor: 0, currency: normalizeCurrency(settings.value.paidSubCurrency), starsAmount: 0, addDays: 30, addTrafficGB: 0, sort: 0, enabled: true })
+const blankTariff = () => ({ id: 0, name: '', description: '', priceMajor: 0, currency: normalizeCurrency(settings.value.paidSubCurrency), starsAmount: 0, addDays: 30, addTrafficGB: 0, maxAwgDevices: 0, sort: 0, enabled: true })
 const tariffEdit = ref<any>(blankTariff())
 
 const loadTariffs = async () => {
@@ -844,6 +879,7 @@ const openTariff = (item?: any) => {
       id: item.id, name: item.name, description: item.description,
       priceMajor: (item.price || 0) / 100, currency: normalizeCurrency(item.currency),
       starsAmount: item.starsAmount || 0, addDays: item.addDays || 0,
+      maxAwgDevices: item.maxAwgDevices || 0,
       addTrafficGB: (item.addTrafficBytes || 0) / (1024 * 1024 * 1024),
       sort: item.sort || 0, enabled: !!item.enabled,
     }
@@ -865,6 +901,7 @@ const saveTariff = async () => {
     starsAmount: Math.max(0, Math.round(Number(e.starsAmount) || 0)),
     addDays: Math.max(0, Math.round(Number(e.addDays) || 0)),
     addTrafficBytes: Math.max(0, Math.round((Number(e.addTrafficGB) || 0) * 1024 * 1024 * 1024)),
+    maxAwgDevices: Math.min(100, Math.max(0, Math.round(Number(e.maxAwgDevices) || 0))),
     sort: Math.max(0, Math.round(Number(e.sort) || 0)),
     enabled: !!e.enabled,
   }
@@ -940,7 +977,7 @@ const formatMoney = (amount: number, currency: string) =>
 
 const reloadAll = async () => {
   loading.value = true
-  await Promise.all([loadSettings(), loadStatus(), loadInbounds(), loadOutbounds(), loadBindings(), loadTariffs(), loadOrders()])
+  await Promise.all([loadSettings(), loadStatus(), loadAWGStatus(), loadInbounds(), loadOutbounds(), loadBindings(), loadTariffs(), loadOrders()])
   loading.value = false
 }
 

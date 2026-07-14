@@ -26,6 +26,9 @@ type Bot struct {
 	token        string
 	cmdLimiter   *rateLimiter
 	startLimiter *rateLimiter
+	awgLimiter   *rateLimiter
+	awgNameMu    sync.Mutex
+	awgNames     map[awgNameKey]awgNameState
 }
 
 func newBot() *Bot {
@@ -34,15 +37,18 @@ func newBot() *Bot {
 		payments:     NewPaymentService(),
 		cmdLimiter:   newRateLimiter(20, 60),
 		startLimiter: newRateLimiter(0, 60), // cap supplied per-call from settings
+		awgLimiter:   newRateLimiter(10, 60),
+		awgNames:     make(map[awgNameKey]awgNameState),
 	}
 }
 
 // ---- lifecycle (package singleton) ----
 
 var (
-	botMu     sync.Mutex
-	botCancel context.CancelFunc
-	botDone   chan struct{}
+	botMu              sync.Mutex
+	botCancel          context.CancelFunc
+	botDone            chan struct{}
+	awgCommandsEnabled = true
 )
 
 // StartBot launches the receiver goroutine if not already running. Idempotent.
@@ -56,8 +62,22 @@ func StartBot() {
 	done := make(chan struct{})
 	botCancel = cancel
 	botDone = done
+	awgCommandsEnabled = true
 	b := newBot()
 	go b.run(ctx, done)
+}
+
+func StopAWGCommands() {
+	botMu.Lock()
+	awgCommandsEnabled = false
+	botMu.Unlock()
+}
+
+func awgCommandsAccepted() bool {
+	botMu.Lock()
+	enabled := awgCommandsEnabled
+	botMu.Unlock()
+	return enabled
 }
 
 // StopBot signals the receiver to stop and waits up to ctx for it to finish.
@@ -115,6 +135,7 @@ func sleepCtx(ctx context.Context, d time.Duration) bool {
 
 func (b *Bot) run(ctx context.Context, done chan struct{}) {
 	defer close(done)
+	defer b.clearAWGNameStates()
 	backoff := time.Second
 	const maxBackoff = 60 * time.Second
 	for {
@@ -243,6 +264,10 @@ func (b *Bot) handleMessage(ctx context.Context, m *tgMessage) {
 	if !b.cmdLimiter.allow(m.From.ID, nowUnix()) {
 		return // silent drop
 	}
+	if state, ok := b.takeAWGNameState(m.From.ID, m.Chat.ID, nowUnix()); ok {
+		b.createNamedAWG(ctx, m.Chat.ID, m.From.ID, m.Text, state, l)
+		return
+	}
 	cmd, _ := parseCommand(m.Text)
 	switch cmd {
 	case "/help":
@@ -276,6 +301,9 @@ func (b *Bot) handleCallback(ctx context.Context, cq *tgCallbackQuery) {
 		return
 	}
 	data := cq.Data
+	if data != "awg:add" {
+		b.cancelAWGName(cq.From.ID, chatID)
+	}
 	switch {
 	case data == "links":
 		b.cmdLinks(ctx, chatID, cq.From.ID, l)
@@ -283,6 +311,38 @@ func (b *Bot) handleCallback(ctx context.Context, cq *tgCallbackQuery) {
 		b.cmdQR(ctx, chatID, cq.From.ID, l)
 	case data == "stats":
 		b.cmdStats(ctx, chatID, cq.From.ID, l)
+	case data == "awg:list":
+		b.cmdAWGList(ctx, chatID, cq.From.ID, l)
+	case data == "awg:add":
+		b.cmdAWGCreate(ctx, chatID, cq.From.ID, cq.ID, l)
+	case strings.HasPrefix(data, "awg:v:"):
+		if id, ok := parseUintArg(data, "awg:v:"); ok {
+			b.cmdAWGView(ctx, chatID, cq.From.ID, id, l)
+		}
+	case strings.HasPrefix(data, "awg:c:"):
+		if id, ok := parseUintArg(data, "awg:c:"); ok {
+			b.cmdAWGConfig(ctx, chatID, cq.From.ID, id, l)
+		}
+	case strings.HasPrefix(data, "awg:q:"):
+		if id, ok := parseUintArg(data, "awg:q:"); ok {
+			b.cmdAWGQR(ctx, chatID, cq.From.ID, id, l)
+		}
+	case strings.HasPrefix(data, "awg:r:"):
+		if id, ok := parseUintArg(data, "awg:r:"); ok {
+			b.confirmAWGRotate(ctx, chatID, cq.From.ID, id, cq.ID, l)
+		}
+	case strings.HasPrefix(data, "awg:ry:"):
+		if id, nonce, ok := parseAWGConfirmation(data, "awg:ry:"); ok {
+			b.rotateAWG(ctx, chatID, cq.From.ID, id, nonce, l)
+		}
+	case strings.HasPrefix(data, "awg:d:"):
+		if id, ok := parseUintArg(data, "awg:d:"); ok {
+			b.confirmAWGDelete(ctx, chatID, cq.From.ID, id, l)
+		}
+	case strings.HasPrefix(data, "awg:dy:"):
+		if id, ok := parseUintArg(data, "awg:dy:"); ok {
+			b.deleteAWG(ctx, chatID, cq.From.ID, id, l)
+		}
 	case data == "help":
 		_ = b.sendMessage(ctx, chatID, tr(l, "help"), nil)
 	case data == "menu":
@@ -525,6 +585,7 @@ func (b *Bot) menuKeyboard(l lang) *inlineKeyboard {
 	return &inlineKeyboard{InlineKeyboard: [][]inlineButton{
 		{{Text: tr(l, "menu_links"), CallbackData: "links"}, {Text: tr(l, "menu_qr"), CallbackData: "qr"}},
 		{{Text: tr(l, "menu_stats"), CallbackData: "stats"}, {Text: tr(l, "menu_payment"), CallbackData: "payment"}},
+		{{Text: tr(l, "menu_awg"), CallbackData: "awg:list"}},
 		{{Text: tr(l, "menu_help"), CallbackData: "help"}},
 	}}
 }
@@ -720,6 +781,14 @@ func humanBytes(n int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.2f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
+}
+
+func humanBytesU64(n uint64) string {
+	const maxInt64 = uint64(^uint64(0) >> 1)
+	if n > maxInt64 {
+		return "> 8 EiB"
+	}
+	return humanBytes(int64(n)) // #nosec G115 -- bounded above by MaxInt64.
 }
 
 func progressBar(pct int) string {

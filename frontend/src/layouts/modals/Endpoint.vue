@@ -40,6 +40,7 @@
         <Wireguard v-if="endpoint.type == epTypes.Wireguard"
           :data="endpoint"
           :field-hints="currentFieldHints"
+          :peers-managed="endpoint.awgManaged === true"
           @getWgPubKey="getWgPubKey"
           @newWgKey="newWgKey"
           @addPeer="addWgPeer"

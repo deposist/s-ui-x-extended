@@ -59,9 +59,88 @@ type Runtime struct {
 	auditWriter      *auditWriter
 	telegramNotifier *telegramNotifier
 	tokenUse         *tokenUseDebouncer
+	awgClientState   AWGClientStateHook
+	awgDevices       AWGDeviceService
+	awgReconcile     func(context.Context) error
 
 	coreStartCooldown time.Duration
 	lastStartFailTime time.Time
+}
+
+// AWGClientStateHook lets payment and depletion paths notify the runtime AWG
+// manager after their database transaction commits, without importing paidsub.
+type AWGClientStateHook interface {
+	SuspendClients(ctx context.Context, clientIDs []uint) error
+	ResumeClient(ctx context.Context, clientID uint) error
+}
+
+type AWGDeviceService interface {
+	CreateDevice(context.Context, uint, string, string, int) (AWGDeviceInfo, error)
+	ListDevices(uint) ([]AWGDeviceInfo, error)
+	GetOwnedDevice(uint, uint) (AWGDeviceInfo, error)
+	RenderOwnedConfig(context.Context, uint, uint) ([]byte, error)
+	RotateOwnedDevice(context.Context, uint, uint, string) (AWGDeviceInfo, error)
+	RevokeOwnedDevice(context.Context, uint, uint) error
+}
+
+func (r *Runtime) SetAWGClientStateHook(hook AWGClientStateHook) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.awgClientState = hook
+	r.mu.Unlock()
+}
+
+func (r *Runtime) AWGClientStateHook() AWGClientStateHook {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	hook := r.awgClientState
+	r.mu.RUnlock()
+	return hook
+}
+
+func (r *Runtime) SetAWGDeviceService(devices AWGDeviceService) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.awgDevices = devices
+	r.mu.Unlock()
+}
+
+func (r *Runtime) AWGDeviceService() AWGDeviceService {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	devices := r.awgDevices
+	r.mu.RUnlock()
+	return devices
+}
+
+func (r *Runtime) SetAWGReconcileHook(hook func(context.Context) error) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.awgReconcile = hook
+	r.mu.Unlock()
+}
+
+func (r *Runtime) TriggerAWGReconcile(ctx context.Context) error {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	hook := r.awgReconcile
+	r.mu.RUnlock()
+	if hook == nil {
+		return nil
+	}
+	return hook(ctx)
 }
 
 func NewRuntime(coreInstance *core.Core) *Runtime {

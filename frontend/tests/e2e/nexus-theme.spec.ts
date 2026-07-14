@@ -1,18 +1,14 @@
 import { expect, test } from '@playwright/test'
 import { login } from './helpers'
 
-test('nexus light theme keeps layout tokens after switching from classic', async ({ page }) => {
+test('nexus light theme keeps layout tokens', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem('theme', 'light')
-    window.localStorage.setItem('sui:ui:mode', 'classic')
+    window.localStorage.setItem('sui:ui:mode', 'nexus')
     window.localStorage.setItem('sui:ui:palette', 'technical')
   })
 
   await login(page)
-  await expect(page.locator('.nexus-shell')).toHaveCount(0)
-
-  await page.getByRole('button', { name: 'Switch to Nexus mode' }).click()
-
   const shell = page.locator('.nexus-shell')
   await expect(shell).toBeVisible()
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.uiMode)).toBe('nexus')

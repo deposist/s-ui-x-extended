@@ -1,19 +1,44 @@
+version: "2"
+
 run:
   timeout: 10m
 
 linters:
-  disable-all: true
+  default: none
   enable:
     - bodyclose
     - errcheck
     - gosec
-    - gosimple
+    - staticcheck
     - govet
     - ineffassign
     - noctx
     - unparam
+  exclusions:
+    generated: lax
+    presets:
+      - std-error-handling
+    rules:
+      - linters: [staticcheck]
+        text: "QF100[13478]"
+      - linters: [gosec]
+        path: "(.+_test\\.go|scripts/)"
+      - linters: [noctx]
+        path: "(.+_test\\.go|tests/)"
+      - linters: [errcheck]
+        source: "defer .*\\.Close\\(\\)"
+      - linters: [gosec]
+        path: "(database/importxui/source\\.go|service/client\\.go|service/panel_update_apply\\.go)"
+      - linters: [govet]
+        text: "Constant reflect.Ptr should be inlined"
+      - linters: [noctx]
+        path: "(database/importxui/dialect_(3xui_mhsanaei|columns)\\.go|network/listen\\.go)"
+      - linters: [staticcheck]
+        text: "(QF1012|SA9003)"
+      - linters: [unparam]
+        path: "paidsub/ratelimit\\.go"
 
-linters-settings:
-  govet:
-    enable:
-      - nilness
+  settings:
+    govet:
+      enable:
+        - nilness

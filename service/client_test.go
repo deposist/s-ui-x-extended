@@ -4,12 +4,41 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
 
 	"gorm.io/gorm"
 )
+
+func TestClientIsActiveAtBoundaries(t *testing.T) {
+	const now = int64(1_700_000_000)
+	const maxInt64 = int64(1<<63 - 1)
+
+	tests := []struct {
+		name   string
+		client model.Client
+		want   bool
+	}{
+		{name: "unlimited", client: model.Client{Enable: true}, want: true},
+		{name: "disabled", client: model.Client{}, want: false},
+		{name: "expiry now", client: model.Client{Enable: true, Expiry: now}, want: false},
+		{name: "expiry future", client: model.Client{Enable: true, Expiry: now + 1}, want: true},
+		{name: "quota below", client: model.Client{Enable: true, Volume: 10, Up: 6, Down: 3}, want: true},
+		{name: "quota equal", client: model.Client{Enable: true, Volume: 10, Up: 6, Down: 4}, want: false},
+		{name: "quota sum overflow", client: model.Client{Enable: true, Volume: maxInt64 - 1, Up: maxInt64 - 5, Down: 10}, want: false},
+		{name: "invalid negative counter", client: model.Client{Enable: true, Volume: 10, Up: -1}, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := clientIsActiveAt(tt.client, now); got != tt.want {
+				t.Fatalf("clientIsActiveAt() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestDecodeClientInbounds(t *testing.T) {
 	got, ok := decodeClientInbounds(7, []byte(`[1,2,3]`), "test")
@@ -103,6 +132,50 @@ func TestDepleteClientsTrafficLimitAvoidsInt64Overflow(t *testing.T) {
 	}
 	if !state["near-limit"] {
 		t.Fatal("client below volume should stay enabled")
+	}
+}
+
+func TestDepleteClientsUsesActiveBoundarySemantics(t *testing.T) {
+	initSettingTestDB(t)
+	now := time.Now().Unix()
+	clients := []model.Client{
+		{
+			Enable: true, Name: "expiry-now", Expiry: now,
+			Inbounds: json.RawMessage(`[1]`), Links: json.RawMessage(`[]`), Config: json.RawMessage(`{}`),
+		},
+		{
+			Enable: true, Name: "quota-equal", Volume: 10, Up: 6, Down: 4,
+			Inbounds: json.RawMessage(`[1]`), Links: json.RawMessage(`[]`), Config: json.RawMessage(`{}`),
+		},
+		{
+			Enable: true, Name: "still-active", Expiry: now + 3600, Volume: 10, Up: 6, Down: 3,
+			Inbounds: json.RawMessage(`[1]`), Links: json.RawMessage(`[]`), Config: json.RawMessage(`{}`),
+		},
+	}
+	if err := database.GetDB().Create(&clients).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := (&ClientService{}).DepleteClients(); err != nil {
+		t.Fatal(err)
+	}
+
+	var got []model.Client
+	if err := database.GetDB().Find(&got).Error; err != nil {
+		t.Fatal(err)
+	}
+	state := make(map[string]bool, len(got))
+	for _, client := range got {
+		state[client.Name] = client.Enable
+	}
+	if state["expiry-now"] {
+		t.Fatal("client expiring at the current Unix second should be depleted")
+	}
+	if state["quota-equal"] {
+		t.Fatal("client at the exact traffic quota should be depleted")
+	}
+	if !state["still-active"] {
+		t.Fatal("client below quota with a future expiry should stay active")
 	}
 }
 

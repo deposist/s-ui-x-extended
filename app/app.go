@@ -27,6 +27,9 @@ type APP struct {
 	cronJob       *cronjob.CronJob
 	core          *core.Core
 	runtime       *service.Runtime
+	awgManager    *service.AWGManager
+	awgCancel     context.CancelFunc
+	awgDone       chan struct{}
 }
 
 func NewApp() *APP {
@@ -111,6 +114,21 @@ func (a *APP) Init() error {
 	if err := paidsub.EnsureSchema(database.GetDB()); err != nil {
 		logger.Warning("failed to ensure paidsub schema: ", err)
 	}
+	if awgSettings, awgErr := a.SettingService.GetAWGSettings(); awgErr != nil {
+		logger.Warning("failed to load AWG settings: ", awgErr)
+	} else {
+		a.awgManager = service.NewAWGManager(a.runtime, service.NewAWGProvisioner(a.runtime, awgSettings.EndpointTag), 128)
+		if startErr := a.awgManager.Start(); startErr != nil {
+			logger.Warning("failed to start AWG manager: ", startErr)
+		} else {
+			a.runtime.SetAWGClientStateHook(a.awgManager)
+			a.runtime.SetAWGDeviceService(a.awgManager)
+			a.runtime.SetAWGReconcileHook(func(ctx context.Context) error {
+				_, err := a.awgManager.Reconcile(ctx)
+				return err
+			})
+		}
+	}
 	// Outbound failover observability table (non-authoritative; idempotent).
 	if err := service.EnsureFailoverSchema(database.GetDB()); err != nil {
 		logger.Warning("failed to ensure failover_state schema: ", err)
@@ -120,6 +138,11 @@ func (a *APP) Init() error {
 }
 
 func (a *APP) Start() error {
+	if a.awgManager != nil {
+		if err := a.awgManager.Start(); err != nil {
+			return err
+		}
+	}
 	loc, err := a.SettingService.GetTimeLocation()
 	if err != nil {
 		return err
@@ -156,6 +179,7 @@ func (a *APP) Start() error {
 	if err = a.configService.StartCore(); err != nil {
 		logger.Error("sing-box core failed to start; panel stays up so you can fix the config: ", err)
 	}
+	a.startAWGLoops()
 
 	// Healthy boot reached: clear any pending self-update marker so this start is
 	// not counted as a failed update attempt (SR-012). No-op when no update is
@@ -169,6 +193,15 @@ func (a *APP) Start() error {
 
 func (a *APP) Stop() {
 	service.StopRestartManager()
+	a.stopAWGLoops()
+	paidsub.StopAWGCommands()
+	if a.awgManager != nil {
+		awgCtx, awgCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if err := a.awgManager.Stop(awgCtx); err != nil {
+			logger.Warning("stop AWG manager err:", err)
+		}
+		awgCancel()
+	}
 	a.cronJob.Stop()
 	err := a.subServer.Stop()
 	if err != nil {
@@ -202,6 +235,51 @@ func (a *APP) Stop() {
 	if err := service.StopAuditWriter(ctx); err != nil {
 		logger.Warning("stop audit writer err:", err)
 	}
+}
+
+func (a *APP) startAWGLoops() {
+	if a.awgManager == nil || a.awgCancel != nil {
+		return
+	}
+	settings, err := a.SettingService.GetAWGSettings()
+	if err != nil || !settings.Enabled {
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	a.awgCancel, a.awgDone = cancel, done
+	go func() {
+		defer close(done)
+		reconcileTicker := time.NewTicker(time.Duration(settings.ReconcileIntervalSec) * time.Second)
+		statsTicker := time.NewTicker(time.Duration(settings.StatsIntervalSec) * time.Second)
+		defer reconcileTicker.Stop()
+		defer statsTicker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-reconcileTicker.C:
+				if _, err := a.awgManager.Reconcile(ctx); err != nil {
+					logger.Warning("periodic AWG reconcile failed: ", err)
+				}
+			case <-statsTicker.C:
+				if _, err := a.awgManager.CollectStats(ctx); err != nil {
+					logger.Warning("periodic AWG stats failed: ", err)
+				}
+			}
+		}
+	}()
+}
+
+func (a *APP) stopAWGLoops() {
+	if a.awgCancel == nil {
+		return
+	}
+	a.awgCancel()
+	if a.awgDone != nil {
+		<-a.awgDone
+	}
+	a.awgCancel, a.awgDone = nil, nil
 }
 
 func (a *APP) initLog() {

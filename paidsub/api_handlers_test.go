@@ -107,3 +107,25 @@ func TestSaveTariffHandlerValidation(t *testing.T) {
 		t.Fatalf("valid new tariff failed: %+v", m)
 	}
 }
+
+func TestAWGStatusDoesNotExposeSecretFields(t *testing.T) {
+	db := openTestDB(t)
+	if err := EnsureSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	h := newTestHandlers()
+	m := doHandler(t, h.awgStatus, "")
+	if !m.Success {
+		t.Fatalf("status failed: %+v", m)
+	}
+	encoded, err := json.Marshal(m.Obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := strings.ToLower(string(encoded))
+	for _, forbidden := range []string{"private", "preshared", "psk", "cipher", "crypto_context"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("status exposed secret field %q: %s", forbidden, encoded)
+		}
+	}
+}

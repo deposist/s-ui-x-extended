@@ -13,17 +13,43 @@ import (
 // to the tariffs table only.
 type TariffService struct{}
 
+const maxAWGDevicesPerTariff = 100
+
 // validateTariff rejects nonsensical values before persistence. Negative
 // money/duration/traffic/sort are never valid; storing them would silently
 // no-op at apply time (the apply path guards >0), so reject up front.
 func validateTariff(t *Tariff) error {
-	if t.Price < 0 || t.StarsAmount < 0 || t.AddDays < 0 || t.AddTrafficBytes < 0 || t.Sort < 0 {
+	if t.Price < 0 || t.StarsAmount < 0 || t.AddDays < 0 || t.AddTrafficBytes < 0 || t.Sort < 0 || t.MaxAWGDevices < 0 {
 		return fmt.Errorf("tariff fields must not be negative")
+	}
+	if t.MaxAWGDevices > maxAWGDevicesPerTariff {
+		return fmt.Errorf("max AWG devices must not exceed %d", maxAWGDevicesPerTariff)
 	}
 	return nil
 }
 
 func NewTariffService() *TariffService { return &TariffService{} }
+
+// EffectiveAWGDeviceLimit returns the newest paid entitlement snapshot with a
+// positive override. Refunded and other terminal states do not participate.
+// The global default applies when no paid override exists.
+func (s *TariffService) EffectiveAWGDeviceLimit(clientID uint, globalDefault int) (int, error) {
+	if globalDefault < 0 || globalDefault > maxAWGDevicesPerTariff {
+		return 0, fmt.Errorf("global AWG device limit must be between 0 and %d", maxAWGDevicesPerTariff)
+	}
+	var order PaymentOrder
+	result := database.GetDB().
+		Where("client_id = ? AND status = ? AND granted_awg_devices > 0", clientID, StatusPaid).
+		Order("id DESC").
+		First(&order)
+	if result.Error == nil {
+		return order.GrantedAWGDevices, nil
+	}
+	if result.Error != gorm.ErrRecordNotFound {
+		return 0, result.Error
+	}
+	return globalDefault, nil
+}
 
 func (s *TariffService) GetAll() ([]Tariff, error) {
 	db := database.GetDB()
@@ -92,6 +118,7 @@ func (s *TariffService) Save(act string, data json.RawMessage) error {
 			"stars_amount":      t.StarsAmount,
 			"add_days":          t.AddDays,
 			"add_traffic_bytes": t.AddTrafficBytes,
+			"max_awg_devices":   t.MaxAWGDevices,
 			"sort":              t.Sort,
 			"enabled":           t.Enabled,
 			"updated_at":        t.UpdatedAt,

@@ -42,7 +42,7 @@ func TestDeleteTokenRequiresOwner(t *testing.T) {
 	adminToken := createTokenOwnershipToken(t, 1, "admin-token", true)
 	otherToken := createTokenOwnershipToken(t, other.Id, "other-token", true)
 
-	if err := userService.DeleteToken("admin", strconv.Itoa(int(otherToken.Id))); err == nil {
+	if err := userService.DeleteToken("admin", strconv.FormatUint(uint64(otherToken.Id), 10)); err == nil {
 		t.Fatal("deleting another admin's token should fail")
 	}
 	var count int64
@@ -53,7 +53,7 @@ func TestDeleteTokenRequiresOwner(t *testing.T) {
 		t.Fatal("admin deleted another admin's token")
 	}
 
-	if err := userService.DeleteToken("admin", strconv.Itoa(int(adminToken.Id))); err != nil {
+	if err := userService.DeleteToken("admin", strconv.FormatUint(uint64(adminToken.Id), 10)); err != nil {
 		t.Fatal(err)
 	}
 	if err := database.GetDB().Model(&model.Tokens{}).Where("id = ?", adminToken.Id).Count(&count).Error; err != nil {
@@ -71,7 +71,7 @@ func TestSetTokenEnabledRequiresOwner(t *testing.T) {
 	adminToken := createTokenOwnershipToken(t, 1, "admin-token", false)
 	otherToken := createTokenOwnershipToken(t, other.Id, "other-token", false)
 
-	if err := userService.SetTokenEnabled("admin", strconv.Itoa(int(otherToken.Id)), true); err == nil {
+	if err := userService.SetTokenEnabled("admin", strconv.FormatUint(uint64(otherToken.Id), 10), true); err == nil {
 		t.Fatal("enabling another admin's token should fail")
 	}
 	var stored model.Tokens
@@ -82,7 +82,7 @@ func TestSetTokenEnabledRequiresOwner(t *testing.T) {
 		t.Fatal("admin enabled another admin's token")
 	}
 
-	if err := userService.SetTokenEnabled("admin", strconv.Itoa(int(adminToken.Id)), true); err != nil {
+	if err := userService.SetTokenEnabled("admin", strconv.FormatUint(uint64(adminToken.Id), 10), true); err != nil {
 		t.Fatal(err)
 	}
 	stored = model.Tokens{}

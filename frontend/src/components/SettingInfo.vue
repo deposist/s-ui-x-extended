@@ -8,7 +8,6 @@
         class="setting-info-icon"
         tabindex="0"
         role="img"
-        :aria-label="text"
       />
     </template>
   </v-tooltip>

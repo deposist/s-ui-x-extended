@@ -1,0 +1,157 @@
+package service
+
+import (
+	"context"
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/deposist/s-ui-x-extended/database/model"
+
+	qrcode "github.com/skip2/go-qrcode"
+	"gorm.io/gorm"
+)
+
+const maxAWGConfigQRBytes = 1500
+
+var (
+	ErrAWGConfigUnavailable = errors.New("AWG configuration is unavailable")
+	ErrAWGConfigTooLargeQR  = errors.New("AWG configuration is too large for QR")
+)
+
+// RenderOwnedConfig decrypts and renders the complete current AWG 2.0 config
+// only for a provisioned device belonging to clientID.
+func (m *AWGManager) RenderOwnedConfig(ctx context.Context, deviceID, clientID uint) ([]byte, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if m == nil || m.deps.DB == nil {
+		return nil, ErrAWGConfigUnavailable
+	}
+	result := m.submit(ctx, func(context.Context) awgCommandResult {
+		config, err := m.renderOwnedConfigInWorker(deviceID, clientID)
+		return awgCommandResult{value: config, err: err}
+	})
+	if result.err != nil {
+		return nil, result.err
+	}
+	config, ok := result.value.([]byte)
+	if !ok {
+		return nil, ErrAWGConfigUnavailable
+	}
+	return config, nil
+}
+
+func (m *AWGManager) renderOwnedConfigInWorker(deviceID, clientID uint) ([]byte, error) {
+	var device model.AWGDevice
+	if err := m.deps.DB.Where("id = ? AND client_id = ?", deviceID, clientID).First(&device).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrAWGDeviceNotFound
+		}
+		return nil, err
+	}
+	if !device.DesiredEnabled || !device.Provisioned || device.SyncState != "in_sync" {
+		return nil, ErrAWGConfigUnavailable
+	}
+	settings, err := m.deps.LoadSettings()
+	if err != nil || !settings.Enabled {
+		return nil, ErrAWGConfigUnavailable
+	}
+	managed, options, err := loadAWGManagedEndpoint(m.deps.DB, settings)
+	if err != nil || options.Amnezia == nil {
+		return nil, ErrAWGConfigUnavailable
+	}
+	cipher, err := m.awgCipher()
+	if err != nil {
+		return nil, ErrAWGConfigUnavailable
+	}
+	privateKey, err := cipher.Decrypt(clientID, device.CryptoContext, device.PrivateKeyEnc)
+	if err != nil {
+		return nil, ErrAWGConfigUnavailable
+	}
+	defer clear(privateKey)
+	psk, err := cipher.Decrypt(clientID, device.CryptoContext, device.PSKEnc)
+	if err != nil {
+		return nil, ErrAWGConfigUnavailable
+	}
+	defer clear(psk)
+	if len(privateKey) != 32 || len(psk) != 32 {
+		return nil, ErrAWGConfigUnavailable
+	}
+	mtu := settings.MTU
+	if mtu == 0 {
+		mtu = options.MTU
+	}
+	if mtu == 0 {
+		mtu = 1420
+	}
+	dns := make([]string, len(settings.DNS))
+	for i := range settings.DNS {
+		dns[i] = settings.DNS[i].String()
+	}
+	a := options.Amnezia
+	var config strings.Builder
+	config.WriteString("[Interface]\n")
+	config.WriteString("PrivateKey = " + base64.StdEncoding.EncodeToString(privateKey) + "\n")
+	config.WriteString("Address = " + device.IPv4Address + "/32\n")
+	config.WriteString("DNS = " + strings.Join(dns, ", ") + "\n")
+	config.WriteString("MTU = " + strconv.FormatUint(uint64(mtu), 10) + "\n")
+	writeAWGConfigInt(&config, "Jc", a.JC)
+	writeAWGConfigInt(&config, "Jmin", a.JMin)
+	writeAWGConfigInt(&config, "Jmax", a.JMax)
+	writeAWGConfigInt(&config, "S1", a.S1)
+	writeAWGConfigInt(&config, "S2", a.S2)
+	writeAWGConfigInt(&config, "S3", a.S3)
+	writeAWGConfigInt(&config, "S4", a.S4)
+	writeAWGConfigValue(&config, "H1", a.H1)
+	writeAWGConfigValue(&config, "H2", a.H2)
+	writeAWGConfigValue(&config, "H3", a.H3)
+	writeAWGConfigValue(&config, "H4", a.H4)
+	writeAWGConfigString(&config, "I1", a.I1)
+	writeAWGConfigString(&config, "I2", a.I2)
+	writeAWGConfigString(&config, "I3", a.I3)
+	writeAWGConfigString(&config, "I4", a.I4)
+	writeAWGConfigString(&config, "I5", a.I5)
+	config.WriteString("\n[Peer]\n")
+	config.WriteString("PublicKey = " + managed.ServerPublicKey + "\n")
+	config.WriteString("PresharedKey = " + base64.StdEncoding.EncodeToString(psk) + "\n")
+	config.WriteString("Endpoint = " + settings.PublicEndpoint + "\n")
+	config.WriteString("AllowedIPs = 0.0.0.0/0, ::/0\n")
+	config.WriteString("PersistentKeepalive = 25\n")
+	return []byte(config.String()), nil
+}
+
+func RenderAWGConfigQR(config []byte) ([]byte, error) {
+	if len(config) == 0 {
+		return nil, ErrAWGConfigUnavailable
+	}
+	if len(config) > maxAWGConfigQRBytes {
+		return nil, ErrAWGConfigTooLargeQR
+	}
+	return qrcode.Encode(string(config), qrcode.Medium, 512)
+}
+
+func writeAWGConfigInt(builder *strings.Builder, key string, value int) {
+	if value > 0 {
+		builder.WriteString(key + " = " + strconv.Itoa(value) + "\n")
+	}
+}
+
+func writeAWGConfigValue(builder *strings.Builder, key string, value any) {
+	if value == nil {
+		return
+	}
+	writeAWGConfigString(builder, key, fmt.Sprint(value))
+}
+
+func writeAWGConfigString(builder *strings.Builder, key, value string) {
+	value = strings.TrimSpace(value)
+	if value != "" {
+		builder.WriteString(key + " = " + value + "\n")
+	}
+}

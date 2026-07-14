@@ -87,6 +87,7 @@ export default {
       stars: "Stars",
       addDays: "+Дней",
       addTraffic: "+Трафик",
+      maxAwgDevices: "Макс. устройств AWG",
       enabled: "Включён",
       id: "ID",
       clientName: "Имя клиента",
@@ -118,6 +119,7 @@ export default {
       starsAmount: "Кол-во Stars (XTR)",
       addDays: "+Дней",
       addTrafficGB: "+Трафик (ГБ, 0 = безлимит)",
+      maxAwgDevices: "Макс. устройств AWG (0 = общий лимит)",
       sort: "Сортировка",
       enabledField: "Включён",
     },
@@ -1309,6 +1311,7 @@ export default {
     },
     endpoint: {
       recommendedPreset: "Применить рекомендации endpoint",
+      awgManagedPeers: "Пиры управляются устройствами AmneziaWG автоматически, и здесь их нельзя редактировать.",
       hint: {
         type: "Рекомендация: Endpoint type. Recommended: choose the endpoint that matches the network integration.",
         tag: "Рекомендация: Unique endpoint tag used by rules and outbounds. Recommended: keep the generated tag or use a clear unique name.",

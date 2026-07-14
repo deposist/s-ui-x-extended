@@ -126,19 +126,7 @@ func (p *PaymentService) CreateOrder(ctx context.Context, client *model.Client, 
 		currency = tariff.Currency
 	}
 	ttlMin, _ := p.setting.GetPaidSubOrderTTLMinutes()
-	now := nowUnix()
-	order := &PaymentOrder{
-		ClientId:       client.Id,
-		TariffId:       tariff.Id,
-		Provider:       string(kind),
-		Amount:         amount,
-		Currency:       currency,
-		Status:         StatusPending,
-		TelegramUserId: tgUserId,
-		IdempotencyKey: common.Random(32),
-		CreatedAt:      now,
-		ExpiresAt:      now + int64(ttlMin)*60,
-	}
+	order := newPaymentOrder(client, tariff, kind, tgUserId, amount, currency, nowUnix(), ttlMin)
 	db := database.GetDB()
 	if err := db.Create(order).Error; err != nil {
 		return nil, nil, err
@@ -159,6 +147,22 @@ func (p *PaymentService) CreateOrder(ctx context.Context, client *model.Client, 
 		_ = db.Model(&PaymentOrder{}).Where("id = ?", order.Id).Updates(upd).Error
 	}
 	return order, inv, nil
+}
+
+func newPaymentOrder(client *model.Client, tariff *Tariff, kind ProviderKind, tgUserID, amount int64, currency string, now int64, ttlMinutes int) *PaymentOrder {
+	return &PaymentOrder{
+		ClientId:          client.Id,
+		TariffId:          tariff.Id,
+		Provider:          string(kind),
+		Amount:            amount,
+		Currency:          currency,
+		Status:            StatusPending,
+		TelegramUserId:    tgUserID,
+		IdempotencyKey:    common.Random(32),
+		CreatedAt:         now,
+		ExpiresAt:         now + int64(ttlMinutes)*60,
+		GrantedAWGDevices: tariff.MaxAWGDevices,
+	}
 }
 
 func (p *PaymentService) getOrder(id uint) (*PaymentOrder, error) {
@@ -197,6 +201,7 @@ func (p *PaymentService) ApplyPaidOrder(orderID uint, chargeID string, raw []byt
 	db := database.GetDB()
 	var inboundIds []uint
 	var tgUserID int64
+	var renewedClientID uint
 	err := db.Transaction(func(tx *gorm.DB) error {
 		res := tx.Model(&PaymentOrder{}).
 			Where("id = ? AND status = ?", orderID, StatusPending).
@@ -230,6 +235,7 @@ func (p *PaymentService) ApplyPaidOrder(orderID uint, chargeID string, raw []byt
 			return err
 		}
 		tgUserID = order.TelegramUserId
+		renewedClientID = order.ClientId
 
 		now := nowUnix()
 		updates := map[string]any{"enable": true}
@@ -292,6 +298,11 @@ func (p *PaymentService) ApplyPaidOrder(orderID uint, chargeID string, raw []byt
 		Severity: service.AuditSeverityInfo,
 		Details:  map[string]any{"orderId": orderID},
 	})
+	if hook := service.DefaultRuntime().AWGClientStateHook(); hook != nil {
+		if hookErr := hook.ResumeClient(context.Background(), renewedClientID); hookErr != nil {
+			logger.Warning("paidsub: AWG resume after renewal failed: ", hookErr)
+		}
+	}
 	return true, tgUserID, nil
 }
 
@@ -366,6 +377,7 @@ func (p *PaymentService) RefundableOrdersForTgUser(tgUserId int64, limit int) ([
 func (p *PaymentService) finalizeRefund(orderID uint, revoke bool) error {
 	db := database.GetDB()
 	var inboundIds []uint
+	var refundedClientID uint
 	err := db.Transaction(func(tx *gorm.DB) error {
 		res := tx.Model(&PaymentOrder{}).
 			Where("id = ? AND status = ?", orderID, StatusPaid).
@@ -391,6 +403,7 @@ func (p *PaymentService) finalizeRefund(orderID uint, revoke bool) error {
 		if err := tx.Where("id = ?", order.ClientId).First(&client).Error; err != nil {
 			return err
 		}
+		refundedClientID = client.Id
 		now := nowUnix()
 		updates := map[string]any{}
 		if tariff.AddDays > 0 && client.Expiry > 0 {
@@ -476,6 +489,22 @@ func (p *PaymentService) finalizeRefund(orderID uint, revoke bool) error {
 		Severity: service.AuditSeverityInfo,
 		Details:  map[string]any{"orderId": orderID, "revoke": revoke},
 	})
+	if refundedClientID != 0 {
+		if hook := service.DefaultRuntime().AWGClientStateHook(); hook != nil {
+			var client model.Client
+			loadErr := db.First(&client, refundedClientID).Error
+			var hookErr error
+			if loadErr == nil && client.Enable && (client.Expiry <= 0 || client.Expiry > nowUnix()) &&
+				(client.Volume <= 0 || (client.Up >= 0 && client.Down >= 0 && client.Up < client.Volume && client.Down < client.Volume && client.Up < client.Volume-client.Down)) {
+				hookErr = hook.ResumeClient(context.Background(), refundedClientID)
+			} else if loadErr == nil {
+				hookErr = hook.SuspendClients(context.Background(), []uint{refundedClientID})
+			}
+			if hookErr != nil {
+				logger.Warning("paidsub: AWG reconcile after refund failed: ", hookErr)
+			}
+		}
+	}
 	return nil
 }
 
