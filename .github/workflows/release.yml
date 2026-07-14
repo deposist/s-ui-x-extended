@@ -34,7 +34,7 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: AWG 2.0 live WireGuard integration
-        run: sudo -E go test -tags="integration with_wireguard with_gvisor" ./core -run TestAWG2ServerEndpoint -count=1
+        run: sudo -E "$(command -v go)" test -tags="integration with_wireguard with_gvisor" ./core -run TestAWG2ServerEndpoint -count=1
 
   build-frontend:
     runs-on: ubuntu-latest
