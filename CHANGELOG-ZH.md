@@ -8,14 +8,17 @@
 
 - 暂无未发布变更。
 
-## [1.0.2] - 2026-07-14 - 稳定版 1.0.2
+## [1.0.2-beta1] - 2026-07-14 - 稳定版 1.0.2-beta1
 
-- 新增托管的个人 AmneziaWG 2.0 设备，支持加密密钥、套餐设备上限、Telegram 配置与二维码下发、流量统计、密钥轮换、撤销和故障恢复。
-- 托管 endpoint 的 peers 禁止手动编辑。Preshared keys 只在内存中传给 core。
-- 修复已保存语言时 `s-ui` 在显示菜单前等待标准输入的问题。
-- 发布下载改用仅 HTTPS 的 curl，并加入重试、超时和强制 SHA-256 校验。
+- 新增托管的个人 AmneziaWG 2.0 设备。用户可以通过 Telegram 创建设备、下载配置或二维码、轮换密钥并撤销设备。设备密钥在数据库中加密，preshared keys 只在内存中传给 core。
+- 新增全局和套餐设备上限、流量与 handshake 统计、托管 endpoint 保护，以及崩溃或配置偏移后的自动修复。
+- 数据库 backup 和 restore 现在包含付费订阅表。
+- 简化 RU 和 ZH 路由与 DNS presets。它们现在使用一个 direct outbound，删除旧的托管规则，并保留用户自定义规则。
+- 修复 Edit Bulk，现可为全部客户端批量添加 inbound。
+- 修复已保存语言时 `s-ui` 在显示菜单前等待终端输入的问题。
+- 发布下载现在使用仅 HTTPS 的 redirects、重试、超时和强制 SHA-256 校验。
 
-完整 release notes: [`docs/releases/v1.0.2.md`](docs/releases/v1.0.2.md)。
+数据库迁移会自动执行。完整 release notes: [`docs/releases/v1.0.2-beta1.md`](docs/releases/v1.0.2-beta1.md)。
 
 ## [1.0.1] - 2026-07-07 - 稳定版 1.0.1
 

@@ -9,14 +9,17 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
-## [1.0.2] - 2026-07-14 - stable 1.0.2 release
+## [1.0.2-beta1] - 2026-07-14 - stable 1.0.2-beta1 release
 
-- Added managed personal AmneziaWG 2.0 devices with encrypted keys, per-tariff limits, Telegram delivery, QR codes, traffic accounting, key rotation, revocation, and crash-safe reconciliation.
-- Managed endpoint peers are protected from manual edits. The core receives preshared keys only in memory.
-- Fixed `s-ui` waiting on standard input before showing the menu when a saved language exists.
-- Hardened release downloads with HTTPS-only curl retries, timeouts, and mandatory SHA-256 verification.
+- Added managed personal AmneziaWG 2.0 devices. Users can create, download, rotate, and revoke devices through Telegram. Keys are encrypted in the database, while preshared keys are passed to the core only in memory.
+- Added global and per-tariff device limits, traffic and handshake statistics, managed endpoint protection, and automatic repair after a crash or configuration drift.
+- Included paid-subscription tables in database backups and restores.
+- Simplified the RU and ZH routing and DNS presets. They now use one direct outbound, remove obsolete managed rules, and leave custom rules unchanged.
+- Fixed Edit Bulk so an inbound can be added to all clients.
+- Fixed `s-ui` waiting for terminal input before showing the menu when a language is already saved.
+- Changed release downloads to use HTTPS-only redirects, retries, timeouts, and mandatory SHA-256 verification.
 
-Full release notes: [`docs/releases/v1.0.2.md`](docs/releases/v1.0.2.md).
+Database migrations run automatically. Full release notes: [`docs/releases/v1.0.2-beta1.md`](docs/releases/v1.0.2-beta1.md).
 
 ## [1.0.1] - 2026-07-07 - stable 1.0.1 release
 
