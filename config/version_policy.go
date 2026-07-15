@@ -142,7 +142,64 @@ func compareSemver(left Semver, right Semver) int {
 			return -1
 		}
 	}
+	// Repository rule: a hotfix on a released MAJOR.MINOR.PATCH (a single
+	// "hotfixN" prerelease identifier) is a fix shipped after that release, so
+	// it ranks ABOVE the bare release. This intentionally departs from plain
+	// SemVer, where any prerelease ranks below the release. It applies only to
+	// the strict "hotfixN" form; beta/rc lines (including a "beta-hotfixN"
+	// identifier) keep normal SemVer precedence and stay below the release.
+	if cmp, ok := compareHotfixPrecedence(left.Prerelease, right.Prerelease); ok {
+		return cmp
+	}
 	return comparePrerelease(left.Prerelease, right.Prerelease)
+}
+
+// hotfixNumber returns the N of a lone "hotfixN" prerelease and whether the
+// prerelease is exactly that form.
+func hotfixNumber(prerelease []string) (int, bool) {
+	if len(prerelease) != 1 {
+		return 0, false
+	}
+	rest, found := strings.CutPrefix(prerelease[0], "hotfix")
+	if !found || rest == "" {
+		return 0, false
+	}
+	return parseNumericIdentifier(rest)
+}
+
+// compareHotfixPrecedence resolves ordering when a hotfix release is involved.
+// It returns ok=false when neither side is a lone hotfix, so the caller falls
+// back to normal prerelease comparison. Core versions are already equal here.
+func compareHotfixPrecedence(left, right []string) (int, bool) {
+	leftN, leftHotfix := hotfixNumber(left)
+	rightN, rightHotfix := hotfixNumber(right)
+	if !leftHotfix && !rightHotfix {
+		return 0, false
+	}
+	// hotfix vs the bare release (empty prerelease): the hotfix wins.
+	if leftHotfix && len(right) == 0 {
+		return 1, true
+	}
+	if rightHotfix && len(left) == 0 {
+		return -1, true
+	}
+	// hotfixN vs hotfixM: higher N wins.
+	if leftHotfix && rightHotfix {
+		switch {
+		case leftN > rightN:
+			return 1, true
+		case leftN < rightN:
+			return -1, true
+		default:
+			return 0, true
+		}
+	}
+	// hotfix vs a non-hotfix prerelease (beta/rc) on the same core version. A
+	// hotfix ships after the release, a beta/rc before it, so the hotfix wins.
+	if leftHotfix {
+		return 1, true
+	}
+	return -1, true
 }
 
 func comparePrerelease(left []string, right []string) int {

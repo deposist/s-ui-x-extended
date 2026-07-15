@@ -8,6 +8,15 @@
 
 - 暂无未发布变更。
 
+## [1.0.5] - 2026-07-15 - 热修复版本优先级、AWG 密钥合并
+
+合并首次以 `v1.0.4-hotfix1` 发布的 AWG 设备密钥加密密钥热修复，并新增版本优先级规则，使今后的热修复排在其基础版本之上。
+
+- 已发布 `MAJOR.MINOR.PATCH` 上的热修复，以单个 `hotfixN` 预发布标识表示（例如 `1.0.4-hotfix1`），现在排在其基础版本之上。普通 SemVer 将任何预发布视为早于正式版本，导致面板自动更新不会向基础版本的安装提示热修复。该规则仅适用于单独的 `hotfixN` 形式；`N` 越大越新，而像 `1.0.5` 这样的后续补丁仍高于前一补丁的热修复。beta 和 rc 线保持普通 SemVer 优先级。
+- 包含 `1.0.4-hotfix1` 的 AWG 修复：systemd 安装器在安装和升级时生成 `AWG_KEY_ENC`，因此受管 AmneziaWG 设备操作不再因 `awg: AWG encryption key is unavailable` 而失败。已有密钥永不重新生成。
+
+完整发布说明：[`docs/releases/v1.0.5.md`](docs/releases/v1.0.5.md)。
+
 ## [1.0.4-hotfix1] - 2026-07-15 - AWG 密钥加密密钥热修复
 
 热修复：由于设备密钥加密密钥未被创建，无法创建受管 AmneziaWG 设备，面板返回 `awg: AWG encryption key is unavailable`。

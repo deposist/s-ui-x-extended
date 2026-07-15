@@ -9,6 +9,15 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.5] - 2026-07-15 - hotfix version precedence, AWG key rollup
+
+Rolls up the AWG device key-encryption key hotfix first tagged `v1.0.4-hotfix1`, and adds a version-precedence rule so future hotfixes rank above their base release.
+
+- A hotfix on a released `MAJOR.MINOR.PATCH`, written as a single `hotfixN` prerelease (for example `1.0.4-hotfix1`), now ranks above its base release. Plain SemVer treats every prerelease as older than the release, which kept the panel auto-update from offering a hotfix to installs on the base version. The rule applies only to the lone `hotfixN` form; higher `N` is newer, and a later patch such as `1.0.5` still outranks a hotfix on the previous patch. Beta and rc lines keep normal SemVer precedence.
+- Carries the AWG key fix from `1.0.4-hotfix1`: the systemd installer generates `AWG_KEY_ENC` on install and upgrade so managed AmneziaWG device operations no longer fail with `awg: AWG encryption key is unavailable`. An existing key is never regenerated.
+
+Full release notes: [`docs/releases/v1.0.5.md`](docs/releases/v1.0.5.md).
+
 ## [1.0.4-hotfix1] - 2026-07-15 - AWG key-encryption key hotfix
 
 Hotfix: managed AmneziaWG devices could not be created because the device key-encryption key was never provisioned, so the panel returned `awg: AWG encryption key is unavailable`.

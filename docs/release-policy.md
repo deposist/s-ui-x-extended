@@ -8,6 +8,17 @@ Version source of truth:
 - The value must not include build metadata.
 - Prerelease identifiers must be lowercase SemVer identifiers.
 
+Hotfix precedence:
+
+- A release patched after the fact uses a single `hotfixN` prerelease, for
+  example `1.0.4-hotfix1`. Unlike plain SemVer, a `hotfixN` prerelease ranks
+  ABOVE its base release (`1.0.4-hotfix1` is newer than `1.0.4`), so
+  auto-update offers it to installs on the base release. Higher `N` is newer.
+- A later patch still wins: `1.0.5` is newer than `1.0.4-hotfix1`.
+- This rule is limited to the lone `hotfixN` form. Beta and rc lines keep
+  normal SemVer precedence and stay below the release; a `beta-hotfixN` line is
+  a beta prerelease and is never published as a release.
+
 Git release tags:
 
 - Git tag names use `v` plus the exact `config/version` value.
