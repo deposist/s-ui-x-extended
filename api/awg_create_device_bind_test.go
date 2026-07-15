@@ -22,11 +22,12 @@ type fakeAWGEndpointDevices struct {
 	createdClientID   uint
 	createdEndpointID uint
 	createdName       string
+	createdExpiresAt  int64
 }
 
-func (f *fakeAWGEndpointDevices) CreateDevice(_ context.Context, clientID uint, endpointID uint, _ string, name string) (service.AWGDeviceInfo, error) {
-	f.createdClientID, f.createdEndpointID, f.createdName = clientID, endpointID, name
-	return service.AWGDeviceInfo{ID: 7, Name: name}, nil
+func (f *fakeAWGEndpointDevices) CreateDevice(_ context.Context, clientID uint, endpointID uint, _ string, name string, expiresAt int64) (service.AWGDeviceInfo, error) {
+	f.createdClientID, f.createdEndpointID, f.createdName, f.createdExpiresAt = clientID, endpointID, name, expiresAt
+	return service.AWGDeviceInfo{ID: 7, Name: name, ExpiresAt: expiresAt}, nil
 }
 
 func (f *fakeAWGEndpointDevices) ListDevices(uint, uint) ([]service.AWGDeviceInfo, error) {
@@ -111,6 +112,57 @@ func TestCreateClientAWGDeviceBindsJSONBody(t *testing.T) {
 	}
 	if fake.createdEndpointID != 3 || fake.createdName != "phone" {
 		t.Fatalf("bound values mismatch: endpointID=%d name=%q", fake.createdEndpointID, fake.createdName)
+	}
+}
+
+// The optional expiresAt field must reach the device service from both
+// encodings; absence binds as 0 (never expires).
+func TestCreateClientAWGDeviceBindsExpiresAt(t *testing.T) {
+	router, fake := newAWGCreateDeviceRouter(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/awg/clients/5/devices",
+		strings.NewReader(`{"endpointId":3,"name":"phone","expiresAt":1900000000}`))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	msg := decodeAWGCreateMsg(t, recorder)
+	if !msg.Success {
+		t.Fatalf("json create with expiresAt failed: %s", msg.Msg)
+	}
+	if fake.createdExpiresAt != 1900000000 {
+		t.Fatalf("bound expiresAt = %d, want 1900000000", fake.createdExpiresAt)
+	}
+
+	form := url.Values{}
+	form.Set("endpointId", "3")
+	form.Set("name", "phone")
+	form.Set("expiresAt", "1900000001")
+	req = httptest.NewRequest(http.MethodPost, "/api/awg/clients/5/devices", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+	recorder = httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	msg = decodeAWGCreateMsg(t, recorder)
+	if !msg.Success {
+		t.Fatalf("form create with expiresAt failed: %s", msg.Msg)
+	}
+	if fake.createdExpiresAt != 1900000001 {
+		t.Fatalf("bound form expiresAt = %d, want 1900000001", fake.createdExpiresAt)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/awg/clients/5/devices",
+		strings.NewReader(`{"endpointId":3,"name":"phone"}`))
+	req.Header.Set("Content-Type", "application/json")
+	recorder = httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	msg = decodeAWGCreateMsg(t, recorder)
+	if !msg.Success {
+		t.Fatalf("json create without expiresAt failed: %s", msg.Msg)
+	}
+	if fake.createdExpiresAt != 0 {
+		t.Fatalf("absent expiresAt bound as %d, want 0", fake.createdExpiresAt)
 	}
 }
 

@@ -42,6 +42,20 @@ type awgOps struct {
 
 // awgDeviceEndpoint resolves the endpoint that owns deviceID for clientID.
 // Zero means the device belongs to the legacy globally-configured endpoint.
+// awgExpiryLine renders the device-card expiry line: empty for devices
+// without a term, "Expires: in N day(s)" while active, "Expires: expired"
+// after the (exclusive) boundary.
+func awgExpiryLine(expiresAt, now int64, l lang) string {
+	if expiresAt <= 0 {
+		return ""
+	}
+	if expiresAt <= now {
+		return tr(l, "awg_expires") + ": " + tr(l, "awg_expired")
+	}
+	days := (expiresAt - now + 86399) / 86400
+	return tr(l, "awg_expires") + ": " + fmt.Sprintf(tr(l, "awg_expires_days"), days)
+}
+
 func awgDeviceEndpoint(clientID, deviceID uint) (uint, error) {
 	var device model.AWGDevice
 	if err := database.GetDB().Select("endpoint_id").Where("id = ? AND client_id = ?", deviceID, clientID).First(&device).Error; err != nil {
@@ -202,7 +216,9 @@ func (b *Bot) createNamedAWG(ctx context.Context, chatID, tgID int64, name strin
 			_ = b.sendMessage(ctx, chatID, tr(l, "awg_unavailable"), nil)
 			return
 		}
-		device, err = managed.CreateDevice(ctx, clientID, state.endpointID, state.requestKey, name)
+		// Bot-created devices have no expiry (0 = never); setting a term from
+		// the bot is a possible follow-up, not part of this stage.
+		device, err = managed.CreateDevice(ctx, clientID, state.endpointID, state.requestKey, name, 0)
 	} else {
 		settings, settingsErr := (&service.SettingService{}).GetAWGSettings()
 		if settingsErr != nil {
@@ -214,7 +230,7 @@ func (b *Bot) createNamedAWG(ctx context.Context, chatID, tgID int64, name strin
 			_ = b.sendMessage(ctx, chatID, tr(l, "error"), nil)
 			return
 		}
-		device, err = devices.CreateDevice(ctx, clientID, state.requestKey, name, limit)
+		device, err = devices.CreateDevice(ctx, clientID, state.requestKey, name, limit, 0)
 	}
 	if err != nil {
 		switch {
@@ -246,6 +262,9 @@ func (b *Bot) cmdAWGView(ctx context.Context, chatID, tgID int64, deviceID uint,
 	}
 	text := fmt.Sprintf("%s\nIP: %s\nTraffic: %s / %s\nHandshake: %d\nState: %s",
 		device.Name, device.IPv4Address, humanBytesU64(device.TotalRx), humanBytesU64(device.TotalTx), device.LastHandshake, device.SyncState)
+	if line := awgExpiryLine(device.ExpiresAt, nowUnix(), l); line != "" {
+		text += "\n" + line
+	}
 	rows := [][]inlineButton{}
 	if device.Provisioned {
 		rows = append(rows, []inlineButton{{Text: tr(l, "awg_config"), CallbackData: fmt.Sprintf("awg:c:%d", device.ID)}, {Text: "QR", CallbackData: fmt.Sprintf("awg:q:%d", device.ID)}})

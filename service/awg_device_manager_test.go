@@ -91,7 +91,7 @@ func TestAWGCreateDevicePersistsThenProvisionsAndFinalizes(t *testing.T) {
 	manager, cipher := newAWGCreateTestManager(t, provisioner)
 	client := createAWGEligibleClient(t)
 
-	got, err := manager.CreateDevice(context.Background(), client.Id, " update-42 ", "  My   Phone  ", 1)
+	got, err := manager.CreateDevice(context.Background(), client.Id, " update-42 ", "  My   Phone  ", 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestAWGCreateDeviceReplayPrecedesEligibilityAndLimit(t *testing.T) {
 	}
 	manager, _ := newAWGCreateTestManager(t, provisioner)
 	client := createAWGEligibleClient(t)
-	first, err := manager.CreateDevice(context.Background(), client.Id, "request-1", "Phone", 1)
+	first, err := manager.CreateDevice(context.Background(), client.Id, "request-1", "Phone", 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestAWGCreateDeviceReplayPrecedesEligibilityAndLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	manager.deps.LoadSettings = func() (AWGSettings, error) { return AWGSettings{}, errors.New("settings unavailable") }
-	replayed, err := manager.CreateDevice(context.Background(), client.Id, " request-1 ", "Phone", 0)
+	replayed, err := manager.CreateDevice(context.Background(), client.Id, " request-1 ", "Phone", 0, 0)
 	if err != nil {
 		t.Fatalf("durable replay must succeed before eligibility and limit checks: %v", err)
 	}
@@ -151,10 +151,10 @@ func TestAWGCreateDeviceReplayRejectsDifferentName(t *testing.T) {
 		add:      func(context.Context, AWGPeerSpec) error { return nil },
 	})
 	client := createAWGEligibleClient(t)
-	if _, err := manager.CreateDevice(context.Background(), client.Id, "request-name", "Phone", 1); err != nil {
+	if _, err := manager.CreateDevice(context.Background(), client.Id, "request-name", "Phone", 1, 0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := manager.CreateDevice(context.Background(), client.Id, "request-name", "Laptop", 1); !errors.Is(err, ErrAWGIdempotencyConflict) {
+	if _, err := manager.CreateDevice(context.Background(), client.Id, "request-name", "Laptop", 1, 0); !errors.Is(err, ErrAWGIdempotencyConflict) {
 		t.Fatalf("different-name replay error = %v, want ErrAWGIdempotencyConflict", err)
 	}
 }
@@ -179,10 +179,10 @@ func TestAWGCreateDevicePendingReplayReusesKeyMaterial(t *testing.T) {
 		return originalGenerate()
 	}
 	client := createAWGEligibleClient(t)
-	if _, err := manager.CreateDevice(context.Background(), client.Id, "request-retry", "Phone", 1); !errors.Is(err, ErrAWGProvisioningFailed) {
+	if _, err := manager.CreateDevice(context.Background(), client.Id, "request-retry", "Phone", 1, 0); !errors.Is(err, ErrAWGProvisioningFailed) {
 		t.Fatalf("first create error = %v, want ErrAWGProvisioningFailed", err)
 	}
-	got, err := manager.CreateDevice(context.Background(), client.Id, "request-retry", "Phone", 1)
+	got, err := manager.CreateDevice(context.Background(), client.Id, "request-retry", "Phone", 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,13 +201,13 @@ func TestAWGCreateDevicePendingReplayRechecksEligibility(t *testing.T) {
 		},
 	})
 	client := createAWGEligibleClient(t)
-	if _, err := manager.CreateDevice(context.Background(), client.Id, "pending-inactive", "Phone", 1); !errors.Is(err, ErrAWGProvisioningFailed) {
+	if _, err := manager.CreateDevice(context.Background(), client.Id, "pending-inactive", "Phone", 1, 0); !errors.Is(err, ErrAWGProvisioningFailed) {
 		t.Fatalf("first create error = %v", err)
 	}
 	if err := database.GetDB().Model(&model.Client{}).Where("id = ?", client.Id).Update("enable", false).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := manager.CreateDevice(context.Background(), client.Id, "pending-inactive", "Phone", 1); !errors.Is(err, ErrAWGClientInactive) {
+	if _, err := manager.CreateDevice(context.Background(), client.Id, "pending-inactive", "Phone", 1, 0); !errors.Is(err, ErrAWGClientInactive) {
 		t.Fatalf("inactive pending replay error = %v", err)
 	}
 	if addCalls != 1 {
@@ -265,7 +265,7 @@ func TestAWGCreateDeviceConcurrentSameRequestConverges(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			info, err := manager.CreateDevice(context.Background(), client.Id, "same-request", "Phone", 2)
+			info, err := manager.CreateDevice(context.Background(), client.Id, "same-request", "Phone", 2, 0)
 			results <- info
 			errs <- err
 		}()
@@ -303,7 +303,7 @@ func TestAWGCreateDeviceProvisionFailureRetainsSanitizedPendingState(t *testing.
 	manager, _ := newAWGCreateTestManager(t, provisioner)
 	client := createAWGEligibleClient(t)
 
-	got, err := manager.CreateDevice(context.Background(), client.Id, "request-fail", "Phone", 1)
+	got, err := manager.CreateDevice(context.Background(), client.Id, "request-fail", "Phone", 1, 0)
 	if err == nil {
 		t.Fatal("expected provisioning failure")
 	}
@@ -331,11 +331,11 @@ func TestAWGCreateDeviceRejectsInactiveAndLimitWithoutDurableRow(t *testing.T) {
 	if err := database.GetDB().Create(&inactive).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := manager.CreateDevice(context.Background(), inactive.Id, "inactive-request", "Phone", 1); !errors.Is(err, ErrAWGClientInactive) {
+	if _, err := manager.CreateDevice(context.Background(), inactive.Id, "inactive-request", "Phone", 1, 0); !errors.Is(err, ErrAWGClientInactive) {
 		t.Fatalf("inactive error = %v", err)
 	}
 	active := createAWGEligibleClient(t)
-	if _, err := manager.CreateDevice(context.Background(), active.Id, "limit-request", "Phone", 0); !errors.Is(err, ErrAWGDeviceLimitReached) {
+	if _, err := manager.CreateDevice(context.Background(), active.Id, "limit-request", "Phone", 0, 0); !errors.Is(err, ErrAWGDeviceLimitReached) {
 		t.Fatalf("limit error = %v", err)
 	}
 	var count int64
@@ -363,7 +363,7 @@ func TestAWGCreateDeviceConcurrentRequestsRespectLimit(t *testing.T) {
 		go func(key string) {
 			defer wg.Done()
 			<-start
-			_, err := manager.CreateDevice(context.Background(), client.Id, key, "Phone", 1)
+			_, err := manager.CreateDevice(context.Background(), client.Id, key, "Phone", 1, 0)
 			errs <- err
 		}(requestKey)
 	}

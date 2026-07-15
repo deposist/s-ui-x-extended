@@ -24,7 +24,7 @@ func newAWGRotateFixture(t *testing.T, provisioner *fakeAWGProvisioner) (*AWGMan
 	manager, cipher := newAWGCreateTestManager(t, provisioner)
 	client := createAWGEligibleClient(t)
 	creating = true
-	device, err := manager.CreateDevice(context.Background(), client.Id, "create-rotate", "Phone", 1)
+	device, err := manager.CreateDevice(context.Background(), client.Id, "create-rotate", "Phone", 1, 0)
 	creating = false
 	if err != nil {
 		t.Fatal(err)

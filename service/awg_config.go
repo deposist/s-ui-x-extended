@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/netip"
 	"strconv"
 	"strings"
 
@@ -121,9 +122,38 @@ func (m *AWGManager) renderOwnedConfigInWorker(deviceID, clientID uint) ([]byte,
 	config.WriteString("PublicKey = " + managed.ServerPublicKey + "\n")
 	config.WriteString("PresharedKey = " + base64.StdEncoding.EncodeToString(psk) + "\n")
 	config.WriteString("Endpoint = " + settings.PublicEndpoint + "\n")
-	config.WriteString("AllowedIPs = 0.0.0.0/0, ::/0\n")
-	config.WriteString("PersistentKeepalive = 25\n")
+	config.WriteString("AllowedIPs = " + awgClientAllowedIPs(settings.ClientAllowedIPs) + "\n")
+	config.WriteString("PersistentKeepalive = " + strconv.Itoa(awgClientKeepalive(settings.ClientKeepalive)) + "\n")
 	return []byte(config.String()), nil
+}
+
+// awgClientAllowedIPs renders the AllowedIPs override. Values were already
+// validated as CIDR prefixes (validateAWGEndpointMetadata), but this is text
+// entering an INI config, so anything that fails to re-parse or contains a
+// line break is dropped defensively rather than written out.
+func awgClientAllowedIPs(overrides []string) string {
+	safe := make([]string, 0, len(overrides))
+	for _, value := range overrides {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" || strings.ContainsAny(trimmed, "\r\n") {
+			continue
+		}
+		if _, err := netip.ParsePrefix(trimmed); err != nil {
+			continue
+		}
+		safe = append(safe, trimmed)
+	}
+	if len(safe) == 0 {
+		return "0.0.0.0/0, ::/0"
+	}
+	return strings.Join(safe, ", ")
+}
+
+func awgClientKeepalive(override int) int {
+	if override <= 0 || override > 3600 {
+		return 25
+	}
+	return override
 }
 
 func RenderAWGConfigQR(config []byte) ([]byte, error) {

@@ -144,7 +144,8 @@ func injectAWGManagedEndpointPeersForEndpoint(db *gorm.DB, settings AWGSettings,
 		} else {
 			for _, device := range devices {
 				var client model.Client
-				if err := db.First(&client, device.ClientId).Error; err != nil || !clientIsActiveAt(client, time.Now().Unix()) {
+				now := time.Now().Unix()
+				if err := db.First(&client, device.ClientId).Error; err != nil || !clientIsActiveAt(client, now) || deviceExpiredAt(device, now) {
 					continue
 				}
 				psk, err := cipher.Decrypt(device.ClientId, device.CryptoContext, device.PSKEnc)

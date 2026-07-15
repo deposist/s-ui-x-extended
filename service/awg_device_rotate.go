@@ -87,6 +87,9 @@ func (m *AWGManager) rotateOwnedDeviceInWorker(ctx context.Context, deviceID, cl
 		if !clientIsActiveAt(client, m.deps.Now()) {
 			return ErrAWGClientInactive
 		}
+		if deviceExpiredAt(device, m.deps.Now()) {
+			return ErrAWGDeviceExpired
+		}
 
 		keys, keyErr := m.deps.GenerateKeys()
 		if keyErr != nil {
@@ -164,6 +167,10 @@ func (m *AWGManager) resumeAWGRotation(ctx context.Context, device model.AWGDevi
 	if err := m.deps.DB.First(&client, device.ClientId).Error; err != nil || !clientIsActiveAt(client, m.deps.Now()) {
 		m.recordAWGRotationFailure(device)
 		return AWGDeviceInfo{}, ErrAWGClientInactive
+	}
+	if deviceExpiredAt(device, m.deps.Now()) {
+		m.recordAWGRotationFailure(device)
+		return AWGDeviceInfo{}, ErrAWGDeviceExpired
 	}
 	cipher, err := m.awgCipher()
 	if err != nil {

@@ -20,7 +20,7 @@ func TestAWGStatsDirectionsIdempotencyResetAndHandshake(t *testing.T) {
 		remove: func(_ context.Context, key string) error { delete(live, key); return nil },
 	})
 	client := createAWGEligibleClient(t)
-	device, err := manager.CreateDevice(context.Background(), client.Id, "stats", "Phone", 1)
+	device, err := manager.CreateDevice(context.Background(), client.Id, "stats", "Phone", 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,11 +67,11 @@ func TestAWGStatsAggregatesTwoDevicesAndIgnoresUnknownPeer(t *testing.T) {
 		return AWGGeneratedKeys{PrivateKey: repeatAWGByte(keySeed), PublicKey: repeatAWGByte(keySeed + 20), PSK: repeatAWGByte(keySeed + 40)}, nil
 	}
 	client := createAWGEligibleClient(t)
-	first, err := manager.CreateDevice(context.Background(), client.Id, "stats-1", "Phone", 2)
+	first, err := manager.CreateDevice(context.Background(), client.Id, "stats-1", "Phone", 2, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := manager.CreateDevice(context.Background(), client.Id, "stats-2", "Laptop", 2)
+	second, err := manager.CreateDevice(context.Background(), client.Id, "stats-2", "Laptop", 2, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestAWGStatsRollbackKeepsBaselinesAndClientCountersTogether(t *testing.T) {
 		remove: func(_ context.Context, key string) error { delete(live, key); return nil },
 	})
 	client := createAWGEligibleClient(t)
-	device, err := manager.CreateDevice(context.Background(), client.Id, "stats-rollback", "Phone", 1)
+	device, err := manager.CreateDevice(context.Background(), client.Id, "stats-rollback", "Phone", 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

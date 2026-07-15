@@ -38,7 +38,7 @@ func TestAWGConfigGoldenRerenderAndOwnership(t *testing.T) {
 		return AWGSettings{Enabled: true, EndpointTag: "awg", PublicEndpoint: "vpn.example.com:51820", Subnet: netip.MustParsePrefix("10.77.0.0/29"), DNS: []netip.Addr{netip.MustParseAddr("1.1.1.1")}}, nil
 	}
 	client := createAWGEligibleClient(t)
-	device, err := manager.CreateDevice(context.Background(), client.Id, "config", "Phone", 1)
+	device, err := manager.CreateDevice(context.Background(), client.Id, "config", "Phone", 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestAWGConfigUnavailableWhilePendingAndQRExactPolicy(t *testing.T) {
 		remove:   func(context.Context, string) error { return nil },
 	})
 	client := createAWGEligibleClient(t)
-	if _, err := manager.CreateDevice(context.Background(), client.Id, "pending-config", "Phone", 1); err == nil {
+	if _, err := manager.CreateDevice(context.Background(), client.Id, "pending-config", "Phone", 1, 0); err == nil {
 		t.Fatal("expected pending create")
 	}
 	var device model.AWGDevice

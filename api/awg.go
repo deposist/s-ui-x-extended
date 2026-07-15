@@ -19,6 +19,7 @@ import (
 func (a *APIHandler) registerAWGRoutes(g *gin.RouterGroup) {
 	awg := g.Group("/awg")
 	awg.GET("/endpoints", a.ApiService.ListAWGEndpoints)
+	awg.GET("/obfuscation/random", a.ApiService.GetAWGObfuscationRandom)
 	awg.GET("/clients/:clientId/access", a.ApiService.ListClientAWGAccess)
 	awg.GET("/clients/:clientId/devices", a.ApiService.ListClientAWGDevices)
 	awg.POST("/clients/:clientId/devices", a.ApiService.CreateClientAWGDevice)
@@ -89,6 +90,20 @@ func (a *ApiService) ListAWGEndpoints(c *gin.Context) {
 	jsonObj(c, rows, nil)
 }
 
+// GetAWGObfuscationRandom returns a server-generated Amnezia obfuscation
+// parameter set. Generation stays on the server so there is one source of
+// truth using crypto/rand instead of the browser's Math.random. H1-H4 are
+// always generated; junk parameters (Jc/Jmin/Jmax) only when the caller
+// explicitly asks for them (preset=balanced).
+func (a *ApiService) GetAWGObfuscationRandom(c *gin.Context) {
+	if !a.requireTokenScopeAny(c, "awg", "admin") {
+		return
+	}
+	includeJunk := c.Query("preset") == "balanced"
+	params, err := service.GenerateAmneziaParams(includeJunk)
+	jsonObj(c, params, err)
+}
+
 func (a *ApiService) ListClientAWGAccess(c *gin.Context) {
 	clientID, ok := awgPathUint(c, "clientId")
 	if !ok {
@@ -120,6 +135,9 @@ type createAWGDeviceRequest struct {
 	EndpointID uint   `json:"endpointId" form:"endpointId"`
 	Name       string `json:"name" form:"name"`
 	RequestKey string `json:"requestKey" form:"requestKey"`
+	// ExpiresAt is an optional exclusive Unix-seconds expiry (0 = never).
+	// Validated server-side: in the future, at most 10 years ahead.
+	ExpiresAt int64 `json:"expiresAt" form:"expiresAt"`
 }
 
 func (a *ApiService) CreateClientAWGDevice(c *gin.Context) {
@@ -147,13 +165,13 @@ func (a *ApiService) CreateClientAWGDevice(c *gin.Context) {
 	if requestKey == "" {
 		requestKey = fmt.Sprintf("admin-%d-%d-%d", clientID, req.EndpointID, time.Now().UnixNano())
 	}
-	device, err := devices.CreateDevice(c.Request.Context(), clientID, req.EndpointID, requestKey, req.Name)
+	device, err := devices.CreateDevice(c.Request.Context(), clientID, req.EndpointID, requestKey, req.Name, req.ExpiresAt)
 	if err != nil {
 		jsonMsg(c, "awg", err)
 		return
 	}
 	a.recordAudit(c, GetLoginUser(c), "awg_device_created", "awg", service.AuditSeverityInfo, map[string]any{
-		"clientId": clientID, "endpointId": req.EndpointID, "deviceId": device.ID,
+		"clientId": clientID, "endpointId": req.EndpointID, "deviceId": device.ID, "expiresAt": req.ExpiresAt,
 	})
 	jsonObj(c, device, nil)
 }

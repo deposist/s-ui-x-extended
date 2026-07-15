@@ -21,6 +21,14 @@ type AWGEndpointMetadata struct {
 	PublicEndpoint     string   `json:"publicEndpoint"`
 	DNS                []string `json:"dns"`
 	DefaultDeviceLimit int      `json:"defaultDeviceLimit"`
+	// ClientAllowedIPs overrides the AllowedIPs line in rendered device
+	// configs (client-side split tunneling). Empty keeps the historical
+	// default of "0.0.0.0/0, ::/0". Values are validated as CIDR prefixes
+	// before they ever reach the INI config text.
+	ClientAllowedIPs []string `json:"clientAllowedIPs,omitempty"`
+	// ClientKeepalive overrides PersistentKeepalive in rendered device
+	// configs. Zero keeps the historical default of 25 seconds.
+	ClientKeepalive int `json:"clientKeepalive,omitempty"`
 }
 
 // AWGDevice is the durable desired state for one managed AmneziaWG peer.
@@ -49,6 +57,11 @@ type AWGDevice struct {
 	CreatedAt         int64  `json:"createdAt" gorm:"column:created_at;not null"`
 	UpdatedAt         int64  `json:"updatedAt" gorm:"column:updated_at;not null"`
 	RevokedAt         int64  `json:"revokedAt" gorm:"column:revoked_at;not null;default:0"`
+	// ExpiresAt is an exclusive Unix-seconds boundary (0 = never expires),
+	// symmetric with Client.Expiry. An expired device is deprovisioned by the
+	// reconciler but keeps its row - and its device-limit slot - until it is
+	// deleted manually (owner decision).
+	ExpiresAt int64 `json:"expiresAt" gorm:"column:expires_at;not null;default:0"`
 	IPReusableAfter   int64  `json:"-" gorm:"column:ip_reusable_after;index;not null;default:0"`
 }
 

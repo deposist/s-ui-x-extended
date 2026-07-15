@@ -66,6 +66,23 @@ func validateAWGEndpointMetadata(endpoint model.Endpoint) (model.AWGEndpointMeta
 			return metadata, errors.New("invalid AWG endpoint DNS")
 		}
 	}
+	// ClientAllowedIPs values are written verbatim into the rendered INI
+	// device config. netip.ParsePrefix rejects anything with whitespace or
+	// control characters (a newline would start a new INI directive =
+	// injection), but the explicit check keeps that guarantee independent of
+	// parser internals.
+	for _, value := range metadata.ClientAllowedIPs {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" || strings.ContainsAny(value, "\r\n") {
+			return metadata, errors.New("invalid AWG client AllowedIPs")
+		}
+		if _, err := netip.ParsePrefix(trimmed); err != nil {
+			return metadata, errors.New("invalid AWG client AllowedIPs: " + trimmed + " is not a CIDR prefix")
+		}
+	}
+	if metadata.ClientKeepalive < 0 || metadata.ClientKeepalive > 3600 {
+		return metadata, errors.New("AWG client keepalive must be between 0 and 3600 seconds")
+	}
 	return metadata, nil
 }
 
@@ -94,10 +111,15 @@ func AWGSettingsForEndpoint(endpoint model.Endpoint) (AWGSettings, error) {
 		address, _ := netip.ParseAddr(strings.TrimSpace(value))
 		dns = append(dns, address)
 	}
+	clientAllowedIPs := make([]string, 0, len(metadata.ClientAllowedIPs))
+	for _, value := range metadata.ClientAllowedIPs {
+		clientAllowedIPs = append(clientAllowedIPs, strings.TrimSpace(value))
+	}
 	return AWGSettings{
 		Enabled: true, EndpointTag: endpoint.Tag, PublicEndpoint: metadata.PublicEndpoint,
 		Subnet: prefix.Masked(), DNS: dns, DefaultDeviceLimit: metadata.DefaultDeviceLimit,
 		ReconcileIntervalSec: 30, StatsIntervalSec: 60, MTU: options.MTU,
+		ClientAllowedIPs: clientAllowedIPs, ClientKeepalive: metadata.ClientKeepalive,
 	}, nil
 }
 

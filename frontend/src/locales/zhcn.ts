@@ -532,6 +532,12 @@ export default {
     desc: "描述",
     group: "组",
     inboundTags: "入站标签",
+    awg: {
+      expiresAt: "过期时间（可选）",
+      expiresIn: "{days} 天后过期",
+      expired: "已过期",
+      expiryInvalid: "过期日期必须在将来",
+    },
     basics: "基础",
     config: "配置",
     links: "链接",
@@ -577,6 +583,42 @@ export default {
     shdwTls: {
       hs: "握手服务器",
       addHS: "添加握手服务器",
+    },
+    amnezia: {
+      randomize: "随机生成",
+      preset: "混淆预设",
+      presets: {
+        balanced: {
+          title: "均衡",
+          description: "适用于家庭和有线网络的通用垃圾包配置（Jc 4、Jmin 40、Jmax 90）。随机生成会重新生成这些参数。",
+        },
+        mobile: {
+          title: "移动网络",
+          description: "针对移动运营商的窄幅垃圾包配置（Jc 3、Jmin 40、Jmax 70）。随机生成不会更改这些参数。",
+        },
+        custom: {
+          title: "自定义",
+          description: "手动设置垃圾包参数。随机生成仅重新生成 H1-H4 头部。",
+        },
+      },
+      hints: {
+        title: "调优提示",
+        mobileJmax: "移动网络下调低 Jmax",
+        mobileJmaxDescription: "过大的垃圾包会触发运营商 DPI 启发式检测；移动网络下建议 Jmax 不超过 70。",
+        mtu: "大文件下载卡顿时调低 MTU",
+        mtuDescription: "大文件传输丢包通常是路径 MTU 问题；可在节点上尝试 1280（设备重新下载配置后生效）。",
+        cpu: "速度到达瓶颈时，请先检查服务器 CPU 软中断负载（top 中的 %si）而不是带宽 - AmneziaWG 混淆依赖 CPU。",
+      },
+      errors: {
+        jcRange: "Jc 必须在 0 到 128 之间",
+        junkSizeRange: "垃圾包大小必须在 0 到 1280 之间",
+        jminAboveJmax: "Jmin 不得超过 Jmax",
+        paddingRange: "填充必须在 0 到 1280 之间",
+        equalPacketSizes: "填充后的数据包大小冲突（S1+148、S2+92、S3+64、S4+32 必须互不相同），连接将无法建立",
+        headerFormat: "请输入数字或范围（例如 1000-2000）",
+        headerReserved: "0-4 为 WireGuard 保留值，请使用 5 或更大的值",
+        headerOverlap: "H1-H4 范围不得重叠，否则握手将失败",
+      },
     },
     ssh: {
       passphrase: "密码短语",
@@ -772,6 +814,16 @@ export default {
     },
     endpoint: {
       recommendedPreset: "应用端点推荐值",
+      awg: {
+        obfuscationChangedWarning: "混淆参数已更改：现有设备必须重新下载配置或重新扫描二维码，否则保存后将失去连接。",
+        clientAllowedIPs: "客户端 AllowedIPs（逗号分隔的 CIDR）",
+        clientAllowedIPsHint: "客户端分流：仅这些网段走隧道。留空 = 全部流量（0.0.0.0/0, ::/0）。",
+        clientAllowedIPsError: "无效的 CIDR 前缀：{values}",
+        clientAllowedIPsCaveat: "按 IP 分流并不精确：CDN 和缓存（如托管在本地运营商网段的 Google 缓存）可能落在隧道之外。更改后设备必须重新下载配置。",
+        clientKeepalive: "客户端 keepalive（秒）",
+        clientKeepaliveHint: "设备配置中的 PersistentKeepalive。0 = 默认值（25）。",
+        clientKeepaliveError: "Keepalive 必须在 0 到 3600 之间",
+      },
       hint: {
         type: "建议：Endpoint type. Recommended: choose the endpoint that matches the network integration.",
         tag: "建议：Unique endpoint tag used by rules and outbounds. Recommended: keep the generated tag or use a clear unique name.",
