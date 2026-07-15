@@ -53,6 +53,9 @@
             <v-alert type="info" variant="tonal" density="compact" class="mb-3">
               {{ $t('types.endpoint.awg.managedHint') }}
             </v-alert>
+            <v-alert v-if="amneziaParamsChanged" type="warning" variant="tonal" density="compact" class="mb-3">
+              {{ $t('types.endpoint.awg.obfuscationChangedWarning') }}
+            </v-alert>
             <v-row>
               <v-col cols="12" sm="6" md="5">
                 <v-text-field v-model="awgPublicEndpoint" :label="$t('types.endpoint.awg.publicEndpoint')" placeholder="vpn.example.com:51820" hide-details />
@@ -128,6 +131,11 @@ export default {
       title: "add",
       tab: "t1",
       loading: false,
+      // Snapshot of the amnezia options at modal open; a change means every
+      // provisioned device must re-download its config / rescan the QR
+      // (configs render live from endpoint options, so nothing regenerates
+      // server-side - but already-installed clients keep the old values).
+      originalAmnezia: "",
       epTypes: EpTypes,
       noDial: [EpTypes.VpnServer, EpTypes.VpnClient],
     }
@@ -138,12 +146,14 @@ export default {
         const newData = JSON.parse(this.$props.data)
         this.endpoint = newData
         this.title = "edit"
+        this.originalAmnezia = JSON.stringify(newData.amnezia ?? null)
       }
       else {
         this.endpoint.type = "wireguard"
         this.endpoint.listen_port = RandomUtil.randomIntRange(10000, 60000)
         this.changeType()
         this.title = "add"
+        this.originalAmnezia = ""
       }
       this.tab = "t1"
     },
@@ -288,6 +298,15 @@ export default {
       this.endpoint.ext.keys = this.endpoint.ext.keys.filter((key: any) => key.public_key != this.endpoint.peers[index].public_key)
       this.endpoint.peers.splice(index, 1)
     },
+    async fillRandomAmneziaHeaders() {
+      const msg = await HttpUtils.get('api/awg/obfuscation/random')
+      if (msg.success && msg.obj && this.endpoint.amnezia) {
+        this.endpoint.amnezia.h1 = msg.obj.h1
+        this.endpoint.amnezia.h2 = msg.obj.h2
+        this.endpoint.amnezia.h3 = msg.obj.h3
+        this.endpoint.amnezia.h4 = msg.obj.h4
+      }
+    },
     async refreshWgPeerKey(index: number) {
       this.loading = true
       const newKeys = await this.genWgKey()
@@ -309,7 +328,11 @@ export default {
           if (!this.endpoint.ext.dns || this.endpoint.ext.dns.length === 0) this.endpoint.ext.dns = ['1.1.1.1', '1.0.0.1']
           if (!this.endpoint.ext.defaultDeviceLimit) this.endpoint.ext.defaultDeviceLimit = 3
           if (!this.endpoint.amnezia) {
-            this.endpoint.amnezia = { jc: 3, jmin: 10, jmax: 20, s1: 15, s2: 18, s3: 12, s4: 8, h1: '1000-1099', h2: '2000-2099', h3: '3000-3099', h4: '4000-4099', i1: '<b 0x01020304><r 8>' }
+            // Junk/padding defaults stay static; H1-H4 come from the server
+            // crypto/rand generator so every managed endpoint gets unique,
+            // non-overlapping header ranges.
+            this.endpoint.amnezia = { jc: 3, jmin: 10, jmax: 20, s1: 15, s2: 18, s3: 12, s4: 8, i1: '<b 0x01020304><r 8>' }
+            this.fillRandomAmneziaHeaders()
           }
           this.endpoint.peers = this.endpoint.peers ?? []
         } else {
@@ -334,6 +357,10 @@ export default {
     },
     currentFieldHints(): Record<string, string> {
       return endpointFieldHintsForType(this.endpoint.type)
+    },
+    amneziaParamsChanged(): boolean {
+      if (this.title !== 'edit' || this.originalAmnezia === "") return false
+      return JSON.stringify(this.endpoint.amnezia ?? null) !== this.originalAmnezia
     },
     showEndpointRecommendedPreset(): boolean {
       return this.$props.id == 0 && hasEndpointRecommendedPreset(this.endpoint.type)

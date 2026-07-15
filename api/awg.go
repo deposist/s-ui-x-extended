@@ -19,6 +19,7 @@ import (
 func (a *APIHandler) registerAWGRoutes(g *gin.RouterGroup) {
 	awg := g.Group("/awg")
 	awg.GET("/endpoints", a.ApiService.ListAWGEndpoints)
+	awg.GET("/obfuscation/random", a.ApiService.GetAWGObfuscationRandom)
 	awg.GET("/clients/:clientId/access", a.ApiService.ListClientAWGAccess)
 	awg.GET("/clients/:clientId/devices", a.ApiService.ListClientAWGDevices)
 	awg.POST("/clients/:clientId/devices", a.ApiService.CreateClientAWGDevice)
@@ -87,6 +88,20 @@ func (a *ApiService) ListAWGEndpoints(c *gin.Context) {
 		})
 	}
 	jsonObj(c, rows, nil)
+}
+
+// GetAWGObfuscationRandom returns a server-generated Amnezia obfuscation
+// parameter set. Generation stays on the server so there is one source of
+// truth using crypto/rand instead of the browser's Math.random. H1-H4 are
+// always generated; junk parameters (Jc/Jmin/Jmax) only when the caller
+// explicitly asks for them (preset=balanced).
+func (a *ApiService) GetAWGObfuscationRandom(c *gin.Context) {
+	if !a.requireTokenScopeAny(c, "awg", "admin") {
+		return
+	}
+	includeJunk := c.Query("preset") == "balanced"
+	params, err := service.GenerateAmneziaParams(includeJunk)
+	jsonObj(c, params, err)
 }
 
 func (a *ApiService) ListClientAWGAccess(c *gin.Context) {

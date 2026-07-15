@@ -578,6 +578,42 @@ export default {
       hs: "握手服務器",
       addHS: "添加握手服務器",
     },
+    amnezia: {
+      randomize: "隨機生成",
+      preset: "混淆預設",
+      presets: {
+        balanced: {
+          title: "均衡",
+          description: "適用於家庭和有線網路的通用垃圾包配置（Jc 4、Jmin 40、Jmax 90）。隨機生成會重新生成這些參數。",
+        },
+        mobile: {
+          title: "行動網路",
+          description: "針對行動業者的窄幅垃圾包配置（Jc 3、Jmin 40、Jmax 70）。隨機生成不會更改這些參數。",
+        },
+        custom: {
+          title: "自訂",
+          description: "手動設定垃圾包參數。隨機生成僅重新生成 H1-H4 標頭。",
+        },
+      },
+      hints: {
+        title: "調校提示",
+        mobileJmax: "行動網路下調低 Jmax",
+        mobileJmaxDescription: "過大的垃圾包會觸發業者 DPI 啟發式偵測；行動網路下建議 Jmax 不超過 70。",
+        mtu: "大檔案下載卡頓時調低 MTU",
+        mtuDescription: "大檔案傳輸丟包通常是路徑 MTU 問題；可在節點上嘗試 1280（裝置重新下載設定後生效）。",
+        cpu: "速度達到瓶頸時，請先檢查伺服器 CPU 軟中斷負載（top 中的 %si）而不是頻寬 - AmneziaWG 混淆依賴 CPU。",
+      },
+      errors: {
+        jcRange: "Jc 必須在 0 到 128 之間",
+        junkSizeRange: "垃圾包大小必須在 0 到 1280 之間",
+        jminAboveJmax: "Jmin 不得超過 Jmax",
+        paddingRange: "填充必須在 0 到 1280 之間",
+        equalPacketSizes: "填充後的封包大小衝突（S1+148、S2+92、S3+64、S4+32 必須互不相同），連線將無法建立",
+        headerFormat: "請輸入數字或範圍（例如 1000-2000）",
+        headerReserved: "0-4 為 WireGuard 保留值，請使用 5 或更大的值",
+        headerOverlap: "H1-H4 範圍不得重疊，否則握手將失敗",
+      },
+    },
     ssh: {
       passphrase: "密語",
       hostKey: "主機密鑰",
@@ -772,6 +808,9 @@ export default {
     },
     endpoint: {
       recommendedPreset: "套用端點推薦值",
+      awg: {
+        obfuscationChangedWarning: "混淆參數已變更：現有裝置必須重新下載設定或重新掃描 QR 碼，否則儲存後將失去連線。",
+      },
       hint: {
         type: "建議：Endpoint type. Recommended: choose the endpoint that matches the network integration.",
         tag: "建議：Unique endpoint tag used by rules and outbounds. Recommended: keep the generated tag or use a clear unique name.",

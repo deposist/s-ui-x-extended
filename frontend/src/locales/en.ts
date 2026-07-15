@@ -1333,6 +1333,7 @@ export default {
         dns: "DNS (comma separated)",
         defaultDeviceLimit: "Default device limit",
         managedHint: "When enabled, this endpoint can be assigned to clients and personal devices are provisioned automatically.",
+        obfuscationChangedWarning: "Obfuscation parameters changed: existing devices must re-download their config or rescan the QR code, otherwise they will lose connectivity after saving.",
       },
       hint: {
         type: "Endpoint type. Recommended: choose the endpoint that matches the network integration.",
@@ -1679,6 +1680,40 @@ export default {
       j2: "Junk packet J2",
       j3: "Junk packet J3",
       itime: "Init interval",
+      randomize: "Randomize",
+      preset: "Obfuscation preset",
+      presets: {
+        balanced: {
+          title: "Balanced",
+          description: "General-purpose junk profile for home and wired networks (Jc 4, Jmin 40, Jmax 90). Randomize regenerates these values.",
+        },
+        mobile: {
+          title: "Mobile",
+          description: "Narrow junk profile for mobile carriers - Yota, Tele2, Megafon (Jc 3, Jmin 40, Jmax 70). Randomize keeps these values.",
+        },
+        custom: {
+          title: "Custom",
+          description: "Manual junk parameters. Randomize regenerates only H1-H4 headers.",
+        },
+      },
+      hints: {
+        title: "Tuning hints",
+        mobileJmax: "Lower Jmax on mobile networks",
+        mobileJmaxDescription: "Large junk packets trigger carrier DPI heuristics; on mobile networks keep Jmax at 70 or below.",
+        mtu: "Lower MTU when large downloads stall",
+        mtuDescription: "Packet loss on large files usually means path MTU issues; try 1280 on the endpoint (devices pick it up from a re-downloaded config).",
+        cpu: "If throughput plateaus, check server CPU softirq load (%si in top) before blaming the channel - AmneziaWG obfuscation is CPU-bound.",
+      },
+      errors: {
+        jcRange: "Jc must be between 0 and 128",
+        junkSizeRange: "Junk size must be between 0 and 1280",
+        jminAboveJmax: "Jmin must not exceed Jmax",
+        paddingRange: "Padding must be between 0 and 1280",
+        equalPacketSizes: "Padded packet sizes collide (S1+148, S2+92, S3+64, S4+32 must all differ) - the connection will not come up",
+        headerFormat: "Enter a number or a from-to range (e.g. 1000-2000)",
+        headerReserved: "Values 0-4 are reserved by WireGuard - use 5 or higher",
+        headerOverlap: "H1-H4 ranges must not overlap - the handshake will fail",
+      },
     },
     fallback: {
       servers: "Fallback servers",

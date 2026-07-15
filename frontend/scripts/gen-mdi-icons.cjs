@@ -81,6 +81,7 @@ const USED_ICONS = [
   'mdi-database-refresh',
   'mdi-delete',
   'mdi-delete-outline',
+  'mdi-dice-multiple',
   'mdi-dns',
   'mdi-dots-vertical',
   'mdi-download',

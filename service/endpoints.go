@@ -108,6 +108,14 @@ func (s *EndpointService) saveEndpointUpsert(tx *gorm.DB, act string, data json.
 			return nil, err
 		}
 	}
+	// Invalid Amnezia obfuscation combinations make the tunnel silently fail
+	// to come up (no error on either side), so saving is blocked outright.
+	// Existing endpoints are untouched until their next edit.
+	if endpoint.Type == "wireguard" || endpoint.Type == "warp" {
+		if err := ValidateAmneziaOptions(endpoint.Options); err != nil {
+			return nil, err
+		}
+	}
 	if act == "edit" && endpoint.Id > 0 {
 		var current model.Endpoint
 		if err := tx.First(&current, endpoint.Id).Error; err != nil {
