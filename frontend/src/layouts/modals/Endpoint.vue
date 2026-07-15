@@ -399,7 +399,7 @@ export default {
       const v: string = this.endpoint.ext?.publicEndpoint ?? ''
       // host:port shape mirroring the server's net.SplitHostPort gate;
       // the server remains authoritative.
-      const m = v.match(/^(\[[0-9a-fA-F:]+\]|[^\s:\[\]]+):(\d{1,5})$/)
+      const m = v.match(/^(\[[0-9a-fA-F:]+\]|[^\s:[\]]+):(\d{1,5})$/)
       const port = m ? parseInt(m[2], 10) : 0
       if (m && port >= 1 && port <= 65535) return []
       return [this.$t('types.endpoint.awg.publicEndpointError')]
