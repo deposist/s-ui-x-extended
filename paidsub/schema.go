@@ -88,7 +88,8 @@ func EnsureSchema(db *gorm.DB) error {
 			created_at INTEGER NOT NULL,
 			updated_at INTEGER NOT NULL,
 			revoked_at INTEGER NOT NULL DEFAULT 0,
-			ip_reusable_after INTEGER NOT NULL DEFAULT 0
+			ip_reusable_after INTEGER NOT NULL DEFAULT 0,
+			expires_at INTEGER NOT NULL DEFAULT 0
 		)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_paidsub_bindings_client ON paidsub_bindings(client_id)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_paidsub_bindings_tg ON paidsub_bindings(tg_user_id)`,
@@ -127,6 +128,7 @@ func EnsureSchema(db *gorm.DB) error {
 		{&model.AWGDevice{}, "create_request_key", `ALTER TABLE awg_devices ADD COLUMN create_request_key TEXT NOT NULL DEFAULT ''`},
 		{&model.AWGDevice{}, "rotate_request_key", `ALTER TABLE awg_devices ADD COLUMN rotate_request_key TEXT NOT NULL DEFAULT ''`},
 		{&model.AWGDevice{}, "endpoint_id", `ALTER TABLE awg_devices ADD COLUMN endpoint_id INTEGER NOT NULL DEFAULT 0`},
+		{&model.AWGDevice{}, "expires_at", `ALTER TABLE awg_devices ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0`},
 	} {
 		if mig.HasColumn(migration.model, migration.column) {
 			continue

@@ -42,7 +42,7 @@ func newAWGOverrideTestDevice(t *testing.T, overrides AWGSettings) (*AWGManager,
 		return settings, nil
 	}
 	client := createAWGEligibleClient(t)
-	device, err := manager.CreateDevice(context.Background(), client.Id, "override-config", "Phone", 1)
+	device, err := manager.CreateDevice(context.Background(), client.Id, "override-config", "Phone", 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

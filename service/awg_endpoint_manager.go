@@ -51,7 +51,7 @@ func (s *AWGEndpointManager) manager(endpointID uint) (*AWGManager, AWGSettings,
 	return manager, settings, settings.DefaultDeviceLimit, nil
 }
 
-func (s *AWGEndpointManager) CreateDevice(ctx context.Context, clientID, endpointID uint, requestKey, name string) (AWGDeviceInfo, error) {
+func (s *AWGEndpointManager) CreateDevice(ctx context.Context, clientID, endpointID uint, requestKey, name string, expiresAt int64) (AWGDeviceInfo, error) {
 	_, _, limit, err := EffectiveAWGEndpointAccess(database.GetDB(), clientID, endpointID)
 	if err != nil {
 		return AWGDeviceInfo{}, err
@@ -60,7 +60,7 @@ func (s *AWGEndpointManager) CreateDevice(ctx context.Context, clientID, endpoin
 	if err != nil {
 		return AWGDeviceInfo{}, err
 	}
-	return manager.CreateDevice(ctx, clientID, requestKey, name, limit)
+	return manager.CreateDevice(ctx, clientID, requestKey, name, limit, expiresAt)
 }
 
 func (s *AWGEndpointManager) ListDevices(clientID, endpointID uint) ([]AWGDeviceInfo, error) {

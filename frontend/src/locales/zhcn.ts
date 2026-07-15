@@ -532,6 +532,12 @@ export default {
     desc: "描述",
     group: "组",
     inboundTags: "入站标签",
+    awg: {
+      expiresAt: "过期时间（可选）",
+      expiresIn: "{days} 天后过期",
+      expired: "已过期",
+      expiryInvalid: "过期日期必须在将来",
+    },
     basics: "基础",
     config: "配置",
     links: "链接",

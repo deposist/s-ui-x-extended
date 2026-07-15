@@ -76,7 +76,7 @@ type AWGClientStateHook interface {
 }
 
 type AWGDeviceService interface {
-	CreateDevice(context.Context, uint, string, string, int) (AWGDeviceInfo, error)
+	CreateDevice(context.Context, uint, string, string, int, int64) (AWGDeviceInfo, error)
 	ListDevices(uint) ([]AWGDeviceInfo, error)
 	GetOwnedDevice(uint, uint) (AWGDeviceInfo, error)
 	RenderOwnedConfig(context.Context, uint, uint) ([]byte, error)
@@ -104,7 +104,7 @@ func (r *Runtime) AWGClientStateHook() AWGClientStateHook {
 }
 
 type AWGEndpointDeviceService interface {
-	CreateDevice(context.Context, uint, uint, string, string) (AWGDeviceInfo, error)
+	CreateDevice(context.Context, uint, uint, string, string, int64) (AWGDeviceInfo, error)
 	ListDevices(uint, uint) ([]AWGDeviceInfo, error)
 	GetOwnedDevice(uint, uint, uint) (AWGDeviceInfo, error)
 	RenderOwnedConfig(context.Context, uint, uint, uint) ([]byte, error)

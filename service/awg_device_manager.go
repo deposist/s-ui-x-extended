@@ -31,7 +31,33 @@ var (
 	ErrAWGInvalidRequestKey   = errors.New("invalid AWG create request key")
 	ErrAWGIdempotencyConflict = errors.New("AWG create request conflicts with existing device")
 	ErrAWGProvisioningFailed  = errors.New("AWG provisioning failed")
+	ErrAWGDeviceExpired       = errors.New("AWG device is expired")
+	ErrAWGInvalidExpiry       = errors.New("AWG device expiry must be in the future and within 10 years")
 )
+
+// awgMaxDeviceExpirySeconds bounds admin-supplied expiry timestamps (10
+// years) so a typo cannot create an effectively immortal-but-not-zero row.
+const awgMaxDeviceExpirySeconds = int64(10 * 365 * 24 * 3600)
+
+// deviceExpiredAt is the shared expiry predicate for AWG devices, symmetric
+// with clientIsActiveAt: the boundary is exclusive Unix seconds and zero
+// means the device never expires. An expired device is deprovisioned by the
+// reconciler but keeps occupying its device-limit slot until deleted.
+func deviceExpiredAt(device model.AWGDevice, now int64) bool {
+	return device.ExpiresAt > 0 && device.ExpiresAt <= now
+}
+
+// validateAWGDeviceExpiry validates an admin-supplied expiry timestamp.
+// Zero is "never expires"; anything else must lie in (now, now+10y].
+func validateAWGDeviceExpiry(expiresAt, now int64) error {
+	if expiresAt == 0 {
+		return nil
+	}
+	if expiresAt <= now || expiresAt > now+awgMaxDeviceExpirySeconds {
+		return ErrAWGInvalidExpiry
+	}
+	return nil
+}
 
 type AWGDeviceInfo struct {
 	ID             uint   `json:"id"`
@@ -45,6 +71,7 @@ type AWGDeviceInfo struct {
 	TotalRx        uint64 `json:"totalRx"`
 	TotalTx        uint64 `json:"totalTx"`
 	CreatedAt      int64  `json:"createdAt"`
+	ExpiresAt      int64  `json:"expiresAt"`
 }
 
 type AWGGeneratedKeys struct {
@@ -105,7 +132,10 @@ func generateAWGKeys() (AWGGeneratedKeys, error) {
 	}, nil
 }
 
-func (m *AWGManager) CreateDevice(ctx context.Context, clientID uint, requestKey, name string, effectiveLimit int) (AWGDeviceInfo, error) {
+// CreateDevice provisions a new device. expiresAt is an optional exclusive
+// Unix-seconds expiry boundary (0 = never); it must be in the future and
+// within ten years.
+func (m *AWGManager) CreateDevice(ctx context.Context, clientID uint, requestKey, name string, effectiveLimit int, expiresAt int64) (AWGDeviceInfo, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -125,13 +155,13 @@ func (m *AWGManager) CreateDevice(ctx context.Context, clientID uint, requestKey
 	}
 
 	result := m.submit(ctx, func(operationCtx context.Context) awgCommandResult {
-		info, createErr := m.createDeviceInWorker(operationCtx, clientID, requestKey, name, effectiveLimit)
+		info, createErr := m.createDeviceInWorker(operationCtx, clientID, requestKey, name, effectiveLimit, expiresAt)
 		return awgCommandResult{device: info, err: createErr}
 	})
 	return result.device, result.err
 }
 
-func (m *AWGManager) createDeviceInWorker(ctx context.Context, clientID uint, requestKey, name string, effectiveLimit int) (AWGDeviceInfo, error) {
+func (m *AWGManager) createDeviceInWorker(ctx context.Context, clientID uint, requestKey, name string, effectiveLimit int, expiresAt int64) (AWGDeviceInfo, error) {
 	now := m.deps.Now()
 	var replay model.AWGDevice
 	replayErr := m.deps.DB.Where("client_id = ? AND endpoint_id = ? AND create_request_key = ?", clientID, m.deps.EndpointID, requestKey).First(&replay).Error
@@ -180,6 +210,9 @@ func (m *AWGManager) createDeviceInWorker(ctx context.Context, clientID uint, re
 		if !clientIsActiveAt(client, now) {
 			return ErrAWGClientInactive
 		}
+		if expiryErr := validateAWGDeviceExpiry(expiresAt, now); expiryErr != nil {
+			return expiryErr
+		}
 		if effectiveLimit <= 0 {
 			return ErrAWGDeviceLimitReached
 		}
@@ -221,7 +254,8 @@ func (m *AWGManager) createDeviceInWorker(ctx context.Context, clientID uint, re
 		}
 		device = model.AWGDevice{ClientId: clientID, EndpointId: m.deps.EndpointID, Name: name, CreateRequestKey: requestKey, CryptoContext: cryptoContext,
 			PublicKey: base64.StdEncoding.EncodeToString(keys.PublicKey), PrivateKeyEnc: privateEnc, PSKEnc: pskEnc,
-			IPv4Address: address.String(), DesiredEnabled: true, SyncState: "pending_add", CreatedAt: now, UpdatedAt: now}
+			IPv4Address: address.String(), DesiredEnabled: true, SyncState: "pending_add", CreatedAt: now, UpdatedAt: now,
+			ExpiresAt: expiresAt}
 		created = true
 		return tx.Create(&device).Error
 	})
@@ -235,6 +269,9 @@ func (m *AWGManager) createDeviceInWorker(ctx context.Context, clientID uint, re
 		var client model.Client
 		if err := m.deps.DB.First(&client, clientID).Error; err != nil || !clientIsActiveAt(client, now) {
 			return AWGDeviceInfo{}, ErrAWGClientInactive
+		}
+		if deviceExpiredAt(device, now) {
+			return AWGDeviceInfo{}, ErrAWGDeviceExpired
 		}
 		if effectiveLimit <= 0 {
 			return AWGDeviceInfo{}, ErrAWGDeviceLimitReached
@@ -320,6 +357,7 @@ func awgDeviceInfo(device model.AWGDevice) AWGDeviceInfo {
 		ID: device.Id, Name: device.Name, PublicKey: device.PublicKey, IPv4Address: device.IPv4Address,
 		DesiredEnabled: device.DesiredEnabled, SyncState: device.SyncState, Provisioned: device.Provisioned,
 		LastHandshake: device.LastHandshake, TotalRx: device.TotalRx, TotalTx: device.TotalTx, CreatedAt: device.CreatedAt,
+		ExpiresAt: device.ExpiresAt,
 	}
 }
 

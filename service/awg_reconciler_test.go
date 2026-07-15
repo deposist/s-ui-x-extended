@@ -32,7 +32,7 @@ func TestAWGReconcileRecoversPendingAddAndPersistsPeer(t *testing.T) {
 	}
 	manager, _ := newAWGCreateTestManager(t, provisioner)
 	client := createAWGEligibleClient(t)
-	if _, err := manager.CreateDevice(context.Background(), client.Id, "crash-before-ipc", "Phone", 1); !errors.Is(err, ErrAWGProvisioningFailed) {
+	if _, err := manager.CreateDevice(context.Background(), client.Id, "crash-before-ipc", "Phone", 1, 0); !errors.Is(err, ErrAWGProvisioningFailed) {
 		t.Fatalf("create error = %v", err)
 	}
 
@@ -73,7 +73,7 @@ func TestAWGReconcileFinalizesIpcSuccessAfterCrashWithoutSecondAdd(t *testing.T)
 	manager, _ := newAWGCreateTestManager(t, provisioner)
 	manager.deps.SyncEndpointPeers = func(*gorm.DB, AWGSettings, []AWGPersistedPeer) error { return nil }
 	client := createAWGEligibleClient(t)
-	created, err := manager.CreateDevice(context.Background(), client.Id, "ipc-success-crash", "Phone", 1)
+	created, err := manager.CreateDevice(context.Background(), client.Id, "ipc-success-crash", "Phone", 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestAWGReconcileRepairsMissingAndOrphanPeers(t *testing.T) {
 	manager, _ := newAWGCreateTestManager(t, provisioner)
 	manager.deps.SyncEndpointPeers = func(*gorm.DB, AWGSettings, []AWGPersistedPeer) error { return nil }
 	client := createAWGEligibleClient(t)
-	created, err := manager.CreateDevice(context.Background(), client.Id, "drift", "Phone", 1)
+	created, err := manager.CreateDevice(context.Background(), client.Id, "drift", "Phone", 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestAWGReconcileRemovesInactiveClientPeerAndRetainsDesiredIntent(t *testing
 	manager, _ := newAWGCreateTestManager(t, provisioner)
 	manager.deps.SyncEndpointPeers = func(*gorm.DB, AWGSettings, []AWGPersistedPeer) error { return nil }
 	client := createAWGEligibleClient(t)
-	created, err := manager.CreateDevice(context.Background(), client.Id, "deplete", "Phone", 1)
+	created, err := manager.CreateDevice(context.Background(), client.Id, "deplete", "Phone", 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestAWGReconcileEndpointUnavailableKeepsDurablePendingState(t *testing.T) {
 		remove:   func(context.Context, string) error { return errors.New("unavailable") },
 	})
 	client := createAWGEligibleClient(t)
-	if _, err := manager.CreateDevice(context.Background(), client.Id, "unavailable", "Phone", 1); err == nil {
+	if _, err := manager.CreateDevice(context.Background(), client.Id, "unavailable", "Phone", 1, 0); err == nil {
 		t.Fatal("expected create failure")
 	}
 	if _, err := manager.Reconcile(context.Background()); !errors.Is(err, ErrAWGReconcileFailed) {

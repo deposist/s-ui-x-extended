@@ -98,7 +98,7 @@ func (m *AWGManager) reconcileInWorker(ctx context.Context) (AWGReconcileResult,
 	invalid := make(map[uint]struct{})
 	for _, device := range devices {
 		client, clientExists := clientsByID[device.ClientId]
-		if !device.DesiredEnabled || !clientExists || !clientIsActiveAt(client, m.deps.Now()) {
+		if !device.DesiredEnabled || !clientExists || !clientIsActiveAt(client, m.deps.Now()) || deviceExpiredAt(device, m.deps.Now()) {
 			continue
 		}
 		peer, peerErr := m.awgPeerSpec(device)

@@ -135,6 +135,9 @@ type createAWGDeviceRequest struct {
 	EndpointID uint   `json:"endpointId" form:"endpointId"`
 	Name       string `json:"name" form:"name"`
 	RequestKey string `json:"requestKey" form:"requestKey"`
+	// ExpiresAt is an optional exclusive Unix-seconds expiry (0 = never).
+	// Validated server-side: in the future, at most 10 years ahead.
+	ExpiresAt int64 `json:"expiresAt" form:"expiresAt"`
 }
 
 func (a *ApiService) CreateClientAWGDevice(c *gin.Context) {
@@ -162,13 +165,13 @@ func (a *ApiService) CreateClientAWGDevice(c *gin.Context) {
 	if requestKey == "" {
 		requestKey = fmt.Sprintf("admin-%d-%d-%d", clientID, req.EndpointID, time.Now().UnixNano())
 	}
-	device, err := devices.CreateDevice(c.Request.Context(), clientID, req.EndpointID, requestKey, req.Name)
+	device, err := devices.CreateDevice(c.Request.Context(), clientID, req.EndpointID, requestKey, req.Name, req.ExpiresAt)
 	if err != nil {
 		jsonMsg(c, "awg", err)
 		return
 	}
 	a.recordAudit(c, GetLoginUser(c), "awg_device_created", "awg", service.AuditSeverityInfo, map[string]any{
-		"clientId": clientID, "endpointId": req.EndpointID, "deviceId": device.ID,
+		"clientId": clientID, "endpointId": req.EndpointID, "deviceId": device.ID, "expiresAt": req.ExpiresAt,
 	})
 	jsonObj(c, device, nil)
 }

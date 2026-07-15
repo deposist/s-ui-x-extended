@@ -256,15 +256,22 @@ func TestEnsureSchemaAddsRequestKeysToLegacyAWGTable(t *testing.T) {
 	if !db.Migrator().HasColumn(&model.AWGDevice{}, "rotate_request_key") {
 		t.Fatal("legacy AWG migration did not add rotate_request_key")
 	}
+	if !db.Migrator().HasColumn(&model.AWGDevice{}, "expires_at") {
+		t.Fatal("legacy AWG migration did not add expires_at")
+	}
 	var keys struct {
 		CreateRequestKey string
 		RotateRequestKey string
+		ExpiresAt        int64
 	}
-	if err := db.Raw("SELECT create_request_key, rotate_request_key FROM awg_devices WHERE public_key = ?", "legacy-public").Scan(&keys).Error; err != nil {
+	if err := db.Raw("SELECT create_request_key, rotate_request_key, expires_at FROM awg_devices WHERE public_key = ?", "legacy-public").Scan(&keys).Error; err != nil {
 		t.Fatal(err)
 	}
 	if keys.CreateRequestKey != "" || keys.RotateRequestKey != "" {
 		t.Fatalf("legacy row request keys = create %q, rotate %q; want empty", keys.CreateRequestKey, keys.RotateRequestKey)
+	}
+	if keys.ExpiresAt != 0 {
+		t.Fatalf("legacy row expires_at = %d; want 0 (never expires)", keys.ExpiresAt)
 	}
 }
 

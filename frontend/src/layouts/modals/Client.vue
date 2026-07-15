@@ -223,6 +223,9 @@
                           <v-chip size="small" :color="device.provisioned ? 'success' : 'warning'" label class="ml-2">
                             {{ device.provisioned ? $t('client.awg.connected') : $t('client.awg.pending') }}
                           </v-chip>
+                          <v-chip v-if="awgDeviceExpiryChip(device)" size="small" :color="awgDeviceExpiryChip(device)!.color" label class="ml-2">
+                            {{ awgDeviceExpiryChip(device)!.text }}
+                          </v-chip>
                           <div class="text-caption">{{ device.ipv4Address }}</div>
                         </v-col>
                         <v-col cols="12" sm="8" class="d-flex flex-wrap ga-1">
@@ -237,10 +240,18 @@
                       <v-col class="text-medium-emphasis">{{ $t('client.awg.none') }}</v-col>
                     </v-row>
                     <v-row>
-                      <v-col cols="12" sm="6">
+                      <v-col cols="12" sm="4">
                         <v-text-field v-model="awgNewDeviceNames[access.endpointId]" :label="$t('client.awg.deviceName')" hide-details density="compact" />
                       </v-col>
-                      <v-col cols="12" sm="6">
+                      <v-col cols="12" sm="4">
+                        <v-text-field
+                          v-model="awgNewDeviceExpiry[access.endpointId]"
+                          type="date"
+                          :label="$t('client.awg.expiresAt')"
+                          hide-details density="compact"
+                          clearable />
+                      </v-col>
+                      <v-col cols="12" sm="4">
                         <v-btn color="primary" :loading="awgBusy" prepend-icon="mdi-plus" @click="createAwgDevice(access.endpointId)">{{ $t('client.awg.addDevice') }}</v-btn>
                       </v-col>
                     </v-row>
@@ -306,6 +317,7 @@
 import { createClient, randomConfigs, updateConfigs, Link, shuffleConfigs } from '@/types/clients'
 import HttpUtils from '@/plugins/httputil'
 import api from '@/plugins/api'
+import { push } from 'notivue'
 import DatePick from '@/components/DateTime.vue'
 import { HumanReadable } from '@/plugins/utils'
 import Data from '@/store/modules/data'
@@ -331,6 +343,7 @@ export default {
       awgAccesses: <any[]>[],
       awgDevices: <Record<number, any[]>>{},
       awgNewDeviceNames: <Record<number, string>>{},
+      awgNewDeviceExpiry: <Record<number, string>>{},
       awgBusy: false,
       awgQrDialog: false,
       awgQrUrl: '',
@@ -342,6 +355,7 @@ export default {
       this.awgAccesses = []
       this.awgDevices = {}
       this.awgNewDeviceNames = {}
+      this.awgNewDeviceExpiry = {}
       if (this.awgQrUrl) { URL.revokeObjectURL(this.awgQrUrl); this.awgQrUrl = '' }
       if (id > 0) {
         this.loading = true
@@ -422,15 +436,41 @@ export default {
     async createAwgDevice(endpointId: number) {
       const name = (this.awgNewDeviceNames[endpointId] ?? '').trim()
       if (name.length == 0) return
+      // Optional expiry: the date input yields YYYY-MM-DD; expiry is the end
+      // of that day (exclusive boundary, local time). Empty = never expires.
+      let expiresAt = 0
+      const expiryDate = (this.awgNewDeviceExpiry[endpointId] ?? '').trim()
+      if (expiryDate.length > 0) {
+        const parsed = new Date(expiryDate + 'T23:59:59')
+        if (isNaN(parsed.getTime()) || parsed.getTime() <= Date.now()) {
+          push.error({ message: this.$t('client.awg.expiryInvalid') })
+          return
+        }
+        expiresAt = Math.floor(parsed.getTime() / 1000)
+      }
       this.awgBusy = true
       try {
-        const msg = await HttpUtils.post(`api/awg/clients/${this.$props.id}/devices`, { endpointId, name })
+        const msg = await HttpUtils.post(`api/awg/clients/${this.$props.id}/devices`, { endpointId, name, expiresAt })
         if (msg.success) {
           this.awgNewDeviceNames[endpointId] = ''
+          this.awgNewDeviceExpiry[endpointId] = ''
           await this.loadAwgState()
         }
       } finally {
         this.awgBusy = false
+      }
+    },
+    awgDeviceExpiryChip(device: any): { text: string, color: string } | null {
+      const expiresAt = device?.expiresAt ?? 0
+      if (!expiresAt) return null
+      const secondsLeft = expiresAt - Math.floor(Date.now() / 1000)
+      if (secondsLeft <= 0) {
+        return { text: this.$t('client.awg.expired'), color: 'error' }
+      }
+      const days = Math.ceil(secondsLeft / 86400)
+      return {
+        text: this.$t('client.awg.expiresIn', { days }),
+        color: days <= 3 ? 'warning' : 'secondary',
       }
     },
     async rotateAwgDevice(endpointId: number, device: any) {

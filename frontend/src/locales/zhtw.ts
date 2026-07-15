@@ -528,6 +528,12 @@ export default {
     },
 },
   client: {
+    awg: {
+      expiresAt: "過期時間（可選）",
+      expiresIn: "{days} 天後過期",
+      expired: "已過期",
+      expiryInvalid: "過期日期必須在將來",
+    },
     name: "名稱",
     desc: "描述",
     group: "組",
