@@ -63,7 +63,7 @@ S-UI-X Extended это веб-панель на базе [`sing-box-extended`](h
 - Английский changelog: [`CHANGELOG-EN.md`](CHANGELOG-EN.md)
 - Русский changelog: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - Changelog на упрощенном китайском: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
-- Заметки последнего стабильного релиза: [`docs/releases/v1.0.2-beta1.md`](docs/releases/v1.0.2-beta1.md)
+- Заметки последнего стабильного релиза: [`docs/releases/v1.0.2.md`](docs/releases/v1.0.2.md)
 - Справка по паритету с upstream: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 ## Чем отличается от `alireza0/s-ui`
@@ -216,12 +216,12 @@ S-UI-X Extended это веб-панель на базе [`sing-box-extended`](h
 
 | Канал | Версия | Заметки |
 |---|---|---|
-| Stable | `v1.0.2-beta1` | Рекомендуется для production. Добавляет управляемые устройства AmneziaWG 2.0 и исправляет запуск меню `s-ui` с сохранённым языком. Release notes: [`docs/releases/v1.0.2-beta1.md`](docs/releases/v1.0.2-beta1.md). |
+| Stable | `v1.0.2` | Рекомендуется для production. Серверы AmneziaWG 2.0 настраиваются как endpoint и назначаются клиентам как inbound'ы; устройства выдаются через панель и Telegram. Release notes: [`docs/releases/v1.0.2.md`](docs/releases/v1.0.2.md). |
 
 ### Linux/macOS, stable
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.2-beta1/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.2/install.sh)
 ```
 
 Эта команда ставит последний stable release. Укажите тег версии явно, если нужна конкретная beta или старая сборка.
@@ -229,14 +229,14 @@ bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.
 ### Локальный clone
 
 ```sh
-git clone --branch v1.0.2-beta1 --depth 1 https://github.com/deposist/s-ui-x-extended.git
+git clone --branch v1.0.2 --depth 1 https://github.com/deposist/s-ui-x-extended.git
 cd s-ui-x-extended
-sudo bash install.sh v1.0.2-beta1
+sudo bash install.sh v1.0.2
 ```
 
 ### Windows
 
-- Stable: скачайте `v1.0.2-beta1` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.2-beta1), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
+- Stable: скачайте `v1.0.2` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.2), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
 
 Существующие установки сохраняют settings, users, inbounds, outbounds, clients, TLS, services и tokens. Миграции базы запускаются автоматически при первом старте. Заметки по обновлению и откату находятся в changelog: [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), [中文](CHANGELOG-ZH.md).
 
@@ -248,7 +248,7 @@ sudo bash install.sh v1.0.2-beta1
 ### Linux/macOS
 
 1. Скачайте последнюю версию S-UI-X Extended для вашей системы и архитектуры из GitHub: [https://github.com/deposist/s-ui-x-extended/releases/latest](https://github.com/deposist/s-ui-x-extended/releases/latest)
-2. Необязательно: скачайте последнюю версию `s-ui.sh`: [https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.2-beta1/s-ui.sh](https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.2-beta1/s-ui.sh)
+2. Необязательно: скачайте последнюю версию `s-ui.sh`: [https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.2/s-ui.sh](https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.2/s-ui.sh)
 3. Необязательно: скопируйте `s-ui.sh` в `/usr/bin/` и выполните `chmod +x /usr/bin/s-ui`.
 4. Распакуйте tar.gz-архив S-UI-X Extended в выбранный каталог и перейдите в распакованную папку.
 5. Скопируйте файлы `*.service` в `/etc/systemd/system/`, затем выполните `systemctl daemon-reload`.

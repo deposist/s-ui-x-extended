@@ -130,13 +130,22 @@ func (s *ClientService) Get(id string) (*[]model.Client, error) {
 
 func (s *ClientService) getById(id string) (*[]model.Client, error) {
 	db := database.GetDB()
-	var client []model.Client
-	err := db.Model(model.Client{}).Where("id in ?", strings.Split(id, ",")).Scan(&client).Error
+	var clients []model.Client
+	err := db.Model(model.Client{}).Where("id in ?", strings.Split(id, ",")).Scan(&clients).Error
 	if err != nil {
 		return nil, err
 	}
-
-	return &client, nil
+	for index := range clients {
+		var accesses []model.ClientEndpointAccess
+		if err := db.Select("endpoint_id").Where("client_id = ?", clients[index].Id).Order("endpoint_id").Find(&accesses).Error; err != nil {
+			return nil, err
+		}
+		clients[index].AWGEndpoints = make([]uint, len(accesses))
+		for accessIndex := range accesses {
+			clients[index].AWGEndpoints[accessIndex] = accesses[accessIndex].EndpointId
+		}
+	}
+	return &clients, nil
 }
 
 func (s *ClientService) GetAll() (*[]model.Client, error) {
@@ -184,6 +193,9 @@ func (s *ClientService) Save(tx *gorm.DB, act string, data json.RawMessage, host
 		}
 		err = tx.Save(&client).Error
 		if err != nil {
+			return nil, err
+		}
+		if err := ReplaceClientAWGEndpointAccess(tx, client.Id, client.AWGEndpoints); err != nil {
 			return nil, err
 		}
 	case "addbulk":

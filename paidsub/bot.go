@@ -301,7 +301,7 @@ func (b *Bot) handleCallback(ctx context.Context, cq *tgCallbackQuery) {
 		return
 	}
 	data := cq.Data
-	if data != "awg:add" {
+	if !strings.HasPrefix(data, "awg:add") {
 		b.cancelAWGName(cq.From.ID, chatID)
 	}
 	switch {
@@ -314,7 +314,11 @@ func (b *Bot) handleCallback(ctx context.Context, cq *tgCallbackQuery) {
 	case data == "awg:list":
 		b.cmdAWGList(ctx, chatID, cq.From.ID, l)
 	case data == "awg:add":
-		b.cmdAWGCreate(ctx, chatID, cq.From.ID, cq.ID, l)
+		b.cmdAWGCreate(ctx, chatID, cq.From.ID, 0, cq.ID, l)
+	case strings.HasPrefix(data, "awg:add:"):
+		if id, ok := parseUintArg(data, "awg:add:"); ok {
+			b.cmdAWGCreate(ctx, chatID, cq.From.ID, id, cq.ID, l)
+		}
 	case strings.HasPrefix(data, "awg:v:"):
 		if id, ok := parseUintArg(data, "awg:v:"); ok {
 			b.cmdAWGView(ctx, chatID, cq.From.ID, id, l)

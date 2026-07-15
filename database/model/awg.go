@@ -1,9 +1,33 @@
 package model
 
+// ClientEndpointAccess grants one client access to one managed AWG endpoint.
+// A zero DeviceLimit inherits the endpoint default; positive values override it.
+type ClientEndpointAccess struct {
+	Id          uint   `json:"id" gorm:"primaryKey;autoIncrement"`
+	ClientId    uint   `json:"clientId" gorm:"column:client_id;uniqueIndex:idx_client_endpoint_access;not null"`
+	EndpointId  uint   `json:"endpointId" gorm:"column:endpoint_id;uniqueIndex:idx_client_endpoint_access;index;not null"`
+	DeviceLimit int    `json:"deviceLimit" gorm:"column:device_limit;not null;default:0"`
+	Source      string `json:"source" gorm:"not null;default:manual"`
+	CreatedAt   int64  `json:"createdAt" gorm:"column:created_at;not null"`
+	UpdatedAt   int64  `json:"updatedAt" gorm:"column:updated_at;not null"`
+}
+
+func (ClientEndpointAccess) TableName() string { return "client_endpoint_access" }
+
+// AWGEndpointMetadata is panel-only configuration stored in Endpoint.Ext.
+// Endpoint.MarshalJSON deliberately excludes Ext from the sing-box config.
+type AWGEndpointMetadata struct {
+	Managed            bool     `json:"managed"`
+	PublicEndpoint     string   `json:"publicEndpoint"`
+	DNS                []string `json:"dns"`
+	DefaultDeviceLimit int      `json:"defaultDeviceLimit"`
+}
+
 // AWGDevice is the durable desired state for one managed AmneziaWG peer.
 type AWGDevice struct {
 	Id                uint   `json:"id" gorm:"primaryKey;autoIncrement"`
 	ClientId          uint   `json:"clientId" gorm:"column:client_id;index;not null"`
+	EndpointId        uint   `json:"endpointId" gorm:"column:endpoint_id;index;not null;default:0"`
 	Name              string `json:"name" gorm:"not null"`
 	CreateRequestKey  string `json:"-" gorm:"column:create_request_key;not null;default:''"`
 	RotateRequestKey  string `json:"-" gorm:"column:rotate_request_key;not null;default:''"`

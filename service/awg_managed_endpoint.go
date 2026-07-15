@@ -116,6 +116,10 @@ func SyncAWGManagedEndpointPeers(db *gorm.DB, settings AWGSettings, peers []AWGP
 }
 
 func injectAWGManagedEndpointPeers(db *gorm.DB, settings AWGSettings, endpoints []json.RawMessage) ([]json.RawMessage, error) {
+	return injectAWGManagedEndpointPeersForEndpoint(db, settings, 0, endpoints)
+}
+
+func injectAWGManagedEndpointPeersForEndpoint(db *gorm.DB, settings AWGSettings, endpointID uint, endpoints []json.RawMessage) ([]json.RawMessage, error) {
 	if !settings.Enabled {
 		return endpoints, nil
 	}
@@ -131,7 +135,11 @@ func injectAWGManagedEndpointPeers(db *gorm.DB, settings AWGSettings, endpoints 
 		buildErr = ErrAWGEncryptionUnavailable
 	} else {
 		var devices []model.AWGDevice
-		if err := db.Where("desired_enabled = ?", true).Find(&devices).Error; err != nil {
+		deviceQuery := db.Where("desired_enabled = ?", true)
+		if endpointID > 0 {
+			deviceQuery = deviceQuery.Where("endpoint_id = ?", endpointID)
+		}
+		if err := deviceQuery.Find(&devices).Error; err != nil {
 			buildErr = fmt.Errorf("load managed AWG peers")
 		} else {
 			for _, device := range devices {

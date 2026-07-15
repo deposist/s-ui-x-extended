@@ -42,7 +42,7 @@ func (m *AWGManager) RotateOwnedDevice(ctx context.Context, deviceID, clientID u
 
 func (m *AWGManager) rotateOwnedDeviceInWorker(ctx context.Context, deviceID, clientID uint, requestKey string) (AWGDeviceInfo, error) {
 	var device model.AWGDevice
-	if err := m.deps.DB.Where("id = ? AND client_id = ?", deviceID, clientID).First(&device).Error; err != nil {
+	if err := m.deps.DB.Where("id = ? AND client_id = ? AND endpoint_id = ?", deviceID, clientID, m.deps.EndpointID).First(&device).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return AWGDeviceInfo{}, ErrAWGDeviceNotFound
 		}
@@ -62,7 +62,7 @@ func (m *AWGManager) rotateOwnedDeviceInWorker(ctx context.Context, deviceID, cl
 	}
 
 	err := m.deps.DB.Transaction(func(tx *gorm.DB) error {
-		if findErr := tx.Where("id = ? AND client_id = ?", deviceID, clientID).First(&device).Error; findErr != nil {
+		if findErr := tx.Where("id = ? AND client_id = ? AND endpoint_id = ?", deviceID, clientID, m.deps.EndpointID).First(&device).Error; findErr != nil {
 			if errors.Is(findErr, gorm.ErrRecordNotFound) {
 				return ErrAWGDeviceNotFound
 			}

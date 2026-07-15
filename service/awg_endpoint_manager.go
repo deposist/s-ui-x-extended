@@ -1,0 +1,188 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"sync"
+
+	"github.com/deposist/s-ui-x-extended/database"
+	"github.com/deposist/s-ui-x-extended/database/model"
+
+	"gorm.io/gorm"
+)
+
+// AWGEndpointManager routes device operations to an isolated manager per
+// endpoint. This keeps UAPI commands serialized without sharing endpoint state.
+type AWGEndpointManager struct {
+	runtime  *Runtime
+	mu       sync.Mutex
+	managers map[uint]*AWGManager
+}
+
+func NewAWGEndpointManager(runtime *Runtime) *AWGEndpointManager {
+	return &AWGEndpointManager{runtime: runtimeOrDefault(runtime), managers: make(map[uint]*AWGManager)}
+}
+
+func (s *AWGEndpointManager) manager(endpointID uint) (*AWGManager, AWGSettings, int, error) {
+	if endpointID == 0 {
+		return nil, AWGSettings{}, 0, ErrAWGEndpointAccessDenied
+	}
+	db := database.GetDB()
+	endpoint, settings, err := LoadAWGEndpointByID(db, endpointID)
+	if err != nil {
+		return nil, AWGSettings{}, 0, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	manager := s.managers[endpointID]
+	if manager == nil {
+		deps := defaultAWGManagerDeps()
+		deps.EndpointID = endpointID
+		deps.LoadSettings = func() (AWGSettings, error) {
+			_, current, err := LoadAWGEndpointByID(database.GetDB(), endpointID)
+			return current, err
+		}
+		manager = NewAWGManagerWithDeps(s.runtime, NewAWGProvisioner(s.runtime, endpoint.Tag), 64, deps)
+		if err := manager.Start(); err != nil {
+			return nil, AWGSettings{}, 0, err
+		}
+		s.managers[endpointID] = manager
+	}
+	return manager, settings, settings.DefaultDeviceLimit, nil
+}
+
+func (s *AWGEndpointManager) CreateDevice(ctx context.Context, clientID, endpointID uint, requestKey, name string) (AWGDeviceInfo, error) {
+	_, _, limit, err := EffectiveAWGEndpointAccess(database.GetDB(), clientID, endpointID)
+	if err != nil {
+		return AWGDeviceInfo{}, err
+	}
+	manager, _, _, err := s.manager(endpointID)
+	if err != nil {
+		return AWGDeviceInfo{}, err
+	}
+	return manager.CreateDevice(ctx, clientID, requestKey, name, limit)
+}
+
+func (s *AWGEndpointManager) ListDevices(clientID, endpointID uint) ([]AWGDeviceInfo, error) {
+	if _, _, _, err := EffectiveAWGEndpointAccess(database.GetDB(), clientID, endpointID); err != nil {
+		return nil, err
+	}
+	manager, _, _, err := s.manager(endpointID)
+	if err != nil {
+		return nil, err
+	}
+	return manager.ListDevices(clientID)
+}
+
+func (s *AWGEndpointManager) GetOwnedDevice(clientID, endpointID, deviceID uint) (AWGDeviceInfo, error) {
+	manager, _, _, err := s.manager(endpointID)
+	if err != nil {
+		return AWGDeviceInfo{}, err
+	}
+	return manager.GetOwnedDevice(deviceID, clientID)
+}
+
+func (s *AWGEndpointManager) RenderOwnedConfig(ctx context.Context, clientID, endpointID, deviceID uint) ([]byte, error) {
+	if _, _, _, err := EffectiveAWGEndpointAccess(database.GetDB(), clientID, endpointID); err != nil {
+		return nil, err
+	}
+	manager, _, _, err := s.manager(endpointID)
+	if err != nil {
+		return nil, err
+	}
+	return manager.RenderOwnedConfig(ctx, deviceID, clientID)
+}
+
+func (s *AWGEndpointManager) RotateOwnedDevice(ctx context.Context, clientID, endpointID, deviceID uint, requestKey string) (AWGDeviceInfo, error) {
+	if _, _, _, err := EffectiveAWGEndpointAccess(database.GetDB(), clientID, endpointID); err != nil {
+		return AWGDeviceInfo{}, err
+	}
+	manager, _, _, err := s.manager(endpointID)
+	if err != nil {
+		return AWGDeviceInfo{}, err
+	}
+	return manager.RotateOwnedDevice(ctx, deviceID, clientID, requestKey)
+}
+
+func (s *AWGEndpointManager) RevokeOwnedDevice(ctx context.Context, clientID, endpointID, deviceID uint) error {
+	manager, _, _, err := s.manager(endpointID)
+	if err != nil {
+		return err
+	}
+	return manager.RevokeOwnedDevice(ctx, deviceID, clientID)
+}
+
+func (s *AWGEndpointManager) ReconcileAll(ctx context.Context) error {
+	endpointIDs, err := ListManagedAWGEndpoints(database.GetDB())
+	if err != nil {
+		return err
+	}
+	var result error
+	for _, endpointID := range endpointIDs {
+		manager, _, _, managerErr := s.manager(endpointID)
+		if managerErr != nil {
+			result = errors.Join(result, managerErr)
+			continue
+		}
+		_, managerErr = manager.Reconcile(ctx)
+		result = errors.Join(result, managerErr)
+	}
+	return result
+}
+
+// CollectStatsAll aggregates traffic counters for every managed endpoint.
+func (s *AWGEndpointManager) CollectStatsAll(ctx context.Context) error {
+	endpointIDs, err := ListManagedAWGEndpoints(database.GetDB())
+	if err != nil {
+		return err
+	}
+	var result error
+	for _, endpointID := range endpointIDs {
+		manager, _, _, managerErr := s.manager(endpointID)
+		if managerErr != nil {
+			result = errors.Join(result, managerErr)
+			continue
+		}
+		_, managerErr = manager.CollectStats(ctx)
+		result = errors.Join(result, managerErr)
+	}
+	return result
+}
+
+// StopAll stops every per-endpoint manager. New commands after StopAll fail
+// until a manager is recreated lazily by the next device operation.
+func (s *AWGEndpointManager) StopAll(ctx context.Context) error {
+	s.mu.Lock()
+	managers := make([]*AWGManager, 0, len(s.managers))
+	for _, manager := range s.managers {
+		managers = append(managers, manager)
+	}
+	s.managers = make(map[uint]*AWGManager)
+	s.mu.Unlock()
+	var result error
+	for _, manager := range managers {
+		result = errors.Join(result, manager.Stop(ctx))
+	}
+	return result
+}
+
+func ListManagedAWGEndpoints(db *gorm.DB) ([]uint, error) {
+	if db == nil {
+		return nil, errors.New("AWG database is unavailable")
+	}
+	var endpoints []model.Endpoint
+	if err := db.Order("id").Find(&endpoints).Error; err != nil {
+		return nil, err
+	}
+	result := make([]uint, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		metadata, err := parseAWGEndpointMetadata(endpoint)
+		if err != nil {
+			return nil, err
+		}
+		if metadata.Managed {
+			result = append(result, endpoint.Id)
+		}
+	}
+	return result, nil
+}

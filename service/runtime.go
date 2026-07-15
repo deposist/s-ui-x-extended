@@ -53,15 +53,16 @@ func (s *LastUpdateStore) Get() int64 {
 type Runtime struct {
 	mu sync.RWMutex
 
-	coreProvider     CoreProvider
-	restartManager   *restartManager
-	lastUpdate       *LastUpdateStore
-	auditWriter      *auditWriter
-	telegramNotifier *telegramNotifier
-	tokenUse         *tokenUseDebouncer
-	awgClientState   AWGClientStateHook
-	awgDevices       AWGDeviceService
-	awgReconcile     func(context.Context) error
+	coreProvider       CoreProvider
+	restartManager     *restartManager
+	lastUpdate         *LastUpdateStore
+	auditWriter        *auditWriter
+	telegramNotifier   *telegramNotifier
+	tokenUse           *tokenUseDebouncer
+	awgClientState     AWGClientStateHook
+	awgDevices         AWGDeviceService
+	awgEndpointDevices AWGEndpointDeviceService
+	awgReconcile       func(context.Context) error
 
 	coreStartCooldown time.Duration
 	lastStartFailTime time.Time
@@ -102,6 +103,15 @@ func (r *Runtime) AWGClientStateHook() AWGClientStateHook {
 	return hook
 }
 
+type AWGEndpointDeviceService interface {
+	CreateDevice(context.Context, uint, uint, string, string) (AWGDeviceInfo, error)
+	ListDevices(uint, uint) ([]AWGDeviceInfo, error)
+	GetOwnedDevice(uint, uint, uint) (AWGDeviceInfo, error)
+	RenderOwnedConfig(context.Context, uint, uint, uint) ([]byte, error)
+	RotateOwnedDevice(context.Context, uint, uint, uint, string) (AWGDeviceInfo, error)
+	RevokeOwnedDevice(context.Context, uint, uint, uint) error
+}
+
 func (r *Runtime) SetAWGDeviceService(devices AWGDeviceService) {
 	if r == nil {
 		return
@@ -117,6 +127,25 @@ func (r *Runtime) AWGDeviceService() AWGDeviceService {
 	}
 	r.mu.RLock()
 	devices := r.awgDevices
+	r.mu.RUnlock()
+	return devices
+}
+
+func (r *Runtime) SetAWGEndpointDeviceService(devices AWGEndpointDeviceService) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.awgEndpointDevices = devices
+	r.mu.Unlock()
+}
+
+func (r *Runtime) AWGEndpointDeviceService() AWGEndpointDeviceService {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	devices := r.awgEndpointDevices
 	r.mu.RUnlock()
 	return devices
 }

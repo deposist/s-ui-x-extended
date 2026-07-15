@@ -17,6 +17,10 @@ var ErrAWGAddressPoolExhausted = errors.New("AWG address pool is exhausted")
 // a write transaction and insert the AWGDevice using the returned address
 // before committing that transaction.
 func AllocateAWGIPv4(tx *gorm.DB, subnet netip.Prefix, serverAddress netip.Addr, now int64) (netip.Addr, error) {
+	return AllocateAWGIPv4ForEndpoint(tx, 0, subnet, serverAddress, now)
+}
+
+func AllocateAWGIPv4ForEndpoint(tx *gorm.DB, endpointID uint, subnet netip.Prefix, serverAddress netip.Addr, now int64) (netip.Addr, error) {
 	if tx == nil {
 		return netip.Addr{}, errors.New("AWG IP allocation requires a database transaction")
 	}
@@ -31,10 +35,12 @@ func AllocateAWGIPv4(tx *gorm.DB, subnet netip.Prefix, serverAddress netip.Addr,
 	var rows []struct {
 		IPv4Address string
 	}
-	if err := tx.Model(&model.AWGDevice{}).
-		Select("ipv4_address").
-		Where("desired_enabled = ? OR provisioned = ? OR sync_state = ? OR ip_reusable_after > ?", true, true, "pending_remove", now).
-		Find(&rows).Error; err != nil {
+	query := tx.Model(&model.AWGDevice{}).Select("ipv4_address").
+		Where("desired_enabled = ? OR provisioned = ? OR sync_state = ? OR ip_reusable_after > ?", true, true, "pending_remove", now)
+	if endpointID > 0 {
+		query = query.Where("endpoint_id = ?", endpointID)
+	}
+	if err := query.Find(&rows).Error; err != nil {
 		return netip.Addr{}, err
 	}
 	used := make(map[netip.Addr]struct{}, len(rows)+2)

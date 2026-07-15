@@ -55,7 +55,11 @@ func (m *AWGManager) collectStatsInWorker(ctx context.Context) (AWGStatsResult, 
 		return result, ErrAWGStatsFailed
 	}
 	var devices []model.AWGDevice
-	if err := m.deps.DB.Where("public_key IN ?", awgSnapshotKeys(snapshot)).Find(&devices).Error; err != nil {
+	statsQuery := m.deps.DB.Where("public_key IN ?", awgSnapshotKeys(snapshot))
+	if m.deps.EndpointID > 0 {
+		statsQuery = statsQuery.Where("endpoint_id = ?", m.deps.EndpointID)
+	}
+	if err := statsQuery.Find(&devices).Error; err != nil {
 		return result, err
 	}
 	err = m.deps.DB.Transaction(func(tx *gorm.DB) error {

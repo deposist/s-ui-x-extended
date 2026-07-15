@@ -37,10 +37,39 @@
             </v-btn>
           </v-col>
         </v-row>
+        <v-card v-if="endpoint.type == epTypes.Wireguard" border density="compact" color="background" class="mb-2">
+          <v-card-subtitle style="padding-top: 8px;">
+            {{ $t('types.endpoint.awg.title') }}
+            <v-switch
+              class="d-inline-block"
+              style="vertical-align: middle; margin-left: 8px;"
+              color="primary"
+              hide-details
+              :label="$t('types.endpoint.awg.managed')"
+              v-model="awgManagedFlag">
+            </v-switch>
+          </v-card-subtitle>
+          <v-card-text v-if="awgManagedFlag">
+            <v-alert type="info" variant="tonal" density="compact" class="mb-3">
+              {{ $t('types.endpoint.awg.managedHint') }}
+            </v-alert>
+            <v-row>
+              <v-col cols="12" sm="6" md="5">
+                <v-text-field v-model="awgPublicEndpoint" :label="$t('types.endpoint.awg.publicEndpoint')" placeholder="vpn.example.com:51820" hide-details />
+              </v-col>
+              <v-col cols="12" sm="6" md="4">
+                <v-text-field v-model="awgDns" :label="$t('types.endpoint.awg.dns')" hide-details />
+              </v-col>
+              <v-col cols="12" sm="6" md="3">
+                <v-text-field v-model.number="awgDefaultDeviceLimit" type="number" min="1" max="100" :label="$t('types.endpoint.awg.defaultDeviceLimit')" hide-details />
+              </v-col>
+            </v-row>
+          </v-card-text>
+        </v-card>
         <Wireguard v-if="endpoint.type == epTypes.Wireguard"
           :data="endpoint"
           :field-hints="currentFieldHints"
-          :peers-managed="endpoint.awgManaged === true"
+          :peers-managed="endpoint.awgManaged === true || awgManagedFlag"
           @getWgPubKey="getWgPubKey"
           @newWgKey="newWgKey"
           @addPeer="addWgPeer"
@@ -270,6 +299,39 @@ export default {
     },
   },
   computed: {
+    awgManagedFlag: {
+      get(): boolean { return this.endpoint.ext?.managed === true },
+      set(v: boolean) {
+        if (!this.endpoint.ext) this.endpoint.ext = { keys: [] }
+        if (v) {
+          this.endpoint.ext.managed = true
+          if (!this.endpoint.ext.publicEndpoint) this.endpoint.ext.publicEndpoint = ''
+          if (!this.endpoint.ext.dns || this.endpoint.ext.dns.length === 0) this.endpoint.ext.dns = ['1.1.1.1', '1.0.0.1']
+          if (!this.endpoint.ext.defaultDeviceLimit) this.endpoint.ext.defaultDeviceLimit = 3
+          if (!this.endpoint.amnezia) {
+            this.endpoint.amnezia = { jc: 3, jmin: 10, jmax: 20, s1: 15, s2: 18, s3: 12, s4: 8, h1: '1000-1099', h2: '2000-2099', h3: '3000-3099', h4: '4000-4099', i1: '<b 0x01020304><r 8>' }
+          }
+          this.endpoint.peers = this.endpoint.peers ?? []
+        } else {
+          this.endpoint.ext.managed = false
+        }
+      },
+    },
+    awgPublicEndpoint: {
+      get(): string { return this.endpoint.ext?.publicEndpoint ?? '' },
+      set(v: string) { if (this.endpoint.ext) this.endpoint.ext.publicEndpoint = v.trim() },
+    },
+    awgDns: {
+      get(): string { return (this.endpoint.ext?.dns ?? []).join(',') },
+      set(v: string) {
+        if (!this.endpoint.ext) return
+        this.endpoint.ext.dns = v.split(',').map((item: string) => item.trim()).filter((item: string) => item.length > 0)
+      },
+    },
+    awgDefaultDeviceLimit: {
+      get(): number { return this.endpoint.ext?.defaultDeviceLimit ?? 3 },
+      set(v: number) { if (this.endpoint.ext) this.endpoint.ext.defaultDeviceLimit = v },
+    },
     currentFieldHints(): Record<string, string> {
       return endpointFieldHintsForType(this.endpoint.type)
     },

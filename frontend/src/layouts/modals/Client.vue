@@ -21,6 +21,7 @@
             <v-tab value="t1">{{ $t('client.basics') }}</v-tab>
             <v-tab value="t2">{{ $t('client.config') }}</v-tab>
             <v-tab value="t3">{{ $t('client.links') }}</v-tab>
+            <v-tab value="t4" v-if="awgEndpointItems.length > 0">{{ $t('client.awg.devices') }}</v-tab>
           </v-tabs>
           <v-window v-model="tab">
             <v-window-item value="t1">
@@ -144,6 +145,20 @@
                   </v-select>
                 </v-col>
               </v-row>
+              <v-row v-if="awgEndpointItems.length > 0">
+                <v-col>
+                  <v-select
+                    v-model="clientAwgEndpoints"
+                    :items="awgEndpointItems"
+                    :label="$t('client.awg.endpoints')"
+                    clearable
+                    multiple
+                    chips
+                    hide-details
+                    data-testid="client-awg-endpoints">
+                  </v-select>
+                </v-col>
+              </v-row>
             </v-window-item>
             <v-window-item value="t2">
               <v-row>
@@ -191,6 +206,58 @@
                 </v-col>
               </v-row>
             </v-window-item>
+            <v-window-item value="t4">
+              <v-alert v-if="id == 0 || (client.awgEndpoints ?? []).length == 0" type="info" variant="tonal" class="ma-2">
+                {{ $t('client.awg.saveFirst') }}
+              </v-alert>
+              <template v-else>
+                <v-card v-for="access in awgAccesses" :key="access.endpointId" border class="ma-2">
+                  <v-card-subtitle style="padding-top: 8px;">
+                    {{ access.tag }} · {{ access.publicEndpoint }} · {{ awgDevicesFor(access.endpointId).filter(d => d.desiredEnabled).length }}/{{ access.deviceLimit }}
+                  </v-card-subtitle>
+                  <v-card-text>
+                    <v-row v-for="device in awgDevicesFor(access.endpointId)" :key="device.id" align="center" density="compact">
+                      <template v-if="device.desiredEnabled">
+                        <v-col cols="12" sm="4">
+                          {{ device.name }}
+                          <v-chip size="small" :color="device.provisioned ? 'success' : 'warning'" label class="ml-2">
+                            {{ device.provisioned ? $t('client.awg.connected') : $t('client.awg.pending') }}
+                          </v-chip>
+                          <div class="text-caption">{{ device.ipv4Address }}</div>
+                        </v-col>
+                        <v-col cols="12" sm="8" class="d-flex flex-wrap ga-1">
+                          <v-btn size="small" variant="tonal" prepend-icon="mdi-qrcode" @click="showAwgQr(access.endpointId, device)">{{ $t('client.awg.qr') }}</v-btn>
+                          <v-btn size="small" variant="tonal" prepend-icon="mdi-download" @click="downloadAwgConfig(access.endpointId, device)">{{ $t('client.awg.config') }}</v-btn>
+                          <v-btn size="small" variant="tonal" prepend-icon="mdi-refresh" @click="rotateAwgDevice(access.endpointId, device)">{{ $t('client.awg.rotate') }}</v-btn>
+                          <v-btn size="small" variant="tonal" color="error" prepend-icon="mdi-delete" @click="revokeAwgDevice(access.endpointId, device)">{{ $t('client.awg.revoke') }}</v-btn>
+                        </v-col>
+                      </template>
+                    </v-row>
+                    <v-row v-if="awgDevicesFor(access.endpointId).filter(d => d.desiredEnabled).length == 0">
+                      <v-col class="text-medium-emphasis">{{ $t('client.awg.none') }}</v-col>
+                    </v-row>
+                    <v-row>
+                      <v-col cols="12" sm="6">
+                        <v-text-field v-model="awgNewDeviceNames[access.endpointId]" :label="$t('client.awg.deviceName')" hide-details density="compact" />
+                      </v-col>
+                      <v-col cols="12" sm="6">
+                        <v-btn color="primary" :loading="awgBusy" prepend-icon="mdi-plus" @click="createAwgDevice(access.endpointId)">{{ $t('client.awg.addDevice') }}</v-btn>
+                      </v-col>
+                    </v-row>
+                  </v-card-text>
+                </v-card>
+              </template>
+              <v-dialog v-model="awgQrDialog" width="420">
+                <v-card class="rounded-lg pa-4 text-center">
+                  <v-card-title>{{ awgQrDeviceName }}</v-card-title>
+                  <img v-if="awgQrUrl" :src="awgQrUrl" alt="AWG QR" style="width: 100%; max-width: 380px; margin: 0 auto;" />
+                  <v-card-actions>
+                    <v-spacer />
+                    <v-btn variant="tonal" @click="awgQrDialog = false">{{ $t('actions.close') }}</v-btn>
+                  </v-card-actions>
+                </v-card>
+              </v-dialog>
+            </v-window-item>
             <v-window-item value="t3">
               <v-row v-for="(lnk, index) in links">
                 <v-col cols="auto">{{ index + 1 }}</v-col>
@@ -237,6 +304,8 @@
 
 <script lang="ts">
 import { createClient, randomConfigs, updateConfigs, Link, shuffleConfigs } from '@/types/clients'
+import HttpUtils from '@/plugins/httputil'
+import api from '@/plugins/api'
 import DatePick from '@/components/DateTime.vue'
 import { HumanReadable } from '@/plugins/utils'
 import Data from '@/store/modules/data'
@@ -259,10 +328,21 @@ export default {
       subLinks: <Link[]>[],
       ipLimitModes: ['monitor', 'enforce'],
       vlessFlows,
+      awgAccesses: <any[]>[],
+      awgDevices: <Record<number, any[]>>{},
+      awgNewDeviceNames: <Record<number, string>>{},
+      awgBusy: false,
+      awgQrDialog: false,
+      awgQrUrl: '',
+      awgQrDeviceName: '',
     }
   },
   methods: {
     async updateData(id: number) {
+      this.awgAccesses = []
+      this.awgDevices = {}
+      this.awgNewDeviceNames = {}
+      if (this.awgQrUrl) { URL.revokeObjectURL(this.awgQrUrl); this.awgQrUrl = '' }
       if (id > 0) {
         this.loading = true
         const newData = await Data().loadClients(id)
@@ -270,6 +350,7 @@ export default {
         this.title = "edit"
         this.clientConfig = this.client.config
         this.loading = false
+        this.loadAwgState()
       }
       else {
         this.client = createClient()
@@ -324,12 +405,87 @@ export default {
       this.client.totalDown = (this.client.totalDown ?? 0) + this.client.down
       this.client.up = 0
       this.client.down = 0
-    }
+    },
+    awgDevicesFor(endpointId: number): any[] {
+      return this.awgDevices[endpointId] ?? []
+    },
+    async loadAwgState() {
+      if (this.$props.id == 0) return
+      const accessMsg = await HttpUtils.get(`api/awg/clients/${this.$props.id}/access`)
+      if (!accessMsg.success) return
+      this.awgAccesses = accessMsg.obj ?? []
+      for (const access of this.awgAccesses) {
+        const devicesMsg = await HttpUtils.get(`api/awg/clients/${this.$props.id}/devices`, { endpointId: access.endpointId })
+        if (devicesMsg.success) this.awgDevices[access.endpointId] = devicesMsg.obj ?? []
+      }
+    },
+    async createAwgDevice(endpointId: number) {
+      const name = (this.awgNewDeviceNames[endpointId] ?? '').trim()
+      if (name.length == 0) return
+      this.awgBusy = true
+      try {
+        const msg = await HttpUtils.post(`api/awg/clients/${this.$props.id}/devices`, { endpointId, name })
+        if (msg.success) {
+          this.awgNewDeviceNames[endpointId] = ''
+          await this.loadAwgState()
+        }
+      } finally {
+        this.awgBusy = false
+      }
+    },
+    async rotateAwgDevice(endpointId: number, device: any) {
+      this.awgBusy = true
+      try {
+        const msg = await HttpUtils.post(`api/awg/clients/${this.$props.id}/devices/${device.id}/rotate?endpointId=${endpointId}`, null)
+        if (msg.success) await this.loadAwgState()
+      } finally {
+        this.awgBusy = false
+      }
+    },
+    async revokeAwgDevice(endpointId: number, device: any) {
+      this.awgBusy = true
+      try {
+        const msg = await HttpUtils.post(`api/awg/clients/${this.$props.id}/devices/${device.id}/revoke?endpointId=${endpointId}`, null)
+        if (msg.success) await this.loadAwgState()
+      } finally {
+        this.awgBusy = false
+      }
+    },
+    async downloadAwgConfig(endpointId: number, device: any) {
+      const response = await api.get(`api/awg/clients/${this.$props.id}/devices/${device.id}/config`, {
+        params: { endpointId }, responseType: 'blob',
+      })
+      const url = URL.createObjectURL(response.data)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${device.name || 'awg-device'}.conf`
+      link.click()
+      URL.revokeObjectURL(url)
+    },
+    async showAwgQr(endpointId: number, device: any) {
+      const response = await api.get(`api/awg/clients/${this.$props.id}/devices/${device.id}/qr`, {
+        params: { endpointId }, responseType: 'blob',
+      })
+      if (this.awgQrUrl) URL.revokeObjectURL(this.awgQrUrl)
+      this.awgQrUrl = URL.createObjectURL(response.data)
+      this.awgQrDeviceName = device.name
+      this.awgQrDialog = true
+    },
   },
   computed: {
     clientInbounds: {
       get() { return this.client.inbounds.length>0 ? this.client.inbounds.sort() : [] },
       set(v:number[]) { this.client.inbounds = v.length == 0 ?  [] : v.sort() }
+    },
+    awgEndpointItems(): any[] {
+      const endpoints = Data().endpoints ?? []
+      return endpoints
+        .filter((e: any) => e.awgManaged === true)
+        .map((e: any) => ({ title: e.tag, value: e.id }))
+    },
+    clientAwgEndpoints: {
+      get(): number[] { return (this.client.awgEndpoints ?? []).slice().sort((a: number, b: number) => a - b) },
+      set(v: number[]) { this.client.awgEndpoints = (v ?? []).slice().sort((a: number, b: number) => a - b) }
     },
     expDate: {
       get() { return this.client.expiry},

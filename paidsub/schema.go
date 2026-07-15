@@ -54,9 +54,19 @@ func EnsureSchema(db *gorm.DB) error {
 			granted_down INTEGER NOT NULL DEFAULT 0,
 			granted_awg_devices INTEGER NOT NULL DEFAULT 0
 		)`,
+		`CREATE TABLE IF NOT EXISTS client_endpoint_access (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			client_id INTEGER NOT NULL,
+			endpoint_id INTEGER NOT NULL,
+			device_limit INTEGER NOT NULL DEFAULT 0,
+			source TEXT NOT NULL DEFAULT 'manual',
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL
+		)`,
 		`CREATE TABLE IF NOT EXISTS awg_devices (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			client_id INTEGER NOT NULL,
+			endpoint_id INTEGER NOT NULL DEFAULT 0,
 			name TEXT NOT NULL,
 			create_request_key TEXT NOT NULL DEFAULT '',
 			rotate_request_key TEXT NOT NULL DEFAULT '',
@@ -90,9 +100,12 @@ func EnsureSchema(db *gorm.DB) error {
 		// Partial unique index: many pending orders have an empty charge id, so
 		// the uniqueness only applies once a provider charge id is recorded.
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_orders_charge ON payment_orders(provider, provider_charge_id) WHERE provider_charge_id != ''`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_client_endpoint_access ON client_endpoint_access(client_id, endpoint_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_client_endpoint_access_endpoint ON client_endpoint_access(endpoint_id)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_awg_devices_public_key ON awg_devices(public_key)`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_awg_devices_active_ipv4 ON awg_devices(ipv4_address) WHERE desired_enabled = 1`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_awg_devices_endpoint_ipv4 ON awg_devices(endpoint_id, ipv4_address) WHERE desired_enabled = 1`,
 		`CREATE INDEX IF NOT EXISTS idx_awg_devices_client_enabled ON awg_devices(client_id, desired_enabled)`,
+		`CREATE INDEX IF NOT EXISTS idx_awg_devices_endpoint_enabled ON awg_devices(endpoint_id, desired_enabled)`,
 		`CREATE INDEX IF NOT EXISTS idx_awg_devices_sync_state ON awg_devices(sync_state)`,
 		`CREATE INDEX IF NOT EXISTS idx_awg_devices_previous_public_key ON awg_devices(previous_public_key)`,
 		`CREATE INDEX IF NOT EXISTS idx_awg_devices_ip_reusable_after ON awg_devices(ip_reusable_after)`,
@@ -116,6 +129,7 @@ func EnsureSchema(db *gorm.DB) error {
 		{&Tariff{}, "max_awg_devices", `ALTER TABLE tariffs ADD COLUMN max_awg_devices INTEGER NOT NULL DEFAULT 0`},
 		{&model.AWGDevice{}, "create_request_key", `ALTER TABLE awg_devices ADD COLUMN create_request_key TEXT NOT NULL DEFAULT ''`},
 		{&model.AWGDevice{}, "rotate_request_key", `ALTER TABLE awg_devices ADD COLUMN rotate_request_key TEXT NOT NULL DEFAULT ''`},
+		{&model.AWGDevice{}, "endpoint_id", `ALTER TABLE awg_devices ADD COLUMN endpoint_id INTEGER NOT NULL DEFAULT 0`},
 	} {
 		if mig.HasColumn(migration.model, migration.column) {
 			continue

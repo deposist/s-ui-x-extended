@@ -156,7 +156,7 @@ func TestAWGCallbackDataFitsTelegramLimit(t *testing.T) {
 
 func TestAWGNameStateIsScopedExpiresAndClears(t *testing.T) {
 	b := newBot()
-	if !b.beginAWGName(10, 20, "request-a", 100) || !b.beginAWGName(10, 21, "request-b", 100) {
+	if !b.beginAWGName(10, 20, "request-a", 0, 100) || !b.beginAWGName(10, 21, "request-b", 0, 100) {
 		t.Fatal("failed to begin AWG name state")
 	}
 	if _, ok := b.takeAWGNameState(11, 20, 101); ok {
@@ -172,7 +172,7 @@ func TestAWGNameStateIsScopedExpiresAndClears(t *testing.T) {
 	if _, ok := b.takeAWGNameState(10, 21, 100+awgNameStateTTL); ok {
 		t.Fatal("expired state was accepted")
 	}
-	if !b.beginAWGName(10, 20, "request-c", 200) {
+	if !b.beginAWGName(10, 20, "request-c", 0, 200) {
 		t.Fatal("failed to replace state")
 	}
 	b.clearAWGNameStates()

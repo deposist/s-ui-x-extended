@@ -28,6 +28,7 @@ export interface Client {
   subSecret?: string
 	config?: Config
 	inbounds: number[]
+  awgEndpoints?: number[]
   links?: Link[]
 	volume: number
 	expiry: number
@@ -52,6 +53,7 @@ const defaultClient: Client = {
   name: "",
   config: {},
   inbounds: [],
+  awgEndpoints: [],
   links: [],
   volume: 0,
   expiry: 0,

@@ -49,7 +49,7 @@ func (m *AWGManager) RenderOwnedConfig(ctx context.Context, deviceID, clientID u
 
 func (m *AWGManager) renderOwnedConfigInWorker(deviceID, clientID uint) ([]byte, error) {
 	var device model.AWGDevice
-	if err := m.deps.DB.Where("id = ? AND client_id = ?", deviceID, clientID).First(&device).Error; err != nil {
+	if err := m.deps.DB.Where("id = ? AND client_id = ? AND endpoint_id = ?", deviceID, clientID, m.deps.EndpointID).First(&device).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrAWGDeviceNotFound
 		}

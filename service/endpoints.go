@@ -27,10 +27,6 @@ func (s *EndpointService) runtime() *Runtime {
 
 func (o *EndpointService) GetAll() (*[]map[string]interface{}, error) {
 	db := database.GetDB()
-	managedTag := ""
-	if settings, settingsErr := (&SettingService{}).GetAWGSettings(); settingsErr == nil && settings.Enabled {
-		managedTag = settings.EndpointTag
-	}
 	endpoints := []*model.Endpoint{}
 	err := db.Model(model.Endpoint{}).Scan(&endpoints).Error
 	if err != nil {
@@ -38,12 +34,16 @@ func (o *EndpointService) GetAll() (*[]map[string]interface{}, error) {
 	}
 	var data []map[string]interface{}
 	for _, endpoint := range endpoints {
+		metadata, metadataErr := parseAWGEndpointMetadata(*endpoint)
+		if metadataErr != nil {
+			return nil, metadataErr
+		}
 		epData := map[string]interface{}{
 			"id":         endpoint.Id,
 			"type":       endpoint.Type,
 			"tag":        endpoint.Tag,
 			"ext":        endpoint.Ext,
-			"awgManaged": managedTag != "" && endpoint.Tag == managedTag,
+			"awgManaged": metadata.Managed,
 		}
 		if endpoint.Options != nil {
 			var restFields map[string]json.RawMessage
@@ -92,16 +92,26 @@ func (s *EndpointService) saveEndpointUpsert(tx *gorm.DB, act string, data json.
 	if err := endpoint.UnmarshalJSON(data); err != nil {
 		return nil, err
 	}
+	metadata, metadataErr := parseAWGEndpointMetadata(endpoint)
+	if metadataErr != nil {
+		return nil, metadataErr
+	}
+	if metadata.Managed {
+		if _, err := validateAWGEndpointMetadata(endpoint); err != nil {
+			return nil, err
+		}
+	}
 	if act == "edit" && endpoint.Id > 0 {
-		settings, settingsErr := (&SettingService{}).GetAWGSettings()
-		if settingsErr == nil && settings.Enabled {
-			var current model.Endpoint
-			if err := tx.Select("tag", "options").First(&current, endpoint.Id).Error; err != nil {
-				return nil, err
-			}
-			if current.Tag == settings.EndpointTag && !awgEndpointPeersEqual(current.Options, endpoint.Options) {
-				return nil, fmt.Errorf("managed AWG endpoint peers are controlled by the device manager")
-			}
+		var current model.Endpoint
+		if err := tx.First(&current, endpoint.Id).Error; err != nil {
+			return nil, err
+		}
+		currentMetadata, err := parseAWGEndpointMetadata(current)
+		if err != nil {
+			return nil, err
+		}
+		if currentMetadata.Managed && !awgEndpointPeersEqual(current.Options, endpoint.Options) {
+			return nil, fmt.Errorf("managed AWG endpoint peers are controlled by the device manager")
 		}
 	}
 
@@ -187,6 +197,15 @@ func (s *EndpointService) saveEndpointDelete(tx *gorm.DB, data json.RawMessage) 
 	var ownId uint
 	if err := tx.Model(model.Endpoint{}).Select("id").Where("tag = ?", tag).Scan(&ownId).Error; err != nil {
 		return nil, err
+	}
+	if ownId > 0 {
+		var accessCount int64
+		if err := tx.Model(&model.ClientEndpointAccess{}).Where("endpoint_id = ?", ownId).Count(&accessCount).Error; err != nil {
+			return nil, err
+		}
+		if accessCount > 0 {
+			return nil, fmt.Errorf("managed AWG endpoint is assigned to clients")
+		}
 	}
 	refs, err := outboundTagReferences(tx, tag, 0, ownId)
 	if err != nil {

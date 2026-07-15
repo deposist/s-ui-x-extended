@@ -22,7 +22,7 @@ func (m *AWGManager) ListDevices(clientID uint) ([]AWGDeviceInfo, error) {
 		return nil, errors.New("AWG database is unavailable")
 	}
 	var devices []model.AWGDevice
-	if err := m.deps.DB.Where("client_id = ?", clientID).Order("created_at, id").Find(&devices).Error; err != nil {
+	if err := m.deps.DB.Where("client_id = ? AND endpoint_id = ?", clientID, m.deps.EndpointID).Order("created_at, id").Find(&devices).Error; err != nil {
 		return nil, err
 	}
 	result := make([]AWGDeviceInfo, len(devices))
@@ -38,7 +38,7 @@ func (m *AWGManager) GetOwnedDevice(deviceID, clientID uint) (AWGDeviceInfo, err
 		return AWGDeviceInfo{}, errors.New("AWG database is unavailable")
 	}
 	var device model.AWGDevice
-	err := m.deps.DB.Where("id = ? AND client_id = ?", deviceID, clientID).First(&device).Error
+	err := m.deps.DB.Where("id = ? AND client_id = ? AND endpoint_id = ?", deviceID, clientID, m.deps.EndpointID).First(&device).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return AWGDeviceInfo{}, ErrAWGDeviceNotFound
 	}
@@ -70,7 +70,7 @@ func (m *AWGManager) revokeOwnedDeviceInWorker(ctx context.Context, deviceID, cl
 	var device model.AWGDevice
 	alreadyRevoked := false
 	err := m.deps.DB.Transaction(func(tx *gorm.DB) error {
-		findErr := tx.Where("id = ? AND client_id = ?", deviceID, clientID).First(&device).Error
+		findErr := tx.Where("id = ? AND client_id = ? AND endpoint_id = ?", deviceID, clientID, m.deps.EndpointID).First(&device).Error
 		if errors.Is(findErr, gorm.ErrRecordNotFound) {
 			return ErrAWGDeviceNotFound
 		}
@@ -82,7 +82,7 @@ func (m *AWGManager) revokeOwnedDeviceInWorker(ctx context.Context, deviceID, cl
 			return nil
 		}
 		return tx.Model(&model.AWGDevice{}).
-			Where("id = ? AND client_id = ?", deviceID, clientID).
+			Where("id = ? AND client_id = ? AND endpoint_id = ?", deviceID, clientID, m.deps.EndpointID).
 			Updates(map[string]any{
 				"desired_enabled": false,
 				"sync_state":      "pending_remove",

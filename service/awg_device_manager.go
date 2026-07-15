@@ -60,6 +60,7 @@ type awgKeyCipher interface {
 
 type AWGManagerDeps struct {
 	DB                *gorm.DB
+	EndpointID        uint
 	LoadSettings      func() (AWGSettings, error)
 	LoadEndpoint      func(*gorm.DB, AWGSettings) (AWGManagedEndpoint, error)
 	SyncEndpointPeers func(*gorm.DB, AWGSettings, []AWGPersistedPeer) error
@@ -133,7 +134,7 @@ func (m *AWGManager) CreateDevice(ctx context.Context, clientID uint, requestKey
 func (m *AWGManager) createDeviceInWorker(ctx context.Context, clientID uint, requestKey, name string, effectiveLimit int) (AWGDeviceInfo, error) {
 	now := m.deps.Now()
 	var replay model.AWGDevice
-	replayErr := m.deps.DB.Where("client_id = ? AND create_request_key = ?", clientID, requestKey).First(&replay).Error
+	replayErr := m.deps.DB.Where("client_id = ? AND endpoint_id = ? AND create_request_key = ?", clientID, m.deps.EndpointID, requestKey).First(&replay).Error
 	if replayErr == nil {
 		if replay.Name != name || !replay.DesiredEnabled || (replay.SyncState != "pending_add" && replay.SyncState != "in_sync") {
 			return AWGDeviceInfo{}, ErrAWGIdempotencyConflict
@@ -183,7 +184,7 @@ func (m *AWGManager) createDeviceInWorker(ctx context.Context, clientID uint, re
 			return ErrAWGDeviceLimitReached
 		}
 		var count int64
-		if countErr := tx.Model(&model.AWGDevice{}).Where("client_id = ? AND desired_enabled = ?", clientID, true).Count(&count).Error; countErr != nil {
+		if countErr := tx.Model(&model.AWGDevice{}).Where("client_id = ? AND endpoint_id = ? AND desired_enabled = ?", clientID, m.deps.EndpointID, true).Count(&count).Error; countErr != nil {
 			return countErr
 		}
 		if count >= int64(effectiveLimit) {
@@ -214,11 +215,11 @@ func (m *AWGManager) createDeviceInWorker(ctx context.Context, clientID uint, re
 		if cipherErr != nil {
 			return cipherErr
 		}
-		address, allocErr := AllocateAWGIPv4(tx, settings.Subnet, endpoint.ServerAddress, now)
+		address, allocErr := AllocateAWGIPv4ForEndpoint(tx, m.deps.EndpointID, settings.Subnet, endpoint.ServerAddress, now)
 		if allocErr != nil {
 			return allocErr
 		}
-		device = model.AWGDevice{ClientId: clientID, Name: name, CreateRequestKey: requestKey, CryptoContext: cryptoContext,
+		device = model.AWGDevice{ClientId: clientID, EndpointId: m.deps.EndpointID, Name: name, CreateRequestKey: requestKey, CryptoContext: cryptoContext,
 			PublicKey: base64.StdEncoding.EncodeToString(keys.PublicKey), PrivateKeyEnc: privateEnc, PSKEnc: pskEnc,
 			IPv4Address: address.String(), DesiredEnabled: true, SyncState: "pending_add", CreatedAt: now, UpdatedAt: now}
 		created = true

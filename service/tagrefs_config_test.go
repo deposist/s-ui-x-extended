@@ -94,4 +94,3 @@ func TestScanConfigBlobForOutboundTagEdgeCases(t *testing.T) {
 		t.Fatalf("untagged dns server locator = %+v, want dns server #0 (detour)", refs)
 	}
 }
-

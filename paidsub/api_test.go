@@ -10,9 +10,9 @@ import (
 // present; omitempty on any of them makes the client report "unknown data".
 func TestApiMsgAlwaysIncludesAllKeys(t *testing.T) {
 	for _, m := range []apiMsg{
-		{Success: true},            // respOK(c, nil)
+		{Success: true},               // respOK(c, nil)
 		{Success: true, Obj: []int{}}, // respOK(c, list)
-		{Success: false, Msg: "x"}, // respFail
+		{Success: false, Msg: "x"},    // respFail
 	} {
 		b, err := json.Marshal(m)
 		if err != nil {

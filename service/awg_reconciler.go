@@ -68,7 +68,11 @@ func (m *AWGManager) reconcileInWorker(ctx context.Context) (AWGReconcileResult,
 	}
 
 	var devices []model.AWGDevice
-	if err := m.deps.DB.Order("id").Find(&devices).Error; err != nil {
+	deviceQuery := m.deps.DB.Order("id")
+	if m.deps.EndpointID > 0 {
+		deviceQuery = deviceQuery.Where("endpoint_id = ?", m.deps.EndpointID)
+	}
+	if err := deviceQuery.Find(&devices).Error; err != nil {
 		return result, err
 	}
 	clientIDs := make([]uint, 0, len(devices))

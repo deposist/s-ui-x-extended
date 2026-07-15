@@ -9,6 +9,19 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.2] - 2026-07-15 - stable 1.0.2 release
+
+Stable v1.0.2 promotes the v1.0.2-beta1 line and reworks how managed AmneziaWG 2.0 servers are configured: a server is now a regular endpoint assigned to clients the same way inbounds are. No manual migration is required.
+
+- A WireGuard endpoint can be marked as a managed AmneziaWG 2.0 server in the endpoint form. The form takes a public address, DNS servers, and a default device limit; the AWG 2.0 profile is filled in automatically.
+- Managed servers are assigned to clients in the client form, next to inbounds. Removing the assignment revokes the client's devices on that server, and an endpoint with assignments cannot be deleted.
+- Devices belong to a client and server pair. Several managed servers can run at the same time, each with its own peers, IP allocation, reconciliation, and traffic counters.
+- The client form has a new devices tab. The admin can create a device, show its QR code, download the `.conf` file, rotate keys, and revoke the device. Every action is audited and config downloads are not cached.
+- The Telegram bot lists the servers assigned to the client and creates devices on the chosen server. Devices created under the old global configuration keep working.
+- The old global AWG settings under Paid Subscriptions keep working unchanged.
+
+Database migrations run automatically. Full release notes: [`docs/releases/v1.0.2.md`](docs/releases/v1.0.2.md).
+
 ## [1.0.2-beta1] - 2026-07-14 - stable 1.0.2-beta1 release
 
 - Added managed personal AmneziaWG 2.0 devices. Users can create, download, rotate, and revoke devices through Telegram. Keys are encrypted in the database, while preshared keys are passed to the core only in memory.
