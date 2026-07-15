@@ -1334,6 +1334,13 @@ export default {
         defaultDeviceLimit: "Лимит устройств по умолчанию",
         managedHint: "Если включено, endpoint можно назначать клиентам, а персональные устройства создаются автоматически.",
         obfuscationChangedWarning: "Параметры обфускации изменены: существующие устройства должны перескачать конфиг или пересканировать QR-код, иначе после сохранения они потеряют связь.",
+        clientAllowedIPs: "AllowedIPs клиента (CIDR через запятую)",
+        clientAllowedIPsHint: "Клиентский сплит-туннелинг: в туннель пойдут только эти сети. Пусто = весь трафик (0.0.0.0/0, ::/0). Пример «Россия напрямую»: перечислите только зарубежные/нужные через VPN префиксы.",
+        clientAllowedIPsError: "Не валидные CIDR-префиксы: {values}",
+        clientAllowedIPsCaveat: "Деление по IP приблизительное: CDN и кэши (например, кэши Google на адресах российских провайдеров) могут оказаться вне туннеля. После изменения устройства должны перескачать конфиг.",
+        clientKeepalive: "Keepalive клиента (секунды)",
+        clientKeepaliveHint: "PersistentKeepalive в конфигах устройств. 0 = по умолчанию (25).",
+        clientKeepaliveError: "Keepalive должен быть от 0 до 3600",
       },
       hint: {
         type: "Рекомендация: Endpoint type. Recommended: choose the endpoint that matches the network integration.",

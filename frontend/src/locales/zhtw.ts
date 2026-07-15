@@ -810,6 +810,13 @@ export default {
       recommendedPreset: "套用端點推薦值",
       awg: {
         obfuscationChangedWarning: "混淆參數已變更：現有裝置必須重新下載設定或重新掃描 QR 碼，否則儲存後將失去連線。",
+        clientAllowedIPs: "用戶端 AllowedIPs（逗號分隔的 CIDR）",
+        clientAllowedIPsHint: "用戶端分流：僅這些網段走隧道。留空 = 全部流量（0.0.0.0/0, ::/0）。",
+        clientAllowedIPsError: "無效的 CIDR 前綴：{values}",
+        clientAllowedIPsCaveat: "按 IP 分流並不精確：CDN 和快取（如託管在本地業者網段的 Google 快取）可能落在隧道之外。變更後裝置必須重新下載設定。",
+        clientKeepalive: "用戶端 keepalive（秒）",
+        clientKeepaliveHint: "裝置設定中的 PersistentKeepalive。0 = 預設值（25）。",
+        clientKeepaliveError: "Keepalive 必須在 0 到 3600 之間",
       },
       hint: {
         type: "建議：Endpoint type. Recommended: choose the endpoint that matches the network integration.",

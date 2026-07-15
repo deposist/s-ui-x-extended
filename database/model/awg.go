@@ -21,6 +21,14 @@ type AWGEndpointMetadata struct {
 	PublicEndpoint     string   `json:"publicEndpoint"`
 	DNS                []string `json:"dns"`
 	DefaultDeviceLimit int      `json:"defaultDeviceLimit"`
+	// ClientAllowedIPs overrides the AllowedIPs line in rendered device
+	// configs (client-side split tunneling). Empty keeps the historical
+	// default of "0.0.0.0/0, ::/0". Values are validated as CIDR prefixes
+	// before they ever reach the INI config text.
+	ClientAllowedIPs []string `json:"clientAllowedIPs,omitempty"`
+	// ClientKeepalive overrides PersistentKeepalive in rendered device
+	// configs. Zero keeps the historical default of 25 seconds.
+	ClientKeepalive int `json:"clientKeepalive,omitempty"`
 }
 
 // AWGDevice is the durable desired state for one managed AmneziaWG peer.

@@ -1334,6 +1334,13 @@ export default {
         defaultDeviceLimit: "Default device limit",
         managedHint: "When enabled, this endpoint can be assigned to clients and personal devices are provisioned automatically.",
         obfuscationChangedWarning: "Obfuscation parameters changed: existing devices must re-download their config or rescan the QR code, otherwise they will lose connectivity after saving.",
+        clientAllowedIPs: "Client AllowedIPs (comma separated CIDR)",
+        clientAllowedIPsHint: "Client-side split tunneling: only these networks go through the tunnel. Empty = everything (0.0.0.0/0, ::/0). Example for 'local traffic direct': list only foreign/VPN-needed prefixes.",
+        clientAllowedIPsError: "Not valid CIDR prefixes: {values}",
+        clientAllowedIPsCaveat: "IP-based splitting is approximate: CDNs and caches (e.g. Google caches hosted on local ISP ranges) may end up outside the tunnel. Devices must re-download their config after changes.",
+        clientKeepalive: "Client keepalive (seconds)",
+        clientKeepaliveHint: "PersistentKeepalive in device configs. 0 = default (25).",
+        clientKeepaliveError: "Keepalive must be between 0 and 3600",
       },
       hint: {
         type: "Endpoint type. Recommended: choose the endpoint that matches the network integration.",

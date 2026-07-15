@@ -21,6 +21,13 @@ type AWGSettings struct {
 	ReconcileIntervalSec int
 	StatsIntervalSec     int
 	MTU                  uint32
+	// ClientAllowedIPs / ClientKeepalive override the AllowedIPs and
+	// PersistentKeepalive lines in rendered device configs. Zero values keep
+	// the historical defaults (0.0.0.0/0, ::/0 and 25). Populated only from
+	// validated Ext metadata (validateAWGEndpointMetadata); the legacy
+	// settings-based path leaves them empty.
+	ClientAllowedIPs []string
+	ClientKeepalive  int
 }
 
 func (s *SettingService) GetAWGSettings() (AWGSettings, error) {

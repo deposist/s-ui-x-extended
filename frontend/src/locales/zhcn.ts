@@ -810,6 +810,13 @@ export default {
       recommendedPreset: "应用端点推荐值",
       awg: {
         obfuscationChangedWarning: "混淆参数已更改：现有设备必须重新下载配置或重新扫描二维码，否则保存后将失去连接。",
+        clientAllowedIPs: "客户端 AllowedIPs（逗号分隔的 CIDR）",
+        clientAllowedIPsHint: "客户端分流：仅这些网段走隧道。留空 = 全部流量（0.0.0.0/0, ::/0）。",
+        clientAllowedIPsError: "无效的 CIDR 前缀：{values}",
+        clientAllowedIPsCaveat: "按 IP 分流并不精确：CDN 和缓存（如托管在本地运营商网段的 Google 缓存）可能落在隧道之外。更改后设备必须重新下载配置。",
+        clientKeepalive: "客户端 keepalive（秒）",
+        clientKeepaliveHint: "设备配置中的 PersistentKeepalive。0 = 默认值（25）。",
+        clientKeepaliveError: "Keepalive 必须在 0 到 3600 之间",
       },
       hint: {
         type: "建议：Endpoint type. Recommended: choose the endpoint that matches the network integration.",

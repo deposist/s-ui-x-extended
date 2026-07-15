@@ -67,6 +67,29 @@
                 <v-text-field v-model.number="awgDefaultDeviceLimit" type="number" min="1" max="100" :label="$t('types.endpoint.awg.defaultDeviceLimit')" hide-details />
               </v-col>
             </v-row>
+            <v-row>
+              <v-col cols="12" sm="8">
+                <v-text-field
+                  v-model="awgClientAllowedIPs"
+                  :label="$t('types.endpoint.awg.clientAllowedIPs')"
+                  placeholder="0.0.0.0/0, ::/0"
+                  :error-messages="awgClientAllowedIPsErrors"
+                  persistent-hint
+                  :hint="$t('types.endpoint.awg.clientAllowedIPsHint')" />
+              </v-col>
+              <v-col cols="12" sm="4">
+                <v-text-field
+                  v-model.number="awgClientKeepalive"
+                  type="number" min="0" max="3600"
+                  :label="$t('types.endpoint.awg.clientKeepalive')"
+                  :error-messages="awgClientKeepaliveErrors"
+                  persistent-hint
+                  :hint="$t('types.endpoint.awg.clientKeepaliveHint')" />
+              </v-col>
+            </v-row>
+            <v-alert v-if="awgClientAllowedIPs.length > 0" type="info" variant="tonal" density="compact" class="mt-1">
+              {{ $t('types.endpoint.awg.clientAllowedIPsCaveat') }}
+            </v-alert>
           </v-card-text>
         </v-card>
         <Wireguard v-if="endpoint.type == epTypes.Wireguard"
@@ -354,6 +377,43 @@ export default {
     awgDefaultDeviceLimit: {
       get(): number { return this.endpoint.ext?.defaultDeviceLimit ?? 3 },
       set(v: number) { if (this.endpoint.ext) this.endpoint.ext.defaultDeviceLimit = v },
+    },
+    awgClientAllowedIPs: {
+      get(): string { return (this.endpoint.ext?.clientAllowedIPs ?? []).join(', ') },
+      set(v: string) {
+        if (!this.endpoint.ext) return
+        const items = v.split(',').map((item: string) => item.trim()).filter((item: string) => item.length > 0)
+        if (items.length === 0) {
+          delete this.endpoint.ext.clientAllowedIPs
+        } else {
+          this.endpoint.ext.clientAllowedIPs = items
+        }
+      },
+    },
+    awgClientAllowedIPsErrors(): string[] {
+      const items: string[] = this.endpoint.ext?.clientAllowedIPs ?? []
+      // CIDR shape check mirroring the server's netip.ParsePrefix gate; the
+      // server remains authoritative.
+      const cidrPattern = /^(\d{1,3}(\.\d{1,3}){3}|[0-9a-fA-F:]+)\/\d{1,3}$/
+      const invalid = items.filter((item: string) => !cidrPattern.test(item))
+      if (invalid.length === 0) return []
+      return [this.$t('types.endpoint.awg.clientAllowedIPsError', { values: invalid.join(', ') })]
+    },
+    awgClientKeepalive: {
+      get(): number { return this.endpoint.ext?.clientKeepalive ?? 0 },
+      set(v: number) {
+        if (!this.endpoint.ext) return
+        if (!v || v <= 0) {
+          delete this.endpoint.ext.clientKeepalive
+        } else {
+          this.endpoint.ext.clientKeepalive = v
+        }
+      },
+    },
+    awgClientKeepaliveErrors(): string[] {
+      const v = this.endpoint.ext?.clientKeepalive
+      if (v === undefined || (Number.isInteger(v) && v >= 0 && v <= 3600)) return []
+      return [this.$t('types.endpoint.awg.clientKeepaliveError')]
     },
     currentFieldHints(): Record<string, string> {
       return endpointFieldHintsForType(this.endpoint.type)
