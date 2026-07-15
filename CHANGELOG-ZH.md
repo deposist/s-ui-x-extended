@@ -8,6 +8,21 @@
 
 - 暂无未发布变更。
 
+## [1.0.3] - 2026-07-15 - 错误修复
+
+修复版本：没有新功能，也没有配置变更。建议所有 v1.0.2 用户升级。
+
+- 修复了从客户端表单创建设备时报 `awg: invalid request` 的问题。API 只接受 JSON，而面板发送 form-encoded 请求；现在两种格式都能解码。
+- 修复了从 v1.0.2-beta1 升级后面板每次启动都崩溃并报 `no such column: endpoint_id` 的问题。启动时不再重建 `awg_devices` 表，索引在列迁移之后创建。受影响的安装升级后会自行恢复。
+- 修复了 self-update 回滚在 Linux 上从未生效的问题（`text file busy`）。备份现在通过重命名就位，而不是写入正在运行的二进制文件。
+- 修复了 sudoku 入站不出现在客户端分配列表中的问题（#4）。面板只在入站有 per-user 凭据时才允许分配，而 sudoku 没有（只有一个共享 key）。现在 sudoku 入站可以分配给客户端，并通过 JSON 订阅下发。
+- 付费订阅的自动注册入站选择器不再提供无法向客户端交付内容的入站（direct、tun 等）。
+- 将客户端分配到非托管 AWG 服务器的 endpoint 现在会被拒绝，而不是默默接受。
+- `client_endpoint_access` 表已包含在数据库备份中。
+- 通过旧的全局 AWG 设置托管的 endpoint 重新标记为托管，其 peers 受保护不可手动编辑。
+
+完整 release notes：[`docs/releases/v1.0.3.md`](docs/releases/v1.0.3.md)。
+
 ## [1.0.2] - 2026-07-15 - 稳定版 1.0.2
 
 稳定版 v1.0.2 将 v1.0.2-beta1 升级为 stable，并改变了托管 AmneziaWG 2.0 服务器的配置方式：服务器现在是普通的 endpoint，像 inbound 一样分配给客户端。无需手动迁移。

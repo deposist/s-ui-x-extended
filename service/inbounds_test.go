@@ -74,6 +74,148 @@ func TestInboundGetAllLoadsUsersForManyInboundsInBatch(t *testing.T) {
 	}
 }
 
+// TestInboundGetAllEmitsUsersForSudoku proves a keyless sudoku inbound is
+// client-assignable: GetAll must emit a `users` key with the names of assigned
+// clients in client-id order (issue #4 — frontend filters the assignment
+// selector on the presence of `users`).
+func TestInboundGetAllEmitsUsersForSudoku(t *testing.T) {
+	initSettingTestDB(t)
+
+	inbound := model.Inbound{
+		Type:    "sudoku",
+		Tag:     "sudoku-1",
+		Options: json.RawMessage(`{"listen":"0.0.0.0","listen_port":8443,"key":"SHARED-KEY"}`),
+	}
+	if err := database.GetDB().Create(&inbound).Error; err != nil {
+		t.Fatal(err)
+	}
+	inboundIDs := json.RawMessage(fmt.Sprintf("[%d]", inbound.Id))
+	clients := []model.Client{
+		{Enable: true, Name: "alice", Inbounds: inboundIDs},
+		{Enable: true, Name: "bob", Inbounds: inboundIDs},
+	}
+	if err := database.GetDB().Create(&clients).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := (&InboundService{}).GetAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	found := false
+	for _, item := range *got {
+		if item["id"] != inbound.Id {
+			continue
+		}
+		found = true
+		users, ok := item["users"].([]string)
+		if !ok {
+			t.Fatalf("sudoku inbound must expose a users list, got %T (%v)", item["users"], item["users"])
+		}
+		if len(users) != 2 || users[0] != "alice" || users[1] != "bob" {
+			t.Fatalf("sudoku users must list assigned clients in client order, got %v", users)
+		}
+	}
+	if !found {
+		t.Fatal("sudoku inbound missing from GetAll output")
+	}
+}
+
+// TestInboundGetAllOmitsUsersForNonAssignableTypes is the regression guard for
+// the sudoku fix: managed shadowsocks, shadowtls v<3 and transparent/local
+// types (direct/tun/bond) must still have NO `users` key.
+func TestInboundGetAllOmitsUsersForNonAssignableTypes(t *testing.T) {
+	initSettingTestDB(t)
+
+	inbounds := []model.Inbound{
+		{Type: "shadowsocks", Tag: "ss-managed", Options: json.RawMessage(`{"listen":"0.0.0.0","listen_port":8388,"managed":true,"method":"2022-blake3-aes-128-gcm"}`)},
+		{Type: "shadowtls", Tag: "stls-v2", Options: json.RawMessage(`{"listen":"0.0.0.0","listen_port":8444,"version":2}`)},
+		{Type: "direct", Tag: "direct-1", Options: json.RawMessage(`{"listen":"0.0.0.0","listen_port":8445}`)},
+		{Type: "tun", Tag: "tun-1", Options: json.RawMessage(`{}`)},
+		{Type: "bond", Tag: "bond-1", Options: json.RawMessage(`{}`)},
+	}
+	if err := database.GetDB().Create(&inbounds).Error; err != nil {
+		t.Fatal(err)
+	}
+	ids := make([]uint, 0, len(inbounds))
+	for _, in := range inbounds {
+		ids = append(ids, in.Id)
+	}
+	idsJSON, err := json.Marshal(ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.GetDB().Create(&model.Client{
+		Enable:   true,
+		Name:     "alice",
+		Inbounds: json.RawMessage(idsJSON),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := (&InboundService{}).GetAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	seen := 0
+	for _, item := range *got {
+		for _, in := range inbounds {
+			if item["id"] != in.Id {
+				continue
+			}
+			seen++
+			if _, has := item["users"]; has {
+				t.Errorf("%s inbound %q must NOT expose users, got %v", in.Type, in.Tag, item["users"])
+			}
+		}
+	}
+	if seen != len(inbounds) {
+		t.Fatalf("expected %d tested inbounds, saw %d", len(inbounds), seen)
+	}
+}
+
+// TestAddUsersLeavesSudokuCoreConfigUntouched proves the core-config generation
+// path is unaffected by the assignability fix: the sing-box sudoku inbound has
+// no `users` option, so addUsers must return the JSON unchanged even when
+// clients are assigned to the inbound.
+func TestAddUsersLeavesSudokuCoreConfigUntouched(t *testing.T) {
+	initSettingTestDB(t)
+
+	inbound := model.Inbound{
+		Type:    "sudoku",
+		Tag:     "sudoku-core",
+		Options: json.RawMessage(`{"listen":"0.0.0.0","listen_port":8443,"key":"SHARED-KEY"}`),
+	}
+	if err := database.GetDB().Create(&inbound).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.GetDB().Create(&model.Client{
+		Enable:   true,
+		Name:     "alice",
+		Inbounds: json.RawMessage(fmt.Sprintf("[%d]", inbound.Id)),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	inboundJSON := []byte(`{"type":"sudoku","tag":"sudoku-core","listen":"0.0.0.0","listen_port":8443,"key":"SHARED-KEY"}`)
+	out, err := (&InboundService{}).addUsers(database.GetDB(), inboundJSON, inbound.Id, "sudoku")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != string(inboundJSON) {
+		t.Fatalf("addUsers must not modify a sudoku core config.\n got: %s\nwant: %s", out, inboundJSON)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	if _, has := got["users"]; has {
+		t.Fatalf("sudoku core config must never contain users: %s", out)
+	}
+}
+
 func TestAddUsersDropsTrojanTopLevelPassword(t *testing.T) {
 	initSettingTestDB(t)
 

@@ -153,6 +153,17 @@ func TestOutJSONBuildersMatchesLegacy(t *testing.T) {
 	}
 }
 
+// TestAssignableKeylessTypesIsExactlySudoku locks the derived "client-assignable
+// but keyless" set to {sudoku}. If a future manifest change adds another keyless
+// JSON-deliverable type, update this golden deliberately (it feeds the `users`
+// emission in service/inbounds.go GetAll and the frontend inboundAssignable list).
+func TestAssignableKeylessTypesIsExactlySudoku(t *testing.T) {
+	want := map[string]struct{}{"sudoku": {}}
+	if got := AssignableKeylessTypes(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("AssignableKeylessTypes drifted.\n got: %v\nwant: %v", got, want)
+	}
+}
+
 func TestManifestParsesAndValidates(t *testing.T) {
 	// init() already ran validate(); re-run explicitly so a regression surfaces here.
 	if err := validate(); err != nil {

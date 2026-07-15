@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/deposist/s-ui-x-extended/core/capabilities"
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/migrateutil"
 	"github.com/deposist/s-ui-x-extended/database/model"
@@ -96,7 +97,8 @@ func (s *InboundService) GetAll() (*[]map[string]interface{}, error) {
 				_ = json.Unmarshal(restFields["managed"], &ss_managed)
 			}
 		}
-		includeUsers := s.hasUser(inbound.Type) &&
+		_, keylessAssignable := assignableKeyless[inbound.Type]
+		includeUsers := (s.hasUser(inbound.Type) || keylessAssignable) &&
 			!(inbound.Type == "shadowtls" && shadowtls_version < 3) &&
 			!(inbound.Type == "shadowsocks" && ss_managed)
 		if includeUsers {
@@ -330,6 +332,12 @@ func (s *InboundService) GetAllConfig(db *gorm.DB) ([]json.RawMessage, error) {
 	}
 	return inboundsJson, nil
 }
+
+// assignableKeyless holds inbound types without per-user credential objects
+// that are still client-assignable (JSON subscription delivery), e.g. sudoku.
+// Used ONLY to emit the `users` list in GetAll(); the core-config generation
+// path (addUsers) must keep skipping these types.
+var assignableKeyless = capabilities.AssignableKeylessTypes()
 
 func (s *InboundService) hasUser(inboundType string) bool {
 	_, ok := userJSONField[inboundType]

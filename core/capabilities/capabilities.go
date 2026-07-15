@@ -214,6 +214,21 @@ func AllowedUserJSONFields() map[string]struct{} {
 	return m
 }
 
+// AssignableKeylessTypes returns inbound types that carry no per-user
+// credential objects but ARE client-assignable because their delivery is
+// the JSON subscription (clientDelivery == "json" && !hasUsers). Today this
+// is exactly {sudoku}: keyless, yet a client must be assignable to the
+// inbound to receive its outbound in the JSON subscription.
+func AssignableKeylessTypes() map[string]struct{} {
+	m := map[string]struct{}{}
+	for _, in := range loaded.Inbounds {
+		if !in.HasUsers && !in.Alias && in.ClientDelivery == "json" {
+			m[in.Type] = struct{}{}
+		}
+	}
+	return m
+}
+
 // InboundTypesWithLink derives the ordered list of inbound types that produce an
 // external link (URI or Telegram), formerly util.InboundTypeWithLink. Order is
 // manifest order; all consumers use it as a set (SQL IN, test iteration).

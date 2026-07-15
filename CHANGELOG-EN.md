@@ -9,6 +9,21 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.3] - 2026-07-15 - bugfix release
+
+Bugfix release: no new features, no configuration changes. Everyone on v1.0.2 should upgrade.
+
+- Fixed device creation from the client form failing with `awg: invalid request`. The API only accepted JSON bodies while the panel sends form-encoded requests; the handler now decodes both.
+- Fixed the upgrade from v1.0.2-beta1 crashing the panel on every start with `no such column: endpoint_id`. Startup no longer rebuilds the `awg_devices` table, and indexes are created after the column migrations. Affected installations recover on their own after this upgrade.
+- Fixed the self-update rollback, which never worked on Linux (`text file busy`). The backup is now renamed into place instead of written over the running binary.
+- Fixed sudoku inbounds missing from the client assignment selector (#4). The panel offered an inbound for assignment only when it had per-user credentials, and sudoku has none (a single shared key). A sudoku inbound can now be assigned to a client and reaches it through the JSON subscription.
+- The auto-register inbound selector in paid subscriptions no longer offers inbounds that cannot deliver anything to a client (direct, tun and similar).
+- Assignments to endpoints that are not managed AWG servers are rejected instead of silently accepted.
+- The `client_endpoint_access` table is included in database backups.
+- An endpoint managed through the legacy global AWG settings is marked as managed again and its peers are protected from manual edits.
+
+Full release notes: [`docs/releases/v1.0.3.md`](docs/releases/v1.0.3.md).
+
 ## [1.0.2] - 2026-07-15 - stable 1.0.2 release
 
 Stable v1.0.2 promotes the v1.0.2-beta1 line and reworks how managed AmneziaWG 2.0 servers are configured: a server is now a regular endpoint assigned to clients the same way inbounds are. No manual migration is required.

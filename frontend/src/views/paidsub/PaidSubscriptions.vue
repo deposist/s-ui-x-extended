@@ -539,6 +539,7 @@ import EmptyState from '@/components/nexus/primitives/EmptyState.vue'
 import PageHeader from '@/components/nexus/primitives/PageHeader.vue'
 import StatusBadge from '@/components/nexus/primitives/StatusBadge.vue'
 import { useUiMode } from '@/uiMode/useUiMode'
+import { inboundAssignable } from '@/types/capabilities'
 
 const { mode } = useUiMode()
 const nexus = computed(() => mode.value === 'nexus')
@@ -739,7 +740,11 @@ const loadInbounds = async () => {
   // api/inbounds returns { obj: { inbounds: [...] } } (LoadPartialData envelope).
   const list = msg?.obj?.inbounds
   if (msg.success && Array.isArray(list)) {
-    inboundOptions.value = list.map((i: any) => ({ title: `${i.tag} (${i.type})`, value: i.id }))
+    // Only client-assignable inbounds make sense as auto-register targets
+    // (direct/tun/bond/tproxy etc. cannot deliver anything to a client).
+    inboundOptions.value = list
+      .filter((i: any) => inboundAssignable.includes(i.type))
+      .map((i: any) => ({ title: `${i.tag} (${i.type})`, value: i.id }))
   }
 }
 

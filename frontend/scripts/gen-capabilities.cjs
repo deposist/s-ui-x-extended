@@ -42,6 +42,9 @@ function derive(manifest) {
   const pick = (pred) => inbounds.filter(pred).map((i) => i.type)
   return {
     inboundWithUsers: pick((i) => i.hasUsers && !i.alias),
+    // Client-assignable inbounds: per-user credentials OR keyless JSON delivery
+    // (sudoku). Differs from inboundWithUsers only by including sudoku.
+    inboundAssignable: pick((i) => !i.alias && (i.hasUsers || i.clientDelivery === 'json')),
     HasInData: pick((i) => i.hasInData),
     HasTls: pick((i) => i.hasTlsTemplate),
     MuxAvailable: pick((i) => i.muxAvailable),
@@ -71,6 +74,7 @@ function render(lists) {
     `  notes?: string\n` +
     `}\n\n` +
     `${arrayLiteral('inboundWithUsers', lists.inboundWithUsers)}\n` +
+    `${arrayLiteral('inboundAssignable', lists.inboundAssignable)}\n` +
     `${arrayLiteral('HasInData', lists.HasInData)}\n` +
     `${arrayLiteral('HasTls', lists.HasTls)}\n` +
     `${arrayLiteral('MuxAvailable', lists.MuxAvailable)}\n` +

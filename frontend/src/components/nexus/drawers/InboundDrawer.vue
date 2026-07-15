@@ -121,7 +121,7 @@
 
 <script lang="ts">
 import { InTypes, createInbound, Addr, ShadowTLS } from '@/types/inbounds'
-import { inboundWithUsers, HasInData, HasTls, MuxAvailable, OnlyTLS } from '@/types/capabilities'
+import { inboundAssignable, HasInData, HasTls, MuxAvailable, OnlyTLS } from '@/types/capabilities'
 import RandomUtil from '@/plugins/randomUtil'
 import Dial from '@/components/Dial.vue'
 import DomainResolver from '@/components/DomainResolver.vue'
@@ -180,7 +180,7 @@ export default {
       inTypes: InTypes,
       // Capability lists are generated from core/capabilities/protocols.json by
       // scripts/gen-capabilities.cjs (shared source of truth with the Go backend).
-      inboundWithUsers,
+      inboundAssignable,
       initUsers: {
         model: 'none',
         values: <any>[],
@@ -326,7 +326,7 @@ export default {
     },
     hasUser() {
       if (this.$props.id > 0) return false
-      if (!this.inboundWithUsers.includes(this.inbound.type)) return false
+      if (!this.inboundAssignable.includes(this.inbound.type)) return false
       if (this.inbound.type == InTypes.ShadowTLS && (<ShadowTLS>this.inbound).version < 3 ) return false
       if ((<any>this.inbound).managed) return false
       return true
