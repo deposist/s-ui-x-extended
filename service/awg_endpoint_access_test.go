@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/deposist/s-ui-x-extended/database"
@@ -189,5 +190,41 @@ func TestListManagedAWGEndpointsFiltersByMetadata(t *testing.T) {
 	}
 	if len(ids) != 1 || ids[0] != managed.Id {
 		t.Fatalf("ids = %v", ids)
+	}
+}
+
+// A managed endpoint saved with a /32 host address (the generated WireGuard
+// default) passes metadata validation but breaks every later reconcile with
+// "address does not match awgSubnet" and leaves IPAM no room for devices.
+// validateManagedAWGEndpointOptions must reject it at save time.
+func TestValidateManagedAWGEndpointOptions(t *testing.T) {
+	cases := []struct {
+		name    string
+		options string
+		errPart string
+	}{
+		{"valid /24", `{"address":["10.0.0.1/24"],"listen_port":51820}`, ""},
+		{"valid /29", `{"address":["10.78.0.1/29"],"listen_port":51821}`, ""},
+		{"host /32", `{"address":["10.0.0.20/32"],"listen_port":43142}`, "/30 or larger"},
+		{"/31 too small", `{"address":["10.0.0.1/31"],"listen_port":51820}`, "/30 or larger"},
+		{"network address", `{"address":["10.0.0.0/24"],"listen_port":51820}`, "network or broadcast"},
+		{"broadcast address", `{"address":["10.0.0.255/24"],"listen_port":51820}`, "network or broadcast"},
+		{"missing address", `{"listen_port":51820}`, "IPv4 subnet"},
+		{"ipv6 first", `{"address":["fe80::14/64"],"listen_port":51820}`, "IPv4 subnet"},
+		{"missing listen_port", `{"address":["10.0.0.1/24"]}`, "listen_port"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateManagedAWGEndpointOptions([]byte(tc.options))
+			if tc.errPart == "" {
+				if err != nil {
+					t.Fatalf("expected valid, got %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.errPart) {
+				t.Fatalf("error %v does not contain %q", err, tc.errPart)
+			}
+		})
 	}
 }

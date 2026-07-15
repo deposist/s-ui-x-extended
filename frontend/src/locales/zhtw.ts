@@ -823,6 +823,9 @@ export default {
         clientKeepalive: "用戶端 keepalive（秒）",
         clientKeepaliveHint: "裝置設定中的 PersistentKeepalive。0 = 預設值（25）。",
         clientKeepaliveError: "Keepalive 必須在 0 到 3600 之間",
+        publicEndpointError: "公網地址必須為 host:port 格式（例如 vpn.example.com:51820）",
+        dnsError: "DNS 必須是一個或多個有效的 IP 地址，逗號分隔",
+        addressError: "Address 必須包含可容納裝置的 IPv4 子網，/30 或更大（例如 10.0.0.1/24）",
       },
       hint: {
         type: "建議：Endpoint type. Recommended: choose the endpoint that matches the network integration.",

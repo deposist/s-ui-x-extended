@@ -58,10 +58,10 @@
             </v-alert>
             <v-row>
               <v-col cols="12" sm="6" md="5">
-                <v-text-field v-model="awgPublicEndpoint" :label="$t('types.endpoint.awg.publicEndpoint')" placeholder="vpn.example.com:51820" hide-details />
+                <v-text-field v-model="awgPublicEndpoint" :label="$t('types.endpoint.awg.publicEndpoint')" placeholder="vpn.example.com:51820" :error-messages="awgPublicEndpointErrors" hide-details="auto" />
               </v-col>
               <v-col cols="12" sm="6" md="4">
-                <v-text-field v-model="awgDns" :label="$t('types.endpoint.awg.dns')" hide-details />
+                <v-text-field v-model="awgDns" :label="$t('types.endpoint.awg.dns')" :error-messages="awgDnsErrors" hide-details="auto" />
               </v-col>
               <v-col cols="12" sm="6" md="3">
                 <v-text-field v-model.number="awgDefaultDeviceLimit" type="number" min="1" max="100" :label="$t('types.endpoint.awg.defaultDeviceLimit')" hide-details />
@@ -89,6 +89,9 @@
             </v-row>
             <v-alert v-if="awgClientAllowedIPs.length > 0" type="info" variant="tonal" density="compact" class="mt-1">
               {{ $t('types.endpoint.awg.clientAllowedIPsCaveat') }}
+            </v-alert>
+            <v-alert v-if="awgAddressErrors.length > 0" type="error" variant="tonal" density="compact" class="mt-2">
+              {{ awgAddressErrors[0] }}
             </v-alert>
           </v-card-text>
         </v-card>
@@ -249,6 +252,21 @@ export default {
       const isDuplicatedTag = Data().checkTag("endpoint",this.endpoint.id, this.endpoint.tag)
       if (isDuplicatedTag) return
 
+      // Managed AWG: surface validation errors before the server rejects the save
+      if (this.awgManagedFlag) {
+        const awgErrors = [
+          ...this.awgPublicEndpointErrors,
+          ...this.awgDnsErrors,
+          ...this.awgAddressErrors,
+          ...this.awgClientAllowedIPsErrors,
+          ...this.awgClientKeepaliveErrors,
+        ]
+        if (awgErrors.length > 0) {
+          push.error({ message: awgErrors[0] })
+          return
+        }
+      }
+
       // save data
       this.loading = true
       try {
@@ -350,6 +368,15 @@ export default {
           if (!this.endpoint.ext.publicEndpoint) this.endpoint.ext.publicEndpoint = ''
           if (!this.endpoint.ext.dns || this.endpoint.ext.dns.length === 0) this.endpoint.ext.dns = ['1.1.1.1', '1.0.0.1']
           if (!this.endpoint.ext.defaultDeviceLimit) this.endpoint.ext.defaultDeviceLimit = 3
+          // The default WireGuard address is a /32 host route; the device
+          // manager needs a real subnet to allocate device IPs from. Widen
+          // the generated default to /24 (only for the untouched default).
+          if (Array.isArray(this.endpoint.address)) {
+            this.endpoint.address = this.endpoint.address.map((a: string) => {
+              const m = a.trim().match(/^(\d{1,3}(?:\.\d{1,3}){3})\/32$/)
+              return m ? m[1] + '/24' : a
+            })
+          }
           if (!this.endpoint.amnezia) {
             // Junk/padding defaults stay static; H1-H4 come from the server
             // crypto/rand generator so every managed endpoint gets unique,
@@ -366,6 +393,34 @@ export default {
     awgPublicEndpoint: {
       get(): string { return this.endpoint.ext?.publicEndpoint ?? '' },
       set(v: string) { if (this.endpoint.ext) this.endpoint.ext.publicEndpoint = v.trim() },
+    },
+    awgPublicEndpointErrors(): string[] {
+      if (!this.awgManagedFlag) return []
+      const v: string = this.endpoint.ext?.publicEndpoint ?? ''
+      // host:port shape mirroring the server's net.SplitHostPort gate;
+      // the server remains authoritative.
+      const m = v.match(/^(\[[0-9a-fA-F:]+\]|[^\s:\[\]]+):(\d{1,5})$/)
+      const port = m ? parseInt(m[2], 10) : 0
+      if (m && port >= 1 && port <= 65535) return []
+      return [this.$t('types.endpoint.awg.publicEndpointError')]
+    },
+    awgDnsErrors(): string[] {
+      if (!this.awgManagedFlag) return []
+      const items: string[] = this.endpoint.ext?.dns ?? []
+      if (items.length === 0) return [this.$t('types.endpoint.awg.dnsError')]
+      const ipPattern = /^(\d{1,3}(\.\d{1,3}){3}|[0-9a-fA-F:]+)$/
+      const invalid = items.filter((item: string) => !ipPattern.test(item))
+      if (invalid.length === 0) return []
+      return [this.$t('types.endpoint.awg.dnsError')]
+    },
+    awgAddressErrors(): string[] {
+      if (!this.awgManagedFlag) return []
+      const addresses: string[] = this.endpoint.address ?? []
+      const first = addresses.find((a: string) => /^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(a.trim()))
+      if (!first) return [this.$t('types.endpoint.awg.addressError')]
+      const bits = parseInt(first.trim().split('/')[1], 10)
+      if (isNaN(bits) || bits > 30) return [this.$t('types.endpoint.awg.addressError')]
+      return []
     },
     awgDns: {
       get(): string { return (this.endpoint.ext?.dns ?? []).join(',') },

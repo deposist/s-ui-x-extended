@@ -1350,6 +1350,9 @@ export default {
         clientKeepalive: "Client keepalive (seconds)",
         clientKeepaliveHint: "PersistentKeepalive in device configs. 0 = default (25).",
         clientKeepaliveError: "Keepalive must be between 0 and 3600",
+        publicEndpointError: "Public endpoint must be host:port (e.g. vpn.example.com:51820)",
+        dnsError: "DNS must be one or more valid IP addresses, comma separated",
+        addressError: "Address must contain an IPv4 subnet with room for devices, /30 or larger (e.g. 10.0.0.1/24)",
       },
       hint: {
         type: "Endpoint type. Recommended: choose the endpoint that matches the network integration.",

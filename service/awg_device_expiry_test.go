@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/netip"
@@ -174,6 +175,18 @@ func TestExpiredDeviceStillOccupiesLimitSlot(t *testing.T) {
 		add:      func(context.Context, AWGPeerSpec) error { return nil },
 		remove:   func(context.Context, string) error { return nil },
 	})
+	// The shared helper returns fixed key bytes; a revoked device keeps its
+	// row (and unique public_key), so each CreateDevice here needs unique keys
+	// like the real generator produces.
+	var keySeq byte
+	manager.deps.GenerateKeys = func() (AWGGeneratedKeys, error) {
+		keySeq++
+		return AWGGeneratedKeys{
+			PrivateKey: bytes.Repeat([]byte{keySeq}, 32),
+			PublicKey:  bytes.Repeat([]byte{0x80 + keySeq}, 32),
+			PSK:        bytes.Repeat([]byte{0x40 + keySeq}, 32),
+		}, nil
+	}
 	client := createAWGEligibleClient(t)
 	created, err := manager.CreateDevice(context.Background(), client.Id, "slot-1", "Phone", 1, awgExpiryTestNow+3600)
 	if err != nil {

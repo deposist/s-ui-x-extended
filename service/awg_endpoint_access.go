@@ -86,6 +86,35 @@ func validateAWGEndpointMetadata(endpoint model.Endpoint) (model.AWGEndpointMeta
 	return metadata, nil
 }
 
+// validateManagedAWGEndpointOptions enforces save-time invariants on the
+// core options of an ext-managed endpoint. Without this, a default /32
+// address is accepted at save time but the device manager later fails every
+// reconcile with "address does not match awgSubnet" and IPAM has no room to
+// allocate device addresses.
+func validateManagedAWGEndpointOptions(options json.RawMessage) error {
+	var parsed awgManagedEndpointOptions
+	if err := json.Unmarshal(options, &parsed); err != nil || len(parsed.Address) == 0 {
+		return errors.New("managed AWG endpoint requires an IPv4 subnet in address (e.g. 10.0.0.1/24)")
+	}
+	prefix, err := netip.ParsePrefix(strings.TrimSpace(parsed.Address[0]))
+	if err != nil || !prefix.Addr().Is4() {
+		return errors.New("managed AWG endpoint requires an IPv4 subnet in address (e.g. 10.0.0.1/24)")
+	}
+	if prefix.Bits() > 30 {
+		return errors.New("managed AWG endpoint address must be a subnet with room for devices, /30 or larger (e.g. 10.0.0.1/24)")
+	}
+	subnet := prefix.Masked()
+	server := prefix.Addr()
+	broadcast := uint32IPv4(ipv4Uint32(subnet.Addr()) | (^uint32(0) >> subnet.Bits()))
+	if server == subnet.Addr() || server == broadcast {
+		return errors.New("managed AWG endpoint address must be a host inside the subnet, not the network or broadcast address")
+	}
+	if parsed.ListenPort == 0 {
+		return errors.New("managed AWG endpoint requires listen_port")
+	}
+	return nil
+}
+
 func AWGSettingsForEndpoint(endpoint model.Endpoint) (AWGSettings, error) {
 	metadata, err := validateAWGEndpointMetadata(endpoint)
 	if err != nil {

@@ -107,6 +107,12 @@ func (s *EndpointService) saveEndpointUpsert(tx *gorm.DB, act string, data json.
 		if _, err := validateAWGEndpointMetadata(endpoint); err != nil {
 			return nil, err
 		}
+		// Reject core options the device manager cannot work with (a /32
+		// address, missing listen_port) at save time instead of failing
+		// every background reconcile afterwards.
+		if err := validateManagedAWGEndpointOptions(endpoint.Options); err != nil {
+			return nil, err
+		}
 	}
 	// Invalid Amnezia obfuscation combinations make the tunnel silently fail
 	// to come up (no error on either side), so saving is blocked outright.

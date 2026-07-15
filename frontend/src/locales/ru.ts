@@ -1350,6 +1350,9 @@ export default {
         clientKeepalive: "Keepalive клиента (секунды)",
         clientKeepaliveHint: "PersistentKeepalive в конфигах устройств. 0 = по умолчанию (25).",
         clientKeepaliveError: "Keepalive должен быть от 0 до 3600",
+        publicEndpointError: "Публичный адрес должен быть в формате host:port (например vpn.example.com:51820)",
+        dnsError: "DNS должен содержать один или несколько корректных IP-адресов через запятую",
+        addressError: "Address должен содержать IPv4-подсеть с местом для устройств, /30 или больше (например 10.0.0.1/24)",
       },
       hint: {
         type: "Рекомендация: Endpoint type. Recommended: choose the endpoint that matches the network integration.",

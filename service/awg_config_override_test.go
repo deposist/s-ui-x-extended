@@ -12,6 +12,7 @@ import (
 	"github.com/deposist/s-ui-x-extended/database/model"
 
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+	"gorm.io/gorm"
 )
 
 func newAWGOverrideTestDevice(t *testing.T, overrides AWGSettings) (*AWGManager, uint, uint) {
@@ -40,6 +41,11 @@ func newAWGOverrideTestDevice(t *testing.T, overrides AWGSettings) (*AWGManager,
 			ClientAllowedIPs: overrides.ClientAllowedIPs, ClientKeepalive: overrides.ClientKeepalive,
 		}
 		return settings, nil
+	}
+	// The base helper's LoadEndpoint returns 10.77.0.1, which is outside the
+	// 10.78.0.0/29 subnet above; keep the endpoint inside the subnet.
+	manager.deps.LoadEndpoint = func(*gorm.DB, AWGSettings) (AWGManagedEndpoint, error) {
+		return AWGManagedEndpoint{ServerAddress: netip.MustParseAddr("10.78.0.1"), ServerPublicKey: serverPrivate.PublicKey().String()}, nil
 	}
 	client := createAWGEligibleClient(t)
 	device, err := manager.CreateDevice(context.Background(), client.Id, "override-config", "Phone", 1, 0)

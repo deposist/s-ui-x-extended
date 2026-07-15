@@ -30,6 +30,11 @@ func (o *Endpoint) UnmarshalJSON(data []byte) error {
 	delete(raw, "tag")
 	o.Ext, _ = json.MarshalIndent(raw["ext"], "", "  ")
 	delete(raw, "ext")
+	// awgManaged is a panel-only marker added by EndpointService.GetAll; the
+	// frontend echoes it back on save. It must never reach Options, because
+	// Options is written verbatim into the sing-box config and sing-box
+	// rejects unknown fields (core fails to start).
+	delete(raw, "awgManaged")
 
 	if o.Type == "warp" {
 		normalizeWarpWireGuardOptions(raw)
@@ -60,6 +65,9 @@ func (o Endpoint) MarshalJSON() ([]byte, error) {
 		if o.Type == "warp" || o.Type == "wireguard" {
 			normalizeWarpWireGuardRawOptions(restFields)
 		}
+		// Heal rows poisoned before UnmarshalJSON started stripping the
+		// panel-only awgManaged marker; sing-box rejects unknown fields.
+		delete(restFields, "awgManaged")
 
 		for k, v := range restFields {
 			combined[k] = v

@@ -9,6 +9,16 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.4] - 2026-07-15 - managed AWG endpoint fixes
+
+Bugfix release for managed AmneziaWG endpoints: a core start failure after saving an endpoint and a save-time gap around unusable endpoint addresses. No migration is needed.
+
+- Fixed saving any endpoint stopping sing-box from starting with `endpoints[N].awgManaged: json: unknown field "awgManaged"`. The endpoint list adds a panel-only `awgManaged` marker for the frontend; the save path stored it inside the endpoint options, which are written into the sing-box config as-is, and sing-box rejects unknown fields. The marker is now stripped on save and at config render, so installations that already carry it in the database recover on their own.
+- Fixed a managed AWG endpoint being saved with a `/32` host address (the panel default for a new WireGuard endpoint). Metadata validation passed, but every reconcile afterwards failed with `managed AWG endpoint address does not match awgSubnet` and the IP allocator had no room for devices. Saving now requires an IPv4 subnet of `/30` or larger, a host address that is not the network or broadcast address, and a set `listen_port`. Existing `/32` endpoints keep working as plain WireGuard; widen the address once (for example `10.0.0.20/32` to `10.0.0.20/24`) so device management starts working.
+- Turning on managed mode in the endpoint form widens the untouched default `/32` address to `/24`. The public endpoint (`host:port`), DNS, and address fields are validated in the form before the save request is sent, in all four panel languages. The server checks remain authoritative.
+
+Full release notes: [`docs/releases/v1.0.4.md`](docs/releases/v1.0.4.md).
+
 ## [1.0.3] - 2026-07-15 - AWG obfuscation tooling, device expiry, fixes
 
 Adds AmneziaWG obfuscation validation, server-side randomize and presets, client config overrides, per-device expiry, and a Russia-direct routing preset. Also carries the v1.0.2 bugfix batch. The `expires_at` column is added automatically.
