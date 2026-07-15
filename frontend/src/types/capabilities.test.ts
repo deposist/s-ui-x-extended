@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   inboundWithUsers,
+  inboundAssignable,
   HasInData,
   HasTls,
   MuxAvailable,
@@ -37,6 +38,7 @@ type InboundRow = {
   type: string
   hasUsers?: boolean
   alias?: boolean
+  clientDelivery?: string
   hasInData?: boolean
   hasTlsTemplate?: boolean
   muxAvailable?: boolean
@@ -74,6 +76,9 @@ describe('capabilities generated from protocols.json', () => {
       inbounds.filter((i) => pred(i)).map((i) => i.type)
 
     expect(asSet(inboundWithUsers)).toEqual(asSet(pick((i) => i.hasUsers && !i.alias)))
+    expect(asSet(inboundAssignable)).toEqual(
+      asSet(pick((i) => !i.alias && (i.hasUsers || i.clientDelivery === 'json'))),
+    )
     expect(asSet(HasInData)).toEqual(asSet(pick((i) => i.hasInData)))
     expect(asSet(HasTls)).toEqual(asSet(pick((i) => i.hasTlsTemplate)))
     expect(asSet(MuxAvailable)).toEqual(asSet(pick((i) => i.muxAvailable)))

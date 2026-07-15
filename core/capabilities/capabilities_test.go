@@ -164,6 +164,30 @@ func TestAssignableKeylessTypesIsExactlySudoku(t *testing.T) {
 	}
 }
 
+// TestEveryKeylessJSONDeliverableTypeIsAssignable is the invariant guard against
+// a repeat of issue #4: any inbound that carries no per-user credential objects
+// but IS delivered through the JSON subscription (clientDelivery == "json") must
+// appear in AssignableKeylessTypes(), otherwise service/inbounds.go GetAll would
+// omit its `users` key and the client edit form would filter it out — making it
+// unassignable and therefore undeliverable. Types that ARE keyless but NOT
+// json-deliverable (transparent/local inbounds: direct/tun/redirect/tproxy/bond/
+// core-failover, clientDelivery == "none") must stay OUT of the set.
+func TestEveryKeylessJSONDeliverableTypeIsAssignable(t *testing.T) {
+	assignable := AssignableKeylessTypes()
+	for _, in := range Inbounds() {
+		if in.Alias || in.HasUsers {
+			continue // covered by the per-user credential path (hasUser)
+		}
+		_, isAssignable := assignable[in.Type]
+		if in.ClientDelivery == "json" && !isAssignable {
+			t.Errorf("keyless json-deliverable inbound %q is missing from AssignableKeylessTypes (issue #4 class: assignable != has-users)", in.Type)
+		}
+		if in.ClientDelivery != "json" && isAssignable {
+			t.Errorf("keyless inbound %q has clientDelivery=%q but is marked assignable; only json delivery should be", in.Type, in.ClientDelivery)
+		}
+	}
+}
+
 func TestManifestParsesAndValidates(t *testing.T) {
 	// init() already ran validate(); re-run explicitly so a regression surfaces here.
 	if err := validate(); err != nil {
