@@ -9,10 +9,16 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
-## [1.0.3] - 2026-07-15 - bugfix release
+## [1.0.3] - 2026-07-15 - AWG obfuscation tooling, device expiry, fixes
 
-Bugfix release: no new features, no configuration changes. Everyone on v1.0.2 should upgrade.
+Adds AmneziaWG obfuscation validation, server-side randomize and presets, client config overrides, per-device expiry, and a Russia-direct routing preset. Also carries the v1.0.2 bugfix batch. The `expires_at` column is added automatically.
 
+- The endpoint form validates Amnezia obfuscation parameters and blocks saving invalid combinations: H1-H4 values 0-4 (vanilla WireGuard message types, no masking), overlapping H1-H4 ranges, and colliding padded packet sizes (S1+148, S2+92, S3+64, S4+32 must differ) all produce tunnels that silently never come up.
+- A Randomize button fills H1-H4 with non-overlapping ranges generated server-side with crypto/rand. Enabling Amnezia uses the same generation instead of the old static defaults, which were the reserved WireGuard values.
+- Obfuscation presets: Balanced for wired networks, Mobile for carriers whose DPI reacts to large junk packets, Custom for manual control. Presets set only Jc/Jmin/Jmax; headers stay unique per endpoint.
+- A managed AWG endpoint can override `AllowedIPs` and `PersistentKeepalive` in rendered device configs (client-side split tunneling). Entries are validated as CIDR prefixes and checked against newline injection; empty values keep the old defaults.
+- Devices can be created with an expiry date. Expired devices are deprovisioned by the reconciler but keep their device-limit slot until deleted; extending the date restores the peer. The panel and the Telegram bot show the term.
+- The regional presets drawer can create a Russia-direct rule for an AWG endpoint: traffic from devices to Russian IPs leaves the server directly, everything else follows the existing rules.
 - Fixed device creation from the client form failing with `awg: invalid request`. The API only accepted JSON bodies while the panel sends form-encoded requests; the handler now decodes both.
 - Fixed the upgrade from v1.0.2-beta1 crashing the panel on every start with `no such column: endpoint_id`. Startup no longer rebuilds the `awg_devices` table, and indexes are created after the column migrations. Affected installations recover on their own after this upgrade.
 - Fixed the self-update rollback, which never worked on Linux (`text file busy`). The backup is now renamed into place instead of written over the running binary.
