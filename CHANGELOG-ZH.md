@@ -8,6 +8,17 @@
 
 - 暂无未发布变更。
 
+## [1.0.4-hotfix1] - 2026-07-15 - AWG 密钥加密密钥热修复
+
+热修复：由于设备密钥加密密钥未被创建，无法创建受管 AmneziaWG 设备，面板返回 `awg: AWG encryption key is unavailable`。
+
+- systemd 安装器现在在安装和升级时生成 `AWG_KEY_ENC`，与已有的 `SUI_SECRETBOX_KEY` 和 `SUI_COOKIE_KEY` 处理方式一致。没有该密钥，设备管理器无法对每个设备的 WireGuard 私钥和预共享密钥进行加密。密钥写入 `/etc/s-ui/secretbox.env`，并在首次生成时显示一次。已有密钥永不重新生成：在设备创建后轮换密钥会使其存储的密钥材料无法解密。
+- 已遇到该错误的现有安装可以手动添加密钥并重启面板；详见发布说明。仅在尚无受管 AWG 设备时执行，并将该值与 `SUI_SECRETBOX_KEY` 一起备份。
+
+本构建版本为 `1.0.4-hotfix1`；prerelease 后缀在版本比较中排在 `1.0.4` 之下，因此 `1.0.4` 安装上的面板自动更新不会提示它。请通过重新运行安装器或从标签更新来显式安装。
+
+完整发布说明：[`docs/releases/v1.0.4-hotfix1.md`](docs/releases/v1.0.4-hotfix1.md)。
+
 ## [1.0.4] - 2026-07-15 - 受管 AWG 端点修复
 
 面向受管 AmneziaWG 端点的修复版本：保存端点后内核无法启动，以及保存时缺少地址校验。无需迁移。

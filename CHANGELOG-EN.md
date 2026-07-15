@@ -9,6 +9,17 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.4-hotfix1] - 2026-07-15 - AWG key-encryption key hotfix
+
+Hotfix: managed AmneziaWG devices could not be created because the device key-encryption key was never provisioned, so the panel returned `awg: AWG encryption key is unavailable`.
+
+- The systemd installer now generates `AWG_KEY_ENC` on install and upgrade, the same way it already handles `SUI_SECRETBOX_KEY` and `SUI_COOKIE_KEY`. Without this key the device manager cannot seal per-device WireGuard private and preshared keys. The key is written to `/etc/s-ui/secretbox.env` and shown once when first generated. An existing key is never regenerated, since rotating it after devices exist would make their stored key material undecryptable.
+- Existing installs that already hit the error can add the key manually and restart the panel; see the release notes. Only do this when no managed AWG devices exist yet, and keep the value backed up alongside `SUI_SECRETBOX_KEY`.
+
+This build is versioned `1.0.4-hotfix1`; a prerelease suffix sorts below `1.0.4`, so the in-panel auto-update on a `1.0.4` install will not offer it. Install it explicitly by re-running the installer or updating from the tag.
+
+Full release notes: [`docs/releases/v1.0.4-hotfix1.md`](docs/releases/v1.0.4-hotfix1.md).
+
 ## [1.0.4] - 2026-07-15 - managed AWG endpoint fixes
 
 Bugfix release for managed AmneziaWG endpoints: a core start failure after saving an endpoint and a save-time gap around unusable endpoint addresses. No migration is needed.

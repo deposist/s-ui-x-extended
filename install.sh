@@ -93,6 +93,9 @@ t() {
             cookie_key_generated) echo "已生成 S-UI 会话 Cookie 密钥。该值只显示一次："; return ;;
             cookie_key_label) echo "SUI_COOKIE_KEY：$2"; return ;;
             cookie_key_relogin) echo "现有浏览器会话需要重新登录一次。"; return ;;
+            awg_key_generated) echo "已生成 AWG 设备密钥加密密钥。该值只显示一次："; return ;;
+            awg_key_label) echo "AWG_KEY_ENC：$2"; return ;;
+            awg_key_keep) echo "请妥善保存该密钥。如果丢失，已创建设备的配置将无法解密。"; return ;;
         esac
     fi
     case "${lang}:${key}" in
@@ -182,6 +185,12 @@ t() {
         ru:cookie_key_label) echo "SUI_COOKIE_KEY: $2";;
         en:cookie_key_relogin) echo "Existing browser sessions will require one re-login.";;
         ru:cookie_key_relogin) echo "Существующие сессии браузера потребуют одного повторного входа.";;
+        en:awg_key_generated) echo "Generated the AWG device key-encryption key. It is shown once:";;
+        ru:awg_key_generated) echo "Сгенерирован ключ шифрования ключей устройств AWG. Он показывается один раз:";;
+        en:awg_key_label) echo "AWG_KEY_ENC: $2";;
+        ru:awg_key_label) echo "AWG_KEY_ENC: $2";;
+        en:awg_key_keep) echo "Keep this key. If it is lost, the configs of devices already created cannot be decrypted.";;
+        ru:awg_key_keep) echo "Сохраните этот ключ. Если он потеряется, конфиги уже созданных устройств нельзя будет расшифровать.";;
         *) echo "${key}";;
     esac
 }
@@ -369,6 +378,36 @@ prepare_cookie_key() {
     echo -e "###############################################"
 }
 
+# Generates the AWG device key-encryption key once. It seals the per-device
+# WireGuard private and preshared keys at rest (AWG_KEY_ENC in service/awg_crypto.go).
+# An existing key is never regenerated: rotating it after devices exist makes
+# their stored key material undecryptable, so re-running the installer for
+# updates is a no-op here.
+prepare_awg_key() {
+    local awg_key
+
+    if awg_key=$(read_env_key_file AWG_KEY_ENC); then
+        chmod 600 "${SECRETBOX_ENV_FILE}"
+        return 0
+    fi
+
+    if [[ -n "${AWG_KEY_ENC:-}" ]]; then
+        awg_key="${AWG_KEY_ENC}"
+        append_env_key_file AWG_KEY_ENC "${awg_key}"
+        return 0
+    fi
+
+    awg_key=$(head -c 32 /dev/urandom | base64 | tr -d '\r\n')
+    append_env_key_file AWG_KEY_ENC "${awg_key}"
+
+    echo -e "###############################################"
+    echo -e "${yellow}$(t awg_key_generated)${plain}"
+    echo -e "${green}$(t awg_key_label "${awg_key}")${plain}"
+    echo -e "$(t secretbox_key_file "${SECRETBOX_ENV_FILE}")"
+    echo -e "${red}$(t awg_key_keep)${plain}"
+    echo -e "###############################################"
+}
+
 config_after_install() {
     echo -e "${yellow}$(t migrate)${plain}"
     /usr/local/s-ui/sui migrate
@@ -518,6 +557,7 @@ install_s-ui() {
 
     prepare_secretbox_key
     prepare_cookie_key
+    prepare_awg_key
     config_after_install
     prepare_services
 
