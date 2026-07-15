@@ -818,6 +818,11 @@ export default {
     done: "Done",
     needFullControl: "Need full control?",
     editRulesManually: "Edit rules manually.",
+    awgRuDirect: {
+      title: "AWG endpoint: Russia direct",
+      description: "Traffic from AmneziaWG devices to Russian IP addresses leaves the server directly; the rest follows your routing rules.",
+      endpoint: "AWG endpoint",
+    },
     proxyOutbound: "Proxy outbound",
     directOutbound: "Direct outbound",
     selectOutbounds: "Choose proxy and direct outbound tags before previewing changes.",

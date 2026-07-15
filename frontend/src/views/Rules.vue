@@ -41,6 +41,7 @@
     v-model="regionalPresetDrawer"
     :config="appConfig"
     :outbound-tags="outboundTags"
+    :awg-endpoint-tags="awgEndpointTags"
     @apply="applyPresetConfig"
   />
   <page-header
@@ -486,6 +487,13 @@ const inboundTags = computed((): string[] => [
   ...Data().inbounds?.map((o:any) => o.tag),
   ...Data().endpoints?.filter((e:any) => e.listen_port > 0).map((e:any) => e.tag)
 ])
+
+// Managed AWG endpoints with a listen_port participate in routing as
+// inbounds; the RU->direct preset in the drawer targets exactly these.
+const awgEndpointTags = computed((): string[] =>
+  (Data().endpoints ?? [])
+    .filter((e:any) => e.awgManaged === true && e.listen_port > 0)
+    .map((e:any) => e.tag))
 
 // ---- Nexus table projections (read-only; actions carry the array index) ----
 // _index keeps the ORIGINAL array index (move/edit/delete operate by index), so

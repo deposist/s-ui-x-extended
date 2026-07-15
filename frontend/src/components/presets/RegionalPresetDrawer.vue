@@ -85,6 +85,41 @@
             </v-card>
           </section>
 
+          <!-- AWG endpoint RU->direct preset (stage 5): appears only when a
+               managed endpoint with a listen_port participates in routing. -->
+          <v-card v-if="awgEndpointItems.length > 0" variant="outlined" class="mb-4" rounded="lg">
+            <div class="pa-4 d-flex justify-space-between align-center">
+              <div>
+                <h3 class="text-subtitle-1 font-weight-bold mb-1">{{ t('regionalPresets.awgRuDirect.title') }}</h3>
+                <p class="text-caption text-medium-emphasis mb-2">{{ t('regionalPresets.awgRuDirect.description') }}</p>
+                <v-chip size="x-small" class="font-weight-medium" variant="tonal">
+                  {{ awgRuStatus }}
+                </v-chip>
+              </div>
+              <v-switch
+                v-model="awgRuState.enabled"
+                color="primary"
+                density="compact"
+                hide-details
+              />
+            </div>
+            <v-expand-transition>
+              <div v-show="awgRuState.enabled">
+                <v-divider />
+                <div class="pa-4">
+                  <v-select
+                    v-model="awgRuState.endpointTag"
+                    density="compact"
+                    hide-details
+                    :items="awgEndpointItems"
+                    :label="t('regionalPresets.awgRuDirect.endpoint')"
+                    variant="outlined"
+                  />
+                </div>
+              </div>
+            </v-expand-transition>
+          </v-card>
+
           <div class="regional-preset-drawer__manual-link">
             <span>{{ t('regionalPresets.needFullControl') }}</span>
             <span>{{ t('regionalPresets.editRulesManually') }}</span>
@@ -95,6 +130,31 @@
           <v-alert density="compact" type="info" variant="tonal" class="mb-4">
             {{ t('regionalPresets.previewGroups.securityNote') }}
           </v-alert>
+
+          <!-- AWG RU->direct preview -->
+          <v-card v-if="awgPreviewVisible" variant="outlined" class="mb-4" rounded="lg">
+            <div class="pa-4">
+              <h3 class="text-subtitle-1 font-weight-bold mb-3">{{ t('regionalPresets.awgRuDirect.title') }}</h3>
+              <div
+                v-for="section in [
+                  { key: 'willAdd', title: t('regionalPresets.previewGroups.willAdd'), items: awgPreview.willAdd, color: 'success' },
+                  { key: 'willKeep', title: t('regionalPresets.previewGroups.willKeep'), items: awgPreview.willKeep, color: 'info' },
+                  { key: 'willRemove', title: t('regionalPresets.previewGroups.willRemove'), items: awgPreview.willRemove, color: 'error' }
+                ]"
+                :key="section.key"
+              >
+                <div v-if="section.items.length > 0" class="mt-3">
+                  <div class="text-caption font-weight-bold d-flex align-center" :class="`text-${section.color}`">
+                    <span class="mr-1">•</span>
+                    {{ section.title }} ({{ section.items.length }})
+                  </div>
+                  <ul class="text-caption pl-4 mt-1 text-medium-emphasis">
+                    <li v-for="item in section.items" :key="item">{{ item }}</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </v-card>
 
           <!-- Preview Card Loop -->
           <div class="regional-preset-drawer__preview-cards">
@@ -130,6 +190,7 @@
                 </div>
 
                 <!-- Preview Actions: Will Add, Will Change, Will Keep, Will Remove -->
+                <!-- (regional preview card body continues below) -->
                 <div v-if="p.state.enabled || p.group.willRemove.length > 0">
                   <div
                     v-for="section in [
@@ -234,11 +295,18 @@ import {
   type RegionalPresetState,
   validatePresetCatalogShape,
 } from './routingDnsPresets'
+import {
+  applyAWGRuDirectState,
+  computeAWGRuDirectPreview,
+  detectAWGRuDirect,
+  type AWGRuDirectState,
+} from './awgRuDirectPreset'
 
 const props = defineProps<{
   modelValue: boolean
   config: Config
   outboundTags: string[]
+  awgEndpointTags?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -254,6 +322,7 @@ const errorMessage = ref('')
 
 const ruState = reactive<RegionalPresetState>({ region: 'RU', enabled: false, direction: 'direct', exceptions: [] })
 const zhState = reactive<RegionalPresetState>({ region: 'ZH', enabled: false, direction: 'direct', exceptions: [] })
+const awgRuState = reactive<AWGRuDirectState>({ enabled: false, endpointTag: '' })
 
 const visible = computed({
   get: () => props.modelValue,
@@ -268,6 +337,26 @@ const outboundItems = computed(() => {
 const hasOutbounds = computed(() => directOutbound.value.length > 0)
 const hasEnabledRegion = computed(() => ruState.enabled || zhState.enabled)
 
+const awgEndpointItems = computed(() =>
+  (props.awgEndpointTags ?? []).filter(Boolean).map(tag => ({ title: tag, value: tag })))
+
+const awgRuStatus = computed(() => {
+  const existing = detectAWGRuDirect(props.config)
+  return existing.length > 0
+    ? t('regionalPresets.region.status.enabled')
+    : t('regionalPresets.region.status.notConfigured')
+})
+
+const awgChanged = computed(() => {
+  const existing = detectAWGRuDirect(props.config)
+  const current = awgRuState.enabled && awgRuState.endpointTag ? [awgRuState.endpointTag] : []
+  return JSON.stringify(existing) !== JSON.stringify(current)
+})
+
+const awgPreview = computed(() => computeAWGRuDirectPreview(props.config, awgRuState, directOutbound.value))
+const awgPreviewVisible = computed(() =>
+  awgPreview.value.willAdd.length > 0 || awgPreview.value.willKeep.length > 0 || awgPreview.value.willRemove.length > 0)
+
 const hasChanges = computed(() => {
   const detected = detectPresetState(props.config)
   const ruChanged = ruState.enabled !== detected.ru.enabled ||
@@ -280,7 +369,7 @@ const hasChanges = computed(() => {
 })
 
 const canPreview = computed(() => {
-  return hasOutbounds.value && (hasEnabledRegion.value || hasChanges.value)
+  return hasOutbounds.value && (hasEnabledRegion.value || hasChanges.value || awgChanged.value)
 })
 
 const preview = computed(() => {
@@ -339,6 +428,9 @@ const resetFromConfig = () => {
   const detected = detectPresetState(props.config)
   assignState(ruState, detected.ru)
   assignState(zhState, detected.zh)
+  const awgExisting = detectAWGRuDirect(props.config)
+  awgRuState.enabled = awgExisting.length > 0
+  awgRuState.endpointTag = awgExisting[0] ?? ((props.awgEndpointTags ?? [])[0] ?? '')
   directOutbound.value = outboundItems.value.some(item => item.value === 'direct') ? 'direct' : (props.outboundTags[0] ?? '')
   errorMessage.value = ''
   step.value = 'selection'
@@ -384,6 +476,7 @@ const applySelectedPresets = () => {
     const result = applyPresets(props.config, ruState, zhState, {
       directOutbound: directOutbound.value,
     })
+    applyAWGRuDirectState(result.config, awgRuState, directOutbound.value)
     emit('apply', result.config)
     step.value = 'success'
   } catch (error) {
