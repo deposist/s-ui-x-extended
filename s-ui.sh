@@ -138,7 +138,17 @@ t() {
             menu_ssl)            echo "SSL 证书管理"; return ;;
             menu_ssl_cf)         echo "Cloudflare SSL 证书"; return ;;
             menu_language)       echo "语言"; return ;;
-            menu_cookie_key)     echo "生成会话 Cookie 密钥（SUI_COOKIE_KEY）"; return ;;
+            menu_env_keys)       echo "生成环境密钥"; return ;;
+            env_keys_title)      echo "生成环境密钥"; return ;;
+            env_keys_opt_cookie) echo "生成会话 Cookie 密钥（SUI_COOKIE_KEY）"; return ;;
+            env_keys_opt_awg)    echo "生成 AmneziaWG 设备密钥（AWG_KEY_ENC）"; return ;;
+            env_keys_choice)     echo "请输入你的选择 [0-2]："; return ;;
+            awg_key_menu_exists) echo "已存在 AWG_KEY_ENC（当前：$2）"; return ;;
+            awg_key_rotate_q)    echo "轮换密钥？警告：如果已创建 AWG 设备，轮换后其已存储的密钥材料将无法解密"; return ;;
+            awg_key_none)        echo "尚未设置 AWG_KEY_ENC，将生成新密钥。"; return ;;
+            awg_key_generated)   echo "已生成 AWG_KEY_ENC（仅显示一次）："; return ;;
+            awg_key_keep)        echo "请妥善保存该密钥。如果丢失，已创建设备的配置将无法解密。"; return ;;
+            awg_key_restart)     echo "密钥在服务重启后生效。"; return ;;
             cookie_key_exists)   echo "已存在 SUI_COOKIE_KEY（当前：$2）"; return ;;
             cookie_key_rotate_q) echo "轮换密钥？新密钥将签发新会话，旧密钥保留用于平滑过渡，现有会话不会被注销"; return ;;
             cookie_key_none)     echo "尚未设置 SUI_COOKIE_KEY，将生成新密钥。"; return ;;
@@ -147,6 +157,7 @@ t() {
             cookie_key_keep)     echo "请保持该文件私密，并在更新与恢复时保留同一个值。"; return ;;
             cookie_key_restart_rollover) echo "密钥在服务重启后生效。旧密钥已保留用于平滑过渡，现有会话保持有效。"; return ;;
             cookie_key_restart_fresh) echo "密钥在服务重启后生效。使用旧后备密钥签发的会话将被注销一次，需要重新登录。"; return ;;
+            menu_back)           echo "返回"; return ;;
             enter_choice_range)  echo "请输入你的选择 [0-23]："; return ;;
             enter_valid_number)  echo "请输入正确的数字 [0-23]"; return ;;
             lang_select)         echo "Select language / Выберите язык / 请选择语言"; return ;;
@@ -364,8 +375,28 @@ t() {
         ru:menu_ssl_cf)         echo "SSL-сертификат Cloudflare";;
         en:menu_language)       echo "Language";;
         ru:menu_language)       echo "Язык";;
-        en:menu_cookie_key)     echo "Generate session cookie key (SUI_COOKIE_KEY)";;
-        ru:menu_cookie_key)     echo "Сгенерировать ключ сессионных cookie (SUI_COOKIE_KEY)";;
+        en:menu_env_keys)       echo "Generate env keys";;
+        ru:menu_env_keys)       echo "Сгенерировать ключи окружения";;
+        en:env_keys_title)      echo "Generate env keys";;
+        ru:env_keys_title)      echo "Генерация ключей окружения";;
+        en:env_keys_opt_cookie) echo "Generate session cookie key (SUI_COOKIE_KEY)";;
+        ru:env_keys_opt_cookie) echo "Сгенерировать ключ сессионных cookie (SUI_COOKIE_KEY)";;
+        en:env_keys_opt_awg)    echo "Generate AmneziaWG device key (AWG_KEY_ENC)";;
+        ru:env_keys_opt_awg)    echo "Сгенерировать ключ устройств AmneziaWG (AWG_KEY_ENC)";;
+        en:env_keys_choice)     echo "Enter your choice [0-2]: ";;
+        ru:env_keys_choice)     echo "Введите ваш выбор [0-2]: ";;
+        en:awg_key_menu_exists) echo "AWG_KEY_ENC already exists (current: $2)";;
+        ru:awg_key_menu_exists) echo "AWG_KEY_ENC уже существует (текущий: $2)";;
+        en:awg_key_rotate_q)    echo "Rotate it? WARNING: if AWG devices already exist, rotating this key makes their stored key material undecryptable";;
+        ru:awg_key_rotate_q)    echo "Ротировать? ВНИМАНИЕ: если устройства AWG уже созданы, смена этого ключа сделает их сохранённый ключевой материал нечитаемым";;
+        en:awg_key_none)        echo "AWG_KEY_ENC is not set yet; a new key will be generated.";;
+        ru:awg_key_none)        echo "AWG_KEY_ENC ещё не задан; будет сгенерирован новый ключ.";;
+        en:awg_key_generated)   echo "Generated AWG_KEY_ENC (shown once):";;
+        ru:awg_key_generated)   echo "Сгенерирован AWG_KEY_ENC (показывается один раз):";;
+        en:awg_key_keep)        echo "Keep this key. If it is lost, the configs of devices already created cannot be decrypted.";;
+        ru:awg_key_keep)        echo "Сохраните этот ключ. Если он потеряется, конфиги уже созданных устройств нельзя будет расшифровать.";;
+        en:awg_key_restart)     echo "The key takes effect after a service restart.";;
+        ru:awg_key_restart)     echo "Ключ вступит в силу после перезапуска службы.";;
         en:cookie_key_exists)   echo "SUI_COOKIE_KEY already exists (current: $2)";;
         ru:cookie_key_exists)   echo "SUI_COOKIE_KEY уже существует (текущий: $2)";;
         en:cookie_key_rotate_q) echo "Rotate it? A new key will sign new sessions; the previous key is kept for rollover, so active sessions are not signed out";;
@@ -382,6 +413,8 @@ t() {
         ru:cookie_key_restart_rollover) echo "Ключ вступит в силу после перезапуска службы. Прежний ключ сохранен для плавной ротации. Активные сессии останутся в силе.";;
         en:cookie_key_restart_fresh) echo "The key takes effect after a service restart. Sessions signed with the previous fallback key will be signed out once; log in again afterwards.";;
         ru:cookie_key_restart_fresh) echo "Ключ вступит в силу после перезапуска службы. Сессии, подписанные прежним fallback-ключом, будут разлогинены один раз. Потребуется повторный вход.";;
+        en:menu_back)           echo "Back";;
+        ru:menu_back)           echo "Назад";;
         en:enter_choice_range)  echo "Enter your choice [0-23]: ";;
         ru:enter_choice_range)  echo "Введите ваш выбор [0-23]: ";;
         en:enter_valid_number)  echo "Enter a valid number [0-23]";;
@@ -634,7 +667,11 @@ write_env_value() {
     local var="$1" value="$2"
     mkdir -p "$(dirname "${SECRETBOX_ENV_FILE}")"
     if [[ -f "${SECRETBOX_ENV_FILE}" ]]; then
-        if awk -v var="${var}" 'index($0, var"=") == 1 { exit 0 } END { exit 1 }' "${SECRETBOX_ENV_FILE}"; then
+        # Note: an `exit 0` inside the main block still runs END, so the detector
+        # must record the match in a flag and let END decide the exit code -
+        # a bare `exit 0` here would be overwritten by `END { exit 1 }` and the
+        # key would be appended (duplicated) instead of replaced in place.
+        if awk -v var="${var}" 'index($0, var"=") == 1 { found = 1 } END { exit(found ? 0 : 1) }' "${SECRETBOX_ENV_FILE}"; then
             local tmp="${SECRETBOX_ENV_FILE}.tmp"
             (umask 077 && awk -v var="${var}" -v val="${value}" \
                 'index($0, var"=") == 1 { print var "=" val; next } { print }' \
@@ -704,6 +741,66 @@ generate_cookie_key() {
     else
         before_show_menu
     fi
+}
+
+# Generates the AmneziaWG device key-encryption key (AWG_KEY_ENC). It seals the
+# per-device WireGuard private and preshared keys at rest. Unlike the cookie
+# key, there is no rollover: rotating it after devices exist makes their stored
+# key material undecryptable, so an existing key is kept unless the operator
+# explicitly confirms the destructive rotation.
+generate_awg_key() {
+    local existing=""
+    existing=$(read_env_value AWG_KEY_ENC) || existing=""
+
+    if [[ -n "${existing}" ]]; then
+        LOGI "$(t awg_key_menu_exists "${existing:0:8}...")"
+        if ! confirm "$(t awg_key_rotate_q)" "n"; then
+            LOGI "$(t cancelled)"
+            before_show_menu
+            return 0
+        fi
+    else
+        LOGI "$(t awg_key_none)"
+    fi
+
+    local value
+    value=$(head -c 32 /dev/urandom | base64 | tr -d '\r\n')
+    write_env_value AWG_KEY_ENC "${value}"
+    ensure_env_dropin
+
+    echo -e "###############################################"
+    echo -e "${yellow}$(t awg_key_generated)${plain}"
+    echo -e "${green}AWG_KEY_ENC: ${value}${plain}"
+    echo -e "$(t cookie_key_file "${SECRETBOX_ENV_FILE}")"
+    echo -e "${red}$(t awg_key_keep)${plain}"
+    echo -e "###############################################"
+    LOGI "$(t awg_key_restart)"
+
+    if confirm "$(t restart_service_q "s-ui")" "y"; then
+        restart s-ui
+    else
+        before_show_menu
+    fi
+}
+
+# Submenu for the environment key generators (menu item 23).
+generate_env_keys() {
+    echo -e "
+  ${green}$(t env_keys_title)${plain}
+---------------------------------------------------------------
+  ${green}1.${plain} $(t env_keys_opt_cookie)
+  ${green}2.${plain} $(t env_keys_opt_awg)
+---------------------------------------------------------------
+  ${green}0.${plain} $(t menu_back)
+"
+    local choice
+    read -rp "$(t env_keys_choice)" choice
+    case "${choice}" in
+        1) generate_cookie_key ;;
+        2) generate_awg_key ;;
+        0) show_menu ;;
+        *) LOGE "$(t enter_valid_number)"; before_show_menu ;;
+    esac
 }
 
 view_uri() {
@@ -1294,7 +1391,7 @@ show_menu() {
   ${green}20.${plain} $(t menu_ssl)
   ${green}21.${plain} $(t menu_ssl_cf)
   ${green}22.${plain} $(t menu_language)
-  ${green}23.${plain} $(t menu_cookie_key)
+  ${green}23.${plain} $(t menu_env_keys)
 ---------------------------------------------------------------
  "
     show_status s-ui
@@ -1324,7 +1421,7 @@ show_menu() {
     20) ssl_cert_issue_main ;;
     21) ssl_cert_issue_CF ;;
     22) choose_language ;;
-    23) check_install && generate_cookie_key ;;
+    23) check_install && generate_env_keys ;;
     *) LOGE "$(t enter_valid_number)" ;;
     esac
 }

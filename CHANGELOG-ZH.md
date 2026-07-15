@@ -8,6 +8,17 @@
 
 - 暂无未发布变更。
 
+## [1.0.6] - 2026-07-15 - AWG 密钥控制台菜单
+
+新增用于生成 AmneziaWG 设备密钥加密密钥的控制台菜单项，并修复控制台脚本中 env 密钥重写的错误。
+
+- 网页面板自更新会替换二进制并重启服务，但不会运行 `install.sh`，因此不会创建 `AWG_KEY_ENC`。仅通过网页更新的面板可能仍因 `awg: AWG encryption key is unavailable` 而无法操作受管 AmneziaWG 设备。
+- `s-ui` 中的菜单项 23 现为“Generate env keys”，包含子菜单：会话 Cookie 密钥（`SUI_COOKIE_KEY`）和 AmneziaWG 设备密钥（`AWG_KEY_ENC`）。当 `/etc/s-ui/secretbox.env` 中缺少时，AWG 选项会生成密钥，配置 systemd drop-in 以加载该文件，并提示重启。除非确认轮换，否则保留现有密钥，因为在设备创建后轮换会使其已存储的密钥材料无法解密。
+- 修复：当 env 密钥已存在时，控制台脚本中的 `write_env_value` 会追加重复行而非替换值。awk 检测块中的 `exit 0` 被末尾的 `END { exit 1 }` 覆盖，导致“已存在”分支从不执行；这也影响从菜单轮换 `SUI_COOKIE_KEY`。
+- 新增 `scripts/setup-awg-key.sh`，以独立命令形式执行相同的检查并生成。
+
+完整发布说明：[`docs/releases/v1.0.6.md`](docs/releases/v1.0.6.md)。
+
 ## [1.0.5] - 2026-07-15 - 热修复版本优先级、AWG 密钥合并
 
 合并首次以 `v1.0.4-hotfix1` 发布的 AWG 设备密钥加密密钥热修复，并新增版本优先级规则，使今后的热修复排在其基础版本之上。
