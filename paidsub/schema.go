@@ -102,13 +102,6 @@ func EnsureSchema(db *gorm.DB) error {
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_orders_charge ON payment_orders(provider, provider_charge_id) WHERE provider_charge_id != ''`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_client_endpoint_access ON client_endpoint_access(client_id, endpoint_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_client_endpoint_access_endpoint ON client_endpoint_access(endpoint_id)`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_awg_devices_public_key ON awg_devices(public_key)`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_awg_devices_endpoint_ipv4 ON awg_devices(endpoint_id, ipv4_address) WHERE desired_enabled = 1`,
-		`CREATE INDEX IF NOT EXISTS idx_awg_devices_client_enabled ON awg_devices(client_id, desired_enabled)`,
-		`CREATE INDEX IF NOT EXISTS idx_awg_devices_endpoint_enabled ON awg_devices(endpoint_id, desired_enabled)`,
-		`CREATE INDEX IF NOT EXISTS idx_awg_devices_sync_state ON awg_devices(sync_state)`,
-		`CREATE INDEX IF NOT EXISTS idx_awg_devices_previous_public_key ON awg_devices(previous_public_key)`,
-		`CREATE INDEX IF NOT EXISTS idx_awg_devices_ip_reusable_after ON awg_devices(ip_reusable_after)`,
 	}
 	for _, stmt := range stmts {
 		if err := db.Exec(stmt).Error; err != nil {
@@ -117,6 +110,10 @@ func EnsureSchema(db *gorm.DB) error {
 	}
 	// Additive columns for upgraded installs (the CREATE above only covers fresh
 	// installs). SQLite lacks ADD COLUMN IF NOT EXISTS, so guard with HasColumn.
+	// These MUST run before the awg_devices index statements below: on an
+	// upgraded database the table already exists without the new columns, so an
+	// index referencing endpoint_id fails with "no such column: endpoint_id"
+	// until the guarded ALTER has added it (the 1.0.2-beta1 -> 1.0.2 crash).
 	mig := db.Migrator()
 	for _, migration := range []struct {
 		model  any
@@ -138,9 +135,23 @@ func EnsureSchema(db *gorm.DB) error {
 			return err
 		}
 	}
-	if err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_awg_devices_client_create_request
-		ON awg_devices(client_id, create_request_key) WHERE create_request_key != ''`).Error; err != nil {
-		return err
+	// awg_devices indexes run after the column migrations above so they can
+	// reference columns added to upgraded installs.
+	awgIndexes := []string{
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_awg_devices_public_key ON awg_devices(public_key)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_awg_devices_endpoint_ipv4 ON awg_devices(endpoint_id, ipv4_address) WHERE desired_enabled = 1`,
+		`CREATE INDEX IF NOT EXISTS idx_awg_devices_client_enabled ON awg_devices(client_id, desired_enabled)`,
+		`CREATE INDEX IF NOT EXISTS idx_awg_devices_endpoint_enabled ON awg_devices(endpoint_id, desired_enabled)`,
+		`CREATE INDEX IF NOT EXISTS idx_awg_devices_sync_state ON awg_devices(sync_state)`,
+		`CREATE INDEX IF NOT EXISTS idx_awg_devices_previous_public_key ON awg_devices(previous_public_key)`,
+		`CREATE INDEX IF NOT EXISTS idx_awg_devices_ip_reusable_after ON awg_devices(ip_reusable_after)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_awg_devices_client_create_request
+			ON awg_devices(client_id, create_request_key) WHERE create_request_key != ''`,
+	}
+	for _, stmt := range awgIndexes {
+		if err := db.Exec(stmt).Error; err != nil {
+			return err
+		}
 	}
 	return nil
 }

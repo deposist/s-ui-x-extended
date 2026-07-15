@@ -32,6 +32,13 @@ func (o *EndpointService) GetAll() (*[]map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Existing installations may still manage one endpoint through the legacy
+	// settings-based configuration instead of Ext metadata; surface it with
+	// the same awgManaged marker so the frontend treats both alike.
+	legacyManagedTag := ""
+	if settings, settingsErr := (&SettingService{}).GetAWGSettings(); settingsErr == nil && settings.Enabled {
+		legacyManagedTag = settings.EndpointTag
+	}
 	var data []map[string]interface{}
 	for _, endpoint := range endpoints {
 		metadata, metadataErr := parseAWGEndpointMetadata(*endpoint)
@@ -43,7 +50,7 @@ func (o *EndpointService) GetAll() (*[]map[string]interface{}, error) {
 			"type":       endpoint.Type,
 			"tag":        endpoint.Tag,
 			"ext":        endpoint.Ext,
-			"awgManaged": metadata.Managed,
+			"awgManaged": metadata.Managed || (legacyManagedTag != "" && endpoint.Tag == legacyManagedTag),
 		}
 		if endpoint.Options != nil {
 			var restFields map[string]json.RawMessage
@@ -110,7 +117,16 @@ func (s *EndpointService) saveEndpointUpsert(tx *gorm.DB, act string, data json.
 		if err != nil {
 			return nil, err
 		}
-		if currentMetadata.Managed && !awgEndpointPeersEqual(current.Options, endpoint.Options) {
+		managed := currentMetadata.Managed
+		if !managed {
+			// Existing installations may still manage this endpoint through the
+			// legacy settings-based single-endpoint configuration instead of
+			// Ext metadata; their peers are equally owned by the device manager.
+			if settings, settingsErr := (&SettingService{}).GetAWGSettings(); settingsErr == nil && settings.Enabled && current.Tag == settings.EndpointTag {
+				managed = true
+			}
+		}
+		if managed && !awgEndpointPeersEqual(current.Options, endpoint.Options) {
 			return nil, fmt.Errorf("managed AWG endpoint peers are controlled by the device manager")
 		}
 	}

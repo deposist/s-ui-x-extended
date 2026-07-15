@@ -141,7 +141,7 @@ func TestAWGSchemaConstraints(t *testing.T) {
 	}
 	for _, index := range []string{
 		"idx_awg_devices_public_key",
-		"idx_awg_devices_active_ipv4",
+		"idx_awg_devices_endpoint_ipv4",
 		"idx_awg_devices_client_enabled",
 		"idx_awg_devices_client_create_request",
 	} {
@@ -209,6 +209,12 @@ func TestAWGCreateRequestKeyUniqueness(t *testing.T) {
 
 func TestEnsureSchemaAddsRequestKeysToLegacyAWGTable(t *testing.T) {
 	db := openTestDB(t)
+	// InitDB creates awg_devices on fresh databases; replace it with the
+	// legacy layout (no request-key or endpoint_id columns) to model an
+	// upgraded install.
+	if err := db.Exec(`DROP TABLE IF EXISTS awg_devices`).Error; err != nil {
+		t.Fatal(err)
+	}
 	if err := db.Exec(`CREATE TABLE awg_devices (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		client_id INTEGER NOT NULL,

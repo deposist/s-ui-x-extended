@@ -117,9 +117,9 @@ func (a *ApiService) ListClientAWGDevices(c *gin.Context) {
 }
 
 type createAWGDeviceRequest struct {
-	EndpointID uint   `json:"endpointId"`
-	Name       string `json:"name"`
-	RequestKey string `json:"requestKey"`
+	EndpointID uint   `json:"endpointId" form:"endpointId"`
+	Name       string `json:"name" form:"name"`
+	RequestKey string `json:"requestKey" form:"requestKey"`
 }
 
 func (a *ApiService) CreateClientAWGDevice(c *gin.Context) {
@@ -131,7 +131,10 @@ func (a *ApiService) CreateClientAWGDevice(c *gin.Context) {
 		return
 	}
 	var req createAWGDeviceRequest
-	if err := c.ShouldBindJSON(&req); err != nil || req.EndpointID == 0 {
+	// ShouldBind selects the binding from the request Content-Type. The panel
+	// frontend posts application/x-www-form-urlencoded (the axios default in
+	// plugins/api.ts), while API consumers may post JSON; both must bind.
+	if err := c.ShouldBind(&req); err != nil || req.EndpointID == 0 {
 		jsonMsg(c, "awg", errors.New("invalid request"))
 		return
 	}

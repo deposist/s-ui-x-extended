@@ -130,6 +130,12 @@ func TestRestoreBackupRollsBack(t *testing.T) {
 	if got, _ := os.ReadFile(execPath); string(got) != "GOOD-OLD" {
 		t.Fatalf("binary was not rolled back, got %q", got)
 	}
+	// The restore must be a rename, not a content copy: rollback runs inside
+	// the process executing execPath, and writing into a running binary fails
+	// with ETXTBSY on Linux. A consumed .bak proves the rename path was taken.
+	if _, err := os.Stat(execPath + backupSuffix); !os.IsNotExist(err) {
+		t.Fatal("backup should be consumed by the rename-based restore")
+	}
 }
 
 // SR-012: a freshly-applied binary that keeps failing to boot is rolled back

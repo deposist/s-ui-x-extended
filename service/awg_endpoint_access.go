@@ -74,6 +74,13 @@ func AWGSettingsForEndpoint(endpoint model.Endpoint) (AWGSettings, error) {
 	if err != nil {
 		return AWGSettings{}, err
 	}
+	// Every caller (device manager, endpoint access, peer injection) expects a
+	// managed endpoint here. Building settings for an unmanaged endpoint made
+	// ReplaceClientAWGEndpointAccess silently accept assignments to plain
+	// WireGuard endpoints that no device manager will ever reconcile.
+	if !metadata.Managed {
+		return AWGSettings{}, errors.New("endpoint is not a managed AWG endpoint")
+	}
 	var options awgManagedEndpointOptions
 	if err := json.Unmarshal(endpoint.Options, &options); err != nil || len(options.Address) == 0 {
 		return AWGSettings{}, errors.New("managed AWG endpoint options are invalid")

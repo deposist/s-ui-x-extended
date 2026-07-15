@@ -185,11 +185,24 @@ func InitDB(dbPath string) error {
 		&model.Client{},
 		&model.Changes{},
 		&model.AuditEvent{},
-		&model.ClientEndpointAccess{},
-		&model.AWGDevice{},
 	)
 	if err != nil {
 		return err
+	}
+	// The AWG tables are shared with paidsub.EnsureSchema, which upgrades them
+	// with raw, guarded DDL. AutoMigrate only CREATES them on fresh databases:
+	// running it over an existing raw-SQL table makes GORM's SQLite migrator
+	// rebuild the table (its rendered column defaults differ textually from
+	// the raw DDL), and that rebuild silently dropped columns on the
+	// 1.0.2-beta1 -> 1.0.2 upgrade, crashing every boot with
+	// "no such column: endpoint_id".
+	for _, awgModel := range []any{&model.ClientEndpointAccess{}, &model.AWGDevice{}} {
+		if db.Migrator().HasTable(awgModel) {
+			continue
+		}
+		if err := db.AutoMigrate(awgModel); err != nil {
+			return err
+		}
 	}
 	if err := dropDeprecatedTables(); err != nil {
 		return err

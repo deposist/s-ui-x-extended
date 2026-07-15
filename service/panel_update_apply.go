@@ -238,12 +238,18 @@ func copyFile(src string, dst string) error {
 }
 
 // RestoreBackup restores <execPath>.bak over execPath (rollback, SR-012).
+//
+// It must use rename, not a content copy: rollback runs inside the very
+// process that is executing execPath, and on Linux opening a running binary
+// for writing fails with ETXTBSY ("text file busy"). Rename replaces the
+// directory entry atomically while the running process keeps its old inode,
+// which is the same mechanism swapBinary relies on for the forward swap.
 func RestoreBackup(execPath string) error {
 	backup := execPath + backupSuffix
 	if _, err := os.Stat(backup); err != nil {
 		return err
 	}
-	return copyFile(backup, execPath)
+	return os.Rename(backup, execPath)
 }
 
 func writePendingMarker(execPath string) error {
