@@ -1071,6 +1071,7 @@ export default {
       expiresIn: "истекает через {days} дн.",
       expired: "истекло",
       expiryInvalid: "Дата истечения должна быть в будущем",
+      qrFailed: "Не удалось построить QR-код. Скачайте файл .conf.",
     },
     basics: "Основы",
     config: "Конфигурация",

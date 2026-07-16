@@ -8,6 +8,17 @@
 
 - 暂无未发布变更。
 
+## [1.0.6-beta2] - 2026-07-16 - sudoku/mieru 链接回填、AWG 2.0 二维码修复
+
+启动时回填 sudoku/mieru 客户端链接，并修复 AmneziaWG 2.0 设备管理器中的空白二维码。
+
+- sudoku 和 mieru 链接以前仅在保存客户端或入站时生成，因此在 v1.0.6-beta1 之前分配的客户端没有本地链接和二维码，需要手动重新保存。`ClientService.RegenerateMissingLocalLinks` 现在在 `InitDB` 之后于启动时运行：对于 sudoku/mieru 入站上的每个客户端，通过 `rebuildClientLinks` 重新生成本地链接，并仅在变更时写回。非本地链接保留，缺失的 mieru 凭据被回填并持久化，不在此类入站上的客户端不会被触碰。该过程非致命且幂等，因此第二次启动不做任何操作。
+- AmneziaWG 2.0 设备管理器中的二维码按钮对完整的 AWG 2.0 配置显示空白图片。`RenderAWGConfigQR` 按手选的 1500 字节上限截断配置并返回错误，`jsonMsg` 将其作为 HTTP 200 下的 JSON 交付；前端将该 blob 送入 `<img>` 标签，而 JSON 无法绘制。带有垃圾和初始化包字段（I1-I5、J1-J3、Itime）的配置超过 1500 字节，因此上限恰好在该功能需要服务的配置上触发。
+- 移除 1500 字节上限。`RenderAWGConfigQR` 现在以 Low 纠错级别编码（QR 版本 40 时约 2953 字节），仅在编解码器本身拒绝负载时返回 `ErrAWGConfigTooLargeQR`。向配置中添加 J1、J2、J3 和 Itime；它们从端点选项中解析但从未写入，导致 AWG 2.0 客户端获得不完整的混淆配置。
+- `GetClientAWGDeviceQR` 在失败时返回真实的 HTTP 状态（配置对 QR 过大时为 422，否则 500），而不是将其隐藏在 200 响应中。客户端模态框会检查响应的 content-type，在非图片时显示服务器消息或备用 `qrFailed`，并指向 `.conf` 下载。该消息已添加到英文、俄文和两种中文本地化。
+
+完整发布说明：[`docs/releases/v1.0.6-beta2.md`](docs/releases/v1.0.6-beta2.md)。
+
 ## [1.0.6-beta1] - 2026-07-16 - sudoku/mieru 分享链接、sudoku 模式可见性、AWG 控制台密钥
 
 新增 sudoku 和 mieru 分享链接，使 sudoku 的 http-mask 模式在入站编辑器中可见，并新增用于 AmneziaWG 设备密钥加密密钥的控制台菜单。

@@ -9,6 +9,7 @@ import (
 
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/service"
+	"github.com/deposist/s-ui-x-extended/util/redact"
 
 	"github.com/gin-gonic/gin"
 )
@@ -227,16 +228,29 @@ func (a *ApiService) GetClientAWGDeviceQR(c *gin.Context) {
 	}
 	config, err := devices.RenderOwnedConfig(c.Request.Context(), clientID, endpointID, deviceID)
 	if err != nil {
-		jsonMsg(c, "awg", err)
+		awgQRError(c, err)
 		return
 	}
 	png, err := service.RenderAWGConfigQR(config)
 	if err != nil {
-		jsonMsg(c, "awg", err)
+		awgQRError(c, err)
 		return
 	}
 	c.Header("Cache-Control", "no-store")
 	c.Data(http.StatusOK, "image/png", png)
+}
+
+// awgQRError writes a genuine HTTP status for the binary QR endpoint. Unlike the
+// JSON SPA envelope (jsonMsg, which always returns 200), this handler streams an
+// image; a 200 body that is actually JSON would be fed straight into an <img>
+// tag and render as an empty picture. Oversized configs map to 422 so the
+// client can offer the .conf download instead; everything else is 500.
+func awgQRError(c *gin.Context, err error) {
+	status := http.StatusInternalServerError
+	if errors.Is(err, service.ErrAWGConfigTooLargeQR) {
+		status = http.StatusUnprocessableEntity
+	}
+	c.JSON(status, Msg{Success: false, Msg: "awg: " + redact.String(err.Error())})
 }
 
 func (a *ApiService) RotateClientAWGDevice(c *gin.Context) {

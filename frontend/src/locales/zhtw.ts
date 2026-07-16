@@ -533,6 +533,7 @@ export default {
       expiresIn: "{days} 天後過期",
       expired: "已過期",
       expiryInvalid: "過期日期必須在將來",
+      qrFailed: "無法生成 QR 碼，請改為下載 .conf 檔案。",
     },
     name: "名稱",
     desc: "描述",

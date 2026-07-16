@@ -503,13 +503,41 @@ export default {
       URL.revokeObjectURL(url)
     },
     async showAwgQr(endpointId: number, device: any) {
-      const response = await api.get(`api/awg/clients/${this.$props.id}/devices/${device.id}/qr`, {
-        params: { endpointId }, responseType: 'blob',
-      })
-      if (this.awgQrUrl) URL.revokeObjectURL(this.awgQrUrl)
-      this.awgQrUrl = URL.createObjectURL(response.data)
-      this.awgQrDeviceName = device.name
-      this.awgQrDialog = true
+      try {
+        const response = await api.get(`api/awg/clients/${this.$props.id}/devices/${device.id}/qr`, {
+          params: { endpointId }, responseType: 'blob',
+        })
+        // The QR endpoint streams image/png on success. Any other content type
+        // means the server returned an error envelope (blob-wrapped JSON); feeding
+        // that into <img src> renders an empty picture, so surface it instead.
+        const blob: Blob = response.data
+        if (!blob || !blob.type.startsWith('image/')) {
+          push.error({ message: await this.awgQrErrorMessage(blob) })
+          return
+        }
+        if (this.awgQrUrl) URL.revokeObjectURL(this.awgQrUrl)
+        this.awgQrUrl = URL.createObjectURL(blob)
+        this.awgQrDeviceName = device.name
+        this.awgQrDialog = true
+      } catch (e: any) {
+        push.error({ message: await this.awgQrErrorMessage(e?.response?.data) })
+      }
+    },
+    // Best-effort extraction of the server error text from a blob-wrapped JSON
+    // envelope, falling back to a generic QR failure message.
+    async awgQrErrorMessage(payload: any): Promise<string> {
+      try {
+        if (payload instanceof Blob) {
+          const text = await payload.text()
+          const parsed = JSON.parse(text)
+          if (parsed?.msg) return parsed.msg
+        } else if (payload?.msg) {
+          return payload.msg
+        }
+      } catch {
+        // fall through to the generic message
+      }
+      return this.$t('client.awg.qrFailed')
     },
   },
   computed: {

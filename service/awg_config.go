@@ -15,8 +15,6 @@ import (
 	"gorm.io/gorm"
 )
 
-const maxAWGConfigQRBytes = 1500
-
 var (
 	ErrAWGConfigUnavailable = errors.New("AWG configuration is unavailable")
 	ErrAWGConfigTooLargeQR  = errors.New("AWG configuration is too large for QR")
@@ -118,6 +116,10 @@ func (m *AWGManager) renderOwnedConfigInWorker(deviceID, clientID uint) ([]byte,
 	writeAWGConfigString(&config, "I3", a.I3)
 	writeAWGConfigString(&config, "I4", a.I4)
 	writeAWGConfigString(&config, "I5", a.I5)
+	writeAWGConfigString(&config, "J1", a.J1)
+	writeAWGConfigString(&config, "J2", a.J2)
+	writeAWGConfigString(&config, "J3", a.J3)
+	writeAWGConfigInt64(&config, "Itime", a.ITime)
 	config.WriteString("\n[Peer]\n")
 	config.WriteString("PublicKey = " + managed.ServerPublicKey + "\n")
 	config.WriteString("PresharedKey = " + base64.StdEncoding.EncodeToString(psk) + "\n")
@@ -156,19 +158,34 @@ func awgClientKeepalive(override int) int {
 	return override
 }
 
+// RenderAWGConfigQR encodes the rendered AWG config as a PNG QR image. The
+// upper size bound is not a hand-picked constant: it is whatever the QR codec
+// can actually fit at the chosen error-correction level. AWG 2.0 configs carry
+// long junk/init-packet fields (I1-I5, J1-J3), so Low ECC is used for the
+// widest byte capacity (~2953 bytes at version 40). When the payload still
+// exceeds that, qrcode.Encode reports "content too long to encode"; that case
+// is surfaced as ErrAWGConfigTooLargeQR so callers can fall back to the .conf
+// download instead of shipping a broken image.
 func RenderAWGConfigQR(config []byte) ([]byte, error) {
 	if len(config) == 0 {
 		return nil, ErrAWGConfigUnavailable
 	}
-	if len(config) > maxAWGConfigQRBytes {
-		return nil, ErrAWGConfigTooLargeQR
+	png, err := qrcode.Encode(string(config), qrcode.Low, 512)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrAWGConfigTooLargeQR, err)
 	}
-	return qrcode.Encode(string(config), qrcode.Medium, 512)
+	return png, nil
 }
 
 func writeAWGConfigInt(builder *strings.Builder, key string, value int) {
 	if value > 0 {
 		builder.WriteString(key + " = " + strconv.Itoa(value) + "\n")
+	}
+}
+
+func writeAWGConfigInt64(builder *strings.Builder, key string, value int64) {
+	if value > 0 {
+		builder.WriteString(key + " = " + strconv.FormatInt(value, 10) + "\n")
 	}
 }
 

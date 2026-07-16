@@ -537,6 +537,7 @@ export default {
       expiresIn: "{days} 天后过期",
       expired: "已过期",
       expiryInvalid: "过期日期必须在将来",
+      qrFailed: "无法生成二维码，请改为下载 .conf 文件。",
     },
     basics: "基础",
     config: "配置",

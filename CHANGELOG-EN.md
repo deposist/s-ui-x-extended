@@ -9,6 +9,17 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.6-beta2] - 2026-07-16 - sudoku/mieru link backfill, AWG 2.0 QR fix
+
+Backfills sudoku/mieru client links at startup and fixes the empty QR code in the AmneziaWG 2.0 device manager.
+
+- Sudoku and mieru links were generated only on a client or inbound save, so clients assigned before v1.0.6-beta1 had no local link and no QR until a manual re-save. `ClientService.RegenerateMissingLocalLinks` now runs at startup after `InitDB`: for every client on a sudoku/mieru inbound it regenerates the local links through `rebuildClientLinks` and writes back only what changed. Non-local links are kept, missing mieru credentials are filled in and persisted, and clients on no such inbound are left untouched. The pass is non-fatal and idempotent, so a second start is a no-op.
+- The QR button in the AmneziaWG 2.0 device manager drew an empty picture for full AWG 2.0 configs. `RenderAWGConfigQR` capped the config at a hand-picked 1500 bytes and returned an error that `jsonMsg` delivered as JSON under HTTP 200; the frontend fed that blob into an `<img>` tag, which cannot draw JSON. A config with the junk and init-packet fields (I1-I5, J1-J3, Itime) runs past 1500 bytes, so the cap fired on exactly the configs the feature serves.
+- Removed the 1500-byte cap. `RenderAWGConfigQR` now encodes at Low error-correction (about 2953 bytes at QR version 40) and reports `ErrAWGConfigTooLargeQR` only when the codec refuses the payload. Added J1, J2, J3 and Itime to the rendered config; they were parsed from the endpoint options but never written, so AWG 2.0 clients got an incomplete obfuscation profile.
+- `GetClientAWGDeviceQR` returns a real HTTP status on failure (422 when the config is too large for a QR, 500 otherwise) instead of hiding it in a 200 response. The client modal checks the response content type and, on a non-image, shows the server message or a `qrFailed` fallback pointing at the `.conf` download. The message is added to English, Russian and both Chinese locales.
+
+Full release notes: [`docs/releases/v1.0.6-beta2.md`](docs/releases/v1.0.6-beta2.md).
+
 ## [1.0.6-beta1] - 2026-07-16 - sudoku/mieru links, sudoku mode visibility, AWG console key
 
 Adds sudoku and mieru share links, makes the sudoku http-mask mode visible in the inbound editor, and ships a console menu for the AmneziaWG device key-encryption key.

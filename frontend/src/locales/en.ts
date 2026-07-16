@@ -1071,6 +1071,7 @@ export default {
       expiresIn: "expires in {days}d",
       expired: "expired",
       expiryInvalid: "Expiry date must be in the future",
+      qrFailed: "Could not render the QR code. Download the .conf file instead.",
     },
     basics: "Basics",
     config: "Config",
