@@ -9,16 +9,17 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
-## [1.0.6] - 2026-07-15 - console menu for the AWG key
+## [1.0.6-beta1] - 2026-07-16 - sudoku/mieru links, sudoku mode visibility, AWG console key
 
-Adds a console menu entry to generate the AmneziaWG device key-encryption key, and fixes an env-key rewrite bug in the console script.
+Adds sudoku and mieru share links, makes the sudoku http-mask mode visible in the inbound editor, and ships a console menu for the AmneziaWG device key-encryption key.
 
-- Web-panel self-update replaces the binary and restarts the service but does not run `install.sh`, so it never provisions `AWG_KEY_ENC`. A panel updated only through the web UI could still fail managed AmneziaWG device operations with `awg: AWG encryption key is unavailable`.
-- Menu item 23 in `s-ui` is now "Generate env keys" with a submenu: session cookie key (`SUI_COOKIE_KEY`) and AmneziaWG device key (`AWG_KEY_ENC`). The AWG option generates the key when it is missing from `/etc/s-ui/secretbox.env`, ensures the systemd drop-in loads that file, and offers a restart. An existing key is kept unless a rotation is confirmed, because rotating it after devices exist makes their stored key material undecryptable.
-- Fixed `write_env_value` in the console script appending a duplicate line instead of replacing the value when an env key already existed. An `exit 0` inside the awk detector was overwritten by the trailing `END { exit 1 }`, so the "already present" branch never ran; this also affected rotating `SUI_COOKIE_KEY` from the menu.
-- Added `scripts/setup-awg-key.sh` for the same check-and-generate as a standalone command.
+- Sudoku and mieru now produce a share link and QR. Sudoku is JSON-delivered and had no URI link, so the raw-links tab was empty; it now emits `sudoku://` (base64url of the short-link JSON, matching `SUDOKU-ASCII/sudoku`). Mieru emits `mierus://` (the `enfein/mieru` simple URL), chosen over `mieru://` because it needs no protobuf schema. Both stay `clientDelivery=json`, so the subscription path and the issue #4 assignability fix are unchanged; the link is an addition.
+- Sudoku http-mask mode is now easy to find. The inbound fields sit in a titled card matching the outbound editor, the selector has a placeholder and a hint (empty means the core default, legacy, and the client only follows the mode if its core supports it), and the recommended preset fills in `http_mask_mode=legacy`. A regression test locks legacy/stream/poll/auto/ws into the client out_json.
+- The raw-links tab no longer reads like a failure for JSON-delivered protocols. It now explains that some protocols have no URI link and are delivered through the JSON subscription, and points to the Sing-box tab for import or QR.
+- Menu item 23 in `s-ui` is now "Generate env keys" with a submenu: session cookie key (`SUI_COOKIE_KEY`) and AmneziaWG device key (`AWG_KEY_ENC`). Web-panel self-update replaces the binary but does not run `install.sh`, so it never provisions `AWG_KEY_ENC`; the menu generates the key when it is missing from `/etc/s-ui/secretbox.env`, wires up the systemd drop-in, and offers a restart. An existing key is kept unless a rotation is confirmed, because rotating it after devices exist makes their stored key material undecryptable.
+- Fixed `write_env_value` in the console script appending a duplicate line instead of replacing the value when an env key already existed; this also affected rotating `SUI_COOKIE_KEY` from the menu. Added `scripts/setup-awg-key.sh` for the same check-and-generate as a standalone command.
 
-Full release notes: [`docs/releases/v1.0.6.md`](docs/releases/v1.0.6.md).
+Full release notes: [`docs/releases/v1.0.6-beta1.md`](docs/releases/v1.0.6-beta1.md).
 
 ## [1.0.5] - 2026-07-15 - hotfix version precedence, AWG key rollup
 

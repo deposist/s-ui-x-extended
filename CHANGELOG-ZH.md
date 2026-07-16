@@ -8,16 +8,17 @@
 
 - 暂无未发布变更。
 
-## [1.0.6] - 2026-07-15 - AWG 密钥控制台菜单
+## [1.0.6-beta1] - 2026-07-16 - sudoku/mieru 分享链接、sudoku 模式可见性、AWG 控制台密钥
 
-新增用于生成 AmneziaWG 设备密钥加密密钥的控制台菜单项，并修复控制台脚本中 env 密钥重写的错误。
+新增 sudoku 和 mieru 分享链接，使 sudoku 的 http-mask 模式在入站编辑器中可见，并新增用于 AmneziaWG 设备密钥加密密钥的控制台菜单。
 
-- 网页面板自更新会替换二进制并重启服务，但不会运行 `install.sh`，因此不会创建 `AWG_KEY_ENC`。仅通过网页更新的面板可能仍因 `awg: AWG encryption key is unavailable` 而无法操作受管 AmneziaWG 设备。
-- `s-ui` 中的菜单项 23 现为“Generate env keys”，包含子菜单：会话 Cookie 密钥（`SUI_COOKIE_KEY`）和 AmneziaWG 设备密钥（`AWG_KEY_ENC`）。当 `/etc/s-ui/secretbox.env` 中缺少时，AWG 选项会生成密钥，配置 systemd drop-in 以加载该文件，并提示重启。除非确认轮换，否则保留现有密钥，因为在设备创建后轮换会使其已存储的密钥材料无法解密。
-- 修复：当 env 密钥已存在时，控制台脚本中的 `write_env_value` 会追加重复行而非替换值。awk 检测块中的 `exit 0` 被末尾的 `END { exit 1 }` 覆盖，导致“已存在”分支从不执行；这也影响从菜单轮换 `SUI_COOKIE_KEY`。
-- 新增 `scripts/setup-awg-key.sh`，以独立命令形式执行相同的检查并生成。
+- sudoku 和 mieru 现在会生成分享链接和二维码。sudoku 仅通过 JSON 交付且没有 URI 链接，因此原始链接页签为空；现在它会生成 `sudoku://`（短链接 JSON 的 base64url，与 `SUDOKU-ASCII/sudoku` 一致）。mieru 生成 `mierus://`（`enfein/mieru` 的简单 URL），选择它而非 `mieru://` 是因为不需要 protobuf 模式。两者仍为 `clientDelivery=json`，因此订阅路径和 issue #4 的可分配修复不受影响；链接是新增而非替换。
+- sudoku 的 http-mask 模式现在容易找到。入站字段放入一个带标题的卡片（与出站编辑器一致），选择器有占位符和提示（空值表示内核默认的 legacy，且客户端仅在其内核支持时才会遵循该模式），推荐预设会填入 `http_mask_mode=legacy`。回归测试锁定 legacy/stream/poll/auto/ws 传入客户端 out_json。
+- 对于通过 JSON 交付的协议，原始链接页签不再看起来像错误。它现在会说明某些协议没有 URI 链接并通过 JSON 订阅交付，并指向 Sing-box 页签。
+- `s-ui` 中的菜单项 23 现为“Generate env keys”，包含子菜单：会话 Cookie 密钥（`SUI_COOKIE_KEY`）和 AmneziaWG 设备密钥（`AWG_KEY_ENC`）。网页面板自更新会替换二进制但不运行 `install.sh`，因此不会创建 `AWG_KEY_ENC`；当 `/etc/s-ui/secretbox.env` 中缺少时，菜单会生成密钥，配置 systemd drop-in，并提示重启。除非确认轮换，否则保留现有密钥，因为在设备创建后轮换会使其已存储的密钥材料无法解密。
+- 修复：当 env 密钥已存在时，控制台脚本中的 `write_env_value` 会追加重复行而非替换值；这也影响从菜单轮换 `SUI_COOKIE_KEY`。新增 `scripts/setup-awg-key.sh`，以独立命令形式执行相同的检查并生成。
 
-完整发布说明：[`docs/releases/v1.0.6.md`](docs/releases/v1.0.6.md)。
+完整发布说明：[`docs/releases/v1.0.6-beta1.md`](docs/releases/v1.0.6-beta1.md)。
 
 ## [1.0.5] - 2026-07-15 - 热修复版本优先级、AWG 密钥合并
 
