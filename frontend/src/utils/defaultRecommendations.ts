@@ -243,6 +243,9 @@ export function applyInboundRecommendedValues(inbound: Inbound): void {
       target.padding_max = RECOMMENDED.sudokuPaddingMax
       target.handshake_timeout = RECOMMENDED.sudokuHandshakeTimeout
       target.enable_pure_downlink = true
+      // Make the http-mask mode explicit so the operator sees it in the editor
+      // instead of an empty field that silently means "core default" (issue #4).
+      target.http_mask_mode = target.http_mask_mode || RECOMMENDED.sudokuHttpMaskModeDefault
       break
     case InTypes.TrustTunnel:
       target.network = ['tcp', 'udp']

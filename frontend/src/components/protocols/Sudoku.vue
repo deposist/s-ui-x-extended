@@ -48,20 +48,28 @@
     </v-row>
 
     <!-- inbound http-mask -->
-    <v-row v-if="direction == 'in'">
-      <v-col cols="12" sm="4">
-        <v-switch color="primary" hide-details :label="$t('types.sudoku.disableHttpMask')" v-model="data.disable_http_mask"></v-switch>
-      </v-col>
-      <v-col cols="12" sm="4">
-        <v-select clearable hide-details :label="$t('types.sudoku.httpMaskMode')" :items="maskModes" v-model="data.http_mask_mode"></v-select>
-      </v-col>
-      <v-col cols="12" sm="4">
-        <v-text-field hide-details :label="$t('types.sudoku.pathRoot')" v-model="data.path_root"></v-text-field>
-      </v-col>
-      <v-col cols="12">
-        <v-text-field hide-details :label="$t('types.sudoku.fallback')" v-model="data.fallback"></v-text-field>
-      </v-col>
-    </v-row>
+    <v-card v-if="direction == 'in'" border density="compact" color="background" style="margin-top: 8px;">
+      <v-card-subtitle style="padding-top: 8px;">{{ $t('types.sudoku.httpMask') }}</v-card-subtitle>
+      <v-card-text>
+        <v-row>
+          <v-col cols="12" sm="4">
+            <v-switch color="primary" hide-details :label="$t('types.sudoku.disableHttpMask')" v-model="data.disable_http_mask"></v-switch>
+          </v-col>
+          <v-col cols="12" sm="4">
+            <v-select clearable :label="$t('types.sudoku.httpMaskMode')" :items="maskModes"
+              :placeholder="$t('types.sudoku.httpMaskModePlaceholder')" persistent-placeholder
+              :hint="$t('types.sudoku.httpMaskModeHint')" persistent-hint
+              v-model="data.http_mask_mode"></v-select>
+          </v-col>
+          <v-col cols="12" sm="4">
+            <v-text-field hide-details :label="$t('types.sudoku.pathRoot')" v-model="data.path_root"></v-text-field>
+          </v-col>
+          <v-col cols="12">
+            <v-text-field hide-details :label="$t('types.sudoku.fallback')" v-model="data.fallback"></v-text-field>
+          </v-col>
+        </v-row>
+      </v-card-text>
+    </v-card>
 
     <!-- outbound http-mask -->
     <v-card v-if="direction == 'out'" border density="compact" color="background" style="margin-top: 8px;">
@@ -91,7 +99,7 @@
 </template>
 
 <script lang="ts">
-import { RECOMMENDED } from '@/types/recommended'
+import { sudokuHttpMaskMode } from '@/types/recommended'
 import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 
 export default {
@@ -104,7 +112,9 @@ export default {
   data() {
     return {
       tableTypes: ['prefer_ascii', 'prefer_entropy', 'up_ascii_down_entropy', 'up_entropy_down_ascii'],
-      maskModes: ['legacy', 'stream', 'poll', 'auto', 'ws'],
+      // Single source of truth (frontend/src/types/recommended.ts) so the
+      // selector and the recommended-preset default can't drift apart.
+      maskModes: sudokuHttpMaskMode,
     }
   },
   computed: {

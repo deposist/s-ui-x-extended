@@ -1875,6 +1875,8 @@ export default {
       customTables: "Пользовательские таблицы",
       disableHttpMask: "Отключить HTTP mask",
       httpMaskMode: "Режим HTTP mask",
+      httpMaskModePlaceholder: "legacy (по умолчанию в ядре)",
+      httpMaskModeHint: "Оставьте пустым для режима по умолчанию (legacy). Клиент применит выбранный режим только если его ядро его поддерживает.",
       pathRoot: "Корневой путь",
       fallback: "Fallback",
       httpMask: "HTTP mask",

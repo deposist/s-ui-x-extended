@@ -1867,6 +1867,8 @@ export default {
       customTables: "Custom tables",
       disableHttpMask: "Disable HTTP mask",
       httpMaskMode: "HTTP mask mode",
+      httpMaskModePlaceholder: "legacy (core default)",
+      httpMaskModeHint: "Leave empty to use the core default (legacy). The client only follows this if its core supports the chosen mode.",
       pathRoot: "Path root",
       fallback: "Fallback",
       httpMask: "HTTP mask",

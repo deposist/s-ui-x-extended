@@ -206,6 +206,7 @@ export const RECOMMENDED = {
   sudokuPaddingMin: 10,
   sudokuPaddingMax: 30,
   sudokuHandshakeTimeout: 5,
+  sudokuHttpMaskModeDefault: 'legacy',
   openvpnCipher: 'AES-256-GCM',
   openvpnAuth: 'SHA256',
   healthCheckUrl: 'https://www.gstatic.com/generate_204',

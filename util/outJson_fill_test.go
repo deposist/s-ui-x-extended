@@ -216,3 +216,47 @@ func TestFillOutJsonSkipsTransparentInbounds(t *testing.T) {
 		}
 	}
 }
+
+// TestSudokuOutCarriesEveryHttpMaskMode is the issue #4 regression guard for the
+// "only legacy mode works" report. The inbound editor offers legacy/stream/poll/
+// auto/ws; each one the operator picks must land verbatim in the client out_json
+// as http_mask.mode, or the client silently falls back to the core default and
+// only legacy interops. One case (stream) was already covered; this locks the
+// whole set so a builder change cannot drop a mode.
+func TestSudokuOutCarriesEveryHttpMaskMode(t *testing.T) {
+	for _, mode := range []string{"legacy", "stream", "poll", "auto", "ws"} {
+		t.Run(mode, func(t *testing.T) {
+			out := fillAndParse(t, fillInbound(t, "sudoku", map[string]interface{}{
+				"key":            "K",
+				"http_mask_mode": mode,
+			}))
+			hm, ok := out["http_mask"].(map[string]interface{})
+			if !ok {
+				t.Fatalf("sudoku out_json should have a nested http_mask object: %v", out)
+			}
+			if hm["mode"] != mode {
+				t.Errorf("http_mask.mode should mirror the inbound %q, got %v", mode, hm["mode"])
+			}
+			if hm["enabled"] != true {
+				t.Errorf("http_mask.enabled should be true when disable_http_mask is unset: %v", hm)
+			}
+		})
+	}
+}
+
+// TestSudokuOutOmitsModeWhenInboundHasNone documents the empty-selector path: if
+// the operator leaves the mode blank, the builder emits no http_mask.mode and the
+// client uses the core default. This is the one shape where "only legacy works" is
+// expected behaviour rather than a lost setting.
+func TestSudokuOutOmitsModeWhenInboundHasNone(t *testing.T) {
+	out := fillAndParse(t, fillInbound(t, "sudoku", map[string]interface{}{
+		"key": "K",
+	}))
+	hm, ok := out["http_mask"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("sudoku out_json should have a nested http_mask object: %v", out)
+	}
+	if _, has := hm["mode"]; has {
+		t.Errorf("http_mask.mode must be absent when the inbound sets no mode: %v", hm)
+	}
+}
