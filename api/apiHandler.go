@@ -59,6 +59,7 @@ func (a *APIHandler) registerGroupedRoutes(g *gin.RouterGroup) {
 	g.POST("/save", a.save)
 	g.POST("/restartApp", a.ApiService.RestartApp)
 	g.POST("/restartSb", a.ApiService.RestartSb)
+	g.POST("/regenerateClientLinks", a.ApiService.RegenerateClientLinks)
 	g.POST("/linkConvert", a.ApiService.LinkConvert)
 	g.POST("/subConvert", a.ApiService.SubConvert)
 	g.POST("/importdb", a.ApiService.ImportDb)

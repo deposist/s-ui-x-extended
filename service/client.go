@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gofrs/uuid/v5"
@@ -517,6 +518,62 @@ func normalizeLinksJSON(raw json.RawMessage) []byte {
 		return raw
 	}
 	return out
+}
+
+// linkBackfillOnce guards the lazy link backfill so it runs at most once per
+// process, on the first data load that carries a usable hostname.
+var linkBackfillOnce sync.Once
+
+// RegenerateMissingLocalLinksOnce runs the sudoku/mieru link backfill a single
+// time per process, but only once it has a non-empty hostname. The startup path
+// has no request host and settings.webDomain is usually blank, which left links
+// with an empty server and produced nothing; the panel's data-load path does
+// carry the host the operator reached the panel on (the same value a manual
+// re-save uses), so this is called from there. An empty hostname is ignored so
+// the Once is not consumed before a real host is available.
+func (s *ClientService) RegenerateMissingLocalLinksOnce(hostname string) {
+	if strings.TrimSpace(hostname) == "" {
+		return
+	}
+	linkBackfillOnce.Do(func() {
+		if err := s.RegenerateMissingLocalLinks(hostname); err != nil {
+			logger.Warning("link backfill (lazy): ", err)
+		}
+	})
+}
+
+// RegenerateAllClientLinks force-rebuilds the local links for every client on
+// all of their assigned inbounds, keeping their non-local (external) links. It
+// backs the manual "regenerate client links and QR" button, so unlike the lazy
+// backfill it always runs, covers every link type, and uses the host the
+// operator reached the panel on. Returns the number of clients processed.
+func (s *ClientService) RegenerateAllClientLinks(hostname string) (int, error) {
+	if strings.TrimSpace(hostname) == "" {
+		return 0, common.NewError("cannot regenerate links without a hostname")
+	}
+	db := database.GetDB()
+	var clients []model.Client
+	if err := db.Model(model.Client{}).Find(&clients).Error; err != nil {
+		return 0, err
+	}
+	if len(clients) == 0 {
+		return 0, nil
+	}
+	ptrs := make([]*model.Client, len(clients))
+	for i := range clients {
+		ptrs[i] = &clients[i]
+	}
+	err := db.Transaction(func(tx *gorm.DB) error {
+		if err := s.updateLinksWithFixedInbounds(tx, ptrs, hostname); err != nil {
+			return err
+		}
+		return database.SaveInBatchesSafe(tx, ptrs)
+	})
+	if err != nil {
+		return 0, err
+	}
+	logger.Infof("regenerated client links for %d client(s) on operator request", len(ptrs))
+	return len(ptrs), nil
 }
 
 var mtProtoFrontHosts = []string{

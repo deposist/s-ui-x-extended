@@ -130,6 +130,7 @@ const USED_ICONS = [
   'mdi-plus',
   'mdi-progress-clock',
   'mdi-qrcode',
+  'mdi-qrcode-edit',
   'mdi-receipt-text-outline',
   'mdi-refresh',
   'mdi-restart',

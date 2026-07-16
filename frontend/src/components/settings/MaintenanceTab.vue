@@ -15,7 +15,7 @@
     </v-row>
 
     <v-row density="comfortable" class="mt-4">
-      <v-col cols="12">
+      <v-col cols="12" class="d-flex flex-wrap ga-3">
         <v-btn
           variant="tonal"
           prepend-icon="mdi-backup-restore"
@@ -23,6 +23,14 @@
           color="primary"
         >
           {{ $t('main.backup.title') }}
+        </v-btn>
+        <v-btn
+          variant="tonal"
+          prepend-icon="mdi-qrcode-edit"
+          :loading="regenerating"
+          @click="regenerateLinks"
+        >
+          {{ $t('setting.regenerateLinks') }}
         </v-btn>
       </v-col>
     </v-row>
@@ -44,6 +52,17 @@
           {{ $t('main.backup.title') }}
         </v-btn>
       </v-col>
+      <v-col cols="12" sm="6" md="4">
+        <v-btn
+          block
+          variant="tonal"
+          prepend-icon="mdi-qrcode-edit"
+          :loading="regenerating"
+          @click="regenerateLinks"
+        >
+          {{ $t('setting.regenerateLinks') }}
+        </v-btn>
+      </v-col>
     </v-row>
   </div>
 
@@ -58,6 +77,7 @@
 import ConfigDoctor from '@/components/settings/ConfigDoctor.vue'
 import PanelUpdateCard from '@/components/settings/PanelUpdateCard.vue'
 import Backup from '@/layouts/modals/Backup.vue'
+import HttpUtils from '@/plugins/httputil'
 import { ref, computed } from 'vue'
 import { useUiMode } from '@/uiMode/useUiMode'
 
@@ -68,4 +88,15 @@ interface ModalControl {
 const { mode } = useUiMode()
 const nexus = computed(() => mode.value === 'nexus')
 const backupModal = ref<ModalControl>({ visible: false })
+
+const regenerating = ref(false)
+const regenerateLinks = async () => {
+  regenerating.value = true
+  try {
+    // HttpUtils.post surfaces the success/failure notification itself.
+    await HttpUtils.post('api/regenerateClientLinks', {})
+  } finally {
+    regenerating.value = false
+  }
+}
 </script>

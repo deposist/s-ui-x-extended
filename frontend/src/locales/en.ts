@@ -743,6 +743,7 @@ export default {
     diagnose: "Diagnose",
     restartApp: "Restart App",
     restartSb: "Restart Singbox",
+    regenerateClientLinks: "Client links regenerated",
     logoutAllAdmins: "Log out all admins",
   },
   doctor: {
@@ -949,6 +950,7 @@ export default {
     basics: "Basics",
     interface: "Interface",
     maintenance: "Maintenance",
+    regenerateLinks: "Regenerate client links & QR",
     sub: "Subscription",
     addr: "Address",
     port: "Port",

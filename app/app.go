@@ -88,17 +88,11 @@ func (a *APP) Init() error {
 	a.runtime = service.NewRuntime(a.core)
 	service.SetDefaultRuntime(a.runtime)
 
-	// One-time startup backfill: clients assigned to a sudoku/mieru inbound
-	// before this build stored their links have no local link for it, and only a
-	// manual re-save would regenerate one. Do it here so existing clients get
-	// their sudoku://mierus:// links (and QR) without operator action. Idempotent
-	// and non-fatal: a failure here must not block startup.
-	{
-		hostname, _ := a.SettingService.GetWebDomain()
-		if err := (&service.ClientService{Runtime: a.runtime}).RegenerateMissingLocalLinks(hostname); err != nil {
-			logger.Warning("failed to backfill sudoku/mieru client links: ", err)
-		}
-	}
+	// Backfill of sudoku/mieru client links (so existing clients get their
+	// sudoku://mierus:// links and QR without a manual re-save) runs lazily on
+	// the first panel data load, not here: startup has no request host and
+	// settings.webDomain is usually blank, which would generate links with an
+	// empty server. See ClientService.RegenerateMissingLocalLinksOnce.
 
 	// Mirror ipmonitor IP-limit enforcement into the durable audit log (D-5).
 	// Set via a hook to avoid an import cycle; debounced upstream so it cannot

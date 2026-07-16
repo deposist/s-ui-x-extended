@@ -121,6 +121,12 @@ func (a *ApiService) LoadData(c *gin.Context) {
 }
 
 func (a *ApiService) getData(c *gin.Context) (interface{}, error) {
+	// One-time lazy backfill of sudoku/mieru client links, using the host the
+	// operator reached the panel on. Startup has no request host and
+	// settings.webDomain is usually blank, so this is where existing clients get
+	// their links (and QR) without a manual re-save. Runs once per process.
+	a.ClientService.RegenerateMissingLocalLinksOnce(getHostname(c))
+
 	data := make(map[string]interface{}, 0)
 	lu := c.Query("lu")
 	isUpdated, err := a.ConfigService.CheckChanges(lu)
@@ -782,6 +788,15 @@ func (a *ApiService) auditSubscriptionPathChanges(c *gin.Context, actor string, 
 func (a *ApiService) RestartApp(c *gin.Context) {
 	err := a.PanelService.RestartPanel(3 * time.Second)
 	jsonMsg(c, "restartApp", err)
+}
+
+// RegenerateClientLinks rebuilds every client's local links and QR from the host
+// the operator reached the panel on. It backs the settings button for clients
+// whose links are missing or stale (for example sudoku/mieru links added in a
+// later build, or after changing the panel domain).
+func (a *ApiService) RegenerateClientLinks(c *gin.Context) {
+	count, err := a.ClientService.RegenerateAllClientLinks(getHostname(c))
+	jsonMsgObj(c, "regenerateClientLinks", map[string]any{"count": count}, err)
 }
 
 func (a *ApiService) RestartSb(c *gin.Context) {

@@ -78,9 +78,10 @@ func (a *APIv2Handler) initRouter(g *gin.RouterGroup) {
 // requireTokenScopeAny.
 var apiV2ActionScopes = map[string][]string{
 	// State mutations and active probes require write.
-	"save":          {"write"},
-	"restartApp":    {"write"},
-	"restartSb":     {"write"},
+	"save":                  {"write"},
+	"restartApp":            {"write"},
+	"restartSb":             {"write"},
+	"regenerateClientLinks": {"write"},
 	"checkOutbound": {"write"},
 	"linkConvert":   {"read", "write"},
 	"subConvert":    {"read", "write"},
@@ -131,6 +132,8 @@ func (a *APIv2Handler) postHandler(c *gin.Context) {
 		a.ApiService.RestartApp(c)
 	case "restartSb":
 		a.ApiService.RestartSb(c)
+	case "regenerateClientLinks":
+		a.ApiService.RegenerateClientLinks(c)
 	case "linkConvert":
 		a.ApiService.LinkConvert(c)
 	case "subConvert":
