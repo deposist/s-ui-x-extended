@@ -387,6 +387,138 @@ func (s *ClientService) updateLinksWithFixedInbounds(tx *gorm.DB, clients []*mod
 	return nil
 }
 
+// linkBackfillInboundTypes are the inbound types that gained a local URI link in
+// a later build than the one that first stored a client's links. A client
+// assigned to one of these before the upgrade has a links blob with no entry for
+// it, and nothing regenerates that until the operator next saves the client.
+// RegenerateMissingLocalLinks closes that gap at startup.
+var linkBackfillInboundTypes = []string{"sudoku", "mieru"}
+
+// RegenerateMissingLocalLinks is an idempotent startup backfill: for every client
+// assigned to an inbound whose type only recently started producing a local link
+// (sudoku, mieru), it regenerates the client's local links and persists them if
+// they changed. Clients that already have the links, or are assigned to no such
+// inbound, are left untouched and cause no write.
+//
+// It runs once per startup after InitDB. hostname is the fallback advertised host
+// used only when an inbound has no explicit Addrs; the same value the request
+// path passes to LinkGenerator.
+func (s *ClientService) RegenerateMissingLocalLinks(hostname string) error {
+	db := database.GetDB()
+
+	// Inbound ids of the backfill types, plus a set for quick membership tests.
+	var backfillInbounds []model.Inbound
+	if err := db.Model(model.Inbound{}).Preload("Tls").
+		Where("type in ?", linkBackfillInboundTypes).
+		Find(&backfillInbounds).Error; err != nil {
+		return err
+	}
+	if len(backfillInbounds) == 0 {
+		return nil // no sudoku/mieru inbounds; nothing to backfill
+	}
+	backfillInboundIDs := make(map[uint]struct{}, len(backfillInbounds))
+	for _, in := range backfillInbounds {
+		backfillInboundIDs[in.Id] = struct{}{}
+	}
+
+	var clients []model.Client
+	if err := db.Model(model.Client{}).Find(&clients).Error; err != nil {
+		return err
+	}
+
+	inboundCache := map[string][]model.Inbound{}
+	updated := 0
+	for i := range clients {
+		client := &clients[i]
+		var inboundIds []uint
+		if err := json.Unmarshal(client.Inbounds, &inboundIds); err != nil {
+			logger.Warningf("link backfill: skipped client %d with invalid inbounds: %v", client.Id, err)
+			continue
+		}
+		// Only touch clients assigned to at least one backfill inbound.
+		hasBackfill := false
+		for _, id := range inboundIds {
+			if _, ok := backfillInboundIDs[id]; ok {
+				hasBackfill = true
+				break
+			}
+		}
+		if !hasBackfill {
+			continue
+		}
+
+		cacheKey := string(client.Inbounds)
+		inbounds, cached := inboundCache[cacheKey]
+		if !cached {
+			if len(inboundIds) > 0 {
+				if err := db.Model(model.Inbound{}).Preload("Tls").
+					Where("id in ?", inboundIds).
+					Find(&inbounds).Error; err != nil {
+					return err
+				}
+			}
+			inboundCache[cacheKey] = inbounds
+		}
+
+		// Backfill any missing per-protocol credentials first (mieru needs a
+		// name/password to produce a link; sudoku is keyless and unaffected).
+		config := client.Config
+		configChanged := false
+		for _, inbound := range inbounds {
+			newConfig, backfilled, err := backfillClientProtocol(config, inbound.Type, client.Name)
+			if err != nil {
+				return err
+			}
+			if backfilled {
+				config = newConfig
+				configChanged = true
+			}
+		}
+
+		links, ok, err := rebuildClientLinks(client.Id, config, client.Links, inbounds, hostname, func(link map[string]string) bool {
+			return link["type"] != "local"
+		}, "startup link backfill")
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+
+		// Persist only when something actually changed, so a second startup is a
+		// no-op and untouched clients are never rewritten.
+		if !configChanged && bytes.Equal(normalizeLinksJSON(client.Links), normalizeLinksJSON(links)) {
+			continue
+		}
+		client.Config = config
+		client.Links = links
+		if err := db.Model(model.Client{}).Where("id = ?", client.Id).
+			Updates(map[string]any{"config": client.Config, "links": client.Links}).Error; err != nil {
+			return err
+		}
+		updated++
+	}
+	if updated > 0 {
+		logger.Infof("link backfill: regenerated local links for %d client(s) with sudoku/mieru inbounds", updated)
+	}
+	return nil
+}
+
+// normalizeLinksJSON re-marshals a links blob into a canonical form so the
+// change check compares content, not whitespace. Invalid JSON is returned as-is
+// so a malformed blob still counts as "changed" and gets rewritten.
+func normalizeLinksJSON(raw json.RawMessage) []byte {
+	var v []map[string]string
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return raw
+	}
+	out, err := json.Marshal(v)
+	if err != nil {
+		return raw
+	}
+	return out
+}
+
 var mtProtoFrontHosts = []string{
 	"www.microsoft.com", "www.apple.com", "www.cloudflare.com", "www.amazon.com",
 	"aws.amazon.com", "dl.google.com", "www.icloud.com", "www.bing.com", "www.tesla.com",
