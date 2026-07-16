@@ -55,26 +55,6 @@ docs/audit/
 tests/baseline/*
 !tests/baseline/run-command.ps1
 
-# Editor directories and files
-.idea
-.vscode
-
-# Local AI assistant instructions/state (not for public repo)
-CLAUDE.md
-AGENTS.md
-.claude/
-.pi/
-
-# Kiro local specs (not for public repo)
-.kiro/
-
-# Spec Kit / local dev tooling and design docs (not for public repo)
-specs/
-.specify/
-.codegraph/
-.continue/
-.agents/
-
 # Local 3x-ui import fixtures with real production data
 test-db/
 
@@ -87,23 +67,4 @@ test-db/
 # Windows reserved device-name files accidentally created by shell probes
 frontend/src/**/nul
 
-# pi-crew runtime state
-.crew/state/
-.crew/artifacts/
-.crew/worktrees/
-.crew/imports/
 
-/.crew/
-/.crew
-!.crew/artifacts/
-!.crew/graphs/
-!.crew/artifacts/.gitkeep
-!.crew/graphs/.gitkeep
-
-# Local Semgrep configuration
-.semgrep-rules/
-.semgrepignore
-
-# Generated initial admin password files
-initial-admin.txt
-**/initial-admin.txt
