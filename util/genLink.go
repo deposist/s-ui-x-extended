@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/deposist/s-ui-x-extended/core/capabilities"
@@ -37,6 +38,25 @@ func mapString(m map[string]interface{}, key string) string {
 func asBool(v interface{}) bool {
 	b, _ := v.(bool)
 	return b
+}
+
+// asInt coerces a JSON-decoded numeric (float64 from encoding/json, or the int
+// forms that can appear when a map is built in Go) into an int. ok is false for
+// nil or non-numeric values so callers can skip malformed ports.
+func asInt(v interface{}) (int, bool) {
+	switch n := v.(type) {
+	case float64:
+		return int(n), true
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	case json.Number:
+		if i, err := n.Int64(); err == nil {
+			return int(i), true
+		}
+	}
+	return 0, false
 }
 
 func LinkGenerator(clientConfig json.RawMessage, i *model.Inbound, hostname string) []string {
@@ -119,9 +139,181 @@ func LinkGenerator(clientConfig json.RawMessage, i *model.Inbound, hostname stri
 		return vmessLink(userConfig["vmess"], *inbound, Addrs)
 	case "mtproxy":
 		return mtproxyLink(userConfig["mtproxy"], Addrs)
+	case "sudoku":
+		return sudokuLink(*inbound, Addrs)
+	case "mieru":
+		return mieruLink(userConfig["mieru"], *inbound, Addrs)
 	}
 
 	return []string{}
+}
+
+// mieruLink builds mierus:// simple-format share links for the enfein/mieru
+// client. Unlike the standard mieru:// form (base64 of a protobuf ClientConfig),
+// mierus:// is a plain URL, so we can emit it without pulling in the mieru
+// protobuf schema. mieru is NOT keyless: the per-user name/password come from the
+// client's own config block; host/ports/transport come from the inbound. One URL
+// is produced per advertised address; a mieru server can bind a range of ports,
+// so every listen_ports entry becomes a repeated port/protocol query pair.
+func mieruLink(userConfig map[string]interface{}, inbound map[string]interface{}, addrs []map[string]interface{}) []string {
+	username := mapString(userConfig, "name")
+	password := mapString(userConfig, "password")
+	if username == "" || password == "" {
+		return []string{}
+	}
+
+	protocol := strings.ToUpper(strings.TrimSpace(mapString(inbound, "transport")))
+	if protocol != "TCP" && protocol != "UDP" {
+		protocol = "TCP" // mieru's own default transport
+	}
+
+	// listen_ports is a list of "begin:end" (or single) strings; mierus:// wants
+	// "begin-end" (or single). Fall back to the single listen_port when absent.
+	ports := mieruPortStrings(inbound)
+	if len(ports) == 0 {
+		return []string{}
+	}
+
+	profile := mapString(inbound, "tag")
+	if profile == "" {
+		profile = "mieru"
+	}
+
+	var links []string
+	for _, addr := range addrs {
+		server := mapString(addr, "server")
+		if server == "" {
+			continue
+		}
+		u := &url.URL{Scheme: "mierus", Host: server}
+		u.User = url.UserPassword(username, password)
+		q := url.Values{}
+		q.Set("profile", profile)
+		if mux := strings.TrimSpace(mapString(inbound, "multiplexing")); mux != "" {
+			q.Set("multiplexing", mux)
+		}
+		for _, p := range ports {
+			q.Add("port", p)
+			q.Add("protocol", protocol)
+		}
+		u.RawQuery = q.Encode()
+		links = append(links, u.String())
+	}
+	return links
+}
+
+// mieruPortStrings normalizes the inbound's port declaration into mierus:// port
+// tokens: each listen_ports "begin:end" range becomes "begin-end", single values
+// pass through, and a bare listen_port is used when no range list is present.
+func mieruPortStrings(inbound map[string]interface{}) []string {
+	var out []string
+	if raw, ok := inbound["listen_ports"].([]interface{}); ok {
+		for _, v := range raw {
+			s, ok := v.(string)
+			if !ok {
+				continue
+			}
+			s = strings.TrimSpace(s)
+			if s == "" {
+				continue
+			}
+			out = append(out, strings.ReplaceAll(s, ":", "-"))
+		}
+	}
+	if len(out) > 0 {
+		return out
+	}
+	if port, ok := asInt(inbound["listen_port"]); ok && port > 0 {
+		out = append(out, strconv.Itoa(port))
+	}
+	return out
+}
+
+// sudokuShortLinkPayload mirrors the upstream SUDOKU-ASCII/sudoku
+// internal/config.shortLinkPayload (json keys are single letters). Only the
+// fields our server inbound can supply are emitted; C-side-only http_mask
+// host/mux/tls have no inbound source and stay omitted (omitempty).
+type sudokuShortLinkPayload struct {
+	Host            string   `json:"h"`
+	Port            int      `json:"p"`
+	Key             string   `json:"k"`
+	ASCII           string   `json:"a,omitempty"`
+	AEAD            string   `json:"e,omitempty"`
+	PackedDownlink  bool     `json:"x,omitempty"`
+	CustomTable     string   `json:"t,omitempty"`
+	CustomTables    []string `json:"ts,omitempty"`
+	DisableHTTPMask bool     `json:"hd,omitempty"`
+	HTTPMaskMode    string   `json:"hm,omitempty"`
+	HTTPMaskPath    string   `json:"hy,omitempty"`
+}
+
+// sudokuASCIIFromTableType maps the panel's table_type onto the short link `a`
+// field, matching upstream encodeASCII: prefer_ascii->ascii, prefer_entropy (and
+// empty) -> entropy, directional up_*_down_* values pass through unchanged.
+func sudokuASCIIFromTableType(tableType string) string {
+	switch strings.ToLower(strings.TrimSpace(tableType)) {
+	case "prefer_ascii", "ascii":
+		return "ascii"
+	case "", "prefer_entropy", "entropy":
+		return "entropy"
+	default:
+		return strings.ToLower(strings.TrimSpace(tableType))
+	}
+}
+
+// sudokuLink builds sudoku:// short links for the SUDOKU-ASCII clients (Sudodroid
+// and the Go CLI's -link). Sudoku is keyless: the shared inbound `key` and the
+// transport-shaping fields are read from the inbound itself, never from a per-user
+// config block. The payload is base64url(RawURLEncoding) of the JSON, exactly as
+// the upstream core encodes and decodes it.
+func sudokuLink(inbound map[string]interface{}, addrs []map[string]interface{}) []string {
+	key := mapString(inbound, "key")
+	if key == "" {
+		return []string{}
+	}
+
+	base := sudokuShortLinkPayload{
+		Key:             key,
+		AEAD:            mapString(inbound, "aead_method"),
+		ASCII:           sudokuASCIIFromTableType(mapString(inbound, "table_type")),
+		CustomTable:     mapString(inbound, "custom_table"),
+		DisableHTTPMask: asBool(inbound["disable_http_mask"]),
+		HTTPMaskPath:    mapString(inbound, "path_root"),
+	}
+	// packed downlink is the inverse of enable_pure_downlink; upstream omits `hm`
+	// for the default legacy mode so the client falls back to its own default.
+	base.PackedDownlink = !asBool(inbound["enable_pure_downlink"])
+	if mode := strings.ToLower(strings.TrimSpace(mapString(inbound, "http_mask_mode"))); mode != "" && mode != "legacy" {
+		base.HTTPMaskMode = mode
+	}
+	if tables, ok := inbound["custom_tables"].([]interface{}); ok {
+		for _, t := range tables {
+			if s, ok := t.(string); ok && s != "" {
+				base.CustomTables = append(base.CustomTables, s)
+			}
+		}
+	}
+
+	var links []string
+	for _, addr := range addrs {
+		server := mapString(addr, "server")
+		if server == "" {
+			continue
+		}
+		port, ok := asInt(addr["server_port"])
+		if !ok || port == 0 {
+			continue
+		}
+		payload := base
+		payload.Host = server
+		payload.Port = port
+		data, err := json.Marshal(payload)
+		if err != nil {
+			continue
+		}
+		links = append(links, "sudoku://"+base64.RawURLEncoding.EncodeToString(data))
+	}
+	return links
 }
 
 // mtproxyLink builds Telegram MTProto proxy deep links. There is no sing-box
