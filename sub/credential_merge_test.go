@@ -82,6 +82,7 @@ func TestSubscriptionCredentialMerge(t *testing.T) {
 		"mieru":       {"name": "alice", "password": "pw1", "junk": "SHOULD-NOT-APPEAR"},
 		"trusttunnel": {"name": "bob", "password": "pw2"},
 		"ssh":         {"name": "carol", "password": "pw3"},
+		"sudoku":      {"key": "PERSONAL-SPLIT-KEY", "server": "evil.example", "server_port": 1, "aead_method": "none", "http_mask": map[string]any{"host": "evil"}, "tag": "evil", "junk": true},
 	}
 	configRaw, _ := json.Marshal(config)
 
@@ -115,14 +116,49 @@ func TestSubscriptionCredentialMerge(t *testing.T) {
 	}
 
 	su := findOutbound(*outs, "sudoku")
-	if su == nil || su["key"] != "SHARED-KEY" {
-		t.Errorf("sudoku should carry its shared key from out_json: %v", su)
+	if su == nil || su["key"] != "PERSONAL-SPLIT-KEY" {
+		t.Errorf("sudoku should carry only its personal key override: %v", su)
+	}
+	if su["server"] != "example.com" || su["server_port"] != float64(443) || su["aead_method"] != "chacha20-poly1305" || su["tag"] == "evil" {
+		t.Errorf("sudoku client config overrode inbound-controlled fields: %v", su)
+	}
+	if _, leaked := su["junk"]; leaked {
+		t.Errorf("sudoku must not copy arbitrary client.config fields: %v", su)
 	}
 
 	// No server secret anywhere in the assembled outbounds.
 	if hits := scanForbidden(*outs, "outbounds", false); len(hits) > 0 {
 		body, _ := json.MarshalIndent(*outs, "", "  ")
 		t.Errorf("subscription outbounds leaked server secret(s): %v\n%s", hits, body)
+	}
+}
+
+func TestSudokuSubscriptionKeyIsolationAndFallback(t *testing.T) {
+	sudoku := deliveredInbound(t, "sudoku", map[string]interface{}{
+		"key": "INBOUND-KEY", "aead_method": "chacha20-poly1305",
+	})
+	originalOutJSON := append(json.RawMessage(nil), sudoku.OutJson...)
+	getKey := func(config string) any {
+		t.Helper()
+		outs, _, err := (&JsonService{}).getOutbounds(json.RawMessage(config), []*model.Inbound{sudoku})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return findOutbound(*outs, "sudoku")["key"]
+	}
+	if got := getKey(`{"sudoku":{"key":"KEY-A"}}`); got != "KEY-A" {
+		t.Fatalf("A key=%v", got)
+	}
+	if got := getKey(`{"sudoku":{"key":"KEY-B"}}`); got != "KEY-B" {
+		t.Fatalf("B key=%v", got)
+	}
+	for _, config := range []string{`{}`, `{"sudoku":{}}`, `{"sudoku":{"key":""}}`} {
+		if got := getKey(config); got != "INBOUND-KEY" {
+			t.Fatalf("fallback key for %s = %v", config, got)
+		}
+	}
+	if string(sudoku.OutJson) != string(originalOutJSON) {
+		t.Fatalf("subscription merge mutated persisted OutJson: before=%s after=%s", originalOutJSON, sudoku.OutJson)
 	}
 }
 

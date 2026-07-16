@@ -78,9 +78,14 @@ var removeEndpointsFromCoreAfterSave = func(s *ConfigService, tags []string) err
 
 var invalidateClientPolicyCacheAfterSave = ipmonitor.InvalidateAllCache
 var invalidateSubscriptionCacheAfterSave func()
+var invalidateClientSubscriptionCacheAfterSave func([]string)
 
 func RegisterSubscriptionCacheInvalidator(fn func()) {
 	invalidateSubscriptionCacheAfterSave = fn
+}
+
+func RegisterClientSubscriptionCacheInvalidator(fn func([]string)) {
+	invalidateClientSubscriptionCacheAfterSave = fn
 }
 
 func NewConfigService(core *core.Core) *ConfigService {
@@ -308,6 +313,7 @@ func (s *ConfigService) CheckOutboundWithContext(ctx context.Context, tag string
 func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initUsers string, loginUser string, hostname string) (objs []string, err error) {
 	var plan postCommitCorePlan
 	invalidateClientPolicyCache := false
+	clientSubscriptionIDs := clientSubscriptionCacheIDs(obj, data)
 	auditTelegramBackupPassphrase, auditTelegramBackupPassphraseConfigured, err := s.telegramBackupPassphraseAuditState(obj, data)
 	if err != nil {
 		return nil, err
@@ -335,7 +341,9 @@ func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initU
 			if invalidateClientPolicyCache {
 				invalidateClientPolicyCacheAfterSave()
 			}
-			if invalidateSubscriptionCacheAfterSave != nil {
+			if obj == "clients" && invalidateClientSubscriptionCacheAfterSave != nil {
+				invalidateClientSubscriptionCacheAfterSave(clientSubscriptionIDs)
+			} else if invalidateSubscriptionCacheAfterSave != nil {
 				invalidateSubscriptionCacheAfterSave()
 			}
 			// Advance the change marker only after the tx actually committed,
@@ -368,6 +376,43 @@ func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initU
 	s.setLastUpdate(time.Now().Unix())
 
 	return objs, nil
+}
+
+func clientSubscriptionCacheIDs(obj string, data json.RawMessage) []string {
+	if obj != "clients" {
+		return nil
+	}
+	var clientIDs []uint
+	var one model.Client
+	if json.Unmarshal(data, &one) == nil {
+		if one.SubSecret != "" {
+			return []string{one.SubSecret}
+		}
+		if one.Id > 0 {
+			clientIDs = append(clientIDs, one.Id)
+		}
+	} else {
+		var many []model.Client
+		if json.Unmarshal(data, &many) != nil {
+			return nil
+		}
+		ids := make([]string, 0, len(many))
+		for _, client := range many {
+			if client.SubSecret != "" {
+				ids = append(ids, client.SubSecret)
+			} else if client.Id > 0 {
+				clientIDs = append(clientIDs, client.Id)
+			}
+		}
+		if len(clientIDs) == 0 {
+			return ids
+		}
+	}
+	var secrets []string
+	if err := database.GetDB().Model(model.Client{}).Where("id in ?", clientIDs).Pluck("sub_secret", &secrets).Error; err != nil {
+		return nil
+	}
+	return secrets
 }
 
 // dispatchSave routes the save to the owning entity service and translates its
@@ -530,11 +575,30 @@ func redactChangePayload(data json.RawMessage) json.RawMessage {
 		}
 		return encoded
 	}
+	redactSudokuSplitKeys(payload)
 	encoded, err := json.Marshal(redact.Value(payload))
 	if err != nil {
 		return json.RawMessage(`"[REDACTED]"`)
 	}
 	return encoded
+}
+
+func redactSudokuSplitKeys(value any) {
+	switch typed := value.(type) {
+	case map[string]any:
+		if sudoku, ok := typed["sudoku"].(map[string]any); ok {
+			if _, exists := sudoku["key"]; exists {
+				sudoku["key"] = redact.Marker
+			}
+		}
+		for _, child := range typed {
+			redactSudokuSplitKeys(child)
+		}
+	case []any:
+		for _, child := range typed {
+			redactSudokuSplitKeys(child)
+		}
+	}
 }
 
 func (s *ConfigService) CheckChanges(lu string) (bool, error) {

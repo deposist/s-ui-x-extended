@@ -1,6 +1,7 @@
 package sub
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -29,6 +30,7 @@ func newSubscriptionOutputCache(ttl time.Duration) *subscriptionOutputCacheStore
 
 func init() {
 	service.RegisterSubscriptionCacheInvalidator(ClearSubscriptionOutputCache)
+	service.RegisterClientSubscriptionCacheInvalidator(InvalidateClientSubscriptionOutputCache)
 }
 
 func subscriptionCacheGet(key string, now time.Time) (string, []string, bool) {
@@ -59,4 +61,23 @@ func ClearSubscriptionOutputCache() {
 	subscriptionOutputCache.mu.Lock()
 	defer subscriptionOutputCache.mu.Unlock()
 	subscriptionOutputCache.entries = map[string]subscriptionOutputCacheEntry{}
+}
+
+func InvalidateClientSubscriptionOutputCache(subIDs []string) {
+	if len(subIDs) == 0 {
+		// Deletes and legacy clients may not provide a secret in the payload.
+		// Fail closed against stale credentials when the affected IDs are unknown.
+		ClearSubscriptionOutputCache()
+		return
+	}
+	subscriptionOutputCache.mu.Lock()
+	defer subscriptionOutputCache.mu.Unlock()
+	for key := range subscriptionOutputCache.entries {
+		for _, subID := range subIDs {
+			if strings.HasSuffix(key, ":"+subID) {
+				delete(subscriptionOutputCache.entries, key)
+				break
+			}
+		}
+	}
 }

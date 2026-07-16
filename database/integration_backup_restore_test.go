@@ -2,6 +2,8 @@ package database_test
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,6 +31,17 @@ func TestIntegrationBackupEnvelopeRestorePreservesBackupTableCounts(t *testing.T
 		t.Fatal(err)
 	}
 	seedBackupRestoreTables(t)
+	const sudokuSplitKey = "01000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000"
+	sudokuInbound := model.Inbound{Type: "sudoku", Tag: "sudoku-backup-inbound", TlsId: 0, Addrs: []byte("[]"), OutJson: []byte("{}"), Options: []byte(`{"listen":"0.0.0.0","listen_port":443,"key":"INBOUND-KEY"}`)}
+	if err := database.GetDB().Create(&sudokuInbound).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.GetDB().Create(&model.Client{
+		Enable: true, Name: "sudoku-backup-client", Inbounds: []byte(fmt.Sprintf("[%d]", sudokuInbound.Id)), Links: []byte("[]"),
+		Config: []byte(`{"sudoku":{"key":"` + sudokuSplitKey + `"}}`),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
 	before := integrationBackupTableCounts(t)
 
 	backup, err := database.GetDb("")
@@ -62,6 +75,41 @@ func TestIntegrationBackupEnvelopeRestorePreservesBackupTableCounts(t *testing.T
 	after := integrationBackupTableCounts(t)
 	if !reflect.DeepEqual(before, after) {
 		t.Fatalf("backup table counts changed after restore:\nbefore=%v\nafter=%v", before, after)
+	}
+	var restored model.Client
+	if err := database.GetDB().Where("name = ?", "sudoku-backup-client").First(&restored).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(restored.Config), sudokuSplitKey) {
+		t.Fatalf("Sudoku split key was not preserved by real backup/restore: %s", restored.Config)
+	}
+	if _, err := (&service.ClientService{}).RegenerateAllClientLinks("restored.example"); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.GetDB().First(&restored, restored.Id).Error; err != nil {
+		t.Fatal(err)
+	}
+	var links []map[string]string
+	if err := json.Unmarshal(restored.Links, &links); err != nil {
+		t.Fatal(err)
+	}
+	foundRestoredKey := false
+	for _, link := range links {
+		if !strings.HasPrefix(link["uri"], "sudoku://") {
+			continue
+		}
+		raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(link["uri"], "sudoku://"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			t.Fatal(err)
+		}
+		foundRestoredKey = payload["k"] == sudokuSplitKey
+	}
+	if !foundRestoredKey {
+		t.Fatalf("regenerated link did not use restored Sudoku split key: %s", restored.Links)
 	}
 }
 

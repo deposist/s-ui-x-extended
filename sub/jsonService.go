@@ -202,6 +202,11 @@ func (j *JsonService) getOutbounds(clientConfig json.RawMessage, inbounds []*mod
 				// ssh). Never copy arbitrary keys from client.config.
 				for srcKey, dstField := range credMap {
 					if v, ok := config[srcKey]; ok {
+						// Empty optional credentials retain the value from the
+						// inbound-derived outbound template (Sudoku fallback).
+						if text, isString := v.(string); isString && strings.TrimSpace(text) == "" {
+							continue
+						}
 						outbound[dstField] = v
 					}
 				}

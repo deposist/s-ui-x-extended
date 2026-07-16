@@ -176,6 +176,9 @@ func (s *ClientService) Save(tx *gorm.DB, act string, data json.RawMessage, host
 		if err != nil {
 			return nil, err
 		}
+		if err = normalizeClientSudokuConfig(&client); err != nil {
+			return nil, err
+		}
 		err = s.updateLinksWithFixedInbounds(tx, []*model.Client{&client}, hostname)
 		if err != nil {
 			return nil, err
@@ -219,6 +222,9 @@ func (s *ClientService) Save(tx *gorm.DB, act string, data json.RawMessage, host
 			if err != nil {
 				return nil, err
 			}
+			if err = normalizeClientSudokuConfig(client); err != nil {
+				return nil, err
+			}
 		}
 		err = s.updateLinksWithFixedInbounds(tx, clients, hostname)
 		if err != nil {
@@ -230,6 +236,7 @@ func (s *ClientService) Save(tx *gorm.DB, act string, data json.RawMessage, host
 		}
 	case "editbulk":
 		var clients []*model.Client
+		sudokuDeliveryChanged := false
 		err = json.Unmarshal(data, &clients)
 		if err != nil {
 			return nil, err
@@ -239,6 +246,25 @@ func (s *ClientService) Save(tx *gorm.DB, act string, data json.RawMessage, host
 			if err != nil {
 				return nil, err
 			}
+			// Bulk limit/inbound edits may omit Config. Preserve it before
+			// validating so existing credentials are neither erased nor rejected.
+			if len(bytes.TrimSpace(client.Config)) == 0 {
+				var oldConfig model.Client
+				if err = tx.Model(model.Client{}).Select("config").Where("id = ?", client.Id).First(&oldConfig).Error; err != nil {
+					return nil, err
+				}
+				client.Config = oldConfig.Config
+			}
+			if err = normalizeClientSudokuConfig(client); err != nil {
+				return nil, err
+			}
+			var oldClient model.Client
+			if err = tx.Model(model.Client{}).Select("config").Where("id = ?", client.Id).First(&oldClient).Error; err != nil {
+				return nil, err
+			}
+			if !clientSudokuDeliveryEqual(oldClient.Config, client.Config) {
+				sudokuDeliveryChanged = true
+			}
 			changedInboundIds, err := s.findInboundsChanges(tx, client, true)
 			if err != nil {
 				return nil, err
@@ -247,7 +273,7 @@ func (s *ClientService) Save(tx *gorm.DB, act string, data json.RawMessage, host
 				inboundIds = common.UnionUintArray(inboundIds, changedInboundIds)
 			}
 		}
-		if len(inboundIds) > 0 {
+		if len(inboundIds) > 0 || sudokuDeliveryChanged {
 			err = s.updateLinksWithFixedInbounds(tx, clients, hostname)
 			if err != nil {
 				return nil, err
@@ -1050,8 +1076,12 @@ func (s *ClientService) findInboundsChanges(tx *gorm.DB, client *model.Client, f
 		return nil, err
 	}
 	if fillOmitted {
-		client.Links = oldClient.Links
-		client.Config = oldClient.Config
+		if len(bytes.TrimSpace(client.Links)) == 0 {
+			client.Links = oldClient.Links
+		}
+		if len(bytes.TrimSpace(client.Config)) == 0 {
+			client.Config = oldClient.Config
+		}
 	}
 	err = json.Unmarshal(oldClient.Inbounds, &oldInboundIds)
 	if err != nil {
@@ -1062,8 +1092,9 @@ func (s *ClientService) findInboundsChanges(tx *gorm.DB, client *model.Client, f
 		return nil, err
 	}
 
-	// Check client.Config changes
-	if !bytes.Equal(oldClient.Config, client.Config) ||
+	// A Sudoku split-key edit changes only links/subscriptions. It must not
+	// schedule a server inbound hot reload because Sudoku has no server users.
+	if !clientCoreConfigEqual(oldClient.Config, client.Config) ||
 		oldClient.Name != client.Name ||
 		oldClient.Enable != client.Enable {
 		return common.UnionUintArray(oldInboundIds, newInboundIds), nil

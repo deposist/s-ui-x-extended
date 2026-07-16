@@ -115,7 +115,7 @@ S-UI-X Extended это веб-панель на базе [`sing-box-extended`](h
 | AnyTLS | |
 | ShadowTLS | Detour к скрытому протоколу |
 | Mieru | Stealth-протокол |
-| Sudoku | HTTP-маскировка |
+| Sudoku | HTTP-маскировка; опциональная [доставка отдельных split key клиентам](docs/SUDOKU-CLIENT-SPLIT-KEYS.md) |
 | TrustTunnel | QUIC-туннель |
 | SSH | Эмуляция SSH-сервера |
 | MTProxy | Telegram-прокси, FakeTLS, отдается как `tg://proxy` |

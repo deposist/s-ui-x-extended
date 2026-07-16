@@ -140,7 +140,7 @@ func LinkGenerator(clientConfig json.RawMessage, i *model.Inbound, hostname stri
 	case "mtproxy":
 		return mtproxyLink(userConfig["mtproxy"], Addrs)
 	case "sudoku":
-		return sudokuLink(*inbound, Addrs)
+		return sudokuLink(userConfig["sudoku"], *inbound, Addrs)
 	case "mieru":
 		return mieruLink(userConfig["mieru"], *inbound, Addrs)
 	}
@@ -266,8 +266,11 @@ func sudokuASCIIFromTableType(tableType string) string {
 // transport-shaping fields are read from the inbound itself, never from a per-user
 // config block. The payload is base64url(RawURLEncoding) of the JSON, exactly as
 // the upstream core encodes and decodes it.
-func sudokuLink(inbound map[string]interface{}, addrs []map[string]interface{}) []string {
-	key := mapString(inbound, "key")
+func sudokuLink(clientConfig map[string]interface{}, inbound map[string]interface{}, addrs []map[string]interface{}) []string {
+	key := strings.TrimSpace(mapString(clientConfig, "key"))
+	if key == "" {
+		key = mapString(inbound, "key")
+	}
 	if key == "" {
 		return []string{}
 	}

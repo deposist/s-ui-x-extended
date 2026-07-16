@@ -95,6 +95,14 @@ export function updateConfigs(configs: Config, newUserName: string): Config {
   return configs
 }
 
+export const sudokuSplitKeyPattern = /^[0-9a-fA-F]{128}$/
+
+export function normalizeSudokuClientKey(value: unknown): { value: string, valid: boolean } {
+  if (typeof value !== 'string') return { value: '', valid: false }
+  const normalized = value.trim().toLowerCase()
+  return { value: normalized, valid: normalized === '' || sudokuSplitKeyPattern.test(normalized) }
+}
+
 export function shuffleConfigs(configs: Config, key?: string) {
   const keys = key ? [key] : Object.keys(configs)
   keys.forEach(k => {
@@ -214,6 +222,9 @@ export function randomConfigs(user: string): Config {
     ssh: {
       name: user,
       password: mixedPassword,
+    },
+    sudoku: {
+      key: '',
     },
     mtproxy: {
       name: user,

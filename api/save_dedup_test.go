@@ -69,6 +69,25 @@ func TestSaveClientCreatesExactlyOneRow(t *testing.T) {
 // TestSaveDedupBlocksRapidDuplicateCreate proves the authoritative server-side
 // guard: the same create submitted twice in quick succession (double-click /
 // client double-send / proxy replay) yields exactly one row, not two.
+func TestSaveClientRejectsInvalidSudokuSplitKeyWhenFrontendIsBypassed(t *testing.T) {
+	router, token, cookies := authedSaveRouter(t)
+	secret := strings.Repeat("f", 128)
+	payload := `{"name":"invalid-sudoku","enable":true,"inbounds":[],"links":[],"config":{"sudoku":{"key":"` + secret + `"}}}`
+	rec := postSave(router, token, cookies, payload)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected transport status %d: %s", rec.Code, rec.Body.String())
+	}
+	if got := countClients(t, "invalid-sudoku"); got != 0 {
+		t.Fatalf("invalid key created %d clients", got)
+	}
+	if strings.Contains(rec.Body.String(), secret) {
+		t.Fatal("API error reflected the submitted split key")
+	}
+	if !strings.Contains(rec.Body.String(), "invalid Sudoku split private key") {
+		t.Fatalf("unexpected error body: %s", rec.Body.String())
+	}
+}
+
 func TestSaveDedupBlocksRapidDuplicateCreate(t *testing.T) {
 	router, token, cookies := authedSaveRouter(t)
 	payload := `{"name":"dupe","enable":true,"inbounds":[],"links":[]}`

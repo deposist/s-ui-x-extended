@@ -197,6 +197,23 @@
                     v-model="clientConfig[key].auth_str"
                     hide-details>
                   </v-text-field>
+                  <template v-if="key == 'sudoku'">
+                    <v-text-field
+                      dir="ltr"
+                      :label="$t('client.sudoku.splitKey')"
+                      v-model="clientConfig[key].key"
+                      :error-messages="sudokuKeyError"
+                      autocomplete="off"
+                      spellcheck="false"
+                      clearable
+                      hide-details="auto">
+                    </v-text-field>
+                    <v-alert type="warning" variant="tonal" density="compact" class="mt-3">
+                      {{ $t('client.sudoku.warning') }}
+                    </v-alert>
+                    <div class="text-caption mt-2">{{ $t('client.sudoku.generate') }}</div>
+                    <code dir="ltr">sudoku -keygen -more &lt;MASTER_PRIVATE_KEY&gt;</code>
+                  </template>
                   <v-text-field
                     v-if="clientConfig[key].secret != undefined"
                     label="Secret"
@@ -314,7 +331,7 @@
 </template>
 
 <script lang="ts">
-import { createClient, randomConfigs, updateConfigs, Link, shuffleConfigs } from '@/types/clients'
+import { createClient, randomConfigs, updateConfigs, Link, shuffleConfigs, normalizeSudokuClientKey } from '@/types/clients'
 import HttpUtils from '@/plugins/httputil'
 import api from '@/plugins/api'
 import { push } from 'notivue'
@@ -388,6 +405,14 @@ export default {
       // check duplicate name
       const isDuplicateName = Data().checkClientName(this.$props.id, this.client.name)
       if (isDuplicateName) return
+
+      const sudokuKey = normalizeSudokuClientKey(this.clientConfig?.sudoku?.key ?? '')
+      if (!sudokuKey.valid) {
+        push.error({ message: this.$t('client.sudoku.invalid') })
+        return
+      }
+      if (!this.clientConfig.sudoku) this.clientConfig.sudoku = {}
+      this.clientConfig.sudoku.key = sudokuKey.value
 
       // check if delayStart is true and autoReset is false, set expiry to 0
       if (this.client.delayStart && !this.client.autoReset) this.client.expiry = 0
@@ -541,6 +566,10 @@ export default {
     },
   },
   computed: {
+    sudokuKeyError(): string[] {
+      const result = normalizeSudokuClientKey(this.clientConfig?.sudoku?.key ?? '')
+      return result.valid ? [] : [this.$t('client.sudoku.invalid')]
+    },
     clientInbounds: {
       get() { return this.client.inbounds.length>0 ? this.client.inbounds.sort() : [] },
       set(v:number[]) { this.client.inbounds = v.length == 0 ?  [] : v.sort() }

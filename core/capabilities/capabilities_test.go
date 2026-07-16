@@ -164,6 +164,25 @@ func TestAssignableKeylessTypesIsExactlySudoku(t *testing.T) {
 	}
 }
 
+func TestSudokuCredentialMapIsFieldScopedAndHasNoUsers(t *testing.T) {
+	want := map[string]string{"key": "key"}
+	if got := CredentialMap("sudoku"); !reflect.DeepEqual(got, want) {
+		t.Fatalf("CredentialMap(sudoku) = %v, want exactly %v", got, want)
+	}
+	for _, in := range Inbounds() {
+		if in.Type == "sudoku" {
+			if in.HasUsers {
+				t.Fatal("sudoku must remain hasUsers=false")
+			}
+			if in.UserField != "" {
+				t.Fatalf("sudoku userField = %q, want empty", in.UserField)
+			}
+			return
+		}
+	}
+	t.Fatal("sudoku capability is missing")
+}
+
 // TestEveryKeylessJSONDeliverableTypeIsAssignable is the invariant guard against
 // a repeat of issue #4: any inbound that carries no per-user credential objects
 // but IS delivered through the JSON subscription (clientDelivery == "json") must

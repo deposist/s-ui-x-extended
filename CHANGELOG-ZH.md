@@ -8,6 +8,18 @@
 
 - 暂无未发布变更。
 
+## [1.0.6-beta3] - 2026-07-16 - 每客户端 Sudoku split key
+
+为每个面板客户端增加可选的 Sudoku Split Private Key，同时保持服务器入站和 `sing-box-extended` 不变。
+
+- 客户端编辑器接受 128 个十六进制字符的 split key。该密钥仅用于此客户端的 `sudoku://` 链接、二维码和 JSON 订阅中的 Sudoku 出站。字段为空或缺失时继续使用入站密钥。
+- 后端验证解码后的 64 字节密钥，并检查两个 Ed25519 scalar 部分是否为规范编码。大写输入会以小写保存。无效值会被拒绝，错误和变更历史不会包含密钥。
+- 客户端订阅配置只能替换 `outbound.key`。服务器、端口、AEAD、表、HTTP mask、路由、拨号器、标签及其他生成字段仍由入站控制。
+- 修改客户端密钥会重新生成本地链接、保留外部链接并清除此客户端的订阅缓存，不会重新加载 Sudoku 入站或重启核心。真实备份/恢复测试确认 `Client.Config` 会保留该密钥。
+- UI 和文档明确说明：split key 不能单独撤销。完整撤销需要轮换 master pair，并向所有剩余客户端重新签发密钥。本版本不包含 Sudoku 每客户端流量统计或在线状态。
+
+完整发布说明：[`docs/releases/v1.0.6-beta3.md`](docs/releases/v1.0.6-beta3.md)。
+
 ## [1.0.6-beta2] - 2026-07-16 - sudoku/mieru 链接回填、AWG 2.0 二维码修复
 
 启动时回填 sudoku/mieru 客户端链接，并修复 AmneziaWG 2.0 设备管理器中的空白二维码。

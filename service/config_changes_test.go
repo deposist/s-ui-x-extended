@@ -40,3 +40,15 @@ func TestConfigSaveRedactsSensitiveChangePayload(t *testing.T) {
 		t.Fatalf("non-sensitive setting was unexpectedly removed: %s", stored)
 	}
 }
+
+func TestRedactChangePayloadHidesSudokuSplitKey(t *testing.T) {
+	secret := strings.Repeat("a", 128)
+	payload := json.RawMessage(`{"name":"alice","config":{"sudoku":{"key":"` + secret + `"}}}`)
+	stored := string(redactChangePayload(payload))
+	if strings.Contains(stored, secret) {
+		t.Fatalf("change payload leaked Sudoku split key: %s", stored)
+	}
+	if !strings.Contains(stored, `"key":"[REDACTED]"`) {
+		t.Fatalf("Sudoku key was not redacted: %s", stored)
+	}
+}

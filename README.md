@@ -115,7 +115,7 @@ This list follows the repository capability matrix. Some protocols, endpoints, a
 | AnyTLS | |
 | ShadowTLS | Detour to hidden protocol |
 | Mieru | Stealth protocol |
-| Sudoku | HTTP mask obfuscation |
+| Sudoku | HTTP mask obfuscation; optional [per-client split-key delivery](docs/SUDOKU-CLIENT-SPLIT-KEYS.md) |
 | TrustTunnel | QUIC tunnel |
 | SSH | SSH server emulation |
 | MTProxy | Telegram proxy, FakeTLS, delivered as `tg://proxy` |

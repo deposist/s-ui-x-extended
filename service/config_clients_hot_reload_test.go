@@ -1,8 +1,11 @@
 package service
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/deposist/s-ui-x-extended/core"
@@ -76,6 +79,62 @@ func TestConfigSaveClientsHotReloadsChangedInboundsWithoutCoreRestart(t *testing
 	}
 	if !reflect.DeepEqual(objs, []string{"clients", "inbounds"}) {
 		t.Fatalf("unexpected partial reload objects: %v", objs)
+	}
+}
+
+func TestConfigSaveSudokuKeyRebuildsLinksWithoutInboundReload(t *testing.T) {
+	initSettingTestDB(t)
+	inbound := model.Inbound{Type: "sudoku", Tag: "sudoku-no-reload", Options: json.RawMessage(`{"listen":"0.0.0.0","listen_port":443,"key":"INBOUND-KEY"}`), Addrs: json.RawMessage(`[]`)}
+	if err := database.GetDB().Create(&inbound).Error; err != nil {
+		t.Fatal(err)
+	}
+	client := model.Client{Enable: true, Name: "sudoku-client", Config: json.RawMessage(`{"sudoku":{"key":"` + validSudokuKeyA + `"}}`), Inbounds: json.RawMessage(fmt.Sprintf(`[%d]`, inbound.Id)), Links: json.RawMessage(`[{"type":"external","uri":"https://external.example/sub"}]`)}
+	if err := database.GetDB().Create(&client).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	previousRestart := restartInboundsAfterSave
+	restartInboundsAfterSave = func(_ *ConfigService, ids []uint) error {
+		t.Fatalf("Sudoku key edit reloaded core inbounds: %v", ids)
+		return nil
+	}
+	t.Cleanup(func() { restartInboundsAfterSave = previousRestart })
+
+	client.Config = json.RawMessage(`{"sudoku":{"key":"` + validSudokuKeyB + `"}}`)
+	payload, _ := json.Marshal(client)
+	objs, err := NewConfigServiceWithRuntime(NewRuntimeWithCoreProvider(nil)).Save("clients", "edit", payload, "", "admin", "example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(objs, []string{"clients"}) {
+		t.Fatalf("objects=%v, want clients only", objs)
+	}
+
+	var saved model.Client
+	if err := database.GetDB().First(&saved, client.Id).Error; err != nil {
+		t.Fatal(err)
+	}
+	links := linkURIs(t, saved.Links)
+	if !links["https://external.example/sub"] {
+		t.Fatalf("external link lost: %s", saved.Links)
+	}
+	foundPersonal := false
+	for uri := range links {
+		if !strings.HasPrefix(uri, "sudoku://") {
+			continue
+		}
+		raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(uri, "sudoku://"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			t.Fatal(err)
+		}
+		foundPersonal = payload["k"] == validSudokuKeyB
+	}
+	if !foundPersonal {
+		t.Fatalf("personal local Sudoku link not rebuilt with B: %s", saved.Links)
 	}
 }
 

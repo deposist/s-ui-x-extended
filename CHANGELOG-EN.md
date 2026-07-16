@@ -9,6 +9,18 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.6-beta3] - 2026-07-16 - per-client Sudoku split keys
+
+Adds an optional Sudoku Split Private Key to each panel client while keeping the server inbound and `sing-box-extended` unchanged.
+
+- The client editor accepts a 128-character split key. It is used only for that client's `sudoku://` link, QR code, and Sudoku outbound in JSON subscriptions. Empty or missing values keep the inbound-key fallback.
+- Backend validation checks the decoded 64-byte key and both canonical Ed25519 scalar halves. Uppercase input is stored in lowercase. Invalid values are rejected without exposing the key in errors or change history.
+- Client subscription data may replace only `outbound.key`; server, port, AEAD, table, HTTP mask, routing, dialer, tag, and other generated fields remain inbound-controlled.
+- A client-key edit rebuilds local links, preserves external links, invalidates the affected subscription cache, and does not reload the Sudoku inbound or restart the core. Real backup/restore coverage confirms that `Client.Config` preserves the key.
+- The UI and documentation state the protocol limit: a split key is not independently revocable. Full revocation requires rotating the master pair and reissuing keys to all remaining clients. Per-client Sudoku traffic and online status are not included.
+
+Full release notes: [`docs/releases/v1.0.6-beta3.md`](docs/releases/v1.0.6-beta3.md).
+
 ## [1.0.6-beta2] - 2026-07-16 - sudoku/mieru link backfill, AWG 2.0 QR fix
 
 Backfills sudoku/mieru client links at startup and fixes the empty QR code in the AmneziaWG 2.0 device manager.

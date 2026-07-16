@@ -178,9 +178,10 @@
       "clientDelivery": "json",
       "outJsonBuilder": "sudoku",
       "hasInData": true,
+      "credentialMap": { "key": "key" },
       "buildTag": "with_sudoku",
       "uiEditor": "Sudoku",
-      "notes": "keyless (no per-user objects); single shared inbound-level 'key' is the credential carried in out_json. http_mask is built nested from flat inbound fields, merged with C-side host/multiplex"
+      "notes": "keyless (no server-side per-user objects); an optional client split key overrides only outbound.key during delivery, otherwise the inbound key is used. http_mask is built nested from flat inbound fields, merged with C-side host/multiplex"
     },
     {
       "type": "trusttunnel",
