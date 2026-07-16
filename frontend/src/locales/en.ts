@@ -897,7 +897,7 @@ export default {
     testUrl: "Test URL",
     testOk: "Subscription URL is reachable. This only checks reachability, not that the response is a valid subscription.",
     testFailed: "Subscription URL test failed.",
-    noRawLinks: "No raw client links are stored for this client.",
+    noRawLinks: "No raw links for this client. Some protocols have no URI link and are delivered only through the JSON subscription. Use the Sing-box tab above to import or scan the QR.",
   },
   login: {
     title: "Login",
