@@ -140,7 +140,7 @@ func LinkGenerator(clientConfig json.RawMessage, i *model.Inbound, hostname stri
 	case "mtproxy":
 		return mtproxyLink(userConfig["mtproxy"], Addrs)
 	case "sudoku":
-		return sudokuLink(userConfig["sudoku"], *inbound, Addrs)
+		return sudokuLink(sudokuClientConfig(userConfig["sudoku"], i.Id), *inbound, Addrs)
 	case "mieru":
 		return mieruLink(userConfig["mieru"], *inbound, Addrs)
 	}
@@ -259,6 +259,18 @@ func sudokuASCIIFromTableType(tableType string) string {
 	default:
 		return strings.ToLower(strings.TrimSpace(tableType))
 	}
+}
+
+func sudokuClientConfig(config map[string]interface{}, inboundID uint) map[string]interface{} {
+	if config == nil {
+		return nil
+	}
+	if keys, ok := config["keys"].(map[string]interface{}); ok {
+		if key, ok := keys[strconv.FormatUint(uint64(inboundID), 10)].(string); ok && strings.TrimSpace(key) != "" {
+			return map[string]interface{}{"key": key}
+		}
+	}
+	return config
 }
 
 // sudokuLink builds sudoku:// short links for the SUDOKU-ASCII clients (Sudodroid

@@ -42,6 +42,7 @@ func TestSudokuLinkUsesPerClientKeyAndPreservesInboundFields(t *testing.T) {
 	if len(linkA) != 1 || len(linkB) != 1 || linkA[0] == linkB[0] {
 		t.Fatalf("distinct clients did not get distinct links: %v %v", linkA, linkB)
 	}
+
 	a := decodeSudokuPayload(t, linkA[0])
 	b := decodeSudokuPayload(t, linkB[0])
 	if a["k"] != testSudokuClientKeyA || b["k"] != testSudokuClientKeyB {
@@ -52,6 +53,19 @@ func TestSudokuLinkUsesPerClientKeyAndPreservesInboundFields(t *testing.T) {
 	}
 	if _, ok := a["junk"]; ok {
 		t.Fatalf("arbitrary client field leaked: %v", a)
+	}
+}
+
+func TestSudokuLinkSelectsKeyForInboundID(t *testing.T) {
+	in := sudokuTestInbound()
+	in.Id = 42
+	config := json.RawMessage(`{"sudoku":{"keys":{"42":"` + testSudokuClientKeyA + `","99":"` + testSudokuClientKeyB + `"}}}`)
+	links := LinkGenerator(config, in, "example.com")
+	if len(links) != 1 {
+		t.Fatalf("expected one link, got %v", links)
+	}
+	if got := decodeSudokuPayload(t, links[0])["k"]; got != testSudokuClientKeyA {
+		t.Fatalf("selected key = %v, want inbound-specific key", got)
 	}
 }
 

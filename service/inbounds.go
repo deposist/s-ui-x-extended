@@ -226,6 +226,9 @@ func (s *InboundService) saveInboundUpsert(tx *gorm.DB, act string, data json.Ra
 		}
 	}
 
+	if err := ensureSudokuInboundMasterKey(&inbound, act == "new"); err != nil {
+		return nil, err
+	}
 	if err := util.FillOutJson(&inbound, hostname); err != nil {
 		return nil, err
 	}

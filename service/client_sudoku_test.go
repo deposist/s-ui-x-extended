@@ -2,11 +2,13 @@ package service
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 
+	"filippo.io/edwards25519"
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
 )
@@ -174,5 +176,136 @@ func TestSudokuOnlyConfigChangeDoesNotReportCoreInboundChanges(t *testing.T) {
 	}
 	if len(ids) != 0 {
 		t.Fatalf("Sudoku delivery-only edit scheduled inbound reload: %v", ids)
+	}
+}
+
+func TestClientSaveGeneratesDistinctSudokuKeysPerInbound(t *testing.T) {
+	initSettingTestDB(t)
+	inbounds := []model.Inbound{
+		{Type: "sudoku", Tag: "sudoku-a", Options: json.RawMessage(`{"key":"` + validSudokuHalfA + `"}`), Addrs: json.RawMessage(`[]`)},
+		{Type: "sudoku", Tag: "sudoku-b", Options: json.RawMessage(`{"key":"` + validSudokuHalfB + `"}`), Addrs: json.RawMessage(`[]`)},
+	}
+	for i := range inbounds {
+		if err := database.GetDB().Create(&inbounds[i]).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	client := model.Client{
+		Name: "auto-sudoku", Enable: true,
+		Inbounds: json.RawMessage(fmt.Sprintf(`[%d,%d]`, inbounds[0].Id, inbounds[1].Id)),
+		Config:   json.RawMessage(`{"sudoku":{"key":""}}`), Links: json.RawMessage(`[]`),
+	}
+	payload, _ := json.Marshal(&client)
+	if _, err := (&ClientService{}).Save(database.GetDB(), "new", payload, "example.com"); err != nil {
+		t.Fatal(err)
+	}
+	var saved model.Client
+	if err := database.GetDB().Where("name = ?", client.Name).First(&saved).Error; err != nil {
+		t.Fatal(err)
+	}
+	var config struct {
+		Sudoku struct {
+			Key  string            `json:"key"`
+			Keys map[string]string `json:"keys"`
+		} `json:"sudoku"`
+	}
+	if err := json.Unmarshal(saved.Config, &config); err != nil {
+		t.Fatal(err)
+	}
+	if config.Sudoku.Key != "" || len(config.Sudoku.Keys) != 2 {
+		t.Fatalf("unexpected generated config: %s", saved.Config)
+	}
+	for i, inbound := range inbounds {
+		key := config.Sudoku.Keys[fmt.Sprint(inbound.Id)]
+		if _, err := normalizeSudokuSplitKey(key); err != nil {
+			t.Fatalf("inbound %d generated invalid key: %v", inbound.Id, err)
+		}
+		decoded, _ := hex.DecodeString(key)
+		left, _ := edwards25519.NewScalar().SetCanonicalBytes(decoded[:32])
+		right, _ := edwards25519.NewScalar().SetCanonicalBytes(decoded[32:])
+		master := edwards25519.NewScalar().Add(left, right)
+		want := validSudokuHalfA
+		if i == 1 {
+			want = validSudokuHalfB
+		}
+		if hex.EncodeToString(master.Bytes()) != want {
+			t.Fatalf("inbound %d split key does not recover its master", inbound.Id)
+		}
+	}
+}
+
+func TestEnsureSudokuInboundMasterKeyGeneratesCanonicalScalar(t *testing.T) {
+	inbound := model.Inbound{Type: "sudoku", Options: json.RawMessage(`{"key":""}`)}
+	if err := ensureSudokuInboundMasterKey(&inbound, true); err != nil {
+		t.Fatal(err)
+	}
+	var options struct {
+		Key       string `json:"key"`
+		MasterKey string `json:"master_key"`
+	}
+	if err := json.Unmarshal(inbound.Options, &options); err != nil {
+		t.Fatal(err)
+	}
+	master, err := parseSudokuMasterKey(options.MasterKey)
+	if err != nil {
+		t.Fatalf("generated inbound master key is invalid: %v", err)
+	}
+	if options.Key != sudokuPublicKey(master) {
+		t.Fatal("inbound public key does not match generated master key")
+	}
+}
+
+func TestEnsureClientSudokuKeysRotatesChangedMasterAndPrunesRemovedInbound(t *testing.T) {
+	initSettingTestDB(t)
+	inbound := model.Inbound{Type: "sudoku", Tag: "rotate", Options: json.RawMessage(`{"master_key":"` + validSudokuHalfA + `","key":"public"}`), Addrs: json.RawMessage(`[]`)}
+	if err := database.GetDB().Create(&inbound).Error; err != nil {
+		t.Fatal(err)
+	}
+	client := model.Client{Inbounds: json.RawMessage(fmt.Sprintf(`[%d]`, inbound.Id)), Config: json.RawMessage(`{"sudoku":{"keys":{"999":"` + validSudokuKeyA + `"}}}`)}
+	if err := ensureClientSudokuKeys(database.GetDB(), &client); err != nil {
+		t.Fatal(err)
+	}
+	var first struct {
+		Sudoku struct {
+			Keys map[string]string `json:"keys"`
+		} `json:"sudoku"`
+	}
+	_ = json.Unmarshal(client.Config, &first)
+	keyA := first.Sudoku.Keys[fmt.Sprint(inbound.Id)]
+	if keyA == "" || first.Sudoku.Keys["999"] != "" {
+		t.Fatalf("generation/pruning failed: %s", client.Config)
+	}
+	inbound.Options = json.RawMessage(`{"master_key":"` + validSudokuHalfB + `","key":"public"}`)
+	if err := database.GetDB().Model(&inbound).Update("options", inbound.Options).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureClientSudokuKeys(database.GetDB(), &client); err != nil {
+		t.Fatal(err)
+	}
+	var second struct {
+		Sudoku struct {
+			Keys map[string]string `json:"keys"`
+		} `json:"sudoku"`
+	}
+	_ = json.Unmarshal(client.Config, &second)
+	keyB := second.Sudoku.Keys[fmt.Sprint(inbound.Id)]
+	if keyB == keyA {
+		t.Fatal("master-key rotation retained incompatible client split key")
+	}
+	masterB, _ := parseSudokuMasterKey(validSudokuHalfB)
+	if !splitSudokuKeyMatchesMaster(keyB, masterB) {
+		t.Fatal("rotated client split key does not match new master")
+	}
+}
+
+func TestInboundCoreJSONOmitsSudokuMasterKey(t *testing.T) {
+	initSettingTestDB(t)
+	row := model.Inbound{Type: "sudoku", Tag: "safe-core", Options: json.RawMessage(`{"listen_port":443,"key":"public","master_key":"` + validSudokuHalfA + `"}`)}
+	raw, err := inboundCoreJSON(&InboundService{}, database.GetDB(), row)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "master_key") || strings.Contains(string(raw), validSudokuHalfA) {
+		t.Fatalf("core config leaked Sudoku master key: %s", raw)
 	}
 }

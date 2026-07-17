@@ -8,6 +8,19 @@
 
 - 暂无未发布变更。
 
+## [1.0.6] - 2026-07-17 - 自动 Sudoku 密钥与稳定交付
+
+这是 1.0.6 beta 系列的稳定版本，加入按客户端/入站自动生成的 Sudoku 密钥，并包含 Sudoku、mieru 链接和 AmneziaWG 2.0 二维码修复。
+
+- 新建 Sudoku 入站时，后端可以生成 Ed25519 master scalar。`master_key` 保存在面板中，但不会进入 sing-box 配置、链接、二维码或订阅。客户端只会收到入站公钥或分配给它的 split key。
+- 每个客户端/入站组合都有独立的 Split Private Key。分配入站时创建，轮换 master key 后重新生成，移除入站时清理。链接和 JSON 订阅按入站 ID 选择密钥。旧的 PSK/公钥入站继续使用共享密钥回退。
+- 面板现在生成 `sudoku://` 和 `mierus://` 链接。旧客户端缺失的链接会在获得可用 hostname 后修复，Settings 中也提供手动重建链接和二维码的操作。
+- 完整的 AmneziaWG 2.0 配置不再受旧的 1500 字节二维码上限影响。生成的配置包含 J1-J3 和 Itime；二维码失败时会显示明确错误并提示下载 `.conf`。
+- 控制台菜单可在通过 Web 面板升级后创建 `AWG_KEY_ENC`，写入环境文件时不会再追加重复值。
+- 无需数据库迁移。
+
+完整发布说明：[`docs/releases/v1.0.6.md`](docs/releases/v1.0.6.md)。
+
 ## [1.0.6-beta3] - 2026-07-16 - 每客户端 Sudoku split key
 
 为每个面板客户端增加可选的 Sudoku Split Private Key，同时保持服务器入站和 `sing-box-extended` 不变。

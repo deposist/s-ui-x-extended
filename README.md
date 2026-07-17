@@ -63,7 +63,7 @@ Release history and upgrade notes:
 - English changelog: [`CHANGELOG-EN.md`](CHANGELOG-EN.md)
 - Russian changelog: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - Simplified Chinese changelog: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
-- Latest stable notes: [`docs/releases/v1.0.2.md`](docs/releases/v1.0.2.md)
+- Latest stable notes: [`docs/releases/v1.0.6.md`](docs/releases/v1.0.6.md)
 - Upstream parity reference: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 ## How this differs from `alireza0/s-ui`
@@ -216,12 +216,12 @@ Use the stable build for normal installations. Use beta releases only if you wan
 
 | Channel | Version | Notes |
 |---|---|---|
-| Stable | `v1.0.2` | Recommended for production. AmneziaWG 2.0 servers are configured as endpoints and assigned to clients like inbounds; devices are delivered through the panel and Telegram. Release notes: [`docs/releases/v1.0.2.md`](docs/releases/v1.0.2.md). |
+| Stable | `v1.0.6` | Recommended for production. Adds Sudoku and mieru share links, repairs legacy link delivery, fixes full AmneziaWG 2.0 QR configs, and generates a separate Sudoku split key for each client and inbound. Release notes: [`docs/releases/v1.0.6.md`](docs/releases/v1.0.6.md). |
 
 ### Linux/macOS, stable
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.2/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.6/install.sh)
 ```
 
 The command above installs the latest stable release. Pass a version tag explicitly if you need a specific beta or older build.

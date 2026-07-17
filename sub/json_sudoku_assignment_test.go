@@ -72,3 +72,24 @@ func TestJsonSubscriptionDeliversSudokuForAssignedClient(t *testing.T) {
 		t.Errorf("sudoku outbound server should be example.com, got %v", sudoku["server"])
 	}
 }
+
+func TestJsonSubscriptionSelectsSudokuKeyForInboundID(t *testing.T) {
+	initSubTestDB(t)
+	inbound := &model.Inbound{
+		Type: "sudoku", Tag: "sudoku-personal", Options: json.RawMessage(`{"listen_port":8443,"key":"SHARED-KEY"}`),
+		OutJson: json.RawMessage(`{"type":"sudoku","tag":"sudoku-personal","server":"example.com","server_port":8443,"key":"SHARED-KEY"}`),
+		Addrs:   json.RawMessage(`[]`),
+	}
+	if err := database.GetDB().Create(inbound).Error; err != nil {
+		t.Fatal(err)
+	}
+	personal := "01000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000"
+	config := json.RawMessage(fmt.Sprintf(`{"sudoku":{"keys":{"%d":"%s"}}}`, inbound.Id, personal))
+	outbounds, _, err := (&JsonService{}).getOutbounds(config, []*model.Inbound{inbound})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(*outbounds) != 1 || (*outbounds)[0]["key"] != personal {
+		t.Fatalf("JSON subscription did not select inbound-specific key: %#v", *outbounds)
+	}
+}

@@ -320,9 +320,9 @@ func trustTunnelOut(out *map[string]interface{}, inbound map[string]interface{})
 	}
 }
 
-// sudokuOut (EXTENDED, keyless) copies the shared client parameters including the
-// mandatory `key` (a client credential, not a server secret — there are no
-// per-user objects to merge it from). It must NOT copy the server-only `fallback`
+// sudokuOut (EXTENDED, keyless) copies client-safe transport parameters. The
+// mandatory public `key` is client-visible; `master_key` is intentionally never
+// copied. Per-client split keys override `key` during delivery.
 // / `handshake_timeout`. http_mask is a nested object on the outbound but flat on
 // the inbound: build it from the inbound's flat fields and MERGE onto any existing
 // out_json.http_mask so an operator's C-side host/multiplex survive.

@@ -3,6 +3,7 @@ package sub
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -191,6 +192,15 @@ func (j *JsonService) getOutbounds(clientConfig json.RawMessage, inbounds []*mod
 				} else if tr, ok := outbound["transport"].(map[string]interface{}); ok {
 					if tt, _ := tr["type"].(string); tt != "" && tt != "tcp" {
 						stripFlow = true
+					}
+				}
+			}
+			if protocol == "sudoku" {
+				if sudokuConfig, ok := configs[protocol].(map[string]interface{}); ok {
+					if keys, ok := sudokuConfig["keys"].(map[string]interface{}); ok {
+						if key, ok := keys[strconv.FormatUint(uint64(inData.Id), 10)].(string); ok && strings.TrimSpace(key) != "" {
+							outbound["key"] = key
+						}
 					}
 				}
 			}

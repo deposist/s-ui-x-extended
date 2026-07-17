@@ -3,6 +3,7 @@ module github.com/deposist/s-ui-x-extended
 go 1.26.4
 
 require (
+	filippo.io/edwards25519 v1.2.0
 	github.com/coder/websocket v1.8.14
 	github.com/gin-contrib/gzip v1.2.5
 	github.com/gin-contrib/sessions v1.0.4
@@ -28,7 +29,6 @@ require (
 )
 
 require (
-	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/AdguardTeam/golibs v0.32.7 // indirect
 	github.com/AliRizaAynaci/gorl/v2 v2.2.0 // indirect
 	github.com/Diniboy1123/connect-ip-go v0.0.0-20260409225322-8d7bb0a858a2 // indirect

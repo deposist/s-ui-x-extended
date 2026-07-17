@@ -391,7 +391,9 @@ function applyCreateSecrets<T extends Inbound>(type: InType, inbound: Inbound, j
       if (target.version === 2 && !hasOwn(source, 'password')) target.password = RandomUtil.randomSeq(16)
       break
     case InTypes.Sudoku:
-      if (!hasOwn(source, 'key')) target.key = RandomUtil.randomShadowsocksPassword(32)
+      // The backend generates a canonical master scalar when the field is
+      // omitted. Explicit values remain supported for legacy PSK/public keys.
+      if (!hasOwn(source, 'key')) delete target.key
       break
   }
 }

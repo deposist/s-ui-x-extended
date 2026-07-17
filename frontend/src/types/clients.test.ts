@@ -4,12 +4,12 @@ import { randomConfigs, normalizeSudokuClientKey } from './clients'
 const validKey = '01'.padEnd(64, '0') + '02'.padEnd(64, '0')
 
 describe('Sudoku client split key form contract', () => {
-  it('creates an optional Sudoku config field', () => {
+  it('leaves Sudoku credentials to backend generation', () => {
     Object.defineProperty(globalThis, 'window', {
       value: { crypto: { getRandomValues: (values: Uint32Array) => values.fill(1) } },
       configurable: true,
     })
-    expect(randomConfigs('alice').sudoku.key).toBe('')
+    expect(randomConfigs('alice').sudoku).toEqual({})
   })
 
   it('trims and lowercases a 128-character hex key', () => {

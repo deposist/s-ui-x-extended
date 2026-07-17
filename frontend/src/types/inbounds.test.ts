@@ -41,12 +41,12 @@ describe('createInbound generated secrets', () => {
     expect(explicitEmpty.password).toBeUndefined()
   })
 
-  it('generates Sudoku and ShadowTLS secrets only when missing', () => {
+  it('leaves a missing Sudoku master key for backend generation', () => {
     const sudoku = createInbound(InTypes.Sudoku, { id: 0, tag: 'sudoku', listen_port: 10001 }) as Sudoku
     const shadowTlsV3 = createInbound(InTypes.ShadowTLS, { id: 0, tag: 'shadowtls', listen_port: 10002 }) as ShadowTLS
     const shadowTlsV2 = createInbound(InTypes.ShadowTLS, { id: 0, tag: 'shadowtls-v2', listen_port: 10003, version: 2 }) as ShadowTLS
 
-    expect(sudoku.key).toBeTruthy()
+    expect(sudoku.key).toBeUndefined()
     expect(shadowTlsV3.version).toBe(3)
     expect(shadowTlsV3.password).toBeUndefined()
     expect(shadowTlsV2.password).toBeTruthy()

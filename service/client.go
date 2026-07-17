@@ -176,7 +176,7 @@ func (s *ClientService) Save(tx *gorm.DB, act string, data json.RawMessage, host
 		if err != nil {
 			return nil, err
 		}
-		if err = normalizeClientSudokuConfig(&client); err != nil {
+		if err = ensureClientSudokuKeys(tx, &client); err != nil {
 			return nil, err
 		}
 		err = s.updateLinksWithFixedInbounds(tx, []*model.Client{&client}, hostname)
@@ -222,7 +222,7 @@ func (s *ClientService) Save(tx *gorm.DB, act string, data json.RawMessage, host
 			if err != nil {
 				return nil, err
 			}
-			if err = normalizeClientSudokuConfig(client); err != nil {
+			if err = ensureClientSudokuKeys(tx, client); err != nil {
 				return nil, err
 			}
 		}
@@ -255,7 +255,7 @@ func (s *ClientService) Save(tx *gorm.DB, act string, data json.RawMessage, host
 				}
 				client.Config = oldConfig.Config
 			}
-			if err = normalizeClientSudokuConfig(client); err != nil {
+			if err = ensureClientSudokuKeys(tx, client); err != nil {
 				return nil, err
 			}
 			var oldClient model.Client
@@ -744,6 +744,9 @@ func (s *ClientService) UpdateClientsOnInboundAdd(tx *gorm.DB, initIds string, i
 		if backfilled {
 			client.Config = config
 		}
+		if err := ensureClientSudokuKeys(tx, &client); err != nil {
+			return err
+		}
 
 		// Regenerate the added inbound's links; keep links for other inbounds.
 		links, decoded, lerr := rebuildClientLinks(client.Id, client.Config, client.Links, []model.Inbound{inbound}, hostname, func(link map[string]string) bool {
@@ -791,6 +794,9 @@ func (s *ClientService) UpdateClientsOnInboundDelete(tx *gorm.DB, id uint, tag s
 		}
 		client.Inbounds, err = json.MarshalIndent(newClientInbounds, "", "  ")
 		if err != nil {
+			return err
+		}
+		if err := ensureClientSudokuKeys(tx, &client); err != nil {
 			return err
 		}
 		// Delete links
@@ -841,6 +847,9 @@ func (s *ClientService) UpdateLinksByInboundChange(tx *gorm.DB, inbounds *[]mode
 			}
 			if backfilled {
 				client.Config = config
+			}
+			if err := ensureClientSudokuKeys(tx, &client); err != nil {
+				return err
 			}
 
 			// Regenerate this inbound's links; keep non-local links and local

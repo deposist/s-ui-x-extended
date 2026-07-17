@@ -9,6 +9,19 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.6] - 2026-07-17 - automatic Sudoku keys and stable delivery
+
+Stable release of the 1.0.6 beta work, with automatic per-inbound Sudoku client keys and the beta fixes for links and AmneziaWG QR delivery.
+
+- New Sudoku inbounds can generate an Ed25519 master scalar on the backend. The stored `master_key` is filtered from sing-box configs, links, QR codes, and subscriptions; clients see only the public inbound key or their assigned split key.
+- Every client/inbound pair gets a separate Split Private Key. Assignment creates it, master rotation replaces it, inbound removal cleans it up, and link/JSON delivery selects it by inbound ID. Legacy PSK/public-key inbounds keep the shared-key fallback.
+- The panel emits `sudoku://` and `mierus://` links. Missing links from older assignments are repaired when the panel has a usable hostname, and Settings includes a manual rebuild action.
+- Full AmneziaWG 2.0 configs no longer hit the old 1500-byte QR cap. J1-J3 and Itime are included, and QR failures now show an actionable error with a `.conf` fallback.
+- The console menu can provision `AWG_KEY_ENC` after a web-panel update and no longer appends duplicate environment values.
+- No database migration is required.
+
+Full release notes: [`docs/releases/v1.0.6.md`](docs/releases/v1.0.6.md).
+
 ## [1.0.6-beta3] - 2026-07-16 - per-client Sudoku split keys
 
 Adds an optional Sudoku Split Private Key to each panel client while keeping the server inbound and `sing-box-extended` unchanged.

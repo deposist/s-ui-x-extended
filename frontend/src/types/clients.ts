@@ -223,9 +223,7 @@ export function randomConfigs(user: string): Config {
       name: user,
       password: mixedPassword,
     },
-    sudoku: {
-      key: '',
-    },
+    sudoku: {},
     mtproxy: {
       name: user,
       secret: randomMtprotoSecret(),
