@@ -9,6 +9,14 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.6-hotfix1] - 2026-07-17 - Sudoku key display
+
+- Replaces the stale beta3 CLI-generation instruction in the client editor with the current automatic-generation behavior.
+- Shows one read-only Split Private Key per assigned Sudoku inbound. Keys are labeled by inbound and hidden until the operator uses the eye button.
+- Clients without generated keys see an automatic-generation note. Existing keys, links, QR codes, subscriptions, and the separate `mtproxy` Secret field are unchanged.
+
+Full release notes: [`docs/releases/v1.0.6-hotfix1.md`](docs/releases/v1.0.6-hotfix1.md).
+
 ## [1.0.6] - 2026-07-17 - automatic Sudoku keys and stable delivery
 
 Stable release of the 1.0.6 beta work, with automatic per-inbound Sudoku client keys and the beta fixes for links and AmneziaWG QR delivery.

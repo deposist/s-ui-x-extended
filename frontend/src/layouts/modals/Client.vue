@@ -198,9 +198,24 @@
                     hide-details>
                   </v-text-field>
                   <template v-if="key == 'sudoku'">
-                    <v-alert type="info" variant="tonal" density="compact">
+                    <v-alert v-if="sudokuKeyEntries.length === 0" type="info" variant="tonal" density="compact">
                       {{ $t('client.sudoku.generate') }}
                     </v-alert>
+                    <v-text-field
+                      v-for="entry in sudokuKeyEntries"
+                      :key="entry.id"
+                      class="mb-2"
+                      dir="ltr"
+                      :label="entry.label"
+                      :model-value="entry.value"
+                      :type="visibleSudokuKeys[entry.id] ? 'text' : 'password'"
+                      :append-inner-icon="visibleSudokuKeys[entry.id] ? 'mdi-eye-off' : 'mdi-eye'"
+                      readonly
+                      hide-details
+                      @click:append-inner="toggleSudokuKey(entry.id)" />
+                    <div v-if="sudokuKeyEntries.length > 0" class="text-caption mt-1">
+                      {{ $t('client.sudoku.generated') }}
+                    </div>
                   </template>
                   <v-text-field
                     v-if="clientConfig[key].secret != undefined"
@@ -353,6 +368,7 @@ export default {
       awgQrDialog: false,
       awgQrUrl: '',
       awgQrDeviceName: '',
+      visibleSudokuKeys: <Record<string, boolean>>{},
     }
   },
   methods: {
@@ -416,6 +432,9 @@ export default {
     },
     setDate(newDate:number){
       this.client.expiry = newDate
+    },
+    toggleSudokuKey(id: string) {
+      this.visibleSudokuKeys[id] = !this.visibleSudokuKeys[id]
     },
     setAllInbounds(){
       this.client.inbounds = this.inboundTags.map((i:any) => i.value).sort()
@@ -550,6 +569,17 @@ export default {
     },
   },
   computed: {
+    sudokuKeyEntries(): Array<{ id: string, label: string, value: string }> {
+      const keys = this.clientConfig?.sudoku?.keys ?? {}
+      return Object.entries(keys).map(([id, value]) => {
+        const inbound = this.inboundTags.find((item: any) => String(item.value) === id)
+        return {
+          id,
+          label: `Split Private Key · ${inbound?.title ?? `Inbound #${id}`}`,
+          value: String(value),
+        }
+      })
+    },
     clientInbounds: {
       get() { return this.client.inbounds.length>0 ? this.client.inbounds.sort() : [] },
       set(v:number[]) { this.client.inbounds = v.length == 0 ?  [] : v.sort() }

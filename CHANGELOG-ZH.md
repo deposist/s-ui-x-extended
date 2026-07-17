@@ -8,6 +8,14 @@
 
 - 暂无未发布变更。
 
+## [1.0.6-hotfix1] - 2026-07-17 - Sudoku 密钥显示
+
+- 删除客户端编辑器中来自 beta3 的旧 CLI 手动生成说明，改为说明当前的自动生成方式。
+- 为每个已分配的 Sudoku 入站显示一个只读 Split Private Key。密钥按入站名称标记，默认隐藏，可通过眼睛按钮显示。
+- 尚未生成密钥的客户端会看到自动生成提示。现有密钥、链接、二维码、订阅以及独立的 `mtproxy` Secret 字段均不受影响。
+
+完整发布说明：[`docs/releases/v1.0.6-hotfix1.md`](docs/releases/v1.0.6-hotfix1.md)。
+
 ## [1.0.6] - 2026-07-17 - 自动 Sudoku 密钥与稳定交付
 
 这是 1.0.6 beta 系列的稳定版本，加入按客户端/入站自动生成的 Sudoku 密钥，并包含 Sudoku、mieru 链接和 AmneziaWG 2.0 二维码修复。

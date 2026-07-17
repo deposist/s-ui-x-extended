@@ -1057,10 +1057,8 @@ export default {
     group: "Group",
     inboundTags: "Inbound Tags",
     sudoku: {
-      splitKey: "Sudoku client split private key (optional)",
-      invalid: "Enter exactly 128 hexadecimal characters, or leave the field empty to use the inbound key.",
-      generate: "Generate a Split Private Key with the official Sudoku CLI. Do not paste the Master Private Key into the panel:",
-      warning: "This is a client Split Private Key, not the server Master Public Key. It creates a distinct client configuration but is not independently revocable. Removing or disabling the client in the panel does not invalidate a key already imported into an application. Full revocation requires rotating the master pair and reissuing keys to every remaining client.",
+      generate: "Split keys are generated automatically for each assigned Sudoku inbound and included in this client's links, QR codes, and subscriptions.",
+      generated: "Generated automatically. Use the eye button to reveal a key when you need to copy it manually.",
     },
     awg: {
       endpoints: "AmneziaWG 2.0 servers",

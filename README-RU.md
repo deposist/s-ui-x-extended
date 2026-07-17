@@ -63,7 +63,7 @@ S-UI-X Extended это веб-панель на базе [`sing-box-extended`](h
 - Английский changelog: [`CHANGELOG-EN.md`](CHANGELOG-EN.md)
 - Русский changelog: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - Changelog на упрощенном китайском: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
-- Заметки последнего стабильного релиза: [`docs/releases/v1.0.6.md`](docs/releases/v1.0.6.md)
+- Заметки последнего стабильного релиза: [`docs/releases/v1.0.6-hotfix1.md`](docs/releases/v1.0.6-hotfix1.md)
 - Справка по паритету с upstream: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 ## Чем отличается от `alireza0/s-ui`
@@ -216,12 +216,12 @@ S-UI-X Extended это веб-панель на базе [`sing-box-extended`](h
 
 | Канал | Версия | Заметки |
 |---|---|---|
-| Stable | `v1.0.6` | Рекомендуется для production. Добавлены ссылки Sudoku и mieru, восстановление ссылок для старых клиентов, исправлена выдача полных конфигов AmneziaWG 2.0 через QR, а для каждой пары клиент/inbound автоматически создаётся отдельный Sudoku split key. Release notes: [`docs/releases/v1.0.6.md`](docs/releases/v1.0.6.md). |
+| Stable | `v1.0.6-hotfix1` | Рекомендуется для production. Включает v1.0.6 и исправляет редактор клиента: сгенерированные Sudoku split key показаны отдельно для каждого inbound, а подсказка соответствует автоматической генерации. Release notes: [`docs/releases/v1.0.6-hotfix1.md`](docs/releases/v1.0.6-hotfix1.md). |
 
 ### Linux/macOS, stable
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.6/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.6-hotfix1/install.sh)
 ```
 
 Эта команда ставит последний stable release. Укажите тег версии явно, если нужна конкретная beta или старая сборка.
