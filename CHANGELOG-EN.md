@@ -9,6 +9,15 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.7] - 2026-07-20 - management menu and certificate cleanup
+
+- The Ubuntu management menu no longer exits when systemd reports `activating` with a non-zero status. Stopped and missing services are also handled without terminating the menu.
+- Menu item 11 now clears the TLS paths used by the web panel and subscriptions together with the domain, listen address, and Web URI. Certificate files and IP-certificate settings remain intact.
+- The Sudoku client section no longer offers a reset control for automatically managed keys. Revealed keys are hidden when another client is opened, and the Split Private Key label now uses the interface locale.
+- Removed the obsolete manual split-key guide. Sudoku client keys are generated and maintained by the panel.
+
+Full release notes: [`docs/releases/v1.0.7.md`](docs/releases/v1.0.7.md).
+
 ## [1.0.6-hotfix1] - 2026-07-17 - Sudoku key display
 
 - Replaces the stale beta3 CLI-generation instruction in the client editor with the current automatic-generation behavior.

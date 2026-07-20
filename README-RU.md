@@ -63,7 +63,7 @@ S-UI-X Extended это веб-панель на базе [`sing-box-extended`](h
 - Английский changelog: [`CHANGELOG-EN.md`](CHANGELOG-EN.md)
 - Русский changelog: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - Changelog на упрощенном китайском: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
-- Заметки последнего стабильного релиза: [`docs/releases/v1.0.6-hotfix1.md`](docs/releases/v1.0.6-hotfix1.md)
+- Заметки последнего стабильного релиза: [`docs/releases/v1.0.7.md`](docs/releases/v1.0.7.md)
 - Справка по паритету с upstream: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 ## Чем отличается от `alireza0/s-ui`
@@ -115,7 +115,7 @@ S-UI-X Extended это веб-панель на базе [`sing-box-extended`](h
 | AnyTLS | |
 | ShadowTLS | Detour к скрытому протоколу |
 | Mieru | Stealth-протокол |
-| Sudoku | HTTP-маскировка; опциональная [доставка отдельных split key клиентам](docs/SUDOKU-CLIENT-SPLIT-KEYS.md) |
+| Sudoku | HTTP-маскировка; автоматическая доставка отдельных split key клиентам |
 | TrustTunnel | QUIC-туннель |
 | SSH | Эмуляция SSH-сервера |
 | MTProxy | Telegram-прокси, FakeTLS, отдается как `tg://proxy` |
@@ -216,12 +216,12 @@ S-UI-X Extended это веб-панель на базе [`sing-box-extended`](h
 
 | Канал | Версия | Заметки |
 |---|---|---|
-| Stable | `v1.0.6-hotfix1` | Рекомендуется для production. Включает v1.0.6 и исправляет редактор клиента: сгенерированные Sudoku split key показаны отдельно для каждого inbound, а подсказка соответствует автоматической генерации. Release notes: [`docs/releases/v1.0.6-hotfix1.md`](docs/releases/v1.0.6-hotfix1.md). |
+| Stable | `v1.0.7` | Рекомендуется для production. Меню управления остаётся доступным во время запуска сервиса, управление Sudoku-ключами стало понятнее, а очистка домена отключает сертификаты панели и подписок. Release notes: [`docs/releases/v1.0.7.md`](docs/releases/v1.0.7.md). |
 
 ### Linux/macOS, stable
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.6-hotfix1/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.7/install.sh)
 ```
 
 Эта команда ставит последний stable release. Укажите тег версии явно, если нужна конкретная beta или старая сборка.
