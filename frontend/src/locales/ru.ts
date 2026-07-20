@@ -1057,6 +1057,7 @@ export default {
     group: "Группа",
     inboundTags: "Теги Inbounds",
     sudoku: {
+      splitKey: "Split Private Key",
       generate: "Split key создаётся автоматически для каждого назначенного Sudoku inbound и добавляется в ссылки, QR-коды и подписки этого клиента.",
       generated: "Ключи созданы автоматически. Нажмите на значок глаза, чтобы показать ключ для ручного копирования.",
     },

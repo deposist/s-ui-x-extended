@@ -1057,6 +1057,7 @@ export default {
     group: "Group",
     inboundTags: "Inbound Tags",
     sudoku: {
+      splitKey: "Split Private Key",
       generate: "Split keys are generated automatically for each assigned Sudoku inbound and included in this client's links, QR codes, and subscriptions.",
       generated: "Generated automatically. Use the eye button to reveal a key when you need to copy it manually.",
     },

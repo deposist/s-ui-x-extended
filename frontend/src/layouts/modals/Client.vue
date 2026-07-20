@@ -169,7 +169,7 @@
               <v-row v-for="key in Object.keys(clientConfig)">
                 <v-col cols="12" md="3" align="end" align-self="center">
                     {{ key }}
-                    <v-icon @click="shuffle(key)" icon="mdi-refresh" v-tooltip:top="$t('reset')" />
+                    <v-icon v-if="key !== 'sudoku'" @click="shuffle(key)" icon="mdi-refresh" v-tooltip:top="$t('reset')" />
                 </v-col>
                 <v-col>
                   <v-text-field
@@ -377,6 +377,7 @@ export default {
       this.awgDevices = {}
       this.awgNewDeviceNames = {}
       this.awgNewDeviceExpiry = {}
+      this.visibleSudokuKeys = {}
       if (this.awgQrUrl) { URL.revokeObjectURL(this.awgQrUrl); this.awgQrUrl = '' }
       if (id > 0) {
         this.loading = true
@@ -575,7 +576,7 @@ export default {
         const inbound = this.inboundTags.find((item: any) => String(item.value) === id)
         return {
           id,
-          label: `Split Private Key · ${inbound?.title ?? `Inbound #${id}`}`,
+          label: `${this.$t('client.sudoku.splitKey')} · ${inbound?.title ?? `Inbound #${id}`}`,
           value: String(value),
         }
       })
