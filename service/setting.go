@@ -397,17 +397,39 @@ func (s *SettingService) GetWebURI() (string, error) {
 	return s.getString("webURI")
 }
 
-// ClearWebDomainAndAddress clears the panel domain, listen address and web URI.
+// ClearWebDomainAndAddress clears the panel domain, listen address, web URI and
+// the certificate paths used by the panel and subscriptions.
 // It restores access by IP on all interfaces when a wrong domain or listen
-// address was configured and locked the panel out. A panel restart is required
-// for the change to take effect.
+// address or a broken certificate path locked the panel out. A panel restart is
+// required for the change to take effect.
 func (s *SettingService) ClearWebDomainAndAddress() error {
-	for _, key := range []string{"webDomain", "webListen", "webURI"} {
-		if err := s.setString(key, ""); err != nil {
-			return err
-		}
+	keys := []string{
+		"webDomain", "webListen", "webURI",
+		"webCertFile", "webKeyFile", "subCertFile", "subKeyFile",
 	}
-	return nil
+	db := database.GetDB()
+	if db == nil {
+		return common.NewError("database is not initialized")
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		for _, key := range keys {
+			setting := &model.Setting{}
+			err := tx.Where("key = ?", key).First(setting).Error
+			if database.IsNotFound(err) {
+				if err := tx.Create(&model.Setting{Key: key, Value: ""}).Error; err != nil {
+					return err
+				}
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if err := tx.Model(setting).Update("value", "").Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (s *SettingService) GetPort() (int, error) {

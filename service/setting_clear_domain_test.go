@@ -5,12 +5,17 @@ import "testing"
 func TestClearWebDomainAndAddress(t *testing.T) {
 	s := initSettingTestDB(t)
 
-	// Seed the panel addressing fields plus an unrelated field that must survive.
+	// Seed the panel addressing and TLS fields plus unrelated fields that must survive.
 	seed := map[string]string{
-		"webDomain": "panel.example.com",
-		"webListen": "10.0.0.5",
-		"webURI":    "https://panel.example.com:2096/app/",
-		"webPath":   "/keep/",
+		"webDomain":      "panel.example.com",
+		"webListen":      "10.0.0.5",
+		"webURI":         "https://panel.example.com:2096/app/",
+		"webCertFile":    "/etc/s-ui/panel.crt",
+		"webKeyFile":     "/etc/s-ui/panel.key",
+		"subCertFile":    "/etc/s-ui/sub.crt",
+		"subKeyFile":     "/etc/s-ui/sub.key",
+		"webPath":        "/keep/",
+		"ipCertCertPath": "/keep/ip.crt",
 	}
 	for key, value := range seed {
 		if err := s.setString(key, value); err != nil {
@@ -22,7 +27,10 @@ func TestClearWebDomainAndAddress(t *testing.T) {
 		t.Fatalf("ClearWebDomainAndAddress: %v", err)
 	}
 
-	for _, key := range []string{"webDomain", "webListen", "webURI"} {
+	for _, key := range []string{
+		"webDomain", "webListen", "webURI",
+		"webCertFile", "webKeyFile", "subCertFile", "subKeyFile",
+	} {
 		got, err := s.getString(key)
 		if err != nil {
 			t.Fatalf("get %s: %v", key, err)
@@ -39,5 +47,12 @@ func TestClearWebDomainAndAddress(t *testing.T) {
 	}
 	if webPath != "/keep/" {
 		t.Errorf("webPath = %q after clear, want %q", webPath, "/keep/")
+	}
+	ipCertPath, err := s.GetIpCertCertPath()
+	if err != nil {
+		t.Fatalf("GetIpCertCertPath: %v", err)
+	}
+	if ipCertPath != "/keep/ip.crt" {
+		t.Errorf("ipCertCertPath = %q after clear, want %q", ipCertPath, "/keep/ip.crt")
 	}
 }

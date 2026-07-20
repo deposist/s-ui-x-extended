@@ -30,7 +30,7 @@ func ParseCmd() {
 	var repairFKOrphans bool
 	settingCmd.BoolVar(&reset, "reset", false, "reset all settings")
 	settingCmd.BoolVar(&show, "show", false, "show current settings")
-	settingCmd.BoolVar(&clearDomain, "clearDomain", false, "clear panel domain, listen address and web URI")
+	settingCmd.BoolVar(&clearDomain, "clearDomain", false, "clear panel domain, listen address, web URI and panel/subscription TLS paths")
 	settingCmd.IntVar(&port, "port", 0, "set panel port")
 	settingCmd.StringVar(&path, "path", "", "set panel path")
 	settingCmd.IntVar(&subPort, "subPort", 0, "set sub port")

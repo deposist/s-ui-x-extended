@@ -63,7 +63,7 @@ t() {
             set_username_p)      echo "请设置用户名："; return ;;
             set_password_p)      echo "请设置密码："; return ;;
             reset_settings_q)    echo "确定要将设置重置为默认值吗？"; return ;;
-            clear_domain_q)      echo "确定要清除面板的域名、监听地址和 Web URI 吗？"; return ;;
+            clear_domain_q)      echo "确定要清除面板的域名、监听地址、Web URI，并停止使用面板和订阅证书吗？"; return ;;
             enter_panel_port)    echo "请输入面板端口（留空则使用现有/默认值）："; return ;;
             enter_panel_path)    echo "请输入面板路径（留空则使用现有/默认值）："; return ;;
             enter_sub_port)      echo "请输入订阅端口（留空则使用现有/默认值）："; return ;;
@@ -227,8 +227,8 @@ t() {
         ru:set_password_p)      echo "Пароль: ";;
         en:reset_settings_q)    echo "Reset settings to default values?";;
         ru:reset_settings_q)    echo "Сбросить настройки к значениям по умолчанию?";;
-        en:clear_domain_q)      echo "Clear the panel domain, listen address and web URI?";;
-        ru:clear_domain_q)      echo "Очистить домен, адрес и Web URI панели?";;
+        en:clear_domain_q)      echo "Clear the panel domain, listen address and web URI, and stop using panel and subscription certificates?";;
+        ru:clear_domain_q)      echo "Очистить домен, адрес и Web URI панели и отключить использование сертификатов панелью и подписками?";;
         en:enter_panel_port)    echo "Enter panel port (leave empty to keep current/default):";;
         ru:enter_panel_port)    echo "Введите порт панели (оставьте пустым, чтобы использовать текущее/стандартное значение):";;
         en:enter_panel_path)    echo "Enter panel path (leave empty to keep current/default):";;
@@ -936,7 +936,7 @@ check_status() {
     if [[ ! -f "/etc/systemd/system/$1.service" ]]; then
         return 2
     fi
-    temp=$(systemctl is-active "$1" 2>/dev/null)
+    temp=$(systemctl is-active "$1" 2>/dev/null || true)
     if [[ "${temp}" == "active" || "${temp}" == "activating" ]]; then
         return 0
     else
@@ -954,8 +954,9 @@ check_enabled() {
 }
 
 check_uninstall() {
-    check_status s-ui
-    if [[ $? != 2 ]]; then
+    local status_code=0
+    check_status s-ui || status_code=$?
+    if [[ ${status_code} != 2 ]]; then
         echo ""
         LOGE "$(t already_installed)"
         if [[ $# == 0 ]]; then
@@ -968,8 +969,9 @@ check_uninstall() {
 }
 
 check_install() {
-    check_status s-ui
-    if [[ $? == 2 ]]; then
+    local status_code=0
+    check_status s-ui || status_code=$?
+    if [[ ${status_code} == 2 ]]; then
         echo ""
         LOGE "$(t install_first)"
         if [[ $# == 0 ]]; then
@@ -982,8 +984,9 @@ check_install() {
 }
 
 show_status() {
-    check_status "$1"
-    case $? in
+    local status_code=0
+    check_status "$1" || status_code=$?
+    case ${status_code} in
     0)
         echo -e "${green}$(t status_running "${1}")${plain}"
         show_enable_status "$1"

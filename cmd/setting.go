@@ -36,10 +36,10 @@ func clearWebDomain() {
 
 	settingService := service.SettingService{}
 	if err := settingService.ClearWebDomainAndAddress(); err != nil {
-		fmt.Println("clear panel domain and address failed:", err)
+		fmt.Println("clear panel domain, address and TLS paths failed:", err)
 		return
 	}
-	fmt.Println("clear panel domain and address success")
+	fmt.Println("clear panel domain, address and TLS paths success")
 	showSetting()
 }
 
