@@ -231,7 +231,7 @@ jobs:
           set -euo pipefail
           BUILD_TAGS="${{ env.RELEASE_BUILD_TAGS }},with_naive_outbound,with_musl"
           go build -ldflags="-checklinkname=0 -linkmode external -extldflags '-static' -X github.com/deposist/s-ui-x-extended/config.ArtifactPlatform=${{ matrix.platform }}" -tags "$BUILD_TAGS" -o sui-security-scan main.go
-          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
           "$(go env GOPATH)/bin/govulncheck" -mode=binary sui-security-scan
           rm sui-security-scan
 
