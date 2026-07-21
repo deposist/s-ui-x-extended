@@ -102,3 +102,14 @@ func TestConvertToClashMetaCoversAllProxies(t *testing.T) {
 		}
 	}
 }
+
+func TestConvertToClashMetaRejectsShortProxyGroupTemplate(t *testing.T) {
+	previous := proxyGroupsConfig
+	proxyGroupsConfig = "- name: Only\n  type: select\n"
+	t.Cleanup(func() { proxyGroupsConfig = previous })
+
+	outbounds := diverseClashOutbounds()
+	if _, err := (&ClashService{}).ConvertToClashMeta(&outbounds, basicClashConfig); err == nil {
+		t.Fatal("expected malformed proxy-group template to return an error")
+	}
+}

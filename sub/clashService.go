@@ -77,6 +77,8 @@ const ProxyGroups = `- name: Proxy
   tolerance: 50
 `
 
+var proxyGroupsConfig = ProxyGroups
+
 func (s *ClashService) GetClash(subId string) (*string, []string, error) {
 	now := time.Now()
 	cacheKey := "clash:" + subId
@@ -417,7 +419,7 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 	}
 
 	var proxyGroups []map[string]interface{}
-	err := yaml.Unmarshal([]byte(ProxyGroups), &proxyGroups)
+	err := yaml.Unmarshal([]byte(proxyGroupsConfig), &proxyGroups)
 	if err != nil {
 		logger.Error(err.Error())
 	}

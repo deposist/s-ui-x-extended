@@ -182,22 +182,6 @@ type covTSInterface struct {
 	Fields  map[string]bool
 }
 
-func covParseTS(dir string) (map[string]covTSInterface, error) {
-	result := map[string]covTSInterface{}
-	files, err := filepath.Glob(filepath.Join(dir, "*.ts"))
-	if err != nil {
-		return nil, err
-	}
-	for _, path := range files {
-		src, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
-		}
-		covParseTSText(string(src), result)
-	}
-	return result, nil
-}
-
 func covParseTSText(text string, result map[string]covTSInterface) {
 	for i := 0; i < len(text); {
 		idx := strings.Index(text[i:], "interface ")

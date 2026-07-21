@@ -48,6 +48,68 @@ func artifactServer(t *testing.T, tarball []byte, checksumHex string) *httptest.
 	return server
 }
 
+func TestDownloadToFileEnforcesExactLimit(t *testing.T) {
+	const limit = int64(32)
+	tests := []struct {
+		name    string
+		size    int64
+		wantErr error
+	}{
+		{name: "exact limit", size: limit},
+		{name: "one byte over", size: limit + 1, wantErr: errArtifactTooLarge},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := bytes.Repeat([]byte("x"), int(tt.size))
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write(body)
+			}))
+			defer server.Close()
+			dest := filepath.Join(t.TempDir(), "artifact")
+			err := downloadToFileLimit(server.Client(), server.URL, dest, limit)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("download error = %v, want %v", err, tt.wantErr)
+			}
+			if tt.wantErr != nil {
+				if _, statErr := os.Stat(dest); !os.IsNotExist(statErr) {
+					t.Fatalf("oversized partial artifact was not removed: %v", statErr)
+				}
+				return
+			}
+			got, readErr := os.ReadFile(dest)
+			if readErr != nil || !bytes.Equal(got, body) {
+				t.Fatalf("exact-limit artifact mismatch: bytes=%d err=%v", len(got), readErr)
+			}
+		})
+	}
+}
+
+func TestDownloadChecksumRejectsOversize(t *testing.T) {
+	const limit = int64(16)
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(bytes.Repeat([]byte("a"), int(limit+1)))
+	}))
+	defer server.Close()
+	if _, err := downloadChecksumLimit(server.Client(), server.URL, limit); !errors.Is(err, errChecksumTooLarge) {
+		t.Fatalf("checksum error = %v, want %v", err, errChecksumTooLarge)
+	}
+}
+
+func TestExtractBinaryRejectsOversizedMemberWithoutPartialFile(t *testing.T) {
+	const limit = int64(32)
+	archive := filepath.Join(t.TempDir(), "artifact.tar.gz")
+	if err := os.WriteFile(archive, makeTarGz(t, bytes.Repeat([]byte("x"), int(limit+1))), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(t.TempDir(), "sui.new")
+	if err := extractBinaryLimit(archive, dest, limit); !errors.Is(err, errArchiveMemberTooLarge) {
+		t.Fatalf("extract error = %v, want %v", err, errArchiveMemberTooLarge)
+	}
+	if _, err := os.Stat(dest); !os.IsNotExist(err) {
+		t.Fatalf("oversized archive member created a partial executable: %v", err)
+	}
+}
+
 // T025 / SR-002 / SR-007: a checksum mismatch aborts the apply before the live
 // binary is touched.
 func TestApplyPipelineRejectsChecksumMismatch(t *testing.T) {
@@ -212,7 +274,9 @@ func TestApplySuccessRecordsAppliedAuditBeforeExit(t *testing.T) {
 	server := artifactServer(t, tarball, hex.EncodeToString(sum[:]))
 
 	oldDeps := newPanelUpdateDeps
-	newPanelUpdateDeps = func() panelUpdateDeps { return panelUpdateDeps{client: server.Client(), execPath: execPath} }
+	newPanelUpdateDeps = func() panelUpdateDeps {
+		return panelUpdateDeps{client: server.Client(), execPath: execPath}
+	}
 	t.Cleanup(func() { newPanelUpdateDeps = oldDeps })
 
 	var auditResult string

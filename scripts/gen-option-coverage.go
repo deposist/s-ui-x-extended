@@ -99,6 +99,7 @@ func baseType(t string) string {
 func parseGoStructs(dir string) (map[string]GoStruct, error) {
 	fset := token.NewFileSet()
 	structs := map[string]GoStruct{}
+	// #nosec G703 -- developer-only generator walks repository-owned source roots.
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return err
@@ -192,23 +193,6 @@ func flatFields(name string, structs map[string]GoStruct) []string {
 type TSInterface struct {
 	Extends []string `json:"extends"`
 	Fields  []string `json:"fields"`
-}
-
-func parseTSInterfaces(dir string) (map[string]TSInterface, error) {
-	result := map[string]TSInterface{}
-	files, err := filepath.Glob(filepath.Join(dir, "*.ts"))
-	if err != nil {
-		return nil, err
-	}
-	for _, path := range files {
-		src, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
-		}
-		text := string(src)
-		parseTSFile(text, result)
-	}
-	return result, nil
 }
 
 func parseTSFile(text string, result map[string]TSInterface) {
@@ -355,6 +339,7 @@ func parseVueModels(dir string) (map[string][]string, error) {
 		return nil, err
 	}
 	for _, path := range files {
+		// #nosec G304 -- path comes from the repository component glob above.
 		src, err := os.ReadFile(path)
 		if err != nil {
 			return nil, err
@@ -575,6 +560,7 @@ type Allowlist struct {
 }
 
 func loadAllowlist(path string) (*Allowlist, error) {
+	// #nosec G304 -- path is the repository-owned allowlist selected by the generator.
 	src, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -592,22 +578,8 @@ func loadAllowlist(path string) (*Allowlist, error) {
 	return &a, nil
 }
 
-func tsContextDir(context string) string {
-	switch context {
-	case "in":
-		return "frontend/src/types/inbounds.ts"
-	case "out":
-		return "frontend/src/types/outbounds.ts"
-	case "ep":
-		return "frontend/src/types/endpoints.ts"
-	case "prov":
-		return "frontend/src/types/providers.ts"
-	default:
-		return ""
-	}
-}
-
 func parseTSFileInto(path string, result map[string]TSInterface) error {
+	// #nosec G304 -- callers pass fixed repository TypeScript source paths.
 	src, err := os.ReadFile(path)
 	if err != nil {
 		return err

@@ -7,6 +7,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net"
@@ -84,9 +85,10 @@ func (u telegramGetUpdatesItem) chat() *telegramDetectedChat {
 }
 
 const (
-	telegramQueueCapacity = 256
-	telegramMaxRetryAfter = 300 * time.Second
-	telegramProxyDialTime = 10 * time.Second
+	telegramQueueCapacity    = 256
+	telegramMaxRetryAfter    = 300 * time.Second
+	telegramProxyDialTime    = 10 * time.Second
+	telegramMaxResponseBytes = 1 << 20
 )
 
 var (
@@ -427,7 +429,10 @@ func (s *TelegramService) DetectTelegramChat(tokenOverride string) TelegramChatD
 		return TelegramChatDetectionResult{ErrorClass: "network"}
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := readTelegramResponse(resp.Body)
+	if err != nil {
+		return TelegramChatDetectionResult{ErrorClass: "payload"}
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return TelegramChatDetectionResult{ErrorClass: telegramStatusErrorClass(resp.StatusCode)}
 	}
@@ -553,8 +558,11 @@ func (s *TelegramService) SendTelegramDocument(filename string, data []byte, cap
 		return TelegramResult{ErrorClass: "network"}
 	}
 	defer resp.Body.Close()
-	respData, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	respData, responseErr := readTelegramResponse(resp.Body)
 	if err := <-writeErr; err != nil {
+		return TelegramResult{ErrorClass: "payload"}
+	}
+	if responseErr != nil {
 		return TelegramResult{ErrorClass: "payload"}
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -654,13 +662,27 @@ func (s *TelegramService) send(text string) TelegramResult {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := readTelegramResponse(resp.Body)
+		if err != nil {
+			body = nil
+		}
 		return TelegramResult{
 			ErrorClass: telegramStatusErrorClass(resp.StatusCode),
 			RetryAfter: telegramRetryAfter(resp.StatusCode, body),
 		}
 	}
 	return TelegramResult{Success: true}
+}
+
+func readTelegramResponse(body io.Reader) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(body, telegramMaxResponseBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > telegramMaxResponseBytes {
+		return nil, errors.New("telegram response exceeds the size limit")
+	}
+	return data, nil
 }
 
 func telegramRetryAfter(status int, body []byte) time.Duration {

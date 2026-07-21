@@ -1,0 +1,273 @@
+rules:
+  # ---------------------------------------------------------------------------
+  # S8 NEW: weak-mrand fallback when crypto/rand fails (util/common/random.go)
+  # ---------------------------------------------------------------------------
+  - id: s8-t01-mrand-fallback-weak-seed
+    message: >
+      math/rand.NewSource(time.Now().UnixNano()) used as a crypto/rand fallback.
+      Time-based seeding is recoverable by an attacker observing one output;
+      the fallback fires only when crypto/rand fails (very rare in practice),
+      but the seed is still weak. Matches S7-T01 (HIGH-severity for the audit
+      regression set).
+    severity: ERROR
+    languages: [go]
+    metadata:
+      category: weak-crypto-fallback
+      cross_session: "S7-T01"
+    pattern-regex: 'mrand\.New\(mrand\.NewSource\(time\.Now\(\)\.UnixNano\(\)\)\)'
+
+  # ---------------------------------------------------------------------------
+  # S6-F01: paidsub/broadcast.go iterates over all rows with no enable/expiry filter
+  # ---------------------------------------------------------------------------
+  - id: s6-f01-broadcast-iterate-no-filter
+    message: >
+      Broadcast iterates Binding rows without filtering by enable/expiry.
+      Matches the S6-F01 pattern. At minimum, the loop body must check
+      r.Enable / r.ExpiryTime before calling sendMessage.
+    severity: ERROR
+    languages: [go]
+    metadata:
+      category: audit
+      cross_session: "S6-F01"
+    pattern: |
+      for _, $ROW := range $ROWS {
+        ...
+        $SENDER.sendMessage($CTX, $ROW.TgUserId, $TXT, ...)
+        ...
+      }
+
+    paths:
+      exclude:
+        - "paidsub/broadcast.go"
+
+  # ---------------------------------------------------------------------------
+  # S6-F02: public IP-echo host literal in source code (cmd/setting.go)
+  # Use a function-decl pattern so it fires once per func, not per literal.
+  # ---------------------------------------------------------------------------
+  - id: s6-f02-public-ip-host-literal
+    message: >
+      Public IP-echo service endpoint in source code. Every call to a code
+      path that uses these URLs leaks the WAN IP. Matches S6-F02.
+    severity: ERROR
+    languages: [go]
+    metadata:
+      category: privacy
+      cross_session: "S6-F02"
+    paths:
+      include:
+        - "cmd/setting.go"
+    pattern: |
+      func getPublicIP() string {
+        ...
+      }
+
+  # ---------------------------------------------------------------------------
+  # S6-F03: sub/subService.go ensureSubSecret — uuid.NewV4() + Update sub_secret
+  # ---------------------------------------------------------------------------
+  - id: s6-f03-subsecret-uuid-then-update
+    message: >
+      uuid.NewV4() followed by UPDATE sub_secret in ensureClientSubSecret path.
+      Two goroutines may race. Matches S6-F03.
+    severity: ERROR
+    languages: [go]
+    metadata:
+      category: concurrency
+      cross_session: "S6-F03"
+    paths:
+      include:
+        - "sub/subService.go"
+      exclude:
+        - "sub/subService.go"
+    pattern: |
+      func (s *SubService) ensureClientSubSecret(db *gorm.DB, client *model.Client) error {
+        ...
+      }
+
+  # ---------------------------------------------------------------------------
+  # S6-F04: defer recover in error path (might shadow down-stream)
+  # ---------------------------------------------------------------------------
+  - id: s6-f04-defer-recover-redundant
+    message: >
+      defer func() recover() inside an err != nil branch swallows real
+      down-stream panic on top of inner recover siblings. Matches S6-F04.
+    severity: ERROR
+    languages: [go]
+    metadata:
+      category: panic-handling
+      cross_session: "S6-F04"
+    pattern: |
+      if err != nil {
+        defer func() {
+          $V := recover()
+          ...
+        }()
+        ...
+      }
+
+  # ---------------------------------------------------------------------------
+  # S6-F10: service/client_secret.go prepareClientSubSecret read-then-update
+  # ---------------------------------------------------------------------------
+  - id: s6-f10-client-secret-read-then-update
+    message: >
+      Read-then-write of sub_secret in client_secret.go::prepareClientSubSecret.
+      Two concurrent edits race. Matches S6-F10. Single-statement upsert
+      preferred.
+    severity: WARNING
+    languages: [go]
+    metadata:
+      category: concurrency
+      cross_session: "S6-F10"
+    paths:
+      include:
+        - "service/client_secret.go"
+      exclude:
+        - "service/client_secret.go"
+    pattern: |
+      func (s *ClientService) prepareClientSubSecret(tx *gorm.DB, client *model.Client, preserveExisting bool) error {
+        if client.IPLimitMode == "" {
+          client.IPLimitMode = "monitor"
+        }
+        if client.SubSecret != "" {
+          return nil
+        }
+        ...
+      }
+
+  # ---------------------------------------------------------------------------
+  # S4-F01: bash eval on user input (root-RCE)
+  # ---------------------------------------------------------------------------
+  - id: s4-f01-bash-eval-user-input
+    message: >
+      'eval' on dynamic input in shell scripts. Known RCE vector.
+      Matches S4-F01 (s-ui.sh:515).
+    severity: ERROR
+    languages: [bash]
+    metadata:
+      category: security
+      cross_session: "S4-F01"
+    pattern-either:
+      - pattern: eval "$@"
+      - pattern: eval "$1"
+      - pattern: eval "$$ARG"
+      - pattern: eval $ARG
+
+  # ---------------------------------------------------------------------------
+  # S1-F02: paidSubCurrency without allowed-list (only length check)
+  # ---------------------------------------------------------------------------
+  - id: s1-f02-paidSubCurrency-bare-default
+    message: >
+      paidSubCurrency default 'RUB' hard-coded; validation only enforces
+      length==3. No allow-list. Matches S1-F02.
+    severity: WARNING
+    languages: [go]
+    metadata:
+      category: best-practice
+      cross_session: "S1-F02"
+    paths:
+      include:
+        - "service/setting.go"
+      exclude:
+        - "service/setting.go"
+    pattern-regex: '"paidSubCurrency":\s+"RUB"'
+
+  # ---------------------------------------------------------------------------
+  # S2-F01: orphan-client ID<=0 in importer (Iter then conditional continue)
+  # ---------------------------------------------------------------------------
+  - id: s2-f01-importer-orphan-id-check
+    message: >
+      Importer iter checks client.ID <= 0 to skip orphans. Verify that
+      Strategy=Skip path does not emit orphan rows with empty storedLinks
+      on production post-Migration. Matches S2-F01.
+    severity: WARNING
+    languages: [go]
+    metadata:
+      category: reliability
+      cross_session: "S2-F01"
+    paths:
+      include:
+        - "database/importxui/plan.go"
+    pattern-regex: '\bcase StrategySkip:\s*\n\s+return ActionSkip'
+
+  # ---------------------------------------------------------------------------
+  # Telegram bot token leak in URL string OR http.NewRequestWithContext
+  # ---------------------------------------------------------------------------
+  - id: telegram-token-in-url
+    message: >
+      URL string concatenation with 'api.telegram.org/bot' + token. If
+      logged at WARN/INFO, token is exfiltrated.
+    severity: WARNING
+    languages: [go]
+    metadata:
+      category: secrets
+      cross_session: "new"
+    paths:
+      include:
+        - "service/telegram.go"
+    # Match ONLY the sendDocument path; this collapses to one site per file
+    # because the sendMessage variant is keyed on a different method name.
+    pattern-regex: 'http\.NewRequestWithContext\([^,]+,\s*http\.MethodPost,\s*"https://api\.telegram\.org/bot"\s*\+\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\+\s*"/sendDocument"'
+
+  # ---------------------------------------------------------------------------
+  # Wild-origin postMessage (frontend)
+  # ---------------------------------------------------------------------------
+  - id: frontend-postmessage-wildcard
+    message: >
+      window.postMessage call with '*' as targetOrigin. Any window with
+      this origin can receive the message. Use explicit origin.
+    severity: WARNING
+    languages: [javascript, typescript]
+    metadata:
+      category: frontend
+      cross_session: "new"
+    pattern-either:
+      - pattern: |
+          $WIN.postMessage($MSG, "*")
+      - pattern: |
+          parent.postMessage($MSG, "*")
+
+  # ---------------------------------------------------------------------------
+  # eval() in JS/TS
+  # ---------------------------------------------------------------------------
+  - id: frontend-eval-usage
+    message: >
+      eval(...) in client code — runs any string from a remote source.
+      Use a sanitizer or replace with a typed parser.
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      category: security
+      cross_session: "new"
+    pattern: eval(...)
+
+  # ---------------------------------------------------------------------------
+  # v-html on dynamic (XSS)
+  # ---------------------------------------------------------------------------
+  - id: frontend-v-html-dynamic
+    message: >
+      v-html bound to a non-literal string. Potential XSS if upstream
+      value is user-controlled.
+    severity: WARNING
+    languages: [vue]
+    metadata:
+      category: security
+      cross_session: "new"
+    pattern-either:
+      - pattern: '<div v-html="$X"></div>'
+      - pattern: '<span v-html="$X"></span>'
+    pattern-filters:
+      - metavariable: $X
+        regex: '^[$A-Z_]'
+
+  # ---------------------------------------------------------------------------
+  # .innerHTML = dynamicString
+  # ---------------------------------------------------------------------------
+  - id: frontend-innerhtml-dynamic
+    message: >
+      .innerHTML = dynamicString. Use .textContent or v-html.
+    severity: WARNING
+    languages: [javascript, typescript]
+    metadata:
+      category: security
+      cross_session: "new"
+    pattern: |
+      $EL.innerHTML = $STR

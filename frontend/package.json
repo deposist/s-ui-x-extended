@@ -1,6 +1,6 @@
 {
   "name": "s-ui-frontend",
-  "version": "1.0.7",
+  "version": "1.0.8-beta1",
   "private": true,
   "scripts": {
     "dev": "vite --host",
@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@mdi/js": "7.4.47",
-    "axios": "^1.14.0",
+    "axios": "^1.18.1",
     "chart.js": "^4.5.1",
     "clipboard": "^2.0.11",
     "lucide-vue-next": "^0.487.0",
@@ -27,6 +27,10 @@
     "vue3-persian-datetime-picker": "^1.2.2",
     "vuetify": "^4.0.4",
     "yaml": "^2.8.3"
+  },
+  "overrides": {
+    "brace-expansion@<1.1.16": "1.1.16",
+    "brace-expansion@>=3.0.0 <5.0.7": "5.0.7"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",

@@ -23,14 +23,14 @@ func NewAWGEndpointManager(runtime *Runtime) *AWGEndpointManager {
 	return &AWGEndpointManager{runtime: runtimeOrDefault(runtime), managers: make(map[uint]*AWGManager)}
 }
 
-func (s *AWGEndpointManager) manager(endpointID uint) (*AWGManager, AWGSettings, int, error) {
+func (s *AWGEndpointManager) manager(endpointID uint) (*AWGManager, error) {
 	if endpointID == 0 {
-		return nil, AWGSettings{}, 0, ErrAWGEndpointAccessDenied
+		return nil, ErrAWGEndpointAccessDenied
 	}
 	db := database.GetDB()
-	endpoint, settings, err := LoadAWGEndpointByID(db, endpointID)
+	endpoint, _, err := LoadAWGEndpointByID(db, endpointID)
 	if err != nil {
-		return nil, AWGSettings{}, 0, err
+		return nil, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -44,11 +44,11 @@ func (s *AWGEndpointManager) manager(endpointID uint) (*AWGManager, AWGSettings,
 		}
 		manager = NewAWGManagerWithDeps(s.runtime, NewAWGProvisioner(s.runtime, endpoint.Tag), 64, deps)
 		if err := manager.Start(); err != nil {
-			return nil, AWGSettings{}, 0, err
+			return nil, err
 		}
 		s.managers[endpointID] = manager
 	}
-	return manager, settings, settings.DefaultDeviceLimit, nil
+	return manager, nil
 }
 
 func (s *AWGEndpointManager) CreateDevice(ctx context.Context, clientID, endpointID uint, requestKey, name string, expiresAt int64) (AWGDeviceInfo, error) {
@@ -56,7 +56,7 @@ func (s *AWGEndpointManager) CreateDevice(ctx context.Context, clientID, endpoin
 	if err != nil {
 		return AWGDeviceInfo{}, err
 	}
-	manager, _, _, err := s.manager(endpointID)
+	manager, err := s.manager(endpointID)
 	if err != nil {
 		return AWGDeviceInfo{}, err
 	}
@@ -67,7 +67,7 @@ func (s *AWGEndpointManager) ListDevices(clientID, endpointID uint) ([]AWGDevice
 	if _, _, _, err := EffectiveAWGEndpointAccess(database.GetDB(), clientID, endpointID); err != nil {
 		return nil, err
 	}
-	manager, _, _, err := s.manager(endpointID)
+	manager, err := s.manager(endpointID)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (s *AWGEndpointManager) ListDevices(clientID, endpointID uint) ([]AWGDevice
 }
 
 func (s *AWGEndpointManager) GetOwnedDevice(clientID, endpointID, deviceID uint) (AWGDeviceInfo, error) {
-	manager, _, _, err := s.manager(endpointID)
+	manager, err := s.manager(endpointID)
 	if err != nil {
 		return AWGDeviceInfo{}, err
 	}
@@ -86,7 +86,7 @@ func (s *AWGEndpointManager) RenderOwnedConfig(ctx context.Context, clientID, en
 	if _, _, _, err := EffectiveAWGEndpointAccess(database.GetDB(), clientID, endpointID); err != nil {
 		return nil, err
 	}
-	manager, _, _, err := s.manager(endpointID)
+	manager, err := s.manager(endpointID)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +97,7 @@ func (s *AWGEndpointManager) RotateOwnedDevice(ctx context.Context, clientID, en
 	if _, _, _, err := EffectiveAWGEndpointAccess(database.GetDB(), clientID, endpointID); err != nil {
 		return AWGDeviceInfo{}, err
 	}
-	manager, _, _, err := s.manager(endpointID)
+	manager, err := s.manager(endpointID)
 	if err != nil {
 		return AWGDeviceInfo{}, err
 	}
@@ -105,7 +105,7 @@ func (s *AWGEndpointManager) RotateOwnedDevice(ctx context.Context, clientID, en
 }
 
 func (s *AWGEndpointManager) RevokeOwnedDevice(ctx context.Context, clientID, endpointID, deviceID uint) error {
-	manager, _, _, err := s.manager(endpointID)
+	manager, err := s.manager(endpointID)
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func (s *AWGEndpointManager) ReconcileAll(ctx context.Context) error {
 	}
 	var result error
 	for _, endpointID := range endpointIDs {
-		manager, _, _, managerErr := s.manager(endpointID)
+		manager, managerErr := s.manager(endpointID)
 		if managerErr != nil {
 			result = errors.Join(result, managerErr)
 			continue
@@ -138,7 +138,7 @@ func (s *AWGEndpointManager) CollectStatsAll(ctx context.Context) error {
 	}
 	var result error
 	for _, endpointID := range endpointIDs {
-		manager, _, _, managerErr := s.manager(endpointID)
+		manager, managerErr := s.manager(endpointID)
 		if managerErr != nil {
 			result = errors.Join(result, managerErr)
 			continue

@@ -73,6 +73,20 @@ const junitFiles = walk(baselineDir)
   .filter((file) => file.endsWith('.junit.xml'))
   .sort();
 
+if (junitFiles.length === 0) {
+  throw new Error('audit aggregate found no JUnit files');
+}
+
+const requiredReports = [
+  'go-build', 'go-vet', 'go-test', 'go-test-race', 'go-cover',
+  'staticcheck', 'golangci-lint', 'gosec', 'govulncheck',
+];
+for (const report of requiredReports) {
+  if (!junitFiles.some((file) => path.basename(file).startsWith(report) && file.endsWith('.junit.xml'))) {
+    throw new Error(`audit aggregate is missing required report: ${report}`);
+  }
+}
+
 const byPhase = new Map();
 const files = [];
 let totals = { tests: 0, green: 0, red: 0, skipped: 0, xfail: 0 };
@@ -144,6 +158,12 @@ const baselineMarkers = {
 };
 
 const phases = [...byPhase.values()].sort((a, b) => a.phase.localeCompare(b.phase, undefined, { numeric: true }));
+if (totals.tests === 0) {
+  throw new Error('audit aggregate found zero tests');
+}
+if (totals.red > 0) {
+  throw new Error(`audit aggregate found ${totals.red} failed checks`);
+}
 const result = {
   generatedAt: new Date().toISOString(),
   root,

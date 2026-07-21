@@ -1,5 +1,5 @@
 PS ?= powershell -NoProfile -ExecutionPolicy Bypass
-RUN = $(PS) -File tests/baseline/run-command.ps1 -ContinueOnError
+RUN = $(PS) -File tests/baseline/run-command.ps1
 
 .PHONY: audit audit\:lint-go audit\:vet audit\:build audit\:test-go audit\:test-go-race audit\:cover audit\:gosec audit\:vuln audit\:fe-typecheck audit\:fe-lint audit\:fe-build audit\:test-fe audit\:e2e audit\:e2e-regress audit\:fe-install audit\:semgrep audit\:bench audit\:fuzz
 
@@ -25,7 +25,7 @@ audit\:cover:
 	$(RUN) -Phase phase0 -Name go-cover -CommandLine "go test ./... -coverprofile tests/baseline/phase0/coverage.out"
 
 audit\:gosec:
-	$(RUN) -Phase phase1 -Name gosec -CommandLine "gosec -exclude-dir .gotmp -exclude-dir .gocache -exclude-dir frontend/node_modules ./..."
+	$(RUN) -Phase phase1 -Name gosec -CommandLine "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/gosec-packages.ps1"
 
 audit\:vuln:
 	$(RUN) -Phase phase1 -Name govulncheck -CommandLine "govulncheck ./..."
@@ -67,12 +67,13 @@ audit\:e2e-regress:
 audit\:semgrep:
 	@echo "==> semgrep custom ruleset"
 	@pip show semgrep >/dev/null 2>&1 || pip install --quiet "semgrep==1.168.0"
-	@python -c "import sys; sys.argv=['semgrep','scan','--config=.semgrep-rules/custom_s0_to_s6.yml','--metrics=off','--quiet','--no-git-ignore','--json','.']; from semgrep.cli import cli; cli()" > semgrep_results.json 2> semgrep_stderr.log || (cat semgrep_stderr.log && exit 1)
-	@python -c "import json,sys; d=json.load(open('semgrep_results.json',encoding='utf-8')); r=d['results']; print(f'hits={len(r)}'); [print('  '+x['check_id'].replace('semgrep-rules.','')+' '+x['path']+':'+str(x['start']['line'])) for x in r]; sys.exit(0 if len(r)==11 else 1)"
+	@python -c "import sys; sys.argv=['semgrep','scan','--config=.semgrep-rules/custom_s0_to_s6.yml','--metrics=off','--quiet','--no-git-ignore','--exclude=.git','--exclude=.tmp','--exclude=.codex_deps','--json','.']; from semgrep.cli import cli; cli()" > semgrep_results.json 2> semgrep_stderr.log || (cat semgrep_stderr.log && exit 1)
+	@python -c "import json,sys; d=json.load(open('semgrep_results.json',encoding='utf-8')); r=d['results']; print(f'hits={len(r)}'); [print('  '+x['check_id'].replace('semgrep-rules.','')+' '+x['path']+':'+str(x['start']['line'])) for x in r]; sys.exit(0 if len(r)==2 else 1)"
 
 audit\:bench:
 	@echo "==> go test -bench (hot paths)"
-	@cd . && go test -run=^$$ -bench=. -benchmem -benchtime=2s ./core/... ./sub/... ./paidsub/... ./service/... ./util/... 2>/dev/null | grep -E "^(Benchmark|PASS|FAIL|ok)" || true
+	@cd . && go test -run=^$$ -bench=. -benchmem -benchtime=2s ./core ./sub ./paidsub ./service ./util ./util/common | tee tests/baseline/phase8/bench-all.txt
+	@grep -q '^Benchmark' tests/baseline/phase8/bench-all.txt
 
 audit\:fuzz:
 	@echo "==> go test -fuzz (JSON unmarshal paths)"

@@ -1,6 +1,6 @@
 module github.com/deposist/s-ui-x-extended
 
-go 1.26.4
+go 1.26.5
 
 require (
 	filippo.io/edwards25519 v1.2.0
@@ -217,7 +217,7 @@ require (
 	lukechampine.com/blake3 v1.4.1 // indirect
 )
 
-replace github.com/quic-go/quic-go => github.com/quic-go/quic-go v0.57.1
+replace github.com/quic-go/quic-go => github.com/quic-go/quic-go v0.59.1
 
 // s-ui-x-extended: use the managed sing-box-extended fork with WireGuard IPC access.
 // It keeps the upstream module path (drop-in via replace). Go ignores `replace`

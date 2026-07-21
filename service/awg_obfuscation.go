@@ -267,9 +267,9 @@ func GenerateAmneziaParams(includeJunk bool) (AmneziaRandomParams, error) {
 		}
 		// Bounds are small compile-time constants (max 89+250), so the uint64
 		// to int conversions cannot overflow.
-		params.JC = int(jc)              //nolint:gosec // bounded by awgCryptoRandInt(3, 6)
-		params.JMin = int(jmin)          //nolint:gosec // bounded by awgCryptoRandInt(40, 89)
-		params.JMax = int(jmin + spread) //nolint:gosec // bounded by 89+250
+		params.JC = int(jc)              // #nosec G115 -- bounded by awgCryptoRandInt(3, 6).
+		params.JMin = int(jmin)          // #nosec G115 -- bounded by awgCryptoRandInt(40, 89).
+		params.JMax = int(jmin + spread) // #nosec G115 -- bounded by 89+250.
 	}
 	return params, nil
 }

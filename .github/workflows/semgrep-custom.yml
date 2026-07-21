@@ -1,0 +1,101 @@
+# Semgrep Custom Rules CI Check
+#
+# Runs the project's custom Semgrep regression ruleset
+# (.semgrep-rules/custom_s0_to_s6.yml) on every push and PR.
+# Required check: must produce EXACTLY 2 distinct hits on the current
+# codebase — the reviewed S2-F01 and telegram-token-in-url markers.
+#
+# Failure modes:
+#   - Total hits != 2 (a rule was added/removed or a finding was fixed
+#     without updating the expected count; review the audit log)
+#   - Parse error in any rule (the YAML failed Semgrep grammar check)
+#   - Crash in any fuzz targets (handled separately by `go test ./...`)
+#
+# Maintenance plan: update the expected count when a confirmed marker is added
+# or resolved.
+
+name: semgrep-custom
+
+on:
+  push:
+    branches: [main, master, develop, s-ui-x-extended]
+  pull_request:
+    branches: [main, master, develop, s-ui-x-extended]
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep-custom-rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@a30953e31e1e6e43c03a9ad5270f825d61057af0 # v6.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Semgrep
+        run: pip install --quiet "semgrep==1.168.0"
+
+      - name: Run custom Semgrep rules
+        run: |
+          semgrep \
+            --config=.semgrep-rules/custom_s0_to_s6.yml \
+            --metrics=off \
+            --quiet \
+            --no-git-ignore \
+            --exclude=.git \
+            --exclude=.tmp \
+            --exclude=.codex_deps \
+            --json \
+            . > semgrep_results.json 2> semgrep_stderr.log
+
+      - name: Validate JSON output
+        run: |
+          python -c '
+          import json
+          d = json.load(open("semgrep_results.json", encoding="utf-8"))
+          results = d.get("results", [])
+          errors = d.get("errors", [])
+          parse_errors = [e for e in errors if "Rule parse" in e.get("message", "")]
+          with open("semgrep_results.json", "w", encoding="utf-8") as fh:
+              json.dump(d, fh)
+          print(f"hits={len(results)} errors={len(errors)} parse_errors={len(parse_errors)}")
+          for e in parse_errors:
+              print(f"PARSE_ERROR: {e.get(\"message\")[:300]}")
+          if parse_errors:
+              raise SystemExit("Semgrep rule parse error (see above)")
+          '
+
+      - name: Compare to expected count
+        env:
+          EXPECTED_HITS: "2"
+        run: |
+          python -c '
+          import json, os
+          d = json.load(open("semgrep_results.json", encoding="utf-8"))
+          results = d.get("results", [])
+          expected = int(os.environ.get("EXPECTED_HITS", "11"))
+          actual = len(results)
+          print(f"actual_hits={actual} expected_hits={expected}")
+          if actual != expected:
+              print("=== HITS: ===")
+              for r in results:
+                  cid = r["check_id"].replace("semgrep-rules.", "")
+                  print(f"  {cid:45s} {r[\"path\"]}:{r[\"start\"][\"line\"]}")
+              raise SystemExit(f"hit count mismatch: expected {expected}, got {actual}")
+          print("OK: hit count matches expected")
+          '
+
+      - name: Upload Semgrep JSON artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: semgrep-custom-results
+          path: |
+            semgrep_results.json
+            semgrep_stderr.log

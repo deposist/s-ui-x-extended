@@ -14,6 +14,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 env:
   NODE_VERSION: "25"
@@ -81,9 +83,39 @@ jobs:
           path: frontend/dist/
           retention-days: 1
 
+  security-gate:
+    name: Source security gate
+    needs: build-frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: frontend-dist
+          path: web/html
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install pinned security and lint tools
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
+          go install honnef.co/go/tools/cmd/staticcheck@2026.1
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Blocking source checks
+        run: |
+          go vet ./...
+          go test ./...
+          staticcheck ./...
+          golangci-lint run
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/gosec-packages.ps1
+          govulncheck ./...
+
   build-linux:
     name: Build-${{ matrix.platform }}
-    needs: [build-frontend, awg-integration]
+    needs: [build-frontend, awg-integration, security-gate]
     strategy:
       fail-fast: false
       matrix:
@@ -139,15 +171,17 @@ jobs:
           go run ./cmd/build-naive --target=linux/${{ matrix.arch }} --libc=musl env | while IFS= read -r line; do
             line="${line#export }"
             [[ -z "$line" ]] && continue
-            echo "$line" >> $GITHUB_ENV
+            echo "$line" >> "$GITHUB_ENV"
           done
 
       - name: Set Go build environment
         run: |
-          echo "CGO_ENABLED=1" >> $GITHUB_ENV
-          echo "GOOS=linux" >> $GITHUB_ENV
-          echo "GOARCH=${{ matrix.arch }}" >> $GITHUB_ENV
-          if [ -n "${{ matrix.goarm }}" ]; then echo "GOARM=${{ matrix.goarm }}" >> $GITHUB_ENV; fi
+          {
+            echo "CGO_ENABLED=1"
+            echo "GOOS=linux"
+            echo "GOARCH=${{ matrix.arch }}"
+            if [ -n "${{ matrix.goarm }}" ]; then echo "GOARM=${{ matrix.goarm }}"; fi
+          } >> "$GITHUB_ENV"
 
       - name: Set up Bootlin musl (non-naive platforms)
         if: ${{ matrix.naive != true }}
@@ -165,16 +199,16 @@ jobs:
           TOOLCHAIN_DIR=$(find . -maxdepth 1 -type d -name "${BOOTLIN_ARCH}--musl--stable-*" | head -n1)
           TOOLCHAIN_DIR="$(realpath "$TOOLCHAIN_DIR")"
           BIN_DIR="$TOOLCHAIN_DIR/bin"
-          echo "PATH=$BIN_DIR:$PATH" >> $GITHUB_ENV
+          echo "PATH=$BIN_DIR:$PATH" >> "$GITHUB_ENV"
           CC=$(find "$BIN_DIR" -maxdepth 1 \( -name '*-gcc.br_real' -o -name '*-gcc' \) -type f -executable 2>/dev/null | grep -v g++ | head -n1)
           [ -z "$CC" ] && { echo "gcc not found in $BIN_DIR" >&2; exit 1; }
-          echo "CC=$(realpath "$CC")" >> $GITHUB_ENV
+          echo "CC=$(realpath "$CC")" >> "$GITHUB_ENV"
           SYSROOT=""
           F=$(find "$TOOLCHAIN_DIR" -name "libc-header-start.h" 2>/dev/null | head -1)
           if [ -n "$F" ]; then SYSROOT=$(dirname "$(dirname "$(dirname "$(dirname "$F")")")"); fi
           if [ -n "$SYSROOT" ] && [ -d "$SYSROOT" ]; then
-            echo "CGO_CFLAGS=--sysroot=$SYSROOT" >> $GITHUB_ENV
-            echo "CGO_LDFLAGS=--sysroot=$SYSROOT -static" >> $GITHUB_ENV
+            echo "CGO_CFLAGS=--sysroot=$SYSROOT" >> "$GITHUB_ENV"
+            echo "CGO_LDFLAGS=--sysroot=$SYSROOT -static" >> "$GITHUB_ENV"
           fi
 
       - name: Build s-ui
@@ -208,7 +242,7 @@ jobs:
 
   publish-linux:
     name: Publish Linux artifacts
-    needs: build-linux
+    needs: [build-linux, release-security]
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository (for release notes)
@@ -252,6 +286,12 @@ jobs:
           path: release-assets
           merge-multiple: true
 
+      - name: Download release security assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: release-security-assets
+          path: release-assets
+
       - name: Publish to current repository Release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
         with:
@@ -263,3 +303,81 @@ jobs:
           body_path: ${{ steps.vars.outputs.notes_path }}
           fail_on_unmatched_files: true
           files: release-assets/*
+
+  release-security:
+    name: Release artifact security
+    needs: build-linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Download Linux build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: s-ui-linux-*
+          path: release-assets
+          merge-multiple: true
+
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify checksums and scan representative binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-assets
+          sha256sum --check --strict s-ui-linux-*.sha256
+          tar -xzf s-ui-linux-amd64.tar.gz
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          "$(go env GOPATH)/bin/govulncheck" -mode=binary s-ui/sui
+
+      - name: Generate SPDX SBOMs for every release archive
+        uses: anchore/sbom-action@b1b13de3df818f1657380c7d558539b493c17f2b # main 2026-07-21
+        with:
+          path: release-assets
+          format: spdx-json
+          output-file: release-assets/s-ui-release.spdx.json
+          artifact-name: s-ui-release-sbom
+          upload-artifact: false
+          upload-release-assets: false
+          syft-version: v1.48.0
+
+      - name: Scan release assets for high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8 # master 2026-07-21
+        with:
+          scan-type: fs
+          scan-ref: release-assets
+          scanners: vuln,secret
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          version: v0.72.0
+
+      - name: Attest release artifact provenance
+        id: attest
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # main 2026-07-21
+        with:
+          subject-path: |
+            release-assets/*.tar.gz
+            release-assets/*.sha256
+            release-assets/*.spdx.json
+
+      - name: Attach offline provenance bundle
+        shell: bash
+        env:
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        run: cp "$BUNDLE_PATH" release-assets/s-ui-release-attestation.json
+
+      - name: Upload verified release security assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-security-assets
+          path: |
+            release-assets/*.spdx.json
+            release-assets/*-attestation.json
+          if-no-files-found: error
+          retention-days: 1

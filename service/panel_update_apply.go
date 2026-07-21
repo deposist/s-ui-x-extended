@@ -30,7 +30,12 @@ const (
 	rollbackAfterAttempts = 2
 )
 
-var errChecksumMismatch = errors.New("artifact checksum does not match the published value")
+var (
+	errChecksumMismatch      = errors.New("artifact checksum does not match the published value")
+	errArtifactTooLarge      = errors.New("artifact exceeds the size limit")
+	errChecksumTooLarge      = errors.New("checksum file exceeds the size limit")
+	errArchiveMemberTooLarge = errors.New("archive member exceeds the size limit")
+)
 
 type panelUpdateDeps struct {
 	client   httpDoer
@@ -59,7 +64,11 @@ func applyPipeline(target ReleaseTarget, deps panelUpdateDeps, setStage func(Upd
 
 	setStage(UpdateStageDownloading)
 	archive := filepath.Join(dir, ".sui-update.tar.gz")
-	defer os.Remove(archive)
+	defer func() {
+		if err := removeUpdateFile(archive); err != nil {
+			logger.Warning("panel update: could not remove downloaded archive:", err)
+		}
+	}()
 	if err := downloadToFile(deps.client, target.AssetURL, archive); err != nil {
 		return err
 	}
@@ -72,7 +81,6 @@ func applyPipeline(target ReleaseTarget, deps panelUpdateDeps, setStage func(Upd
 	if err := verifySHA256(archive, expected); err != nil {
 		return err
 	}
-
 	setStage(UpdateStageApplying)
 	return swapBinary(archive, deps.execPath)
 }
@@ -82,25 +90,29 @@ func applyPipeline(target ReleaseTarget, deps panelUpdateDeps, setStage func(Upd
 func swapBinary(archive string, execPath string) error {
 	newBin := execPath + ".new"
 	if err := extractBinary(archive, newBin); err != nil {
-		os.Remove(newBin)
-		return err
+		return errors.Join(err, removeUpdateFile(newBin))
 	}
+	// #nosec G302 -- the staged program must be executable before the atomic swap.
 	if err := os.Chmod(newBin, 0o755); err != nil {
-		os.Remove(newBin)
-		return err
+		return errors.Join(err, removeUpdateFile(newBin))
 	}
 	if err := copyFile(execPath, execPath+backupSuffix); err != nil {
-		os.Remove(newBin)
-		return err
+		return errors.Join(err, removeUpdateFile(newBin))
 	}
 	if err := os.Rename(newBin, execPath); err != nil {
-		os.Remove(newBin) // live binary is untouched; .bak remains for safety
-		return err
+		return errors.Join(err, removeUpdateFile(newBin)) // live binary is untouched; .bak remains for safety
 	}
 	return nil
 }
 
 func downloadToFile(client httpDoer, url string, dest string) error {
+	return downloadToFileLimit(client, url, dest, maxArtifactBytes)
+}
+
+func downloadToFileLimit(client httpDoer, url string, dest string, limit int64) error {
+	if limit < 0 {
+		return errArtifactTooLarge
+	}
 	if !strings.HasPrefix(url, "https://") { // SR-003/SR-004: TLS-only, template URLs
 		return fmt.Errorf("refusing non-https artifact url")
 	}
@@ -119,18 +131,35 @@ func downloadToFile(client httpDoer, url string, dest string) error {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("artifact download failed: status %d", resp.StatusCode)
 	}
+	// #nosec G304 -- dest is a fixed filename next to the running executable.
 	f, err := os.OpenFile(dest, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	if _, err := io.Copy(f, io.LimitReader(resp.Body, maxArtifactBytes)); err != nil {
-		return err
+	written, copyErr := io.Copy(f, io.LimitReader(resp.Body, sizeProbeLimit(limit)))
+	if copyErr != nil {
+		return errors.Join(copyErr, f.Close(), removeUpdateFile(dest))
 	}
-	return f.Sync()
+	if written > limit {
+		return errors.Join(errArtifactTooLarge, f.Close(), removeUpdateFile(dest))
+	}
+	if err := f.Sync(); err != nil {
+		return errors.Join(err, f.Close(), removeUpdateFile(dest))
+	}
+	if err := f.Close(); err != nil {
+		return errors.Join(err, removeUpdateFile(dest))
+	}
+	return nil
 }
 
 func downloadChecksum(client httpDoer, url string) (string, error) {
+	return downloadChecksumLimit(client, url, maxChecksumBytes)
+}
+
+func downloadChecksumLimit(client httpDoer, url string, limit int64) (string, error) {
+	if limit < 0 {
+		return "", errChecksumTooLarge
+	}
 	if !strings.HasPrefix(url, "https://") {
 		return "", fmt.Errorf("refusing non-https checksum url")
 	}
@@ -149,9 +178,12 @@ func downloadChecksum(client httpDoer, url string) (string, error) {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", fmt.Errorf("checksum download failed: status %d", resp.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxChecksumBytes))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, sizeProbeLimit(limit)))
 	if err != nil {
 		return "", err
+	}
+	if int64(len(body)) > limit {
+		return "", errChecksumTooLarge
 	}
 	// Format produced by `sha256sum`: "<hex>  <filename>".
 	fields := strings.Fields(string(body))
@@ -162,6 +194,7 @@ func downloadChecksum(client httpDoer, url string) (string, error) {
 }
 
 func verifySHA256(path string, expectedHex string) error {
+	// #nosec G304 -- path is the fixed updater archive created beside the executable.
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -182,6 +215,14 @@ func verifySHA256(path string, expectedHex string) error {
 // paths are never honored for the output location (extraction is pinned to dest),
 // preventing path traversal.
 func extractBinary(archive string, dest string) error {
+	return extractBinaryLimit(archive, dest, maxArtifactBytes)
+}
+
+func extractBinaryLimit(archive string, dest string, limit int64) error {
+	if limit < 0 {
+		return errArchiveMemberTooLarge
+	}
+	// #nosec G304 -- archive is the fixed updater archive created beside the executable.
 	f, err := os.Open(archive)
 	if err != nil {
 		return err
@@ -208,33 +249,68 @@ func extractBinary(archive string, dest string) error {
 		if name != "s-ui/sui" && filepath.Base(name) != "sui" {
 			continue
 		}
+		if header.Size < 0 || header.Size > limit {
+			return errArchiveMemberTooLarge
+		}
+		// #nosec G302,G304 -- dest is the fixed staging binary and must be executable.
 		out, err := os.OpenFile(dest, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o755)
 		if err != nil {
 			return err
 		}
-		defer out.Close()
-		if _, err := io.Copy(out, io.LimitReader(tr, maxArtifactBytes)); err != nil {
-			return err
+		written, copyErr := io.Copy(out, io.LimitReader(tr, sizeProbeLimit(limit)))
+		if copyErr != nil {
+			return errors.Join(copyErr, out.Close(), removeUpdateFile(dest))
 		}
-		return out.Sync()
+		if written > limit {
+			return errors.Join(errArchiveMemberTooLarge, out.Close(), removeUpdateFile(dest))
+		}
+		if err := out.Sync(); err != nil {
+			return errors.Join(err, out.Close(), removeUpdateFile(dest))
+		}
+		if err := out.Close(); err != nil {
+			return errors.Join(err, removeUpdateFile(dest))
+		}
+		return nil
 	}
 }
 
 func copyFile(src string, dst string) error {
+	// #nosec G304 -- src is os.Executable() or its fixed updater staging path.
 	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer in.Close()
+	// #nosec G302,G304 -- dst is the fixed rollback binary and must be executable.
 	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o755)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 	if _, err := io.Copy(out, in); err != nil {
+		return errors.Join(err, out.Close(), removeUpdateFile(dst))
+	}
+	if err := out.Sync(); err != nil {
+		return errors.Join(err, out.Close(), removeUpdateFile(dst))
+	}
+	if err := out.Close(); err != nil {
+		return errors.Join(err, removeUpdateFile(dst))
+	}
+	return nil
+}
+
+func removeUpdateFile(path string) error {
+	err := os.Remove(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	return out.Sync()
+	return nil
+}
+
+func sizeProbeLimit(limit int64) int64 {
+	if limit == int64(^uint64(0)>>1) {
+		return limit
+	}
+	return limit + 1
 }
 
 // RestoreBackup restores <execPath>.bak over execPath (rollback, SR-012).
@@ -269,6 +345,7 @@ func ClearPendingUpdate(execPath string) {
 // brick the panel (SR-012). Returns true if a rollback was performed.
 func CheckPendingUpdate(execPath string) bool {
 	marker := execPath + pendingSuffix
+	// #nosec G304 -- marker is a fixed suffix of os.Executable().
 	raw, err := os.ReadFile(marker)
 	if err != nil {
 		return false

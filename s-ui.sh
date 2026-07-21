@@ -833,15 +833,17 @@ start() {
 }
 
 stop() {
-    check_status "$1"
-    if [[ $? == 1 ]]; then
+    local status_code=0
+    check_status "$1" || status_code=$?
+    if [[ ${status_code} == 1 ]]; then
         echo ""
         LOGI "$(t already_stopped "${1}")"
     else
         systemctl stop "$1"
         sleep 2
-        check_status "$1"
-        if [[ $? == 1 ]]; then
+        status_code=0
+        check_status "$1" || status_code=$?
+        if [[ ${status_code} == 1 ]]; then
             LOGI "$(t stop_ok "${1}")"
         else
             LOGE "$(t stop_fail "${1}")"
@@ -1157,13 +1159,13 @@ read -rp "HTTP-01 challenge port (default 80) / Порт проверки HTTP-0
         was_running=0
     fi
 
-    stop s-ui 0
+    stop s-ui 0 || true
 
-    "${bin}" ip-cert issue -ip "${ip}" -email "${email}" -port "${WebPort}"
-    local rc=$?
+    local rc=0
+    "${bin}" ip-cert issue -ip "${ip}" -email "${email}" -port "${WebPort}" || rc=$?
 
     if [[ ${was_running} == 0 ]]; then
-        start s-ui 0
+        start s-ui 0 || true
     fi
 
     if [[ ${rc} == 0 ]]; then

@@ -392,7 +392,7 @@ func (s *ClientService) updateLinksWithFixedInbounds(tx *gorm.DB, clients []*mod
 				return err
 			}
 			if backfilled {
-				clients[index].Config = config
+				clients[index].Config = config // #nosec G602 -- index is produced by ranging over clients.
 				client.Config = config
 			}
 		}

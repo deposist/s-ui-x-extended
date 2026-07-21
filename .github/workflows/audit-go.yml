@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - main
+      - s-ui-x-extended
+    tags:
+      - "v*"
   schedule:
     - cron: "17 2 * * *"
   workflow_dispatch:
@@ -19,11 +22,36 @@ concurrency:
 env:
   GOFLAGS: -mod=readonly
   MAKE_PS: pwsh -NoProfile -ExecutionPolicy Bypass
+  STATICCHECK_VERSION: "2026.1"
+  GOLANGCI_LINT_VERSION: "v2.12.2"
+  GOSEC_VERSION: "v2.28.0"
+  GOVULNCHECK_VERSION: "v1.6.0"
 
 jobs:
+  frontend-assets:
+    name: frontend-assets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: "25"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: audit-frontend-dist
+          path: frontend/dist/
+          if-no-files-found: error
+
   build:
     name: build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    needs: frontend-assets
     strategy:
       fail-fast: false
       matrix:
@@ -35,6 +63,10 @@ jobs:
           go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: audit-frontend-dist
+          path: web/html
       - name: Ensure make on Windows
         if: runner.os == 'Windows'
         shell: pwsh
@@ -61,6 +93,7 @@ jobs:
   vet:
     name: vet (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    needs: frontend-assets
     strategy:
       fail-fast: false
       matrix:
@@ -72,6 +105,10 @@ jobs:
           go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: audit-frontend-dist
+          path: web/html
       - name: Ensure make on Windows
         if: runner.os == 'Windows'
         shell: pwsh
@@ -95,6 +132,7 @@ jobs:
   test-go:
     name: test-go (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    needs: frontend-assets
     strategy:
       fail-fast: false
       matrix:
@@ -106,6 +144,10 @@ jobs:
           go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: audit-frontend-dist
+          path: web/html
       - name: Ensure make on Windows
         if: runner.os == 'Windows'
         shell: pwsh
@@ -130,7 +172,7 @@ jobs:
   test-go-race:
     name: test-go-race (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    continue-on-error: true
+    needs: frontend-assets
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -143,6 +185,10 @@ jobs:
           go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: audit-frontend-dist
+          path: web/html
       - name: Ensure make on Windows
         if: runner.os == 'Windows'
         shell: pwsh
@@ -166,7 +212,7 @@ jobs:
   coverage:
     name: coverage (ubuntu-latest)
     runs-on: ubuntu-latest
-    continue-on-error: true
+    needs: frontend-assets
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
@@ -174,6 +220,10 @@ jobs:
           go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: audit-frontend-dist
+          path: web/html
       - name: make audit:cover
         shell: bash
         run: make audit:cover PS="${MAKE_PS}"
@@ -192,7 +242,7 @@ jobs:
   lint-go:
     name: lint-go (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    continue-on-error: true
+    needs: frontend-assets
     strategy:
       fail-fast: false
       matrix:
@@ -204,6 +254,10 @@ jobs:
           go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: audit-frontend-dist
+          path: web/html
       - name: Ensure make on Windows
         if: runner.os == 'Windows'
         shell: pwsh
@@ -214,8 +268,8 @@ jobs:
       - name: Install Go lint tools
         shell: bash
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@latest
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          go install "honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}"
+          go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}"
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: make audit:lint-go
         shell: bash
@@ -233,7 +287,7 @@ jobs:
   staticcheck:
     name: staticcheck (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    continue-on-error: true
+    needs: frontend-assets
     strategy:
       fail-fast: false
       matrix:
@@ -245,14 +299,18 @@ jobs:
           go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: audit-frontend-dist
+          path: web/html
       - name: Install staticcheck
         shell: bash
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@latest
+          go install "honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}"
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: staticcheck
         shell: bash
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File tests/baseline/run-command.ps1 -Phase phase8 -Name staticcheck -CommandLine "staticcheck ./..." -ContinueOnError
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File tests/baseline/run-command.ps1 -Phase phase8 -Name staticcheck -CommandLine "staticcheck ./..."
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
@@ -266,7 +324,7 @@ jobs:
   gosec:
     name: gosec (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    continue-on-error: true
+    needs: frontend-assets
     strategy:
       fail-fast: false
       matrix:
@@ -278,6 +336,10 @@ jobs:
           go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: audit-frontend-dist
+          path: web/html
       - name: Ensure make on Windows
         if: runner.os == 'Windows'
         shell: pwsh
@@ -288,7 +350,7 @@ jobs:
       - name: Install gosec
         shell: bash
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          go install "github.com/securego/gosec/v2/cmd/gosec@${GOSEC_VERSION}"
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: make audit:gosec
         shell: bash
@@ -306,7 +368,7 @@ jobs:
   govulncheck:
     name: govulncheck (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    continue-on-error: true
+    needs: frontend-assets
     strategy:
       fail-fast: false
       matrix:
@@ -318,6 +380,10 @@ jobs:
           go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: audit-frontend-dist
+          path: web/html
       - name: Ensure make on Windows
         if: runner.os == 'Windows'
         shell: pwsh
@@ -328,7 +394,7 @@ jobs:
       - name: Install govulncheck
         shell: bash
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: make audit:vuln
         shell: bash
@@ -365,6 +431,23 @@ jobs:
           pattern: audit-go-*
           path: .
           merge-multiple: true
+      - name: Require every audit job to succeed
+        shell: bash
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          VET_RESULT: ${{ needs.vet.result }}
+          TEST_RESULT: ${{ needs.test-go.result }}
+          RACE_RESULT: ${{ needs.test-go-race.result }}
+          COVERAGE_RESULT: ${{ needs.coverage.result }}
+          LINT_RESULT: ${{ needs.lint-go.result }}
+          STATICCHECK_RESULT: ${{ needs.staticcheck.result }}
+          GOSEC_RESULT: ${{ needs.gosec.result }}
+          GOVULNCHECK_RESULT: ${{ needs.govulncheck.result }}
+        run: |
+          set -euo pipefail
+          for result in "$BUILD_RESULT" "$VET_RESULT" "$TEST_RESULT" "$RACE_RESULT" "$COVERAGE_RESULT" "$LINT_RESULT" "$STATICCHECK_RESULT" "$GOSEC_RESULT" "$GOVULNCHECK_RESULT"; do
+            test "$result" = success
+          done
       - name: Build audit dashboard
         shell: bash
         run: bash scripts/audit/aggregate.sh

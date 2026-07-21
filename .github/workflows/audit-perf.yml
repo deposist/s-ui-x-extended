@@ -17,29 +17,74 @@ concurrency:
 
 env:
   GOFLAGS: -mod=readonly
+  BENCHSTAT_VERSION: "v0.0.0-20260701181110-82a0b07e230d"
 
 jobs:
   bench-all:
     name: bench-all
     runs-on: ubuntu-latest
-    continue-on-error: true
     timeout-minutes: 60
     if: ${{ github.event_name != 'pull_request' || contains(join(github.event.pull_request.labels.*.name, ','), 'run-perf') }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
           go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: "25"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - name: Install frontend assets for go:embed packages
+        run: |
+          rm -rf web/html
+          cp -r frontend/dist web/html
       - name: Install benchstat
         run: |
-          go install golang.org/x/perf/cmd/benchstat@latest
+          go install "golang.org/x/perf/cmd/benchstat@${BENCHSTAT_VERSION}"
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Benchmark base revision on the same runner
+        shell: bash
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          BASE_SHA="$PR_BASE_SHA"
+          if [ -z "$BASE_SHA" ] && [ -n "$PUSH_BASE_SHA" ] && [ "$PUSH_BASE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            BASE_SHA="$PUSH_BASE_SHA"
+          fi
+          if [ -z "$BASE_SHA" ]; then
+            BASE_SHA="$(git rev-parse HEAD^)"
+          fi
+          git worktree add ../audit-perf-base "$BASE_SHA"
+          npm ci --prefix ../audit-perf-base/frontend
+          npm run build --prefix ../audit-perf-base/frontend
+          rm -rf ../audit-perf-base/web/html
+          cp -r ../audit-perf-base/frontend/dist ../audit-perf-base/web/html
+          mkdir -p tests/baseline/phase5
+          (
+            cd ../audit-perf-base
+            go test -run='^$' -bench=. -benchmem -benchtime=1s ./core ./sub ./paidsub ./service ./util ./util/common
+          ) > tests/baseline/phase5/bench-all.txt
+          grep -q '^Benchmark' tests/baseline/phase5/bench-all.txt
       - name: Run benchmarks
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File tests/baseline/run-command.ps1 -Phase phase8 -Name bench-all -CommandLine "go test ./... -bench=. -benchmem -run=^$ -benchtime=2s" -ContinueOnError
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File tests/baseline/run-command.ps1 -Phase phase8 -Name bench-all -CommandLine "go test -run=^$ -bench=. -benchmem -benchtime=1s ./core ./sub ./paidsub ./service ./util ./util/common"
+      - name: Require benchmark results and a baseline
+        shell: bash
+        run: |
+          grep -q '^Benchmark' tests/baseline/phase8/bench-all.txt
+          test -s tests/baseline/phase5/bench-all.txt
       - name: Compare with Phase 5 baseline
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File tests/baseline/run-command.ps1 -Phase phase8 -Name benchstat -CommandLine "benchstat tests/baseline/phase5/bench-all.txt tests/baseline/phase8/bench-all.txt" -ContinueOnError
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File tests/baseline/run-command.ps1 -Phase phase8 -Name benchstat -CommandLine "benchstat tests/baseline/phase5/bench-all.txt tests/baseline/phase8/bench-all.txt"
       - name: Detect >20 percent ns/op regressions
         id: regression
         shell: bash

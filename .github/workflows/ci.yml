@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - s-ui-x-extended
 
 permissions:
   contents: read

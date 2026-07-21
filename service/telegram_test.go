@@ -334,6 +334,28 @@ func TestDetectTelegramChatReportsNoUpdates(t *testing.T) {
 	}
 }
 
+func TestDetectTelegramChatRejectsOversizedResponse(t *testing.T) {
+	initSettingTestDB(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(bytes.Repeat([]byte("x"), telegramMaxResponseBytes+1))
+	}))
+	defer server.Close()
+	baseURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restoreClient := setTelegramHTTPClient(&http.Client{
+		Transport: telegramServerRoundTripper{base: baseURL, transport: http.DefaultTransport},
+		Timeout:   time.Second,
+	})
+	defer restoreClient()
+
+	result := (&TelegramService{}).DetectTelegramChat("123456:test-token")
+	if result.Success || result.ErrorClass != "payload" {
+		t.Fatalf("unexpected oversized response result: %#v", result)
+	}
+}
+
 func TestTelegramStatusErrorClassMapping(t *testing.T) {
 	settingService := initSettingTestDB(t)
 	enableTelegramForTest(t, settingService)
@@ -400,6 +422,30 @@ func TestTelegramSendParsesRetryAfterFrom429Response(t *testing.T) {
 	}
 	if result.Success || result.ErrorClass != "rate_limited" || result.RetryAfter != time.Second {
 		t.Fatalf("unexpected retry-after result: %#v", result)
+	}
+}
+
+func TestTelegramSendDoesNotParseOversizedErrorResponse(t *testing.T) {
+	settingService := initSettingTestDB(t)
+	enableTelegramForTest(t, settingService)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write(bytes.Repeat([]byte("x"), telegramMaxResponseBytes+1))
+	}))
+	defer server.Close()
+	baseURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restoreClient := setTelegramHTTPClient(&http.Client{
+		Transport: telegramServerRoundTripper{base: baseURL, transport: http.DefaultTransport},
+		Timeout:   time.Second,
+	})
+	defer restoreClient()
+
+	result := (&TelegramService{}).send("message")
+	if result.Success || result.ErrorClass != "rate_limited" || result.RetryAfter != 0 {
+		t.Fatalf("unexpected oversized error response result: %#v", result)
 	}
 }
 

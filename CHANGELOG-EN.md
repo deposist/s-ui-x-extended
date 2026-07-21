@@ -9,6 +9,18 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.8-beta1] - 2026-07-21 - security hardening and IP certificate recovery
+
+- Updated Go to 1.26.5, `quic-go` to 0.59.1, Axios to 1.18.1, and the affected `brace-expansion` packages to versions that include the published security fixes covered by this release.
+- The self-updater now rejects oversized downloads, checksum responses, and archive members. Failed downloads and extractions remove partial files instead of leaving them beside the installed binary.
+- Telegram API responses have a fixed size limit, so an unexpected peer cannot make the panel buffer an unbounded response body.
+- IP certificate issuance now continues after the service stop, reports the command result, attempts to restore the previous service state, and returns control to the management menu.
+- Malformed Clash proxy-group templates return an error instead of causing an index panic.
+- Security checks now fail the build on errors and use pinned scanner versions. Release jobs verify checksums, scan artifacts, publish an SPDX SBOM, and attach provenance.
+- No database migration is required.
+
+Full release notes: [`docs/releases/v1.0.8-beta1.md`](docs/releases/v1.0.8-beta1.md).
+
 ## [1.0.7] - 2026-07-20 - management menu and certificate cleanup
 
 - The Ubuntu management menu no longer exits when systemd reports `activating` with a non-zero status. Stopped and missing services are also handled without terminating the menu.

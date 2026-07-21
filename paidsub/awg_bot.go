@@ -33,7 +33,6 @@ type awgNameState struct {
 // awgOps unifies the legacy single-endpoint device service and the
 // endpoint-scoped manager behind the deviceID-shaped calls the bot uses.
 type awgOps struct {
-	list   func() ([]service.AWGDeviceInfo, error)
 	get    func(deviceID uint) (service.AWGDeviceInfo, error)
 	render func(ctx context.Context, deviceID uint) ([]byte, error)
 	rotate func(ctx context.Context, deviceID uint, requestKey string) (service.AWGDeviceInfo, error)
