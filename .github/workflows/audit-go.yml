@@ -429,7 +429,7 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: audit-go-*
-          path: .
+          path: tests/baseline
           merge-multiple: true
       - name: Require every audit job to succeed
         shell: bash

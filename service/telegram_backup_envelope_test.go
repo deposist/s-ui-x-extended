@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"testing"
-	"time"
 )
 
 func TestTelegramBackupEnvelopeRoundTripPayloadSizes(t *testing.T) {
@@ -118,19 +117,26 @@ func TestTelegramBackupEnvelopeHeaderParsingKnownAndUnknownKDF(t *testing.T) {
 	}
 }
 
-func TestTelegramBackupKDFMeetsMinimumDuration(t *testing.T) {
-	start := time.Now()
+func TestTelegramBackupKDFMeetsMinimumParameters(t *testing.T) {
+	params := telegramBackupDefaultKDFParams
+	if params.MemoryKiB < 64*1024 {
+		t.Fatalf("Argon2id memory cost is too low: %d KiB", params.MemoryKiB)
+	}
+	if params.Iterations < 3 {
+		t.Fatalf("Argon2id iteration count is too low: %d", params.Iterations)
+	}
+	if params.Parallelism < 1 {
+		t.Fatalf("Argon2id parallelism is too low: %d", params.Parallelism)
+	}
 	key := deriveTelegramBackupKey(
 		[]byte("correct horse battery staple"),
 		bytes.Repeat([]byte{1}, telegramBackupSaltSize),
-		telegramBackupDefaultKDFParams,
+		params,
 	)
-	elapsed := time.Since(start)
-	zeroBytes(key)
-	if elapsed < 100*time.Millisecond {
-		t.Fatalf("Argon2id KDF completed too quickly: %s", elapsed)
+	if len(key) != telegramBackupKeySize {
+		t.Fatalf("unexpected Argon2id key length: %d", len(key))
 	}
-	t.Logf("Argon2id KDF duration: %s", elapsed)
+	zeroBytes(key)
 }
 
 func BenchmarkTelegramBackupKDF(b *testing.B) {

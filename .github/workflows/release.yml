@@ -225,6 +225,16 @@ jobs:
           cp s-ui.service s-ui/
           cp s-ui.sh s-ui/
 
+      - name: Scan representative release build
+        if: matrix.platform == 'amd64'
+        run: |
+          set -euo pipefail
+          BUILD_TAGS="${{ env.RELEASE_BUILD_TAGS }},with_naive_outbound,with_musl"
+          go build -ldflags="-checklinkname=0 -linkmode external -extldflags '-static' -X github.com/deposist/s-ui-x-extended/config.ArtifactPlatform=${{ matrix.platform }}" -tags "$BUILD_TAGS" -o sui-security-scan main.go
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          "$(go env GOPATH)/bin/govulncheck" -mode=binary sui-security-scan
+          rm sui-security-scan
+
       - name: Package
         run: tar -zcvf s-ui-linux-${{ matrix.platform }}.tar.gz s-ui
 
@@ -319,20 +329,12 @@ jobs:
           path: release-assets
           merge-multiple: true
 
-      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Verify checksums and scan representative binary
+      - name: Verify release checksums
         shell: bash
         run: |
           set -euo pipefail
           cd release-assets
           sha256sum --check --strict s-ui-linux-*.sha256
-          tar -xzf s-ui-linux-amd64.tar.gz
-          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
-          "$(go env GOPATH)/bin/govulncheck" -mode=binary s-ui/sui
 
       - name: Generate SPDX SBOMs for every release archive
         uses: anchore/sbom-action@b1b13de3df818f1657380c7d558539b493c17f2b # main 2026-07-21
