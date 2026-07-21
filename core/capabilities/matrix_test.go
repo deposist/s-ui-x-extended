@@ -33,7 +33,9 @@ func TestProtocolMatrixDoc(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read %s (regenerate with: go test ./core/capabilities -run TestProtocolMatrixDoc -update): %v", path, err)
 	}
-	if string(got) != want {
+	// Git may check Markdown out with CRLF on Windows. Compare logical lines so
+	// the generated document stays portable without hiding content changes.
+	if strings.ReplaceAll(string(got), "\r\n", "\n") != strings.ReplaceAll(want, "\r\n", "\n") {
 		t.Fatalf("docs/protocol-matrix.md is out of date with protocols.json.\nRegenerate with: go test ./core/capabilities -run TestProtocolMatrixDoc -update")
 	}
 }
