@@ -66,7 +66,7 @@ jobs:
               json.dump(d, fh)
           print(f"hits={len(results)} errors={len(errors)} parse_errors={len(parse_errors)}")
           for e in parse_errors:
-              print(f"PARSE_ERROR: {e.get(\"message\")[:300]}")
+              print("PARSE_ERROR: " + e.get("message", "")[:300])
           if parse_errors:
               raise SystemExit("Semgrep rule parse error (see above)")
           '
@@ -86,7 +86,7 @@ jobs:
               print("=== HITS: ===")
               for r in results:
                   cid = r["check_id"].replace("semgrep-rules.", "")
-                  print(f"  {cid:45s} {r[\"path\"]}:{r[\"start\"][\"line\"]}")
+                  print("  {:45s} {}:{}".format(cid, r["path"], r["start"]["line"]))
               raise SystemExit(f"hit count mismatch: expected {expected}, got {actual}")
           print("OK: hit count matches expected")
           '
