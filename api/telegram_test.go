@@ -40,6 +40,9 @@ func TestAPIV2TelegramTestRequiresAdminScope(t *testing.T) {
 
 func TestAPIV2TelegramTestAuditsWithoutSecrets(t *testing.T) {
 	initSessionTestDB(t)
+	if err := (&service.UserService{}).UpdateFirstUser("admin", "phase3-password"); err != nil {
+		t.Fatal(err)
+	}
 	adminToken, err := (&service.UserService{}).AddToken("admin", 0, "admin telegram", "admin")
 	if err != nil {
 		t.Fatal(err)

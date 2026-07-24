@@ -2,6 +2,7 @@ package util
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"github.com/deposist/s-ui-x-extended/util/common"
 	"golang.org/x/net/idna"
@@ -10,6 +11,9 @@ import (
 func ValidateHostname(host string) error {
 	if host == "" {
 		return nil
+	}
+	if !utf8.ValidString(host) {
+		return common.NewError("invalid hostname")
 	}
 	if strings.TrimSpace(host) != host {
 		return common.NewError("invalid hostname")

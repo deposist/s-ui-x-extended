@@ -91,7 +91,7 @@ function _respToMsg(resp: any): Msg {
     return { success: true, msg: "", obj: null }
   } else if (isMsg(data)) {
     if (data.hasOwnProperty('success')) {
-        return { success: data.success, msg: data.msg, obj: data.obj || null }
+        return { success: data.success, msg: data.msg, obj: data.obj ?? null }
     } else {
         return data
     }

@@ -25,6 +25,11 @@ describe('en/ru locale key parity', () => {
   const enKeys = new Set(flatten(en as Record<string, unknown>))
   const ruKeys = new Set(flatten(ru as Record<string, unknown>))
 
+  it('labels delivery URL checks as best-effort requests', () => {
+    expect(en.delivery.testBestEffort).toBeDefined()
+    expect(ru.delivery.testBestEffort).toBeDefined()
+  })
+
   it('ru defines every key en defines', () => {
     const missing = [...enKeys].filter((k) => !ruKeys.has(k)).sort()
     expect(missing, `keys in en but missing from ru: ${missing.join(', ')}`).toEqual([])

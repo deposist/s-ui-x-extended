@@ -375,7 +375,7 @@ func TestTokenUseDebouncerManualFlushBypassesCircuitIssue28(t *testing.T) {
 	}
 }
 
-func TestTokenUseDebouncerForceFlushFailureDoesNotRetryIssue28(t *testing.T) {
+func TestTokenUseDebouncerForceFlushFailureRequeuesPendingUpdates(t *testing.T) {
 	resumeTokenUseFlush()
 	t.Cleanup(resumeTokenUseFlush)
 	errFlush := errors.New("force flush failed")
@@ -395,14 +395,14 @@ func TestTokenUseDebouncerForceFlushFailureDoesNotRetryIssue28(t *testing.T) {
 	circuitUntil := debouncer.circuitUntil
 	timer := debouncer.timer
 	debouncer.mu.Unlock()
-	if pending != 0 {
-		t.Fatalf("force flush failure requeued pending updates: %d", pending)
+	if pending != 1 {
+		t.Fatalf("force flush failure lost pending update: %d", pending)
 	}
-	if !circuitUntil.IsZero() {
-		t.Fatalf("force flush failure opened circuit: %v", circuitUntil)
+	if circuitUntil.IsZero() {
+		t.Fatal("force flush failure did not open retry circuit")
 	}
-	if timer != nil {
-		t.Fatal("force flush failure scheduled retry timer")
+	if timer == nil {
+		t.Fatal("force flush failure did not schedule retry")
 	}
 }
 

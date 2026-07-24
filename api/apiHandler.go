@@ -2,7 +2,9 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
+	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/paidsub"
 
 	"github.com/gin-gonic/gin"
@@ -13,6 +15,27 @@ type APIHandler struct {
 	apiv2           *APIv2Handler
 	csrfLoginPath   string
 	authExemptPaths map[string]struct{}
+}
+
+// databaseOperationMiddleware keeps an API request's DB handle alive for its
+// entire lifetime. During ImportDB, new requests wait while the restore drains
+// existing work and atomically swaps the SQLite database.
+func IsRestoreRequestPath(path string) bool {
+	return strings.HasSuffix(path, "/importdb") || strings.HasSuffix(path, "/import-xui/rollback")
+}
+
+func databaseOperationMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// The restore endpoint must acquire the exclusive barrier itself; taking a
+		// shared request lease here would otherwise deadlock behind this request.
+		if IsRestoreRequestPath(c.Request.URL.Path) {
+			c.Next()
+			return
+		}
+		leave := database.EnterDBOperation()
+		defer leave()
+		c.Next()
+	}
 }
 
 func NewAPIHandler(g *gin.RouterGroup, a2 *APIv2Handler, options ...Option) {

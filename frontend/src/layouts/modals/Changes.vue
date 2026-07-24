@@ -106,9 +106,12 @@ export default {
   methods: {
     async loadData() {
       this.loading = true
-      const data = await HttpUtils.get('api/changes',{ a: this.user, k: this.key, c: this.chngCount })
-      if (data.success) {
-        this.changes = data.obj?? []
+      try {
+        const data = await HttpUtils.get('api/changes',{ a: this.user, k: this.key, c: this.chngCount })
+        if (data.success) {
+          this.changes = data.obj?? []
+        }
+      } finally {
         this.loading = false
       }
     },

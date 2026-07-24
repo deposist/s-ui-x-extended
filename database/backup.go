@@ -121,26 +121,40 @@ func PrepareDbBackup(exclude string) (backupPath string, cleanup func(), err err
 		return "", nil, err
 	}
 
-	for _, table := range tables {
-		if excludedTables[table.name] || table.optional && !db.Migrator().HasTable(table.model) {
-			continue
+	// A read transaction pins one SQLite snapshot for every selected table.
+	// Without it, a committed multi-table update between table copies can leave
+	// the backup with rows from different source generations.
+	if err = db.Transaction(func(sourceSnapshot *gorm.DB) error {
+		for _, table := range tables {
+			if excludedTables[table.name] || table.optional && !sourceSnapshot.Migrator().HasTable(table.model) {
+				continue
+			}
+			sourceDB := sourceSnapshot
+			if table.name == "tls" {
+				// The no-TLS sentinel uses id=0, which GORM treats as an unset
+				// auto-increment key during Create. Copy it explicitly below so it
+				// cannot be reinserted with a generated id that collides with real
+				// TLS rows.
+				sourceDB = sourceSnapshot.Where("id <> ?", 0)
+			}
+			if err := copyBackupTable(sourceDB, backupDb, table.model); err != nil {
+				return err
+			}
+			if backupTableCopiedHook != nil {
+				backupTableCopiedHook(table.name)
+			}
 		}
-		sourceDB := db
-		if table.name == "tls" {
-			// The no-TLS sentinel uses id=0, which GORM treats as an unset
-			// auto-increment key during Create. Copy it explicitly below so it
-			// cannot be reinserted with a generated id that collides with real
-			// TLS rows.
-			sourceDB = db.Where("id <> ?", 0)
-		}
-		if err := copyBackupTable(sourceDB, backupDb, table.model); err != nil {
-			return "", nil, err
-		}
+		return nil
+	}); err != nil {
+		return "", nil, err
 	}
 	// A no-TLS inbound points at tls.id=0. GORM treats a zero primary key as
 	// unset during row copies, so the sentinel must be restored explicitly in
 	// the backup or PRAGMA foreign_key_check will reject the restore.
 	if err := ensureNoTLSRowOn(backupDb); err != nil {
+		return "", nil, err
+	}
+	if err := validateGeneratedBackup(backupDb); err != nil {
 		return "", nil, err
 	}
 
@@ -185,6 +199,36 @@ func ParseBackupExcludes(exclude string) []string {
 	return ordered
 }
 
+func validateGeneratedBackup(backupDB *gorm.DB) error {
+	var integrity string
+	if err := backupDB.Raw("PRAGMA integrity_check").Scan(&integrity).Error; err != nil {
+		return common.NewErrorf("checking generated backup integrity: %v", err)
+	}
+	if integrity != "ok" {
+		return common.NewErrorf("generated backup integrity check failed: %s", integrity)
+	}
+
+	var foreignKeyViolations int64
+	if err := backupDB.Raw("SELECT COUNT(*) FROM pragma_foreign_key_check").Scan(&foreignKeyViolations).Error; err != nil {
+		return common.NewErrorf("checking generated backup foreign keys: %v", err)
+	}
+	if foreignKeyViolations != 0 {
+		return common.NewErrorf("generated backup foreign key check failed: %d violation(s)", foreignKeyViolations)
+	}
+
+	// All generated backups include tls, and inbounds with tls_id=0 rely on
+	// this sentinel. Verify the application-level invariant before exposing
+	// the file to callers.
+	var noTLSRows int64
+	if err := backupDB.Table("tls").Where("id = ?", 0).Count(&noTLSRows).Error; err != nil {
+		return common.NewErrorf("checking generated backup no-TLS sentinel: %v", err)
+	}
+	if noTLSRows != 1 {
+		return common.NewErrorf("generated backup has %d no-TLS sentinel rows, want 1", noTLSRows)
+	}
+	return nil
+}
+
 func copyBackupTable(sourceDB *gorm.DB, backupDB *gorm.DB, modelValue any) error {
 	modelType := reflect.TypeOf(modelValue)
 	if modelType.Kind() != reflect.Ptr {
@@ -210,6 +254,10 @@ func copyBackupTable(sourceDB *gorm.DB, backupDB *gorm.DB, modelValue any) error
 		return findResult.Error
 	})
 }
+
+// backupTableCopiedHook is test-only synchronization for deterministic
+// multi-table snapshot regression coverage.
+var backupTableCopiedHook func(string)
 
 var backupTempPathHook func(string)
 
@@ -239,7 +287,20 @@ func walCheckpointWithFallback(db *gorm.DB) error {
 	return nil
 }
 
+// restoreStartedHook is test-only synchronization for deterministic drain
+// coverage. It runs before restore waits for in-flight DB operations.
+var restoreStartedHook func()
+
 func ImportDB(file multipart.File) error {
+	if restoreStartedHook != nil {
+		restoreStartedHook()
+	}
+	leaveMaintenance, err := beginRestore()
+	if err != nil {
+		return err
+	}
+	defer leaveMaintenance()
+
 	// Check if the file is a SQLite database.
 	isValidDb, err := IsSQLiteDB(file)
 	if err != nil {
@@ -345,13 +406,14 @@ func ImportDB(file multipart.File) error {
 }
 
 func closeLiveDB() {
-	// Swap the global pointer under dbMu (mirrors OpenDB), so concurrent
-	// GetDB() readers — e.g. a cron job firing mid-import — never race the write.
-	// The actual Close() is done outside the lock (I/O, touches no global).
-	dbMu.Lock()
+	// Maintenance is held by ImportDB throughout the replacement, so no
+	// participating request or cron job can obtain this handle while it is
+	// closed. Keep the last non-nil pointer published until OpenDB atomically
+	// replaces it with the validated/restored handle: consumers never observe a
+	// nil global DB during a restore.
+	dbMu.RLock()
 	current := db
-	db = nil
-	dbMu.Unlock()
+	dbMu.RUnlock()
 	if current == nil {
 		return
 	}

@@ -373,8 +373,6 @@ func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initU
 		return nil, err
 	}
 
-	s.setLastUpdate(time.Now().Unix())
-
 	return objs, nil
 }
 

@@ -5,10 +5,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/deposist/s-ui-x-extended/config"
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
 	"github.com/deposist/s-ui-x-extended/realtime"
@@ -18,6 +21,92 @@ import (
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 )
+
+func TestIntegrationBootstrapCredentialIsOneTimeAndRetainedUntilPasswordChange(t *testing.T) {
+	resetRateLimitState()
+	previousAuditSync := service.AuditSyncForTest
+	service.AuditSyncForTest = true
+	t.Cleanup(func() { service.AuditSyncForTest = previousAuditSync })
+	dbDir := t.TempDir()
+	t.Setenv("SUI_DB_FOLDER", dbDir)
+	initAPITestDB(t, filepath.Join(dbDir, "s-ui.db"))
+	testDB := database.GetDB()
+	t.Cleanup(func() {
+		if testDB != nil {
+			if sqlDB, err := testDB.DB(); err == nil {
+				_ = sqlDB.Close()
+			}
+		}
+	})
+	settingService := &service.SettingService{}
+	if _, err := settingService.GetAllSetting(); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.GetDB().Model(model.Setting{}).Where("key = ?", "webPath").Update("value", "/").Error; err != nil {
+		t.Fatal(err)
+	}
+	passwordPath := filepath.Join(config.GetDBFolderPath(), "initial-admin.txt")
+	passwordData, err := os.ReadFile(passwordPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bootstrapPassword := strings.TrimSpace(string(passwordData))
+	if bootstrapPassword == "" {
+		t.Fatal("bootstrap password is empty")
+	}
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(sessions.Sessions("s-ui", cookie.NewStore([]byte("test-secret"))))
+	NewAPIHandler(router.Group("/api"), nil)
+	jar := integrationCookieJar{}
+
+	login := func(password string) *httptest.ResponseRecorder {
+		form := url.Values{"user": {"admin"}, "pass": {password}}
+		req := httptest.NewRequest(http.MethodPost, "/api/login", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		return performIntegrationRequest(router, req, &jar)
+	}
+	if recorder := login("wrong-password"); recorder.Code != http.StatusOK {
+		t.Fatalf("failed login returned %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if _, err := os.Stat(passwordPath); err != nil {
+		t.Fatalf("failed login removed bootstrap credential: %v", err)
+	}
+	if recorder := login(bootstrapPassword); recorder.Code != http.StatusOK {
+		t.Fatalf("bootstrap login returned %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if _, err := os.Stat(passwordPath); err != nil {
+		t.Fatalf("bootstrap login removed credential before password change: %v", err)
+	}
+
+	csrfReq := httptest.NewRequest(http.MethodGet, "/api/csrf", nil)
+	csrfRecorder := performIntegrationRequest(router, csrfReq, &jar)
+	if csrfRecorder.Code != http.StatusOK {
+		t.Fatalf("csrf returned %d body=%s", csrfRecorder.Code, csrfRecorder.Body.String())
+	}
+	csrfToken := integrationCSRFToken(t, csrfRecorder)
+	change := func(oldPass, newPass string) *httptest.ResponseRecorder {
+		form := url.Values{"oldPass": {oldPass}, "newUsername": {"admin"}, "newPass": {newPass}}
+		req := httptest.NewRequest(http.MethodPost, "/api/changePass", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set(csrfHeader, csrfToken)
+		return performIntegrationRequest(router, req, &jar)
+	}
+	if recorder := change("wrong-password", "new-bootstrap-password"); recorder.Code != http.StatusOK {
+		t.Fatalf("failed password change returned %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if _, err := os.Stat(passwordPath); err != nil {
+		t.Fatalf("failed password change removed bootstrap credential: %v", err)
+	}
+	if recorder := change(bootstrapPassword, "new-bootstrap-password"); recorder.Code != http.StatusOK {
+		t.Fatalf("password change returned %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if _, err := os.Stat(passwordPath); !os.IsNotExist(err) {
+		t.Fatalf("successful bootstrap password change retained credential: %v", err)
+	}
+
+}
 
 func TestIntegrationAuthFlowLoginCSRFSaveSettingsPublishesRealtime(t *testing.T) {
 	resetRateLimitState()

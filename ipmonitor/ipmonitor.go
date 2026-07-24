@@ -220,22 +220,25 @@ func shouldPublishSecurityEvent(clientName string, kind string, now time.Time) b
 	return true
 }
 
-func Flush() error {
+func Flush() (err error) {
 	db := database.GetDB()
 	if db == nil {
 		return nil
 	}
-	pending.Lock()
-	snapshot := pending.byClient
-	pending.byClient = map[string]map[string]pendingIP{}
-	pending.Unlock()
+	snapshot := takePending()
 	if len(snapshot) == 0 {
 		return nil
 	}
+	defer func() {
+		if err != nil {
+			requeuePending(snapshot)
+		}
+	}()
 	tx := db.Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
+			requeuePending(snapshot)
 			panic(r)
 		}
 	}()
@@ -246,15 +249,67 @@ func Flush() error {
 	return tx.Commit().Error
 }
 
-func FlushTo(tx *gorm.DB) error {
-	pending.Lock()
-	snapshot := pending.byClient
-	pending.byClient = map[string]map[string]pendingIP{}
-	pending.Unlock()
-	if len(snapshot) == 0 {
+type PendingSnapshot struct {
+	byClient map[string]map[string]pendingIP
+	acked    bool
+}
+
+func SnapshotPending() *PendingSnapshot {
+	return &PendingSnapshot{byClient: takePending()}
+}
+
+func (s *PendingSnapshot) FlushTo(tx *gorm.DB) error {
+	if s == nil || len(s.byClient) == 0 {
 		return nil
 	}
-	return flushSnapshot(tx, snapshot)
+	return flushSnapshot(tx, s.byClient)
+}
+
+func (s *PendingSnapshot) Ack() {
+	if s != nil {
+		s.acked = true
+	}
+}
+
+func (s *PendingSnapshot) Requeue() {
+	if s != nil && !s.acked {
+		requeuePending(s.byClient)
+		s.acked = true
+	}
+}
+
+func FlushTo(tx *gorm.DB) error {
+	snapshot := SnapshotPending()
+	if err := snapshot.FlushTo(tx); err != nil {
+		snapshot.Requeue()
+		return err
+	}
+	snapshot.Ack()
+	return nil
+}
+
+func takePending() map[string]map[string]pendingIP {
+	pending.Lock()
+	defer pending.Unlock()
+	snapshot := pending.byClient
+	pending.byClient = map[string]map[string]pendingIP{}
+	return snapshot
+}
+
+func requeuePending(snapshot map[string]map[string]pendingIP) {
+	pending.Lock()
+	defer pending.Unlock()
+	for clientName, ips := range snapshot {
+		if pending.byClient[clientName] == nil {
+			pending.byClient[clientName] = map[string]pendingIP{}
+		}
+		for ipHash, previous := range ips {
+			current, exists := pending.byClient[clientName][ipHash]
+			if !exists || previous.lastSeen > current.lastSeen {
+				pending.byClient[clientName][ipHash] = previous
+			}
+		}
+	}
 }
 
 func flushSnapshot(tx *gorm.DB, snapshot map[string]map[string]pendingIP) error {

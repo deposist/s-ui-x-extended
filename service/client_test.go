@@ -179,6 +179,38 @@ func TestDepleteClientsUsesActiveBoundarySemantics(t *testing.T) {
 	}
 }
 
+func TestResetClientsDoesNotAdvanceMarkerBeforeCallerCommit(t *testing.T) {
+	initSettingTestDB(t)
+	const now = int64(1_700_000_000)
+	runtime := NewRuntimeWithCoreProvider(nil)
+	client := model.Client{
+		Enable: true, Name: "reset-marker", Inbounds: json.RawMessage(`[]`), Links: json.RawMessage(`[]`), Config: json.RawMessage(`{}`),
+		DelayStart: true, ResetDays: 1, Up: 1,
+	}
+	if err := database.GetDB().Create(&client).Error; err != nil {
+		t.Fatal(err)
+	}
+	tx := database.GetDB().Begin()
+	if tx.Error != nil {
+		t.Fatal(tx.Error)
+	}
+	service := &ClientService{Runtime: runtime}
+	if _, err := service.ResetClients(tx, now); err != nil {
+		_ = tx.Rollback().Error
+		t.Fatal(err)
+	}
+	if got := runtime.updates().Get(); got != 0 {
+		_ = tx.Rollback().Error
+		t.Fatalf("change marker advanced before caller commit: %d", got)
+	}
+	if err := tx.Rollback().Error; err != nil {
+		t.Fatal(err)
+	}
+	if got := runtime.updates().Get(); got != 0 {
+		t.Fatalf("rolled-back reset left phantom change marker: %d", got)
+	}
+}
+
 func TestResetClientsUsesColumnUpdatesAndPreservesIndependentFields(t *testing.T) {
 	initSettingTestDB(t)
 	const now = int64(1_700_000_000)

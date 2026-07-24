@@ -145,34 +145,69 @@ func (a *APP) Init() error {
 	return nil
 }
 
-func (a *APP) Start() error {
-	if a.awgManager != nil {
-		if err := a.awgManager.Start(); err != nil {
+// lifecycleStep is a small, testable start/rollback seam. A component is added
+// to the rollback stack only after its Start succeeds.
+type lifecycleStep struct {
+	name  string
+	start func() error
+	stop  func()
+}
+
+func runStartLifecycle(steps []lifecycleStep) error {
+	started := make([]lifecycleStep, 0, len(steps))
+	for _, step := range steps {
+		if err := step.start(); err != nil {
+			for i := len(started) - 1; i >= 0; i-- {
+				started[i].stop()
+			}
 			return err
 		}
+		started = append(started, step)
 	}
+	return nil
+}
+
+func (a *APP) Start() error {
 	loc, err := a.SettingService.GetTimeLocation()
 	if err != nil {
 		return err
 	}
-
 	trafficAge, err := a.SettingService.GetTrafficAge()
 	if err != nil {
 		return err
 	}
-
-	err = a.cronJob.Start(loc, trafficAge)
-	if err != nil {
-		return err
-	}
-
-	err = a.webServer.Start()
-	if err != nil {
-		return err
-	}
-
-	err = a.subServer.Start()
-	if err != nil {
+	if err := runStartLifecycle([]lifecycleStep{
+		{name: "awg", start: func() error {
+			if a.awgManager == nil {
+				return nil
+			}
+			return a.awgManager.Start()
+		}, stop: func() {
+			if a.awgManager == nil {
+				return
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := a.awgManager.Stop(ctx); err != nil {
+				logger.Warning("rollback AWG manager err: ", err)
+			}
+		}},
+		{name: "cron", start: func() error { return a.cronJob.Start(loc, trafficAge) }, stop: func() {
+			if err := a.cronJob.Stop(); err != nil {
+				logger.Warning("rollback cron err: ", err)
+			}
+		}},
+		{name: "web", start: a.webServer.Start, stop: func() {
+			if err := a.webServer.Stop(); err != nil {
+				logger.Warning("rollback Web Server err: ", err)
+			}
+		}},
+		{name: "sub", start: a.subServer.Start, stop: func() {
+			if err := a.subServer.Stop(); err != nil {
+				logger.Warning("rollback Sub Server err: ", err)
+			}
+		}},
+	}); err != nil {
 		return err
 	}
 
@@ -217,7 +252,9 @@ func (a *APP) Stop() {
 		}
 		awgCancel()
 	}
-	a.cronJob.Stop()
+	if err := a.cronJob.Stop(); err != nil {
+		logger.Warning("stop cron err:", err)
+	}
 	err := a.subServer.Stop()
 	if err != nil {
 		logger.Warning("stop Sub Server err:", err)

@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -38,14 +40,120 @@ func makeTarGz(t *testing.T, suiContent []byte) []byte {
 
 func artifactServer(t *testing.T, tarball []byte, checksumHex string) *httptest.Server {
 	t.Helper()
+	manifest, signature := signedManifest(t, ReleaseTarget{Version: "9.9.9", Channel: "main", Platform: "amd64"}, tarball)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/asset", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write(tarball) })
 	mux.HandleFunc("/checksum", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(checksumHex + "  s-ui-linux-amd64.tar.gz\n"))
 	})
+	mux.HandleFunc("/asset.manifest.json", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write(manifest) })
+	mux.HandleFunc("/asset.manifest.json.sig", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write(signature) })
 	server := httptest.NewTLSServer(mux) // https so the SR-003 TLS-only guard passes
 	t.Cleanup(server.Close)
 	return server
+}
+
+func checksumHex(archive []byte) string {
+	sum := sha256.Sum256(archive)
+	return hex.EncodeToString(sum[:])
+}
+
+func signedManifest(t *testing.T, target ReleaseTarget, archive []byte) ([]byte, []byte) {
+	t.Helper()
+	manifest := []byte(`{"version":"` + target.Version + `","channel":"` + target.Channel + `","platform":"` + target.Platform + `","filename":"s-ui-linux-` + target.Platform + `.tar.gz","sha256":"` + checksumHex(archive) + `"}`)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldVerifier := verifyUpdateManifestSignature
+	verifyUpdateManifestSignature = func(rawManifest, signature []byte) bool {
+		return ed25519.Verify(publicKey, rawManifest, signature)
+	}
+	t.Cleanup(func() { verifyUpdateManifestSignature = oldVerifier })
+	return manifest, ed25519.Sign(privateKey, manifest)
+}
+
+// AUD-02: all mutable release inputs are authenticated together. A valid
+// archive/checksum alone is insufficient; the signed manifest binds the target
+// metadata and archive digest before the live executable is touched.
+func TestApplyPipelineRequiresSignedManifestBindingArtifact(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	oldContent := []byte("OLD-WORKING-BINARY")
+	if err := os.WriteFile(execPath, oldContent, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tarball := makeTarGz(t, []byte("NEW-BINARY"))
+	target := ReleaseTarget{Channel: "main", Version: "9.9.9", Platform: "amd64"}
+	manifest, signature := signedManifest(t, target, tarball)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/asset", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(tarball) })
+	mux.HandleFunc("/checksum", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(checksumHex(tarball) + "  replacement.tar.gz\n"))
+	})
+	mux.HandleFunc("/asset.manifest.json", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(manifest) })
+	mux.HandleFunc("/asset.manifest.json.sig", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(signature) })
+	server := httptest.NewTLSServer(mux)
+	defer server.Close()
+
+	target.AssetURL = server.URL + "/asset"
+	target.ChecksumURL = server.URL + "/checksum"
+	deps := panelUpdateDeps{client: server.Client(), execPath: execPath}
+	if err := applyPipeline(target, deps, func(UpdateStage) {}); err != nil {
+		t.Fatalf("signed update failed: %v", err)
+	}
+	if got, _ := os.ReadFile(execPath); !bytes.Equal(got, []byte("NEW-BINARY")) {
+		t.Fatalf("binary = %q, want signed artifact", got)
+	}
+}
+
+func TestApplyPipelineRejectsTamperedSignedReleaseInputs(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*ReleaseTarget, *[]byte, *[]byte, *[]byte, *[]byte)
+	}{
+		{name: "archive", mutate: func(_ *ReleaseTarget, archive, _ *[]byte, _ *[]byte, _ *[]byte) {
+			*archive = makeTarGz(t, []byte("TAMPERED"))
+		}},
+		{name: "checksum", mutate: func(_ *ReleaseTarget, _ *[]byte, checksum, _ *[]byte, _ *[]byte) {
+			*checksum = []byte("00" + string((*checksum)[2:]))
+		}},
+		{name: "manifest", mutate: func(_ *ReleaseTarget, _ *[]byte, _ *[]byte, manifest, _ *[]byte) {
+			*manifest = bytes.Replace(*manifest, []byte(`"version":"9.9.9"`), []byte(`"version":"9.9.8"`), 1)
+		}},
+		{name: "signature", mutate: func(_ *ReleaseTarget, _ *[]byte, _ *[]byte, _ *[]byte, signature *[]byte) { (*signature)[0] ^= 0xff }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			execPath := filepath.Join(dir, "sui")
+			oldContent := []byte("OLD-WORKING-BINARY")
+			if err := os.WriteFile(execPath, oldContent, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			archive := makeTarGz(t, []byte("NEW-BINARY"))
+			target := ReleaseTarget{Channel: "main", Version: "9.9.9", Platform: "amd64"}
+			manifest, signature := signedManifest(t, target, archive)
+			checksum := []byte(checksumHex(archive) + "  s-ui-linux-amd64.tar.gz\n")
+			tt.mutate(&target, &archive, &checksum, &manifest, &signature)
+			mux := http.NewServeMux()
+			mux.HandleFunc("/asset", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(archive) })
+			mux.HandleFunc("/checksum", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(checksum) })
+			mux.HandleFunc("/asset.manifest.json", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(manifest) })
+			mux.HandleFunc("/asset.manifest.json.sig", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(signature) })
+			server := httptest.NewTLSServer(mux)
+			defer server.Close()
+			target.AssetURL, target.ChecksumURL = server.URL+"/asset", server.URL+"/checksum"
+			err := applyPipeline(target, panelUpdateDeps{client: server.Client(), execPath: execPath}, func(UpdateStage) {})
+			if err == nil {
+				t.Fatal("tampered signed release was accepted")
+			}
+			if got, _ := os.ReadFile(execPath); !bytes.Equal(got, oldContent) {
+				t.Fatal("live binary changed for tampered release")
+			}
+		})
+	}
 }
 
 func TestDownloadToFileEnforcesExactLimit(t *testing.T) {
@@ -122,10 +230,10 @@ func TestApplyPipelineRejectsChecksumMismatch(t *testing.T) {
 	tarball := makeTarGz(t, []byte("NEW-BINARY"))
 	server := artifactServer(t, tarball, "00deadbeef00") // wrong checksum
 
-	target := ReleaseTarget{AssetURL: server.URL + "/asset", ChecksumURL: server.URL + "/checksum", Version: "9.9.9"}
+	target := ReleaseTarget{Channel: "main", Platform: "amd64", AssetURL: server.URL + "/asset", ChecksumURL: server.URL + "/checksum", Version: "9.9.9"}
 	deps := panelUpdateDeps{client: server.Client(), execPath: execPath}
-	if err := applyPipeline(target, deps, func(UpdateStage) {}); err != errChecksumMismatch {
-		t.Fatalf("expected errChecksumMismatch, got %v", err)
+	if err := applyPipeline(target, deps, func(UpdateStage) {}); err != errManifestInvalid {
+		t.Fatalf("expected errManifestInvalid for checksum not bound by the signed manifest, got %v", err)
 	}
 	got, _ := os.ReadFile(execPath)
 	if !bytes.Equal(got, oldContent) {
@@ -150,7 +258,7 @@ func TestApplyPipelineReplacesBinaryAndKeepsBackup(t *testing.T) {
 	sum := sha256.Sum256(tarball)
 	server := artifactServer(t, tarball, hex.EncodeToString(sum[:]))
 
-	target := ReleaseTarget{AssetURL: server.URL + "/asset", ChecksumURL: server.URL + "/checksum", Version: "9.9.9"}
+	target := ReleaseTarget{Channel: "main", Platform: "amd64", AssetURL: server.URL + "/asset", ChecksumURL: server.URL + "/checksum", Version: "9.9.9"}
 	deps := panelUpdateDeps{client: server.Client(), execPath: execPath}
 	if err := applyPipeline(target, deps, func(UpdateStage) {}); err != nil {
 		t.Fatalf("apply pipeline failed: %v", err)
@@ -289,7 +397,7 @@ func TestApplySuccessRecordsAppliedAuditBeforeExit(t *testing.T) {
 	panelUpdateExit = func() { close(done) }
 	t.Cleanup(func() { panelUpdateExit = oldExit })
 
-	target := ReleaseTarget{Channel: "main", Version: "9.9.9", AssetURL: server.URL + "/asset", ChecksumURL: server.URL + "/checksum"}
+	target := ReleaseTarget{Channel: "main", Version: "9.9.9", Platform: "amd64", AssetURL: server.URL + "/asset", ChecksumURL: server.URL + "/checksum"}
 	if err := (&PanelUpdateService{}).Apply(target, "admin"); err != nil {
 		t.Fatalf("apply start failed: %v", err)
 	}

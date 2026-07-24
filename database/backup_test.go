@@ -281,6 +281,76 @@ func TestGetDbUsesRandomTempPathAndRemovesIt(t *testing.T) {
 	}
 }
 
+func TestPrepareDbBackupUsesOneSourceSnapshotAcrossTables(t *testing.T) {
+	dbDir := t.TempDir()
+	dbPath := filepath.Join(dbDir, "s-ui.db")
+	t.Setenv("SUI_DB_FOLDER", dbDir)
+	if err := InitDB(dbPath); err != nil {
+		if strings.Contains(err.Error(), "go-sqlite3 requires cgo") {
+			t.Skip(err)
+		}
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		closeMainDB(t)
+		cleanupBackupSidecars(dbPath)
+	})
+
+	mainDB := GetDB()
+	tlsRow := model.Tls{Name: "snapshot-before", Server: []byte("{}"), Client: []byte("{}")}
+	if err := mainDB.Create(&tlsRow).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := mainDB.Create(&model.Inbound{
+		Type: "http", Tag: "snapshot-before", TlsId: tlsRow.Id,
+		Addrs: []byte("[]"), OutJson: []byte("{}"), Options: []byte("{}"),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	prevHook := backupTableCopiedHook
+	backupTableCopiedHook = func(table string) {
+		if table != "tls" {
+			return
+		}
+		if err := mainDB.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Model(&model.Tls{}).Where("id = ?", tlsRow.Id).Update("name", "snapshot-after").Error; err != nil {
+				return err
+			}
+			return tx.Model(&model.Inbound{}).Where("tag = ?", "snapshot-before").Update("tag", "snapshot-after").Error
+		}); err != nil {
+			t.Fatalf("controlled concurrent source update: %v", err)
+		}
+	}
+	t.Cleanup(func() { backupTableCopiedHook = prevHook })
+
+	backupPath, cleanup, err := PrepareDbBackup("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	backupDB, err := gorm.Open(sqlite.Open(backupPath), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if sqlDB, err := backupDB.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+	})
+
+	var tlsName, inboundTag string
+	if err := backupDB.Table("tls").Select("name").Where("id = ?", tlsRow.Id).Scan(&tlsName).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := backupDB.Model(&model.Inbound{}).Select("tag").Where("tls_id = ?", tlsRow.Id).Scan(&inboundTag).Error; err != nil {
+		t.Fatal(err)
+	}
+	if tlsName != "snapshot-before" || inboundTag != "snapshot-before" {
+		t.Fatalf("backup crossed source generations: tls=%q inbound=%q; want both snapshot-before", tlsName, inboundTag)
+	}
+}
+
 func TestGetDbExcludeSkipsSelectedTables(t *testing.T) {
 	dbDir := t.TempDir()
 	dbPath := filepath.Join(dbDir, "s-ui.db")

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -48,6 +49,52 @@ func TestAuditWriterExtraFlushesPartialBatchOnInterval(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("partial audit batch was not flushed on interval")
+	}
+}
+
+func TestAuditWriterExtraRetriesFailedBatchWithoutLosingEvents(t *testing.T) {
+	attempts := make(chan []model.AuditEvent, 3)
+	var calls atomic.Int32
+	writer := newAuditWriter(10, 1, time.Hour, func(events []model.AuditEvent) error {
+		attempts <- append([]model.AuditEvent(nil), events...)
+		if calls.Add(1) == 1 {
+			return context.DeadlineExceeded
+		}
+		return nil
+	})
+	defer func() {
+		if err := writer.Stop(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	writer.Enqueue(model.AuditEvent{Event: "durable"})
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		select {
+		case events := <-attempts:
+			if len(events) != 1 || events[0].Event != "durable" {
+				t.Fatalf("attempt %d wrote unexpected batch: %#v", attempt, events)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("attempt %d did not write the failed batch", attempt)
+		}
+	}
+}
+
+func TestAuditWriterExtraStopReturnsErrorWhenEventsRemainUnsaved(t *testing.T) {
+	writer := newAuditWriter(10, 1, time.Hour, func([]model.AuditEvent) error {
+		return context.DeadlineExceeded
+	})
+	writer.Enqueue(model.AuditEvent{Event: "unsaved"})
+
+	if err := writer.Stop(context.Background()); err == nil {
+		t.Fatal("Stop returned nil while unsaved audit events remained")
+	}
+	writer.mu.Lock()
+	defer writer.mu.Unlock()
+	if len(writer.queue) != 1 || writer.queue[0].Event != "unsaved" {
+		t.Fatalf("unsaved events were lost: %#v", writer.queue)
 	}
 }
 

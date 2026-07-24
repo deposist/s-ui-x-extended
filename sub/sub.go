@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/deposist/s-ui-x-extended/config"
+	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/logger"
 	"github.com/deposist/s-ui-x-extended/middleware"
 	"github.com/deposist/s-ui-x-extended/network"
@@ -48,6 +49,11 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	}
 
 	engine := gin.Default()
+	engine.Use(func(c *gin.Context) {
+		leave := database.EnterDBOperation()
+		defer leave()
+		c.Next()
+	})
 
 	subPath, err := s.SettingService.GetSubPath()
 	if err != nil {

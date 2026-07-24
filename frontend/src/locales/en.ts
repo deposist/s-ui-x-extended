@@ -896,6 +896,7 @@ export default {
     subscriptionUrl: "Subscription URL",
     importUrl: "Import URL",
     testUrl: "Test URL",
+    testBestEffort: "Best-effort availability check: the request was sent; HTTP success cannot be verified by the browser.",
     testOk: "Subscription URL is reachable. This only checks reachability, not that the response is a valid subscription.",
     testFailed: "Subscription URL test failed.",
     noRawLinks: "No raw links for this client. Some protocols have no URI link and are delivered only through the JSON subscription. Use the Sing-box tab above to import or scan the QR.",

@@ -152,7 +152,7 @@ func TestIssue14InitDBReturnsAdaptError(t *testing.T) {
 	}
 }
 
-func TestIssue13InitDBCreatesForcePasswordResetDefaultFalse(t *testing.T) {
+func TestIssue13InitDBCreatesForcePasswordResetDefaultTrueForBootstrapAdmin(t *testing.T) {
 	dbDir := makeDBTempDir(t, "s-ui-db-test-")
 	dbPath := filepath.Join(dbDir, "s-ui.db")
 	if err := InitDB(dbPath); err != nil {
@@ -173,8 +173,8 @@ func TestIssue13InitDBCreatesForcePasswordResetDefaultFalse(t *testing.T) {
 	if err := GetDB().Where("username = ?", "admin").First(&admin).Error; err != nil {
 		t.Fatal(err)
 	}
-	if admin.ForcePasswordReset {
-		t.Fatalf("initial admin should not require reset: %#v", admin)
+	if !admin.ForcePasswordReset {
+		t.Fatalf("fresh bootstrap admin must require reset: %#v", admin)
 	}
 }
 

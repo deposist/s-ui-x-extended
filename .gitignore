@@ -66,5 +66,22 @@ test-db/
 
 # Windows reserved device-name files accidentally created by shell probes
 frontend/src/**/nul
-
-
+# Local agent/audit/release scratch files - not useful to end users
+.hermes/
+.tools-bin/
+.ci-artifacts-*/
+.ci-release-*/
+.ci-v107-*/
+CODE_AUDIT_*.md
+AUDIT*.md
+AUDIT*.json
+AWG_*_PLAN.md
+AWG_*_PROMPT.md
+NEXT_PROMPT.md
+NEXT_PROTOCOL_PROMPT.md
+PLAN_PROTOCOL_COVERAGE.md
+TASKS_PROTOCOL_COVERAGE.md
+PROJECT_CONTEXT.md
+review.md
+.release-status.txt
+CHANGELOG-*.md0

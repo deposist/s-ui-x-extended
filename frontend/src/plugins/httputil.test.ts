@@ -41,10 +41,30 @@ vi.mock('notivue', () => ({
   },
 }))
 
-describe('HttpUtils cancellation handling', () => {
+describe('HttpUtils response handling', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
+
+  it.each([false, 0, ''])('preserves a falsy response obj value: %j', async (obj) => {
+    const { default: HttpUtils } = await import('@/plugins/httputil')
+    mocks.apiGet.mockResolvedValueOnce({
+      data: { success: true, msg: '', obj },
+    })
+
+    await expect(HttpUtils.get('api/load')).resolves.toEqual({ success: true, msg: '', obj })
+  })
+
+  it.each([null, undefined])('normalizes a nullish response obj value to null: %j', async (obj) => {
+    const { default: HttpUtils } = await import('@/plugins/httputil')
+    mocks.apiGet.mockResolvedValueOnce({
+      data: { success: true, msg: '', obj },
+    })
+
+    await expect(HttpUtils.get('api/load')).resolves.toEqual({ success: true, msg: '', obj: null })
+  })
+
+  describe('cancellation handling', () => {
 
   it('does not show a failed toast for canceled duplicate requests', async () => {
     const { default: HttpUtils } = await import('@/plugins/httputil')
@@ -70,5 +90,6 @@ describe('HttpUtils cancellation handling', () => {
     expect(mocks.pushError).toHaveBeenCalledWith(expect.objectContaining({
       message: 'Error: network down',
     }))
+  })
   })
 })

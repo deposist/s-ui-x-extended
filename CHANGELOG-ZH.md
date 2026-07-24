@@ -8,6 +8,20 @@
 
 - 暂无未发布变更。
 
+## [1.0.8-beta2] - 2026-07-24 - 可靠恢复与签名自更新
+
+- 自更新现在只接受带 Ed25519 签名 manifest 的发布包。签名绑定归档校验和、版本、通道、平台和归档文件名，未签名发布包不会被用于自更新。
+- 数据库恢复会等待面板、订阅和 cron 任务完成正在进行的数据库操作，然后安全切换 SQLite handle。x-ui 回滚不会再等待自身的请求 lease。
+- 选择性备份从同一个 source snapshot 读取，并在导出前检查 SQLite integrity、foreign keys 和 TLS sentinel。
+- Traffic、IP monitor、token-use 和 audit batches 会保留 pending 数据直到数据库 commit 成功。写入失败会重试或重新入队。
+- cron 停止和应用启动现在能更安全地处理活动任务。x-ui import 在 commit 成功但 checkpoint 出现问题时返回 warning，而不是把整个导入标记为失败。
+- Bootstrap password file 只会在密码成功修改后删除。前端修复了独立组件之间取消 GET 请求、polling、loading 状态，以及 `false`、`0` 和空字符串的处理。
+- `golang.org/x/text` 已更新到 0.39.0，frontend build 依赖也已更新。`npm audit --audit-level=moderate` 未发现漏洞。
+- 默认 Compose 镜像现在是 `ghcr.io/deposist/s-ui-x:v1.0.8-beta2`；nftables capability 仍通过单独的 Compose profile 按需启用。
+- 无需迁移数据库。
+
+完整发布说明：[`docs/releases/v1.0.8-beta2.md`](docs/releases/v1.0.8-beta2.md)。
+
 ## [1.0.8-beta1] - 2026-07-21 - 安全加固与 IP 证书签发恢复
 
 - Go 已更新至 1.26.5，`quic-go` 更新至 0.59.1，Axios 更新至 1.18.1，受影响的 `brace-expansion` 包也已更新到包含本次安全修复的版本。

@@ -14,21 +14,6 @@ const api = axios.create({
     },
 })
 
-const pendingRequests = new Map<string, AbortController>()
-const DUPLICATE_ABORT_REASON = 'Duplicate request cancelled'
-
-const isDedupeMethod = (method?: string) => {
-    const m = (method ?? 'get').toLowerCase()
-    // Only deduplicate idempotent reads. Mutating requests with identical
-    // URLs but different bodies would otherwise cancel each other.
-    return m === 'get' || m === 'head' || m === 'options'
-}
-
-const requestKey = (config: any) => {
-    const params = config.params ? JSON.stringify(config.params) : ''
-    return `${config.method}:${config.url}:${params}`
-}
-
 const normalizeURL = (url?: string) => (url ?? '').replace(/^\.\//, '').replace(/^\//, '')
 
 const needsCSRFToken = (method?: string, url?: string) => {
@@ -42,16 +27,6 @@ const needsCSRFToken = (method?: string, url?: string) => {
 
 api.interceptors.request.use(
     async (config) => {
-        if (isDedupeMethod(config.method)) {
-            const key = requestKey(config)
-            if (pendingRequests.has(key)) {
-                pendingRequests.get(key)?.abort(DUPLICATE_ABORT_REASON)
-            }
-            const controller = new AbortController()
-            config.signal = controller.signal
-            pendingRequests.set(key, controller)
-        }
-
         if (config.data instanceof FormData) {
             delete config.headers['Content-Type']
         }
@@ -64,17 +39,10 @@ api.interceptors.request.use(
 )
 
 api.interceptors.response.use(
-    (response) => {
-        if (isDedupeMethod(response.config.method)) {
-            pendingRequests.delete(requestKey(response.config))
-        }
-        return response
-    },
+    (response) => response,
     (error) => {
         if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {
             console.warn(error.message)
-        } else if (error.config && isDedupeMethod(error.config.method)) {
-            pendingRequests.delete(requestKey(error.config))
         }
         if (error.response?.status === 403 && error.response?.data?.msg === 'Invalid CSRF token') {
             clearCSRFToken()

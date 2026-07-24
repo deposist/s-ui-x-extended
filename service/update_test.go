@@ -137,13 +137,15 @@ func TestSelectBetaReleasePicksHighestIncludingStableGraduation(t *testing.T) {
 // T010: artifact URLs are derived from a fixed template (SR-004) and asset
 // availability is taken from the release's published assets.
 func TestResolveReleaseBuildsAssetURLsFromTemplate(t *testing.T) {
-	setArtifactPlatformForTest(t, "amd64")
+	setArtifactPlatformForTest(t)
 	resolved := resolveRelease(&ghRelease{
 		TagName: "v9.9.9",
 		Body:    "release notes here",
 		Assets: []ghAsset{
 			{Name: "s-ui-linux-amd64.tar.gz"},
 			{Name: "s-ui-linux-amd64.tar.gz.sha256"},
+			{Name: "s-ui-linux-amd64.tar.gz.manifest.json"},
+			{Name: "s-ui-linux-amd64.tar.gz.manifest.json.sig"},
 		},
 	})
 	if resolved == nil || !resolved.assetAvailable {
@@ -158,14 +160,28 @@ func TestResolveReleaseBuildsAssetURLsFromTemplate(t *testing.T) {
 	}
 }
 
+// AUD-02: legacy releases without both signed-manifest assets are visible but
+// deliberately not installable, so a GitHub asset substitution cannot enable an
+// unsigned self-update.
+func TestResolveReleaseRejectsUnsignedAssets(t *testing.T) {
+	setArtifactPlatformForTest(t)
+	resolved := resolveRelease(&ghRelease{TagName: "v9.9.9", Assets: []ghAsset{
+		{Name: "s-ui-linux-amd64.tar.gz"},
+		{Name: "s-ui-linux-amd64.tar.gz.sha256"},
+	}})
+	if resolved == nil || resolved.assetAvailable {
+		t.Fatalf("unsigned release must not be installable: %#v", resolved)
+	}
+}
+
 // T010: beta channel over HTTP surfaces the graduated stable as the latest.
 func TestCheckForChannelBetaGraduationOverHTTP(t *testing.T) {
-	setArtifactPlatformForTest(t, "amd64")
+	setArtifactPlatformForTest(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`[
-			{"tag_name":"v99.0.0-beta1","prerelease":true,"assets":[{"name":"s-ui-linux-amd64.tar.gz"},{"name":"s-ui-linux-amd64.tar.gz.sha256"}]},
-			{"tag_name":"v99.0.0","prerelease":false,"assets":[{"name":"s-ui-linux-amd64.tar.gz"},{"name":"s-ui-linux-amd64.tar.gz.sha256"}]}
+			{"tag_name":"v99.0.0-beta1","prerelease":true,"assets":[{"name":"s-ui-linux-amd64.tar.gz"},{"name":"s-ui-linux-amd64.tar.gz.sha256"},{"name":"s-ui-linux-amd64.tar.gz.manifest.json"},{"name":"s-ui-linux-amd64.tar.gz.manifest.json.sig"}]},
+			{"tag_name":"v99.0.0","prerelease":false,"assets":[{"name":"s-ui-linux-amd64.tar.gz"},{"name":"s-ui-linux-amd64.tar.gz.sha256"},{"name":"s-ui-linux-amd64.tar.gz.manifest.json"},{"name":"s-ui-linux-amd64.tar.gz.manifest.json.sig"}]}
 		]`))
 	}))
 	defer server.Close()
@@ -185,7 +201,7 @@ func TestCheckForChannelBetaGraduationOverHTTP(t *testing.T) {
 
 // T010: downgrade guard and missing-asset guard for the apply target.
 func TestResolveTargetGuards(t *testing.T) {
-	setArtifactPlatformForTest(t, "amd64")
+	setArtifactPlatformForTest(t)
 
 	// Older-than-current release on the channel -> no downgrade.
 	older := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -236,9 +252,9 @@ func expireVersionCheckCacheForTest(t *testing.T) {
 	versionCheckState.Unlock()
 }
 
-func setArtifactPlatformForTest(t *testing.T, platform string) {
+func setArtifactPlatformForTest(t *testing.T) {
 	t.Helper()
 	old := config.ArtifactPlatform
-	config.ArtifactPlatform = platform
+	config.ArtifactPlatform = "amd64"
 	t.Cleanup(func() { config.ArtifactPlatform = old })
 }

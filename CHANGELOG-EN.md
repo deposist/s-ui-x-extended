@@ -9,6 +9,20 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.8-beta2] - 2026-07-24 - durable recovery and signed self-update
+
+- Self-update accepts only releases with an Ed25519-signed manifest that binds the archive checksum, version, channel, platform, and archive filename. Unsigned releases are not offered through self-update.
+- Database restore drains panel, subscription, and cron database work before swapping SQLite. The x-ui rollback route no longer deadlocks on its own request lease.
+- Selective backups use one source snapshot and validate SQLite integrity, foreign keys, and the TLS sentinel before export.
+- Traffic, IP-monitor, token-use, and audit batches keep pending data until the database commit succeeds. Failed writes are retried or requeued.
+- Application and cron shutdown handle active work more safely, and an x-ui import reports a post-commit checkpoint problem as a warning rather than a failed import.
+- The bootstrap password file is consumed only after a successful password change. Frontend request, polling, loading-state, and falsy-payload handling were tightened.
+- Updated `golang.org/x/text` to 0.39.0 and frontend build dependencies. `npm audit --audit-level=moderate` reports no vulnerabilities.
+- The default Compose image is now `ghcr.io/deposist/s-ui-x:v1.0.8-beta2`; nftables capability remains opt-in in a separate Compose profile.
+- No database migration is required.
+
+Full release notes: [`docs/releases/v1.0.8-beta2.md`](docs/releases/v1.0.8-beta2.md).
+
 ## [1.0.8-beta1] - 2026-07-21 - security hardening and IP certificate recovery
 
 - Updated Go to 1.26.5, `quic-go` to 0.59.1, Axios to 1.18.1, and the affected `brace-expansion` packages to versions that include the published security fixes covered by this release.

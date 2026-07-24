@@ -23,7 +23,41 @@ import (
 var (
 	dbMu sync.RWMutex
 	db   *gorm.DB
+
+	// maintenanceMu is held exclusively while a database restore replaces the
+	// SQLite file. Request/job entry points hold a read lock for their complete
+	// DB-using operation, so restore first drains them and then prevents new
+	// work from acquiring a handle that is about to be closed.
+	maintenanceMu sync.RWMutex
+	restoreMu     sync.Mutex
 )
+
+// ErrRestoreInProgress is returned instead of allowing two restores to race
+// over the same live, temporary and fallback database paths.
+var ErrRestoreInProgress = errors.New("database restore already in progress")
+
+// EnterDBOperation brackets a request or scheduled job that may use GetDB.
+// The returned function must be deferred by the caller. sync.RWMutex blocks
+// new readers while beginRestore is waiting for its exclusive lock, so work
+// admitted before restore drains and later work waits for the completed swap.
+func EnterDBOperation() func() {
+	maintenanceMu.RLock()
+	return maintenanceMu.RUnlock
+}
+
+// beginRestore serializes restore attempts and drains operations that entered
+// through EnterDBOperation. It must be paired with the returned function.
+func beginRestore() (func(), error) {
+	if !restoreMu.TryLock() {
+		return nil, ErrRestoreInProgress
+	}
+	maintenanceMu.Lock()
+	return func() {
+		maintenanceMu.Unlock()
+		restoreMu.Unlock()
+	}, nil
+}
+
 var adaptToCurrentVersion = AdaptToCurrentVersion
 
 const (
@@ -63,8 +97,9 @@ func initUser(dbPath string) error {
 			return err
 		}
 		user := &model.User{
-			Username: "admin",
-			Password: passwordHash,
+			Username:           "admin",
+			Password:           passwordHash,
+			ForcePasswordReset: true,
 		}
 		if err := db.Create(user).Error; err != nil {
 			_ = os.Remove(passwordPath)

@@ -98,6 +98,11 @@ func TestStatsServiceSaveStatsCommitFailureAuditsAndReturnsIssue26(t *testing.T)
 	if statsRows != 0 {
 		t.Fatalf("stats rows committed after failed commit: %d", statsRows)
 	}
+
+	stats := tracker.GetStats()
+	if len(*stats) == 0 {
+		t.Fatal("traffic snapshot was lost after failed commit")
+	}
 }
 
 func TestStatsServiceGetInboundTrafficSummaryUsesExactBucketSums(t *testing.T) {

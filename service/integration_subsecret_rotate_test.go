@@ -31,6 +31,9 @@ func TestIntegrationSubSecretRotateReloadsClientAndPublishesRealtime(t *testing.
 	if err := database.GetDB().Create(&client).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := (&service.UserService{}).UpdateFirstUser("admin", "phase3-password"); err != nil {
+		t.Fatal(err)
+	}
 	token, err := (&service.UserService{}).AddToken("admin", 0, "phase3-write", "write")
 	if err != nil {
 		t.Fatal(err)

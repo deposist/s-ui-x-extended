@@ -81,7 +81,7 @@ describe('api axios interceptor regression anchors', () => {
     expect(config.headers['X-CSRF-Token']).toBeUndefined()
   })
 
-  it('aborts the previous duplicate idempotent request', async () => {
+  it('allows identical GET requests to remain in flight independently', async () => {
     await loadApi()
     const first = await mocks.requestFulfilled?.({
       method: 'get',
@@ -89,16 +89,15 @@ describe('api axios interceptor regression anchors', () => {
       params: { refresh: 1 },
       headers: {},
     })
-
-    await mocks.requestFulfilled?.({
+    const second = await mocks.requestFulfilled?.({
       method: 'get',
       url: 'api/load',
       params: { refresh: 1 },
       headers: {},
     })
 
-    expect(first.signal.aborted).toBe(true)
-    expect(first.signal.reason).toBe('Duplicate request cancelled')
+    expect(first.signal).toBeUndefined()
+    expect(second.signal).toBeUndefined()
   })
 
   it('does not deduplicate mutating requests with the same URL', async () => {

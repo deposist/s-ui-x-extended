@@ -876,6 +876,7 @@ func (s *ClientService) DepleteClients() (inboundIds []uint, err error) {
 	var clients []model.Client
 	var changes []model.Changes
 	var depletedClientIDs []uint
+	markerPending := false
 
 	dt := time.Now().Unix()
 	db := database.GetDB()
@@ -886,6 +887,9 @@ func (s *ClientService) DepleteClients() (inboundIds []uint, err error) {
 			err = tx.Commit().Error
 			if err != nil {
 				return
+			}
+			if markerPending {
+				s.setLastUpdate(dt)
 			}
 			if err1 := db.Exec("PRAGMA wal_checkpoint(FULL)").Error; err1 != nil {
 				logger.Error("Error checkpointing WAL: ", err1.Error())
@@ -954,7 +958,7 @@ func (s *ClientService) DepleteClients() (inboundIds []uint, err error) {
 		if err != nil {
 			return nil, err
 		}
-		s.setLastUpdate(dt)
+		markerPending = true
 	}
 
 	return inboundIds, nil
@@ -1067,7 +1071,6 @@ func (s *ClientService) ResetClients(tx *gorm.DB, dt int64) ([]uint, error) {
 		if err != nil {
 			return nil, err
 		}
-		s.setLastUpdate(dt)
 	}
 	return inboundIds, nil
 }

@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -14,6 +16,7 @@ const (
 	auditQueueCapacity = 4096
 	auditBatchSize     = 64
 	auditFlushInterval = 200 * time.Millisecond
+	auditWriteAttempts = 3
 
 	// Coverage-gap signal: once this many audit events have been dropped since
 	// the last marker (and the window has elapsed), emit one synchronous warn
@@ -42,6 +45,8 @@ type auditWriter struct {
 	done    chan struct{}
 	started bool
 	stopped bool
+
+	terminalErr error
 }
 
 func newAuditWriter(capacity int, batchSize int, flushInterval time.Duration, write func([]model.AuditEvent) error) *auditWriter {
@@ -186,7 +191,10 @@ func (w *auditWriter) Stop(ctx context.Context) error {
 
 	select {
 	case <-done:
-		return nil
+		w.mu.Lock()
+		err := w.terminalErr
+		w.mu.Unlock()
+		return err
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -220,13 +228,19 @@ func (w *auditWriter) run() {
 				flush = true
 			case <-w.stopCh:
 				stopTimer(timer)
-				w.writeBatch(batch)
+				if err := w.writeBatchWithRetry(batch); err != nil {
+					w.requeueFailedBatch(batch, err)
+					return
+				}
 				w.flushRemaining()
 				return
 			}
 		}
 		stopTimer(timer)
-		w.writeBatch(batch)
+		if err := w.writeBatchWithRetry(batch); err != nil {
+			w.requeueFailedBatch(batch, err)
+			return
+		}
 	}
 }
 
@@ -253,17 +267,38 @@ func (w *auditWriter) flushRemaining() {
 		if len(batch) == 0 {
 			return
 		}
-		w.writeBatch(batch)
+		if err := w.writeBatchWithRetry(batch); err != nil {
+			w.requeueFailedBatch(batch, err)
+			return
+		}
 	}
 }
 
-func (w *auditWriter) writeBatch(batch []model.AuditEvent) {
-	if len(batch) == 0 || w.write == nil {
-		return
+func (w *auditWriter) writeBatchWithRetry(batch []model.AuditEvent) error {
+	if len(batch) == 0 {
+		return nil
 	}
-	if err := w.write(batch); err != nil {
+	if w.write == nil {
+		return errors.New("audit writer is not configured")
+	}
+	var err error
+	for attempt := 0; attempt < auditWriteAttempts; attempt++ {
+		err = w.write(batch)
+		if err == nil {
+			return nil
+		}
 		logger.Warning("audit writer flush failed:", err)
 	}
+	return fmt.Errorf("audit writer failed after %d attempts: %w", auditWriteAttempts, err)
+}
+
+func (w *auditWriter) requeueFailedBatch(batch []model.AuditEvent, err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	queue := make([]model.AuditEvent, 0, len(batch)+len(w.queue))
+	queue = append(queue, batch...)
+	w.queue = append(queue, w.queue...)
+	w.terminalErr = fmt.Errorf("audit writer is unhealthy with %d unsaved events: %w", len(w.queue), err)
 }
 
 func (w *auditWriter) signalLocked() {

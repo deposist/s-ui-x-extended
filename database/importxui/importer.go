@@ -17,6 +17,18 @@ import (
 	"gorm.io/gorm"
 )
 
+// walCheckpoint is a test seam for post-commit, best-effort maintenance.
+// Its failure cannot invalidate a transaction that has already committed.
+var walCheckpoint = func() error {
+	return database.GetDB().Exec("PRAGMA wal_checkpoint(TRUNCATE)").Error
+}
+
+func reportCheckpointFailure(report *Report, err error) {
+	if err != nil {
+		report.warn(fmt.Sprintf("wal checkpoint after committed import failed: %v", err))
+	}
+}
+
 type importState struct {
 	report           *Report
 	realityByKey     map[string]*realitySpec
@@ -90,9 +102,7 @@ func Import(srcPath string, opts Options) (*Report, error) {
 		return report, fmt.Errorf("xui-import: %w", err)
 	}
 	committed = true
-	if err := db.Exec("PRAGMA wal_checkpoint(TRUNCATE)").Error; err != nil {
-		return report, fmt.Errorf("xui-import: %w", err)
-	}
+	reportCheckpointFailure(report, walCheckpoint())
 	return report, nil
 }
 

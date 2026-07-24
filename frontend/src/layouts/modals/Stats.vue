@@ -128,7 +128,16 @@ export default {
       usage: ref(<any>{}),
     }
   },
+  beforeUnmount() {
+    this.stopPolling()
+  },
   methods: {
+    stopPolling() {
+      if (this.intervalId !== 0) {
+        clearInterval(this.intervalId)
+        this.intervalId = 0
+      }
+    },
     async loadData() {
       this.loading = true
       const data = await HttpUtils.get('api/stats', { resource: this.resource, tag: this.tag, limit: this.limit })
@@ -195,11 +204,13 @@ export default {
   watch: {
     visible(v) {
       if (v) {
-        this.limit = 1
-        this.loadData()
-        this.intervalId = setInterval(() => {
+        if (this.intervalId === 0) {
+          this.limit = 1
           this.loadData()
-        }, 10000)
+          this.intervalId = setInterval(() => {
+            this.loadData()
+          }, 10000)
+        }
       } else {
         this.loaded = false
         this.alert = false
@@ -208,9 +219,7 @@ export default {
           this.usage.datasets[0].data = []
           this.usage.datasets[1].data = []
         }
-        if (this.intervalId && this.intervalId != 0) {
-          clearInterval(this.intervalId)
-        }
+        this.stopPolling()
       }
     }
   }

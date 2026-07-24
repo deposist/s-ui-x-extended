@@ -287,6 +287,10 @@ rm /usr/bin/s-ui
 
 ### Usage
 
+> **Linux host only:** this Compose configuration uses `network_mode: host`. Docker host networking is supported on Linux hosts; it is not a portable configuration for Docker Desktop on Windows or macOS. Run it on a Linux Docker host, or provide an alternative bridge-network deployment before using Docker Desktop.
+>
+> The default service has no extra Linux capabilities. nftables/transparent-proxy features need `NET_ADMIN`; opt in only when required with `docker compose -f docker-compose.yml -f docker-compose.nftables.yml --profile nftables up -d`. The opt-in file grants only `NET_ADMIN`; it does not add a TUN device.
+
 Step 1: install Docker
 
 ```shell
@@ -300,9 +304,9 @@ Docker Compose option:
 ```shell
 services:
   s-ui:
-    image: ghcr.io/deposist/s-ui-x-extended
-    container_name: s-ui-x-extended
-    hostname: "s-ui-x-extended"
+    image: ghcr.io/deposist/s-ui-x:v1.0.8-beta2
+    container_name: s-ui
+    hostname: "s-ui"
     network_mode: host
     volumes:
       - "./db:/app/db"
@@ -323,9 +327,9 @@ docker run -itd \
     --network host \
     -v $PWD/db/:/app/db/ \
     -v $PWD/cert/:/root/cert/ \
-    --name s-ui-x-extended \
+    --name s-ui \
     --restart=unless-stopped \
-    ghcr.io/deposist/s-ui-x-extended
+    ghcr.io/deposist/s-ui-x:v1.0.8-beta2
 ```
 
 Build the image yourself:

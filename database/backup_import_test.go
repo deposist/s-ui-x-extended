@@ -2,6 +2,7 @@ package database
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -74,6 +75,117 @@ func newLegacyBackup(t *testing.T) []byte {
 		t.Fatal(err)
 	}
 	return data
+}
+
+func TestImportDBRejectsConcurrentRestore(t *testing.T) {
+	entered := make(chan struct{})
+
+	leave, err := beginRestore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer leave()
+
+	go func() {
+		_, err := beginRestore()
+		if !errors.Is(err, ErrRestoreInProgress) {
+			t.Errorf("second beginRestore error = %v, want ErrRestoreInProgress", err)
+		}
+		close(entered)
+	}()
+
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("concurrent restore did not return")
+	}
+}
+
+func TestCloseLiveDBDoesNotPublishNilDatabase(t *testing.T) {
+	dbDir := t.TempDir()
+	dbPath := filepath.Join(dbDir, "s-ui.db")
+	if err := InitDB(dbPath); err != nil {
+		if strings.Contains(err.Error(), "go-sqlite3 requires cgo") {
+			t.Skip(err)
+		}
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeMainDB(t) })
+
+	closeLiveDB()
+	if GetDB() == nil {
+		t.Fatal("closeLiveDB published nil global database")
+	}
+}
+
+func TestImportDBDrainsActiveOperationAndBlocksNewOperation(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("SUI_DB_FOLDER", dbDir)
+	livePath := filepath.Join(dbDir, "s-ui.db")
+	if err := InitDB(livePath); err != nil {
+		if strings.Contains(err.Error(), "go-sqlite3 requires cgo") {
+			t.Skip(err)
+		}
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeMainDB(t) })
+	SetSendSighupHook(func() error { return nil })
+	t.Cleanup(func() { SetSendSighupHook(nil) })
+
+	backup, err := GetDb("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	activeDone := EnterDBOperation()
+	restoreStarted := make(chan struct{})
+	previousHook := restoreStartedHook
+	restoreStartedHook = func() { close(restoreStarted) }
+	t.Cleanup(func() { restoreStartedHook = previousHook })
+
+	restoreDone := make(chan error, 1)
+	go func() {
+		restoreDone <- ImportDB(memMultipartFile{Reader: bytes.NewReader(backup)})
+	}()
+	select {
+	case <-restoreStarted:
+	case <-time.After(time.Second):
+		t.Fatal("restore did not start")
+	}
+	select {
+	case err := <-restoreDone:
+		t.Fatalf("restore completed before active operation drained: %v", err)
+	default:
+	}
+	// The active request keeps using the old handle while restore is queued;
+	// it must not see "database is closed" before it leaves the barrier.
+	if err := GetDB().Exec("SELECT 1").Error; err != nil {
+		t.Fatalf("active operation saw closed database while restore was queued: %v", err)
+	}
+
+	newOperationDone := make(chan error, 1)
+	go func() {
+		leave := EnterDBOperation()
+		defer leave()
+		current := GetDB()
+		if current == nil {
+			newOperationDone <- errors.New("GetDB returned nil after maintenance barrier")
+			return
+		}
+		newOperationDone <- current.Exec("SELECT 1").Error
+	}()
+	select {
+	case err := <-newOperationDone:
+		t.Fatalf("new operation bypassed restore barrier: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	activeDone()
+	if err := <-restoreDone; err != nil {
+		t.Fatalf("restore after drain: %v", err)
+	}
+	if err := <-newOperationDone; err != nil {
+		t.Fatalf("new operation after restore: %v", err)
+	}
 }
 
 func TestImportDBRunsResetHooks(t *testing.T) {

@@ -82,9 +82,9 @@ var apiV2ActionScopes = map[string][]string{
 	"restartApp":            {"write"},
 	"restartSb":             {"write"},
 	"regenerateClientLinks": {"write"},
-	"checkOutbound": {"write"},
-	"linkConvert":   {"read", "write"},
-	"subConvert":    {"read", "write"},
+	"checkOutbound":         {"write"},
+	"linkConvert":           {"read", "write"},
+	"subConvert":            {"read", "write"},
 	// Config / identity / secret reads — observability and telegram excluded.
 	"load":      {"read", "write"},
 	"inbounds":  {"read", "write"},

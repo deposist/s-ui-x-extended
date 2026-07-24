@@ -110,7 +110,8 @@ func (s *StatsService) SaveStats(enableTraffic bool) (err error) {
 	if st == nil {
 		return nil
 	}
-	stats := st.GetStats()
+	statsSnapshot := st.SnapshotStats()
+	stats := statsSnapshot.Stats()
 
 	currentOnlines := onlines{}
 	// Failover groups have their own liveness, independent of traffic stats, so
@@ -132,6 +133,7 @@ func (s *StatsService) SaveStats(enableTraffic bool) (err error) {
 
 	db := database.GetDB()
 	tx := db.Begin()
+	ipSnapshot := ipmonitor.SnapshotPending()
 	publishOnCommit := false
 	publishOnlines := onlines{}
 	var publishStats []model.Stats
@@ -140,6 +142,8 @@ func (s *StatsService) SaveStats(enableTraffic bool) (err error) {
 		if err == nil {
 			if commitErr := commitStatsTransaction(tx); commitErr != nil {
 				err = commitErr
+				statsSnapshot.Requeue()
+				ipSnapshot.Requeue()
 				if auditErr := (&AuditService{Runtime: s.runtime()}).Record(AuditEvent{
 					Actor:    "system",
 					Event:    "stats_commit_failed",
@@ -156,11 +160,15 @@ func (s *StatsService) SaveStats(enableTraffic bool) (err error) {
 				})
 				return
 			}
+			statsSnapshot.Ack()
+			ipSnapshot.Ack()
 			if publishOnCommit {
 				publishStatsRealtime(publishOnlines, publishStats)
 			}
 		} else {
 			tx.Rollback()
+			statsSnapshot.Requeue()
+			ipSnapshot.Requeue()
 		}
 	}()
 
@@ -198,12 +206,12 @@ func (s *StatsService) SaveStats(enableTraffic bool) (err error) {
 	publishStats = append([]model.Stats(nil), (*stats)...)
 
 	if !enableTraffic {
-		return ipmonitor.FlushTo(tx)
+		return ipSnapshot.FlushTo(tx)
 	}
 	if err := database.CreateInBatchesSafe(tx, stats); err != nil {
 		return err
 	}
-	return ipmonitor.FlushTo(tx)
+	return ipSnapshot.FlushTo(tx)
 }
 
 func updateClientTrafficDeltas(tx *gorm.DB, deltas map[string]clientTrafficDelta) error {

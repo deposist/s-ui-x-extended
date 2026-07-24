@@ -1,0 +1,7 @@
+# Opt-in only: grants the capability needed for Linux nftables/transparent-proxy rules.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.nftables.yml --profile nftables up -d
+services:
+  s-ui:
+    profiles: ["nftables"]
+    cap_add:
+      - NET_ADMIN

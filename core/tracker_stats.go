@@ -30,6 +30,12 @@ type StatsTracker struct {
 	inflight  *trackerWaitGroup
 }
 
+type StatsSnapshot struct {
+	tracker *StatsTracker
+	stats   []model.Stats
+	acked   bool
+}
+
 func NewStatsTracker() *StatsTracker {
 	return &StatsTracker{
 		inbounds:  make(map[string]Counter),
@@ -218,6 +224,11 @@ func sourceIPFromMetadata(metadata adapter.InboundContext) string {
 }
 
 func (c *StatsTracker) GetStats() *[]model.Stats {
+	snapshot := c.SnapshotStats()
+	return &snapshot.stats
+}
+
+func (c *StatsTracker) SnapshotStats() *StatsSnapshot {
 	c.access.Lock()
 	defer c.access.Unlock()
 
@@ -283,5 +294,54 @@ func (c *StatsTracker) GetStats() *[]model.Stats {
 			})
 		}
 	}
-	return &s
+	return &StatsSnapshot{tracker: c, stats: s}
+}
+
+func (s *StatsSnapshot) Stats() *[]model.Stats {
+	if s == nil {
+		stats := []model.Stats{}
+		return &stats
+	}
+	return &s.stats
+}
+
+func (s *StatsSnapshot) Ack() {
+	if s == nil {
+		return
+	}
+	s.acked = true
+}
+
+func (s *StatsSnapshot) Requeue() {
+	if s == nil || s.tracker == nil || s.acked {
+		return
+	}
+	s.tracker.requeueStats(s.stats)
+	s.acked = true
+}
+
+func (c *StatsTracker) requeueStats(stats []model.Stats) {
+	c.access.Lock()
+	defer c.access.Unlock()
+	for _, stat := range stats {
+		counter := c.counterForStatLocked(stat)
+		if stat.Direction {
+			counter.read.Add(stat.Traffic)
+		} else {
+			counter.write.Add(stat.Traffic)
+		}
+	}
+}
+
+func (c *StatsTracker) counterForStatLocked(stat model.Stats) Counter {
+	switch stat.Resource {
+	case "inbound":
+		return c.loadOrCreateCounter(&c.inbounds, stat.Tag)
+	case "outbound":
+		return c.loadOrCreateCounter(&c.outbounds, stat.Tag)
+	case "user":
+		return c.loadOrCreateCounter(&c.users, stat.Tag)
+	default:
+		return Counter{}
+	}
 }

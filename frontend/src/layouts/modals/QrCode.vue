@@ -84,7 +84,7 @@
                   variant="tonal"
                   @click="testUrl(platform.copy)"
                 >
-                  {{ $t('delivery.testUrl') }}
+                  {{ $t('delivery.testBestEffort') }}
                 </v-btn>
               </div>
             </div>
@@ -152,7 +152,7 @@ export default {
       try {
         await fetch(url, { method: 'GET', mode: 'no-cors', credentials: 'omit', cache: 'no-store' })
         push.success({
-          message: i18n.global.t('delivery.testOk'),
+          message: i18n.global.t('delivery.testBestEffort'),
           duration: 5000,
         })
       } catch {

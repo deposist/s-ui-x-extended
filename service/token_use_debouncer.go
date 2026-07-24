@@ -165,7 +165,7 @@ func (d *tokenUseDebouncer) flushNow(ctx context.Context, force bool) error {
 	err := d.write(updates)
 	if err == nil {
 		d.closeFailureCircuit()
-	} else if !force {
+	} else {
 		d.requeueAfterWriteError(updates, time.Now())
 	}
 	if ctxErr := ctx.Err(); ctxErr != nil {

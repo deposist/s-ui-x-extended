@@ -488,9 +488,7 @@ func Apply(srcPath string, plan MigrationPlan, opts ApplyOptions) (*Report, erro
 		return report, fmt.Errorf("xui-import: %w", err)
 	}
 	committed = true
-	if err := db.Exec("PRAGMA wal_checkpoint(TRUNCATE)").Error; err != nil {
-		return report, fmt.Errorf("xui-import: %w", err)
-	}
+	reportCheckpointFailure(report, walCheckpoint())
 	return report, nil
 }
 

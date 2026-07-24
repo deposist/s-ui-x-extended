@@ -584,6 +584,11 @@ func (a *ApiService) ChangePass(c *gin.Context) {
 	currentUser := GetLoginUser(c)
 	err := a.UserService.ChangePass(currentUser, oldPass, newUsername, newPass)
 	if err == nil {
+		// ChangePass commits before returning. Consume the bootstrap credential only
+		// after that durable credential rotation; a failed change leaves it intact.
+		if cleanupErr := database.ConsumeInitialAdminPasswordIfBootstrapCredential(currentUser, oldPass); cleanupErr != nil {
+			logger.Warning("unable to remove initial admin credential:", cleanupErr)
+		}
 		logger.Info("change user credentials success")
 		a.recordAudit(c, currentUser, "admin_credentials_changed", "admin", service.AuditSeverityWarn, map[string]any{
 			"newUsername": newUsername,

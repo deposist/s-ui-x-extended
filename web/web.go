@@ -82,6 +82,18 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	}
 
 	engine := gin.Default()
+	// Guard the whole panel ingress, including the SQLite session store that
+	// runs before the nested API groups. ImportDB itself takes the exclusive
+	// lease, so it must not hold a shared request lease while waiting to restore.
+	engine.Use(func(c *gin.Context) {
+		if api.IsRestoreRequestPath(c.Request.URL.Path) {
+			c.Next()
+			return
+		}
+		leave := database.EnterDBOperation()
+		defer leave()
+		c.Next()
+	})
 
 	// Load the HTML template
 	t := template.New("").Funcs(engine.FuncMap)

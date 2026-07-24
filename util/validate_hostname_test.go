@@ -51,6 +51,7 @@ func TestValidateHostnameRejectsInvalidInput(t *testing.T) {
 		"bad-.example",
 		"bad..example",
 		"bad.",
+		string([]byte{0xff}),
 		label64 + ".example",
 		tooLong,
 	}
