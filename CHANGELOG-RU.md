@@ -7,9 +7,18 @@
 
 ## [Unreleased]
 
+- No unreleased changes.
+
+## [1.0.8-beta3] - 2026-07-24 - подписанные артефакты релиза
+
+- Reissued the beta release with a newly generated Ed25519 signing key after the previous release workflow lacked its Actions secret.
+- Linux artifacts are published only after manifest signing succeeds.
+
+
+
 - Нет незарелизенных изменений.
 
-## [1.0.8-beta2] - 2026-07-24 - надёжное восстановление и подписанное самообновление
+## [1.0.8-beta3] - 2026-07-24 - надёжное восстановление и подписанное самообновление
 
 - Самообновление принимает только релизы с Ed25519-подписью manifest. Подпись связывает checksum архива, версию, канал, платформу и имя архива. Неподписанные релизы панель не предлагает для обновления.
 - Восстановление базы ждёт активные операции панели, подписок и cron-задач, затем безопасно меняет SQLite handle. Откат x-ui больше не зависает на собственной request lease.
@@ -18,10 +27,10 @@
 - Остановка cron и запуск приложения аккуратнее работают с активными задачами, а x-ui import после успешного commit возвращает warning при проблеме с checkpoint, а не ошибку импорта.
 - Bootstrap password file удаляется только после успешной смены пароля. Во фронтенде исправлены отмена GET-запросов между независимыми компонентами, polling, loading-состояния и обработка `false`, `0` и пустой строки.
 - `golang.org/x/text` обновлён до 0.39.0, обновлены зависимости frontend build. `npm audit --audit-level=moderate` сообщает об отсутствии уязвимостей.
-- Базовый Compose теперь использует `ghcr.io/deposist/s-ui-x:v1.0.8-beta2`; capability для nftables остаётся opt-in в отдельном Compose profile.
+- Базовый Compose теперь использует `ghcr.io/deposist/s-ui-x:v1.0.8-beta3`; capability для nftables остаётся opt-in в отдельном Compose profile.
 - Миграция базы данных не требуется.
 
-Полные заметки о релизе: [`docs/releases/v1.0.8-beta2.md`](docs/releases/v1.0.8-beta2.md).
+Полные заметки о релизе: [`docs/releases/v1.0.8-beta3.md`](docs/releases/v1.0.8-beta3.md).
 
 ## [1.0.8-beta1] - 2026-07-21 - усиление защиты и восстановление после выпуска IP-сертификата
 

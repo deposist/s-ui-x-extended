@@ -48,7 +48,7 @@ const (
 )
 
 // updateManifestPublicKey is pinned to the release signing authority.
-const updateManifestPublicKey = "ktxegSPjNJZWlZ5kK2pcMciZO5Ukhr7jRCrgK1y38og="
+const updateManifestPublicKey = "x2acPjN9QGzMDpvmWgHw/npuSyLp4hz8t17KaaxZmPQ="
 
 // verifyUpdateManifestSignature is a test seam; production always uses the
 // immutable pinned updateManifestPublicKey above.
