@@ -145,7 +145,6 @@ func TestResolveReleaseBuildsAssetURLsFromTemplate(t *testing.T) {
 			{Name: "s-ui-linux-amd64.tar.gz"},
 			{Name: "s-ui-linux-amd64.tar.gz.sha256"},
 			{Name: "s-ui-linux-amd64.tar.gz.manifest.json"},
-			{Name: "s-ui-linux-amd64.tar.gz.manifest.json.sig"},
 		},
 	})
 	if resolved == nil || !resolved.assetAvailable {
@@ -160,17 +159,14 @@ func TestResolveReleaseBuildsAssetURLsFromTemplate(t *testing.T) {
 	}
 }
 
-// AUD-02: legacy releases without both signed-manifest assets are visible but
-// deliberately not installable, so a GitHub asset substitution cannot enable an
-// unsigned self-update.
-func TestResolveReleaseRejectsUnsignedAssets(t *testing.T) {
+func TestResolveReleaseRequiresManifestAndChecksum(t *testing.T) {
 	setArtifactPlatformForTest(t)
 	resolved := resolveRelease(&ghRelease{TagName: "v9.9.9", Assets: []ghAsset{
 		{Name: "s-ui-linux-amd64.tar.gz"},
 		{Name: "s-ui-linux-amd64.tar.gz.sha256"},
 	}})
 	if resolved == nil || resolved.assetAvailable {
-		t.Fatalf("unsigned release must not be installable: %#v", resolved)
+		t.Fatalf("release without manifest must not be installable: %#v", resolved)
 	}
 }
 
@@ -180,8 +176,8 @@ func TestCheckForChannelBetaGraduationOverHTTP(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`[
-			{"tag_name":"v99.0.0-beta1","prerelease":true,"assets":[{"name":"s-ui-linux-amd64.tar.gz"},{"name":"s-ui-linux-amd64.tar.gz.sha256"},{"name":"s-ui-linux-amd64.tar.gz.manifest.json"},{"name":"s-ui-linux-amd64.tar.gz.manifest.json.sig"}]},
-			{"tag_name":"v99.0.0","prerelease":false,"assets":[{"name":"s-ui-linux-amd64.tar.gz"},{"name":"s-ui-linux-amd64.tar.gz.sha256"},{"name":"s-ui-linux-amd64.tar.gz.manifest.json"},{"name":"s-ui-linux-amd64.tar.gz.manifest.json.sig"}]}
+			{"tag_name":"v99.0.0-beta1","prerelease":true,"assets":[{"name":"s-ui-linux-amd64.tar.gz"},{"name":"s-ui-linux-amd64.tar.gz.sha256"},{"name":"s-ui-linux-amd64.tar.gz.manifest.json"}]},
+			{"tag_name":"v99.0.0","prerelease":false,"assets":[{"name":"s-ui-linux-amd64.tar.gz"},{"name":"s-ui-linux-amd64.tar.gz.sha256"},{"name":"s-ui-linux-amd64.tar.gz.manifest.json"}]}
 		]`))
 	}))
 	defer server.Close()

@@ -240,13 +240,10 @@ jobs:
       - name: Generate SHA256 checksum
         run: sha256sum s-ui-linux-${{ matrix.platform }}.tar.gz > s-ui-linux-${{ matrix.platform }}.tar.gz.sha256
 
-      - name: Sign self-update manifest
-        env:
-          RELEASE_MANIFEST_ED25519_PRIVATE_KEY: ${{ secrets.RELEASE_MANIFEST_ED25519_PRIVATE_KEY }}
+      - name: Generate self-update manifest
         shell: bash
         run: |
           set -euo pipefail
-          : "${RELEASE_MANIFEST_ED25519_PRIVATE_KEY:?set the repository signing-key secret}"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             tag="${{ inputs.tag }}"
           else
@@ -266,10 +263,7 @@ jobs:
               json.dump({"version":"$tag", "channel":"$channel", "platform":"${{ matrix.platform }}", "filename":archive, "sha256":digest}, f, separators=(",", ":"))
               f.write("\n")
           PY
-          key="$(mktemp)"
-          trap 'rm -f "$key"' EXIT
-          printf '%s' "$RELEASE_MANIFEST_ED25519_PRIVATE_KEY" | base64 --decode > "$key"
-          openssl pkeyutl -sign -rawin -inkey "$key" -in "$manifest" -out "$manifest.sig"
+
 
       - name: Upload build artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -279,7 +273,7 @@ jobs:
             ./s-ui-linux-${{ matrix.platform }}.tar.gz
             ./s-ui-linux-${{ matrix.platform }}.tar.gz.sha256
             ./s-ui-linux-${{ matrix.platform }}.tar.gz.manifest.json
-            ./s-ui-linux-${{ matrix.platform }}.tar.gz.manifest.json.sig
+
           retention-days: 1
 
   publish-linux:

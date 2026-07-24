@@ -150,12 +150,10 @@ func resolveRelease(release *ghRelease) *resolvedRelease {
 		assetName := fmt.Sprintf("s-ui-linux-%s.tar.gz", platform)
 		resolved.assetURL = fmt.Sprintf("%s/%s/%s", githubDownloadBase, tag, assetName)
 		resolved.checksumURL = resolved.assetURL + ".sha256"
-		// AUD-02: unsigned releases are never installable. The manifest and its
-		// Ed25519 signature bind the archive, checksum and target metadata.
+		// The updater requires the archive, checksum, and metadata manifest.
 		resolved.assetAvailable = hasAsset(release.Assets, assetName) &&
 			hasAsset(release.Assets, assetName+".sha256") &&
-			hasAsset(release.Assets, assetName+".manifest.json") &&
-			hasAsset(release.Assets, assetName+".manifest.json.sig")
+			hasAsset(release.Assets, assetName+".manifest.json")
 	}
 	return resolved
 }

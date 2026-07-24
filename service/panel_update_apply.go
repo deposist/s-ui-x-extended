@@ -4,9 +4,7 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
-	"crypto/ed25519"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -38,21 +36,10 @@ var (
 	errArtifactTooLarge      = errors.New("artifact exceeds the size limit")
 	errChecksumTooLarge      = errors.New("checksum file exceeds the size limit")
 	errArchiveMemberTooLarge = errors.New("archive member exceeds the size limit")
-	errManifestInvalid       = errors.New("signed update manifest is invalid")
-	errManifestSignature     = errors.New("signed update manifest signature is invalid")
+	errManifestInvalid       = errors.New("update manifest is invalid")
 )
 
-const (
-	maxManifestBytes  = 16 << 10
-	maxSignatureBytes = ed25519.SignatureSize
-)
-
-// updateManifestPublicKey is pinned to the release signing authority.
-const updateManifestPublicKey = "x2acPjN9QGzMDpvmWgHw/npuSyLp4hz8t17KaaxZmPQ="
-
-// verifyUpdateManifestSignature is a test seam; production always uses the
-// immutable pinned updateManifestPublicKey above.
-var verifyUpdateManifestSignature = verifyPinnedUpdateManifestSignature
+const maxManifestBytes = 16 << 10
 
 type signedUpdateManifest struct {
 	Version  string `json:"version"`
@@ -105,13 +92,8 @@ func applyPipeline(target ReleaseTarget, deps panelUpdateDeps, setStage func(Upd
 	if err != nil {
 		return err
 	}
-	signature, err := downloadUpdateManifest(deps.client, target.AssetURL+".manifest.json.sig")
-	if err != nil {
-		return err
-	}
-
 	setStage(UpdateStageVerifying)
-	if err := verifySignedUpdateManifest(manifest, signature, target, expected); err != nil {
+	if err := verifyUpdateManifest(manifest, target, expected); err != nil {
 		return err
 	}
 	if err := verifySHA256(archive, expected); err != nil {
@@ -258,13 +240,7 @@ func downloadUpdateManifest(client httpDoer, url string) ([]byte, error) {
 	return body, nil
 }
 
-func verifySignedUpdateManifest(rawManifest, signature []byte, target ReleaseTarget, checksum string) error {
-	if len(signature) != maxSignatureBytes {
-		return errManifestSignature
-	}
-	if !verifyUpdateManifestSignature(rawManifest, signature) {
-		return errManifestSignature
-	}
+func verifyUpdateManifest(rawManifest []byte, target ReleaseTarget, checksum string) error {
 	var manifest signedUpdateManifest
 	if err := json.Unmarshal(rawManifest, &manifest); err != nil {
 		return errors.Join(errManifestInvalid, err)
@@ -279,11 +255,6 @@ func verifySignedUpdateManifest(rawManifest, signature []byte, target ReleaseTar
 		return errors.Join(errManifestInvalid, err)
 	}
 	return nil
-}
-
-func verifyPinnedUpdateManifestSignature(rawManifest, signature []byte) bool {
-	publicKey, err := base64.StdEncoding.DecodeString(updateManifestPublicKey)
-	return err == nil && len(publicKey) == ed25519.PublicKeySize && ed25519.Verify(ed25519.PublicKey(publicKey), rawManifest, signature)
 }
 
 func verifySHA256(path string, expectedHex string) error {

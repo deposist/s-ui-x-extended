@@ -42,18 +42,12 @@ Release checklist:
 - Run `go test ./config ./database ./service`.
 - Run the full validation gate before publishing artifacts.
 
-Signed self-update manifest (AUD-02):
+Self-update manifest:
 
 - Every `s-ui-linux-<platform>.tar.gz` release asset must include its adjacent
-  `.sha256`, `.manifest.json`, and `.manifest.json.sig` assets. Unsigned
-  releases are intentionally not offered for self-update.
+  `.sha256` and `.manifest.json` assets.
 - The manifest is compact UTF-8 JSON with exactly the update binding fields:
   `version`, `channel` (`main` or `beta`), `platform`, `filename`, and the
-  archive `sha256`. The `.sig` file is a raw Ed25519 signature over the exact
-  manifest bytes, not a signature over re-serialized JSON.
-- Before publishing, provision the repository secret
-  `RELEASE_MANIFEST_ED25519_PRIVATE_KEY` with the base64-encoded PEM private
-  key matching the Ed25519 public key pinned in
-  `service/panel_update_apply.go`. Never put that private key in a repository,
-  release asset, workflow log, or release notes. Public-key rotation requires a
-  separately trusted application release that changes the pinned key first.
+  archive `sha256`.
+- The updater validates HTTPS transport, exact target metadata, archive
+  checksum, archive size, and safe extraction before replacing the binary.
