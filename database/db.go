@@ -28,8 +28,9 @@ var (
 	// SQLite file. Request/job entry points hold a read lock for their complete
 	// DB-using operation, so restore first drains them and then prevents new
 	// work from acquiring a handle that is about to be closed.
-	maintenanceMu sync.RWMutex
-	restoreMu     sync.Mutex
+	maintenanceMu      sync.RWMutex
+	restoreMu          sync.Mutex
+	restoreStartedHook func()
 )
 
 // ErrRestoreInProgress is returned instead of allowing two restores to race
@@ -50,6 +51,9 @@ func EnterDBOperation() func() {
 func beginRestore() (func(), error) {
 	if !restoreMu.TryLock() {
 		return nil, ErrRestoreInProgress
+	}
+	if restoreStartedHook != nil {
+		restoreStartedHook()
 	}
 	maintenanceMu.Lock()
 	return func() {

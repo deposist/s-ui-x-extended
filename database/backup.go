@@ -287,14 +287,7 @@ func walCheckpointWithFallback(db *gorm.DB) error {
 	return nil
 }
 
-// restoreStartedHook is test-only synchronization for deterministic drain
-// coverage. It runs before restore waits for in-flight DB operations.
-var restoreStartedHook func()
-
 func ImportDB(file multipart.File) error {
-	if restoreStartedHook != nil {
-		restoreStartedHook()
-	}
 	leaveMaintenance, err := beginRestore()
 	if err != nil {
 		return err

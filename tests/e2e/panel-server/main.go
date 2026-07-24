@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,6 +34,16 @@ func main() {
 	fmt.Println("phase6 e2e panel-server: init database")
 	if err := database.InitDB(config.GetDBPath()); err != nil {
 		log.Fatal(err)
+	}
+	if os.Getenv("SUI_E2E") == "1" {
+		passwordPath := filepath.Join(os.Getenv("SUI_DB_FOLDER"), "initial-admin.txt")
+		password, readErr := os.ReadFile(passwordPath)
+		if readErr != nil {
+			log.Fatal(readErr)
+		}
+		if err := (&service.UserService{}).UpdateFirstUser("admin", strings.TrimSpace(string(password))); err != nil {
+			log.Fatal(err)
+		}
 	}
 	fmt.Println("phase6 e2e panel-server: load settings")
 	if _, err := (&service.SettingService{}).GetAllSetting(); err != nil {

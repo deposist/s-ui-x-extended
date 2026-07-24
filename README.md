@@ -304,7 +304,7 @@ Docker Compose option:
 ```shell
 services:
   s-ui:
-    image: ghcr.io/deposist/s-ui-x:v1.0.8-beta3
+    image: ghcr.io/deposist/s-ui-x:v1.0.8-beta4
     container_name: s-ui
     hostname: "s-ui"
     network_mode: host
@@ -329,7 +329,7 @@ docker run -itd \
     -v $PWD/cert/:/root/cert/ \
     --name s-ui \
     --restart=unless-stopped \
-    ghcr.io/deposist/s-ui-x:v1.0.8-beta3
+    ghcr.io/deposist/s-ui-x:v1.0.8-beta4
 ```
 
 Build the image yourself:

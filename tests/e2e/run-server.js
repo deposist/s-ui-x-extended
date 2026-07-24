@@ -88,6 +88,7 @@ const main = async () => {
     SUI_LOG_LEVEL: 'warn',
     SUI_FORCE_COOKIE_SECURE: 'false',
     SUI_DISABLE_CORE: '1',
+    SUI_E2E: '1',
     XUI_DISABLE_REMOTE: '1',
     APPDATA: appDataDir,
     GOTELEMETRY: 'off',
