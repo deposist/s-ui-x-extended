@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -36,8 +35,12 @@ func main() {
 		log.Fatal(err)
 	}
 	if os.Getenv("SUI_E2E") == "1" {
-		passwordPath := filepath.Join(os.Getenv("SUI_DB_FOLDER"), "initial-admin.txt")
-		password, readErr := os.ReadFile(passwordPath)
+		dbRoot, rootErr := os.OpenRoot(os.Getenv("SUI_DB_FOLDER"))
+		if rootErr != nil {
+			log.Fatal(rootErr)
+		}
+		defer dbRoot.Close()
+		password, readErr := dbRoot.ReadFile("initial-admin.txt")
 		if readErr != nil {
 			log.Fatal(readErr)
 		}
