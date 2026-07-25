@@ -87,6 +87,32 @@ func TestDoctorRunReportsMissingReferences(t *testing.T) {
 	}
 }
 
+func TestDoctorRunReportsMissingRuleConditions(t *testing.T) {
+	initDoctorTestDB(t)
+	config := `{"log":{"disabled":true},"dns":{"servers":[],"rules":[{"type":"logical","mode":"and","rules":[{}],"action":"route"}]},"route":{"rules":[{"action":"sniff"},{"type":"logical","mode":"and","rules":[{}],"action":"route","outbound":"direct"}],"rule_set":[]}}`
+	if err := (&SettingService{}).SetConfig(config); err != nil {
+		t.Fatalf("set config: %v", err)
+	}
+
+	report := (&DoctorService{}).Run("example.com")
+	if !doctorReportHas(report, "rule-conditions", DoctorSeverityError) {
+		t.Fatalf("missing rule condition error: %#v", report.Items)
+	}
+}
+
+func TestDoctorRunAllowsActionOnlyRules(t *testing.T) {
+	initDoctorTestDB(t)
+	config := `{"log":{"disabled":true},"dns":{"servers":[],"rules":[{"action":"route","server":"local"}]},"route":{"rules":[{"action":"sniff"}],"rule_set":[]}}`
+	if err := (&SettingService{}).SetConfig(config); err != nil {
+		t.Fatalf("set config: %v", err)
+	}
+
+	report := (&DoctorService{}).Run("example.com")
+	if doctorReportHas(report, "rule-conditions", DoctorSeverityError) {
+		t.Fatalf("unexpected rule condition error: %#v", report.Items)
+	}
+}
+
 func TestDiagnoseClientReportsDisabledExpiredAndOverLimit(t *testing.T) {
 	initDoctorTestDB(t)
 	inbounds, _ := json.Marshal([]uint{})

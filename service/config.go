@@ -482,6 +482,9 @@ func (s *ConfigService) dispatchSave(tx *gorm.DB, obj string, act string, data j
 		if err := validateConfigLogOutput(data); err != nil {
 			return nil, plan, false, err
 		}
+		if err := validateConfigRuleConditions(data); err != nil {
+			return nil, plan, false, err
+		}
 		changed, err := s.SettingService.ConfigBlobChanged(tx, data)
 		if err != nil {
 			return nil, plan, false, err
@@ -570,6 +573,33 @@ func validateConfigLogOutput(data json.RawMessage) error {
 	}
 	if !config.IsSafeLogOutputPath(logBlock.Output) {
 		return common.NewError("log.output must be a relative path within the panel directory; absolute paths and '..' are not allowed")
+	}
+	return nil
+}
+
+// validateConfigRuleConditions rejects logical rules that sing-box reports as
+// missing conditions. Simple action-only catch-all rules remain valid.
+func validateConfigRuleConditions(data json.RawMessage) error {
+	var top struct {
+		Route struct {
+			Rules []map[string]any `json:"rules"`
+		} `json:"route"`
+		DNS struct {
+			Rules []map[string]any `json:"rules"`
+		} `json:"dns"`
+	}
+	if err := json.Unmarshal(data, &top); err != nil {
+		return nil
+	}
+	for _, group := range []struct {
+		name  string
+		rules []map[string]any
+	}{{"route.rules", top.Route.Rules}, {"dns.rules", top.DNS.Rules}} {
+		for i, rule := range group.rules {
+			if stringField(rule, "type") == "logical" && !ruleHasConditions(rule) {
+				return common.NewErrorf("%s[%d] has no conditions; add at least one condition or remove the rule, otherwise sing-box will not start", group.name, i)
+			}
+		}
 	}
 	return nil
 }

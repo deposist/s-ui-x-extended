@@ -205,6 +205,7 @@
         <v-btn
           color="primary"
           variant="tonal"
+          :disabled="saveBlocked"
           :loading="loading"
           @click="saveChanges"
         >
@@ -221,6 +222,7 @@ import RuleOptions from '@/components/DnsRule.vue'
 import { i18n } from '@/locales'
 import SettingInfo from '@/components/SettingInfo.vue'
 import { applyDnsRuleRecommendedValues, dnsRuleFieldHints, hasDnsRuleRecommendedPreset } from '@/utils/defaultRecommendations'
+import { isLogicalRuleMissingConditions } from '@/utils/ruleConditions'
 export default {
   props: ['visible', 'data', 'index', 'clients', 'inTags', 'serverTags', 'ruleSets'],
   emits: ['close', 'save'],
@@ -355,6 +357,9 @@ export default {
     }
   },
   computed: {
+    saveBlocked(): boolean {
+      return isLogicalRuleMissingConditions(this.ruleData)
+    },
     currentFieldHints(): Record<string, string> {
       return dnsRuleFieldHints()
     },

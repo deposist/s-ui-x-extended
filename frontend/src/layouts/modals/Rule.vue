@@ -1,6 +1,7 @@
 <template>
   <form-shell
     :dirty="dirty"
+    :save-disabled="saveBlocked"
     :loading="loading"
     :title="$t('actions.' + title) + ' ' + $t('objects.rule')"
     @close="closeModal"
@@ -270,6 +271,7 @@ import RuleOptions from '@/components/Rule.vue'
 import FormShell from '@/components/nexus/drawers/FormShell.vue'
 import SettingInfo from '@/components/SettingInfo.vue'
 import { applyRouteRuleRecommendedValues, hasRouteRuleRecommendedPreset, routeRuleFieldHints } from '@/utils/defaultRecommendations'
+import { isLogicalRuleMissingConditions } from '@/utils/ruleConditions'
 
 // Stable identity key for each sub-rule object so the v-for is not keyed by array
 // index. Splicing out a middle rule then re-binds the remaining RuleOptions
@@ -448,6 +450,9 @@ export default {
   computed: {
     dirty(): boolean {
       return this.snapshot !== '' && JSON.stringify(this.ruleData) !== this.snapshot
+    },
+    saveBlocked(): boolean {
+      return isLogicalRuleMissingConditions(this.ruleData)
     },
     currentFieldHints(): Record<string, string> {
       return routeRuleFieldHints()
