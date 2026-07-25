@@ -41,16 +41,14 @@
 
 <script lang="ts" setup>
 import { computed, nextTick, ref, watch } from 'vue'
-import { useDisplay, useLocale, useTheme } from 'vuetify'
+import { useDisplay, useLocale } from 'vuetify'
 
 import ConfirmHost from '@/components/nexus/primitives/ConfirmHost.vue'
-import { useUiPalette } from '@/uiMode/palette'
+import { useNexusTheme } from '@/uiMode/nexusTheme'
 import NexusServerStatus from './NexusServerStatus.vue'
 import NexusSidebar from './NexusSidebar.vue'
 import NexusTopbar from './NexusTopbar.vue'
 
-const theme = useTheme()
-const { palette } = useUiPalette()
 const { isRtl } = useLocale()
 const { mdAndDown, smAndDown } = useDisplay()
 
@@ -70,32 +68,7 @@ watch(isMobile, async (mobile) => {
   sidebarOpen.value = !mobile
 }, { immediate: true })
 
-const nexusThemeName = computed(() => {
-  const activeThemeName = theme.global.name.value
-  const systemIsDark = activeThemeName === 'system' && theme.global.current.value.dark
-  const isDark = activeThemeName === 'dark' || systemIsDark
-
-  if (palette.value === 'navy') {
-    return isDark ? 'nexusDark' : 'nexusLight'
-  }
-
-  if (palette.value === 'emerald') {
-    return isDark ? 'emeraldDark' : 'emeraldLight'
-  }
-
-  if (palette.value === 'dracula') {
-    return isDark ? 'draculaDark' : 'draculaLight'
-  }
-
-  return isDark ? 'technicalDark' : 'technicalLight'
-})
-
-// Keep the html attribute in sync at runtime so the pre-mount token blocks
-// (and the body background that reads them) recolor the instant the palette
-// changes, without a reload.
-watch(palette, (next) => {
-  document.documentElement.dataset.uiPalette = next
-}, { immediate: true })
+const nexusThemeName = useNexusTheme()
 
 const nexusDefaults = {
   VBtn: {

@@ -1,4 +1,5 @@
 <template>
+  <v-theme-provider :theme="nexusThemeName" style="min-height: 100vh" with-background>
     <v-container class="fill-height" style="margin-top: 100px;">
       <v-row justify="center" align="center">
         <v-col cols="12" sm="8" md="4">
@@ -58,6 +59,7 @@
         </v-col>
       </v-row>
     </v-container>
+  </v-theme-provider>
   </template>
   
 <script lang="ts" setup>
@@ -66,10 +68,12 @@ import { useLocale,useTheme } from 'vuetify'
 import { i18n, languages, setI18nLocale } from '@/locales'
 import { useRouter } from 'vue-router'
 import HttpUtil, { resetInvalidLoginHandling, markLoginSuccess } from '@/plugins/httputil'
+import { useNexusTheme } from '@/uiMode/nexusTheme'
 
 
 const theme = useTheme()
 const locale = useLocale()
+const nexusThemeName = useNexusTheme()
 
 const themes = [
   { value: 'light', icon: 'mdi-white-balance-sunny' },
@@ -148,7 +152,7 @@ const changeTheme = (th: string) => {
   localStorage.setItem('theme', th)
 }
 const isActiveTheme = (th: string) => {
-  const current = localStorage.getItem('theme') ?? 'system'
+  const current = localStorage.getItem('theme') ?? 'dark'
   return current == th
 }
 </script>
