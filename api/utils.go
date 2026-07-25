@@ -80,7 +80,20 @@ func RequestIsHTTPS(c *gin.Context) bool {
 	return isTrustedProxy(canonicalClientIP(splitRemoteIP(c.Request.RemoteAddr))) && strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https")
 }
 
+// cookieSameSiteNoneRequested reports whether the operator asked for
+// SameSite=None session cookies via SUI_COOKIE_SAMESITE=none.
+//
+// This is needed when the panel is embedded in a cross-site iframe. CSRF
+// protection remains enforced independently through the X-CSRF-Token header.
+func cookieSameSiteNoneRequested() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("SUI_COOKIE_SAMESITE")), "none")
+}
+
 func resolveCookieSecure(c *gin.Context, settingService *service.SettingService) bool {
+	if cookieSameSiteNoneRequested() {
+		// Browsers reject SameSite=None cookies unless Secure is also set.
+		return true
+	}
 	if settingService != nil {
 		forceSecure, err := settingService.GetForceCookieSecure()
 		if err != nil {
@@ -109,8 +122,12 @@ func resolveCookieSecure(c *gin.Context, settingService *service.SettingService)
 }
 
 // resolveCookieSameSite returns the SameSite mode for session cookies. It is
-// Lax by default and Strict when the sessionSameSiteStrict setting is enabled.
+// Lax by default, Strict when the sessionSameSiteStrict setting is enabled, and
+// None when SUI_COOKIE_SAMESITE=none opts into cross-site iframe embedding.
 func resolveCookieSameSite(settingService *service.SettingService) http.SameSite {
+	if cookieSameSiteNoneRequested() {
+		return http.SameSiteNoneMode
+	}
 	if settingService != nil {
 		strict, err := settingService.GetSessionSameSiteStrict()
 		if err != nil {
