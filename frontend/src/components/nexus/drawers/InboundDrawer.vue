@@ -25,7 +25,7 @@
           </v-select>
         </v-col>
         <v-col cols="12" sm="6">
-          <v-text-field v-model="inbound.tag" :label="$t('objects.tag')" hide-details>
+          <v-text-field v-model="inbound.tag" :label="$t('objects.tag')" hide-details :error="isBlankIdentity(inbound.tag)">
             <template #append-inner>
               <SettingInfo v-if="fieldHint('tag')" :text="fieldHint('tag')" />
             </template>
@@ -162,6 +162,7 @@ import FormSection from './FormSection.vue'
 import SettingInfo from '@/components/SettingInfo.vue'
 import { applyInboundRecommendedValues, hasInboundRecommendedPreset, inboundFieldHintsForType } from '@/utils/defaultRecommendations'
 import { inboundAllowedTlsTemplateKinds, isInboundTlsTemplateCompatible } from '@/utils/tlsCompatibility'
+import { isBlankIdentity } from '@/utils/entityIdentity'
 export default {
   // The drawer is driven explicitly by the `visible` prop (the parent passes it
   // alongside v-model); inheritAttrs:false stops the v-model's modelValue from
@@ -193,6 +194,7 @@ export default {
     }
   },
   methods: {
+    isBlankIdentity,
     async loadData(id: number) {
       this.loading = true
       const inboundArray = await Data().loadInbounds([id])
@@ -298,7 +300,7 @@ export default {
     },
     validate() {
       if (this.inbound == undefined) return false
-      if (this.inbound.tag == "") return false
+      if (isBlankIdentity(this.inbound.tag)) return false
       if (this.inbound.listen_port > 65535 || this.inbound.listen_port < 1) return false
       if (this.OnlyTLS.includes(this.inbound.type) && this.inbound.tls_id == 0) return false
       if (!this.selectedTlsTemplateCompatible) return false

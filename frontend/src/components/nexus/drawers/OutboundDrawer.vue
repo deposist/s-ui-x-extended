@@ -3,6 +3,7 @@
     :dirty="dirty"
     :loading="loading"
     :model-value="visible"
+    :save-disabled="saveBlocked"
     :saving="loading"
     :title="$t('actions.' + title) + ' ' + $t('objects.outbound')"
     :width="720"
@@ -28,7 +29,7 @@
           </v-select>
         </v-col>
         <v-col cols="12" sm="6">
-          <v-text-field v-model="outbound.tag" :label="$t('objects.tag')" hide-details>
+          <v-text-field v-model="outbound.tag" :label="$t('objects.tag')" hide-details :error="isBlankIdentity(outbound.tag)">
             <template #append-inner>
               <SettingInfo v-if="fieldHint('tag')" :text="fieldHint('tag')" />
             </template>
@@ -156,6 +157,7 @@ import EntityDrawer from './EntityDrawer.vue'
 import FormSection from './FormSection.vue'
 import SettingInfo from '@/components/SettingInfo.vue'
 import { applyOutboundRecommendedValues, hasOutboundRecommendedPreset, outboundFieldHintsForType } from '@/utils/defaultRecommendations'
+import { isBlankIdentity } from '@/utils/entityIdentity'
 export default {
   inheritAttrs: false,
   props: ['visible', 'data', 'id', 'tags'],
@@ -184,6 +186,7 @@ export default {
     } catch { /* capabilities endpoint optional */ }
   },
   methods: {
+    isBlankIdentity,
     updateData(id: number) {
       if (id > 0) {
         const newData = JSON.parse(this.$props.data)
@@ -248,6 +251,9 @@ export default {
   computed: {
     dirty(): boolean {
       return this.snapshot !== "" && JSON.stringify(this.outbound) !== this.snapshot
+    },
+    saveBlocked(): boolean {
+      return isBlankIdentity(this.outbound?.tag)
     },
     currentFieldHints(): Record<string, string> {
       return outboundFieldHintsForType(this.outbound.type)

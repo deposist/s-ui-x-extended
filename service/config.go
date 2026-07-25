@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/deposist/s-ui-x-extended/config"
@@ -419,6 +420,9 @@ func clientSubscriptionCacheIDs(obj string, data json.RawMessage) []string {
 func (s *ConfigService) dispatchSave(tx *gorm.DB, obj string, act string, data json.RawMessage, initUsers string, hostname string) ([]string, postCommitCorePlan, bool, error) {
 	objs := []string{obj}
 	var plan postCommitCorePlan
+	if err := validateEntityIdentity(obj, act, data); err != nil {
+		return nil, plan, false, err
+	}
 	switch obj {
 	case "clients":
 		inboundIds, err := s.ClientService.Save(tx, act, data, hostname)
@@ -498,6 +502,49 @@ func (s *ConfigService) dispatchSave(tx *gorm.DB, obj string, act string, data j
 	default:
 		return nil, plan, false, common.NewError("unknown object: ", obj)
 	}
+}
+
+// entityIdentityField reports the JSON field used to reference an entity from
+// the assembled sing-box config. Client names are descriptive, not references.
+func entityIdentityField(obj string) (string, bool) {
+	switch obj {
+	case "inbounds", "outbounds", "services", "endpoints", "providers":
+		return "tag", true
+	case "tls":
+		return "name", true
+	default:
+		return "", false
+	}
+}
+
+// validateEntityIdentity rejects blank identities before an entity save can
+// persist a row that other config objects cannot reference reliably.
+func validateEntityIdentity(obj string, act string, data json.RawMessage) error {
+	if act != "new" && act != "edit" {
+		return nil
+	}
+	field, ok := entityIdentityField(obj)
+	if !ok {
+		return nil
+	}
+
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(data, &payload); err != nil {
+		// The entity save path reports malformed body shapes with better context.
+		return nil
+	}
+	raw, ok := payload[field]
+	if !ok {
+		return common.NewErrorf("%s: %s is required", obj, field)
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return common.NewErrorf("%s: %s must be a string", obj, field)
+	}
+	if strings.TrimSpace(value) == "" {
+		return common.NewErrorf("%s: %s must not be empty", obj, field)
+	}
+	return nil
 }
 
 // validateConfigLogOutput rejects unsafe sing-box log.output paths before the

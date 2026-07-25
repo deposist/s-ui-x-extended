@@ -3,6 +3,7 @@
     :dirty="dirty"
     :loading="loading"
     :model-value="visible"
+    :save-disabled="saveBlocked"
     :saving="loading"
     :title="$t('actions.' + title) + ' ' + $t('objects.tls')"
     :width="720"
@@ -12,7 +13,7 @@
     <v-card class="rounded-lg">
       <v-row>
         <v-col cols="12" sm="6" md="4">
-          <v-text-field :label="$t('client.name')" hide-details v-model="tls.name">
+          <v-text-field :label="$t('client.name')" hide-details v-model="tls.name" :error="isBlankIdentity(tls.name)">
             <template #append-inner><SettingInfo v-if="fieldHint('name')" :text="fieldHint('name')" /></template>
           </v-text-field>
         </v-col>
@@ -246,6 +247,7 @@ import RandomUtil from '@/plugins/randomUtil'
 import EntityDrawer from './EntityDrawer.vue'
 import SettingInfo from '@/components/SettingInfo.vue'
 import { applyTlsRecommendedValues, hasTlsRecommendedPreset, tlsFieldHintsForType } from '@/utils/defaultRecommendations'
+import { isBlankIdentity } from '@/utils/entityIdentity'
 export default {
   inheritAttrs: false,
   props: ['visible', 'data', 'id'],
@@ -313,6 +315,7 @@ export default {
     }
   },
   methods: {
+    isBlankIdentity,
     fieldHint(key: string): string {
       const hintKey = (this.currentFieldHints as Record<string, string>)[key]
       if (!hintKey) return ''
@@ -442,6 +445,9 @@ export default {
   computed: {
     dirty(): boolean {
       return this.snapshot !== "" && JSON.stringify(this.tls) !== this.snapshot
+    },
+    saveBlocked(): boolean {
+      return isBlankIdentity(this.tls?.name)
     },
     inTls(): iTls {
       return this.tls.server
