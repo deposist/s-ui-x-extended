@@ -61,8 +61,8 @@ type AWGDevice struct {
 	// symmetric with Client.Expiry. An expired device is deprovisioned by the
 	// reconciler but keeps its row - and its device-limit slot - until it is
 	// deleted manually (owner decision).
-	ExpiresAt int64 `json:"expiresAt" gorm:"column:expires_at;not null;default:0"`
-	IPReusableAfter   int64  `json:"-" gorm:"column:ip_reusable_after;index;not null;default:0"`
+	ExpiresAt       int64 `json:"expiresAt" gorm:"column:expires_at;not null;default:0"`
+	IPReusableAfter int64 `json:"-" gorm:"column:ip_reusable_after;index;not null;default:0"`
 }
 
 func (AWGDevice) TableName() string { return "awg_devices" }
