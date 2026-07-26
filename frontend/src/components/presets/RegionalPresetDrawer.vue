@@ -38,6 +38,17 @@
                 variant="outlined"
               />
             </v-col>
+            <v-col cols="12">
+              <v-select
+                v-model="downloadOutbound"
+                density="compact"
+                :hint="t('regionalPresets.ruleSetDownload.hint')"
+                :items="downloadOutboundItems"
+                :label="t('regionalPresets.ruleSetDownload.label')"
+                persistent-hint
+                variant="outlined"
+              />
+            </v-col>
           </v-row>
 
           <v-alert v-if="!hasOutbounds" density="compact" type="warning" variant="tonal" class="mb-4">
@@ -264,8 +275,8 @@
           </v-btn>
         </template>
         <template v-else-if="step === 'preview'">
-          <v-btn variant="text" @click="step = 'selection'">{{ t('regionalPresets.back') }}</v-btn>
-          <v-btn color="primary" variant="flat" @click="applySelectedPresets">
+          <v-btn :disabled="applying" variant="text" @click="step = 'selection'">{{ t('regionalPresets.back') }}</v-btn>
+          <v-btn color="primary" :loading="applying" variant="flat" @click="applySelectedPresets">
             {{ t('regionalPresets.apply') }}
           </v-btn>
         </template>
@@ -285,6 +296,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { Config } from '@/types/config'
+import HttpUtils from '@/plugins/httputil'
 import {
   applyPresets,
   computePreview,
@@ -293,6 +305,7 @@ import {
   type PresetRegion,
   type PresetRegionKey,
   type RegionalPresetState,
+  requiredRuleSetSources,
   validatePresetCatalogShape,
 } from './routingDnsPresets'
 import {
@@ -319,6 +332,19 @@ const drawerWidth = 520
 const step = ref<'selection' | 'preview' | 'success' | 'error'>('selection')
 const directOutbound = ref('direct')
 const errorMessage = ref('')
+const applying = ref(false)
+
+// Which network path the panel uses to fetch the .srs files. Sentinel value
+// rather than '' so the select always has a visible choice; a censored server
+// needs one of its own outbounds here, since sources like
+// raw.githubusercontent.com are commonly unreachable directly.
+const DIRECT_DOWNLOAD = '__direct__'
+const downloadOutbound = ref(DIRECT_DOWNLOAD)
+
+const downloadOutboundItems = computed(() => [
+  { title: t('regionalPresets.ruleSetDownload.direct'), value: DIRECT_DOWNLOAD },
+  ...[...new Set(props.outboundTags.filter(Boolean))].map(tag => ({ title: tag, value: tag })),
+])
 
 const ruState = reactive<RegionalPresetState>({ region: 'RU', enabled: false, direction: 'direct', exceptions: [] })
 const zhState = reactive<RegionalPresetState>({ region: 'ZH', enabled: false, direction: 'direct', exceptions: [] })
@@ -406,8 +432,21 @@ const regions = computed(() => [
 ])
 
 watch(() => props.modelValue, open => {
-  if (open) resetFromConfig()
+  if (!open) return
+  resetFromConfig()
+  void loadDownloadChannel()
 })
+
+// Show the channel that is actually configured, so re-opening the drawer does
+// not silently reset a previously chosen outbound back to direct.
+const loadDownloadChannel = async () => {
+  const msg = await HttpUtils.get('api/settings')
+  if (!msg.success) return
+  const settings = (msg.obj ?? {}) as Record<string, unknown>
+  const mode = String(settings.ruleSetDownloadMode ?? 'direct')
+  const tag = String(settings.ruleSetDownloadOutbound ?? '')
+  downloadOutbound.value = mode === 'outbound' && tag ? tag : DIRECT_DOWNLOAD
+}
 
 const emptyPreviewGroup = (): PresetPreviewGroup => ({
   willAdd: [],
@@ -471,10 +510,64 @@ const openPreview = () => {
   step.value = 'preview'
 }
 
-const applySelectedPresets = () => {
+// Download the rule-set files before touching the config.
+//
+// The order matters and is deliberately fail-closed: if a download fails we
+// leave the config untouched, because a config that points at a missing .srs
+// stops sing-box from starting at all. Better to keep the current working
+// routing than to save something that bricks the core on its next restart.
+const applySelectedPresets = async () => {
+  applying.value = true
   try {
+    const sources = requiredRuleSetSources(ruState, zhState)
+    const ruleSetPaths: Record<string, string> = {}
+
+    if (sources.length > 0) {
+      // The download channel lives in panel settings, not in the request, so it
+      // has to be saved before asking for the download. Doing it in this order
+      // means a server whose direct network is censored can pick an outbound
+      // here and have the very next download use it.
+      const useDirect = downloadOutbound.value === DIRECT_DOWNLOAD
+      const saved = await HttpUtils.post('api/save', {
+        object: 'settings',
+        action: 'set',
+        data: JSON.stringify({
+          ruleSetDownloadMode: useDirect ? 'direct' : 'outbound',
+          ruleSetDownloadOutbound: useDirect ? '' : downloadOutbound.value,
+        }),
+      })
+      if (!saved.success) {
+        errorMessage.value = saved.msg || t('regionalPresets.result.ruleSetDownloadFailed')
+        step.value = 'error'
+        return
+      }
+
+      // Requests go out as form-urlencoded, which cannot carry a nested array:
+      // posting { sources } directly flattens into sources[0][tag]=... and the
+      // API rejects it. The panel convention is a single JSON-encoded "data"
+      // field, same as the api/save call above.
+      const msg = await HttpUtils.post('api/rulesets/materialize', {
+        data: JSON.stringify({ sources }),
+      })
+      if (!msg.success) {
+        errorMessage.value = msg.msg || t('regionalPresets.result.ruleSetDownloadFailed')
+        step.value = 'error'
+        return
+      }
+      // The API answers with tag/path pairs; applyPresets keys off the source
+      // URL, so map each returned tag back to the URL that was requested.
+      const assets = (msg.obj as { tag: string, path: string }[] | null) ?? []
+      const urlByTag = new Map(sources.map(source => [source.tag, source.url]))
+      for (const asset of assets) {
+        const url = urlByTag.get(asset.tag)
+        if (url && asset.path) ruleSetPaths[url] = asset.path
+      }
+    }
+
     const result = applyPresets(props.config, ruState, zhState, {
       directOutbound: directOutbound.value,
+      ruleSetPaths,
+      requireLocalAssets: true,
     })
     applyAWGRuDirectState(result.config, awgRuState, directOutbound.value)
     emit('apply', result.config)
@@ -482,6 +575,8 @@ const applySelectedPresets = () => {
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : t('regionalPresets.result.regionalDataUnavailable')
     step.value = 'error'
+  } finally {
+    applying.value = false
   }
 }
 </script>

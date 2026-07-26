@@ -122,6 +122,11 @@ func (a *APIHandler) registerGroupedRoutes(g *gin.RouterGroup) {
 	g.POST("/checkOutbounds", a.ApiService.CheckOutbounds)
 	g.POST("/rotateSubSecret", a.ApiService.RotateSubSecret)
 
+	// Rule-set assets are downloaded by the panel and stored on disk so the
+	// core no longer fetches them (fatally, on failure) during startup.
+	rulesets := g.Group("/rulesets")
+	rulesets.POST("/materialize", a.ApiService.MaterializeRuleSets)
+
 	doctor := g.Group("/doctor")
 	doctor.POST("/run", a.ApiService.RunDoctor)
 	doctor.POST("/client", a.ApiService.DiagnoseClient)

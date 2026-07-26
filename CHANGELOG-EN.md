@@ -7,7 +7,13 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 ## [Unreleased]
 
-- No unreleased changes.
+- Regional `.srs` rule-set files are downloaded and validated by the panel before they are referenced from the sing-box configuration. Saved configurations use verified local files, so core startup no longer depends on reaching GitHub.
+- Downloads are atomic and fail closed: invalid payloads, unsafe tags, unsafe URLs, partial batches, and missing local files are rejected without replacing a working asset.
+- Added a daily refresh job and a `rulesets/sources.json` manifest. Refresh failures keep the last known-good files in place.
+- Added an authenticated, CSRF-protected `/rulesets/materialize` endpoint, direct/outbound download settings, doctor checks, and save-time validation for local rule-set files.
+- Regional presets now use an IP-literal DNS-over-HTTPS fallback for non-regional queries while keeping regional resolvers scoped to their own geosite rules.
+- The preset UI lets operators choose the download path and leaves the configuration unchanged when materialization fails.
+- Added backend, frontend, serialization, cron, and cross-platform rule-set tests. No database migration is required.
 
 ## [1.0.8-beta4] - 2026-07-24 - CI race and E2E fixture fixes
 

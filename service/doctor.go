@@ -247,6 +247,7 @@ func doctorReferenceChecks(rawConfig []byte) []DoctorItem {
 
 	items = append(items, doctorRuleConditionChecks(cfg.Route.Rules, cfg.DNS.Rules)...)
 	items = append(items, doctorRuleSetURLChecks(cfg.Route.RuleSet)...)
+	items = append(items, doctorLocalRuleSetChecks(cfg.Route.RuleSet)...)
 	return items
 }
 
@@ -362,6 +363,40 @@ func doctorRuleSetURLChecks(ruleSets []map[string]any) []DoctorItem {
 		return []DoctorItem{doctorWarn("ruleset-urls", "Remote rule-set URLs", "Some remote rule-set URLs look unsafe or inconsistent.", "Use HTTPS raw URLs without credentials and binary format for .srs files.", invalid)}
 	}
 	return []DoctorItem{doctorOK("ruleset-urls", "Remote rule-set URLs", "Remote rule-set URLs have a safe shape.", nil)}
+}
+
+// doctorLocalRuleSetChecks verifies every local rule-set file is present and
+// parseable.
+//
+// This is reported as an error rather than a warning because the core aborts
+// startup on an unreadable local rule-set: the panel may look healthy while the
+// next core restart would fail. Surfacing it here gives the operator a chance
+// to re-download the assets before that happens.
+func doctorLocalRuleSetChecks(ruleSets []map[string]any) []DoctorItem {
+	var broken []string
+	var found int
+	for i, ruleSet := range ruleSets {
+		if stringField(ruleSet, "type") != "local" {
+			continue
+		}
+		found++
+		tag := stringField(ruleSet, "tag")
+		path := stringField(ruleSet, "path")
+		if path == "" {
+			broken = append(broken, fmt.Sprintf("rule_set[%d] %q has empty path", i, tag))
+			continue
+		}
+		if err := VerifyRuleSetFile(path); err != nil {
+			broken = append(broken, fmt.Sprintf("rule_set[%d] %q cannot be loaded from %s: %v", i, tag, path, err))
+		}
+	}
+	if found == 0 {
+		return nil
+	}
+	if len(broken) > 0 {
+		return []DoctorItem{doctorError("ruleset-local-files", "Local rule-set files", "Some local rule-set files are missing or unreadable, which prevents sing-box from starting.", "Re-apply the regional preset to download the rule-set files again.", broken)}
+	}
+	return []DoctorItem{doctorOK("ruleset-local-files", "Local rule-set files", "All local rule-set files are present and loadable.", nil)}
 }
 
 func stringField(m map[string]any, key string) string {

@@ -101,6 +101,11 @@ func (c *CronJob) Start(loc *time.Location, trafficAge int) error {
 	if _, err := c.cron.AddJob("@every 12h", NewCertRenewJob(c.ctx)); err != nil {
 		return err
 	}
+	// Replaces the rule-set `update_interval`, which no longer applies now that
+	// the core reads these files from disk instead of fetching them.
+	if _, err := c.cron.AddJob("@daily", NewRuleSetRefreshJob()); err != nil {
+		return err
+	}
 	c.cron.Start()
 	return nil
 }

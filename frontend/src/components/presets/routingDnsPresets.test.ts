@@ -9,6 +9,7 @@ import {
   isPresetManagedItem,
   routingDnsPresetCatalog,
   type RegionalPresetState,
+  requiredRuleSetSources,
   validatePresetCatalogShape,
 } from './routingDnsPresets'
 
@@ -64,6 +65,110 @@ describe('routing DNS preset catalog', () => {
     }
   })
 
+  it('emits a local rule-set for every materialized source', () => {
+    const sources = requiredRuleSetSources(state('RU', true), state('ZH', true))
+    const ruleSetPaths = Object.fromEntries(
+      sources.map(source => [source.url, `rulesets/${source.tag}.srs`]),
+    )
+
+    const { config } = applyPresets(baseConfig(), state('RU', true), state('ZH', true), {
+      ...options,
+      ruleSetPaths,
+      requireLocalAssets: true,
+    })
+
+    expect((config.route.rule_set as any[]).length).toBeGreaterThan(0)
+    for (const ruleSet of config.route.rule_set as any[]) {
+      expect(ruleSet.type).toBe('local')
+      expect(ruleSet.path).toMatch(/^rulesets\/.*\.srs$/)
+      // A local rule-set must not keep remote-only fields: sing-box would
+      // reject the unknown keys and refuse to start.
+      expect(ruleSet).not.toHaveProperty('url')
+      expect(ruleSet).not.toHaveProperty('download_detour')
+      expect(ruleSet).not.toHaveProperty('update_interval')
+    }
+  })
+
+  // The whole point of the fail-closed flow: saving a config that points at a
+  // file which was never downloaded would stop sing-box from starting.
+  it('refuses to build a config referencing an undownloaded source', () => {
+    expect(() => applyPresets(baseConfig(), state('RU', true), state('ZH', false), {
+      ...options,
+      ruleSetPaths: {},
+      requireLocalAssets: true,
+    })).toThrow(/has not been downloaded/)
+  })
+
+  it('keeps the regional resolver scoped to its own rule', () => {
+    const { config } = applyPresets(baseConfig(), state('RU', true), state('ZH', false), options)
+
+    const doh = (config.dns.servers as any[]).find(server => server.tag === 'preset-dns-proxy')
+    expect(doh.type).toBe('https')
+    // An IP literal: resolving a resolver's own hostname would need the very
+    // plaintext DNS this change avoids.
+    expect(doh.server).toMatch(/^\d+\.\d+\.\d+\.\d+$/)
+
+    const rulesUsingRegional = (config.dns.rules as any[])
+      .filter(rule => rule.server === 'preset-dns-direct')
+    expect(rulesUsingRegional.length).toBe(1)
+  })
+
+  // An unknown detour tag passes config validation but makes sing-box fail at
+  // startup, so the preset must never emit one it has not verified.
+  it('omits the DoH detour when the proxy outbound does not exist', () => {
+    const { config } = applyPresets(baseConfig(), state('RU', true), state('ZH', false), {
+      ...options,
+      proxyOutbound: 'not-in-config',
+    })
+    const doh = (config.dns.servers as any[]).find(server => server.tag === 'preset-dns-proxy')
+    expect(doh).not.toHaveProperty('detour')
+  })
+
+  it('sets the DoH detour when the proxy outbound exists', () => {
+    const cfg = baseConfig()
+    cfg.outbounds.push({ id: 1, type: 'socks', tag: 'upstream' } as any)
+
+    const { config } = applyPresets(cfg, state('RU', true), state('ZH', false), {
+      ...options,
+      proxyOutbound: 'upstream',
+    })
+    const doh = (config.dns.servers as any[]).find(server => server.tag === 'preset-dns-proxy')
+    expect(doh.detour).toBe('upstream')
+  })
+
+  // A final pointing at a pruned server is accepted by validation but breaks DNS
+  // at runtime, so disabling the presets has to clean up both together.
+  it('removes the DoH server and final when every preset is disabled', () => {
+    const enabled = applyPresets(baseConfig(), state('RU', true), state('ZH', true), options).config
+    expect(enabled.dns.final).toBe('preset-dns-proxy')
+
+    const disabled = applyPresets(enabled, state('RU', false), state('ZH', false), options).config
+    expect(disabled.dns.servers as any[]).toEqual([])
+    expect(disabled.dns).not.toHaveProperty('final')
+  })
+
+  it('leaves a user-defined dns final alone', () => {
+    const cfg = baseConfig()
+    cfg.dns.final = 'my-own-resolver'
+
+    const { config } = applyPresets(cfg, state('RU', false), state('ZH', false), options)
+    expect(config.dns.final).toBe('my-own-resolver')
+  })
+
+  it('lists only the sources the enabled regions need', () => {
+    expect(requiredRuleSetSources(state('RU', false), state('ZH', false))).toEqual([])
+
+    const ruOnly = requiredRuleSetSources(state('RU', true), state('ZH', false))
+    expect(ruOnly.length).toBe(2)
+    for (const source of ruOnly) {
+      expect(source.url).toMatch(/^https:\/\/.*\.srs$/)
+      expect(source.tag).toBeTruthy()
+    }
+    // Tags name the files on disk, so collisions would overwrite each other.
+    const both = requiredRuleSetSources(state('RU', true), state('ZH', true))
+    expect(new Set(both.map(source => source.tag)).size).toBe(both.length)
+  })
+
   it('applies RU country rule sets directly and leaves other traffic untouched', () => {
     const result = applyRoutingDnsPreset(baseConfig(), 'ru-direct', options)
     const ruleSets = byTag(result.config.route.rule_set as any[])
@@ -74,12 +179,11 @@ describe('routing DNS preset catalog', () => {
       'preset-ru-direct-geoip',
     ])
     expect(ruleSets['preset-ru-direct-geosite']).toMatchObject({
-      type: 'local',
+      type: 'remote',
       format: 'binary',
-      path: 'rulesets/geosite-ru-smart/direct-ru.srs',
+      url: 'https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-ru.srs',
+      download_detour: 'direct',
     })
-    expect(ruleSets['preset-ru-direct-geosite']).not.toHaveProperty('url')
-    expect(ruleSets['preset-ru-direct-geosite']).not.toHaveProperty('download_detour')
     expect(ruleSets['preset-ru-direct-geoip']).toMatchObject({
       type: 'remote',
       format: 'binary',
@@ -88,8 +192,11 @@ describe('routing DNS preset catalog', () => {
     })
 
     expect(ruleOutboundByRuleSet(result.config)['preset-ru-direct-geosite,preset-ru-direct-geoip']).toBe('direct')
+    // Route final stays untouched: the preset only claims regional traffic.
     expect(result.config.route).not.toHaveProperty('final')
-    expect(result.config.dns).not.toHaveProperty('final')
+    // DNS final is now the preset's DoH resolver, so non-regional lookups no
+    // longer travel over the regional server's plaintext UDP 53.
+    expect(result.config.dns.final).toBe('preset-dns-proxy')
     expect(hasUnknownPresetMetadata(result.config)).toBe(false)
   })
 
@@ -115,7 +222,7 @@ describe('routing DNS preset catalog', () => {
     expect((config.route.rules as any[]).some(rule => rule.rule_set?.includes('preset-zh-direct-geosite-non-cn'))).toBe(false)
   })
 
-  it('routes country DNS domains to direct DNS without changing global DNS final', () => {
+  it('routes country DNS domains to a regional resolver and the rest over DoH', () => {
     const { config } = applyPresets(
       baseConfig(),
       state('RU', true),
@@ -130,7 +237,7 @@ describe('routing DNS preset catalog', () => {
       server_port: 53,
     }))
     expect((config.dns.servers as any[]).find(server => server.tag === 'preset-dns-direct')).not.toHaveProperty('detour')
-    expect(config.dns).not.toHaveProperty('final')
+    expect(config.dns.final).toBe('preset-dns-proxy')
     expect(config.dns.rules).toContainEqual(expect.objectContaining({
       action: 'route',
       rule_set: ['preset-ru-direct-geosite'],

@@ -485,6 +485,9 @@ func (s *ConfigService) dispatchSave(tx *gorm.DB, obj string, act string, data j
 		if err := validateConfigRuleConditions(data); err != nil {
 			return nil, plan, false, err
 		}
+		if err := validateConfigLocalRuleSets(data); err != nil {
+			return nil, plan, false, err
+		}
 		changed, err := s.SettingService.ConfigBlobChanged(tx, data)
 		if err != nil {
 			return nil, plan, false, err
@@ -599,6 +602,43 @@ func validateConfigRuleConditions(data json.RawMessage) error {
 			if stringField(rule, "type") == "logical" && !ruleHasConditions(rule) {
 				return common.NewErrorf("%s[%d] has no conditions; add at least one condition or remove the rule, otherwise sing-box will not start", group.name, i)
 			}
+		}
+	}
+	return nil
+}
+
+// validateConfigLocalRuleSets rejects a config that references a local
+// rule-set file which is missing or unreadable by the core.
+//
+// This is a fail-closed guard, not a convenience check. A local rule-set whose
+// file is absent or corrupt aborts core startup outright
+// (route/rule/rule_set_local.go), so accepting such a config would leave the
+// operator with a panel that saved successfully and a core that refuses to
+// come back up. The normal flow materializes the files before saving; this
+// catches the cases that bypass it, such as a direct API call or a restored
+// config whose asset directory was not carried over.
+func validateConfigLocalRuleSets(data json.RawMessage) error {
+	var top struct {
+		Route struct {
+			RuleSet []map[string]any `json:"rule_set"`
+		} `json:"route"`
+	}
+	if err := json.Unmarshal(data, &top); err != nil {
+		// Not the shape we validate here; the assembly path reports malformed
+		// config on its own.
+		return nil
+	}
+	for i, ruleSet := range top.Route.RuleSet {
+		if stringField(ruleSet, "type") != "local" {
+			continue
+		}
+		tag := stringField(ruleSet, "tag")
+		path := stringField(ruleSet, "path")
+		if path == "" {
+			return common.NewErrorf("route.rule_set[%d] (%s) is local but has no path; sing-box will not start", i, tag)
+		}
+		if err := VerifyRuleSetFile(path); err != nil {
+			return common.NewErrorf("route.rule_set[%d] (%s) points at an unusable file %q: %v; sing-box will not start", i, tag, path, err)
 		}
 	}
 	return nil

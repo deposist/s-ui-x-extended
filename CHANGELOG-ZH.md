@@ -6,7 +6,13 @@
 
 ## [Unreleased]
 
-- No unreleased changes.
+- 面板会先下载并验证区域 `.srs` 文件，再将已验证的本地文件写入配置，核心启动不再依赖访问 GitHub。
+- 下载采用原子写入和 fail-closed 策略；损坏内容、不安全的标签或 URL、不完整的批次以及缺失的本地文件都会被拒绝。
+- 新增每日刷新任务和 `rulesets/sources.json` manifest。刷新失败时保留最后一份可用文件。
+- 新增受认证和 CSRF 保护的 `/rulesets/materialize` 接口、直接下载或通过 outbound 下载的设置、Doctor 检查以及保存时的本地 rule-set 校验。
+- 区域预设为非区域 DNS 查询使用 IP 字面量 DoH，同时保留区域 DNS 规则的作用范围。
+- 预设界面允许选择下载通道；materialize 失败时不会修改现有配置。
+- 新增 backend、frontend、序列化、cron 和跨平台路径测试。无需数据库迁移。
 
 ## [1.0.8-beta4] - 2026-07-24 - CI 与 E2E 修复
 

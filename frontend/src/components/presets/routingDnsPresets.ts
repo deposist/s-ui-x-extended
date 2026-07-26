@@ -23,14 +23,23 @@ export interface PresetManagedIdentity {
   tags: string[]
 }
 
-export interface ApplyPresetOptions {
+// ruleSetPaths maps a source URL to the on-disk .srs the panel downloaded for
+// it. requireLocalAssets turns a missing entry into an error instead of a
+// remote fallback, so a saved config can never reference a file that is not
+// there.
+export interface RuleSetAssetOptions {
+  ruleSetPaths?: Record<string, string>
+  requireLocalAssets?: boolean
+}
+
+export interface ApplyPresetOptions extends RuleSetAssetOptions {
   proxyOutbound?: string
   directOutbound: string
   direction?: PresetDirection
   exceptions?: string[]
 }
 
-export interface ApplyPresetsOptions {
+export interface ApplyPresetsOptions extends RuleSetAssetOptions {
   proxyOutbound?: string
   directOutbound: string
 }
@@ -75,15 +84,14 @@ export interface DetectedPresetState {
 }
 
 const SOURCE_URLS = {
-  ruSmartGeositeDat: 'https://github.com/wastrel-g/geosite-ru-smart/releases/latest/download/geosite.dat',
+  ruGeosite: 'https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-ru.srs',
   ruGeoip: 'https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geoip/geoip-ru.srs',
   cnGeosite: 'https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-cn.srs',
   cnGeoip: 'https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs',
 } as const
 
-const MANAGED_RU_SMART_RULESET_PATH = 'rulesets/geosite-ru-smart/direct-ru.srs'
-
 const DNS_DIRECT_TAG = 'preset-dns-direct'
+const FALLBACK_DOH_SERVER = '1.1.1.1'
 const DNS_PROXY_TAG = 'preset-dns-proxy'
 const BUILTIN_DIRECT_OUTBOUND_TAG = 'direct'
 
@@ -164,11 +172,32 @@ const localRuleSet = (tag: string, path: string) => ({
   path,
 })
 
+const ruleSetFor = (tag: string, url: string, options: ApplyPresetOptions) => {
+  const path = options.ruleSetPaths?.[url]
+  if (path) return localRuleSet(tag, path)
+  if (options.requireLocalAssets) {
+    throw new Error(`rule-set asset for ${url} has not been downloaded`)
+  }
+  return remoteRuleSet(tag, url, options.directOutbound)
+}
+
 const dnsServer = (tag: string, server: string, detour?: string) => ({
   type: 'udp',
   tag,
   server,
   server_port: 53,
+  ...(detour ? { detour } : {}),
+})
+
+// DNS-over-HTTPS for everything that is not regional traffic.
+//
+// The address is an IP literal on purpose: a hostname here would have to be
+// resolved before DNS works, and that bootstrap lookup would go out over the
+// very plaintext UDP 53 we are trying to stop using.
+const dohDnsServer = (tag: string, server: string, detour?: string) => ({
+  type: 'https',
+  tag,
+  server,
   ...(detour ? { detour } : {}),
 })
 
@@ -209,6 +238,28 @@ const addDirectDnsServer = (config: Config, directOutbound: string, changes: str
   changes.push(`${action} dns server ${server.tag}`)
 }
 
+const outboundExists = (config: Config, tag: string): boolean =>
+  (config.outbounds as any[]).some(item => String(item?.tag ?? '') === tag)
+
+// Install the DoH fallback and make it the default resolver.
+//
+// The detour is only set when the outbound really exists. sing-box fails to
+// start with "outbound detour not found" on an unknown tag, and ValidateConfig
+// does not catch it, so emitting an unverified tag here would turn a DNS
+// improvement into a core that refuses to boot. Without a usable proxy outbound
+// the queries still go over DoH/443 directly, which is the point of the change.
+const addFallbackDohServer = (config: Config, proxyOutbound: string | undefined, changes: string[]) => {
+  const detour = proxyOutbound && outboundExists(config, proxyOutbound) ? proxyOutbound : undefined
+  const server = dohDnsServer(DNS_PROXY_TAG, FALLBACK_DOH_SERVER, detour)
+  const action = upsertByTag(config.dns.servers as any[], server)
+  changes.push(`${action} dns server ${server.tag}`)
+
+  if (config.dns.final !== DNS_PROXY_TAG) {
+    config.dns.final = DNS_PROXY_TAG
+    changes.push(`set dns final ${DNS_PROXY_TAG}`)
+  }
+}
+
 const addRuleSet = (config: Config, ruleSet: any, changes: string[]) => {
   ;(config.route.rule_set as any[]).push(ruleSet)
   changes.push(`add rule-set ${ruleSet.tag}`)
@@ -226,17 +277,15 @@ const addDnsRule = (config: Config, rule: any, label: string, changes: string[])
 
 const countrySources = (region: PresetRegion) => region === 'RU'
   ? {
-      geosite: MANAGED_RU_SMART_RULESET_PATH,
-      geositeType: 'local' as const,
+      geosite: SOURCE_URLS.ruGeosite,
       geoip: SOURCE_URLS.ruGeoip,
       names: [
-        { name: 'wastrel-g/geosite-ru-smart: direct-ru', url: SOURCE_URLS.ruSmartGeositeDat, path: MANAGED_RU_SMART_RULESET_PATH },
+        { name: 'SagerNet/sing-geosite: geolocation-ru', url: SOURCE_URLS.ruGeosite },
         { name: 'runetfreedom/russia-v2ray-rules-dat: geoip-ru', url: SOURCE_URLS.ruGeoip },
       ],
     }
   : {
       geosite: SOURCE_URLS.cnGeosite,
-      geositeType: 'remote' as const,
       geoip: SOURCE_URLS.cnGeoip,
       names: [
         { name: 'SagerNet/sing-geosite: geolocation-cn', url: SOURCE_URLS.cnGeosite },
@@ -250,14 +299,8 @@ const applyRegionDirectPreset = (region: PresetRegion): PresetApplier => (config
   const geositeTag = presetRuleSetTag(region, 'direct', 'geosite')
   const geoipTag = presetRuleSetTag(region, 'direct', 'geoip')
 
-  addRuleSet(
-    config,
-    sources.geositeType === 'local'
-      ? localRuleSet(geositeTag, sources.geosite)
-      : remoteRuleSet(geositeTag, sources.geosite, directOutbound),
-    changes,
-  )
-  addRuleSet(config, remoteRuleSet(geoipTag, sources.geoip, directOutbound), changes)
+  addRuleSet(config, ruleSetFor(geositeTag, sources.geosite, options), changes)
+  addRuleSet(config, ruleSetFor(geoipTag, sources.geoip, options), changes)
   addRouteRule(config, { rule_set: [geositeTag, geoipTag], outbound: directOutbound }, `${geositeTag}, ${geoipTag}`, changes)
   addDnsRule(config, { action: 'route', rule_set: [geositeTag], server: DNS_DIRECT_TAG }, geositeTag, changes)
 }
@@ -330,8 +373,12 @@ const pruneUnusedPresetDnsServers = (config: Config) => {
   config.dns.servers = (config.dns.servers as any[]).filter(server => {
     const tag = String(server?.tag ?? '')
     if (tag !== DNS_DIRECT_TAG && tag !== DNS_PROXY_TAG) return true
+    if (tag === DNS_PROXY_TAG && config.dns.final === DNS_PROXY_TAG) return true
     return usedServers.has(tag)
   }) as any
+  if (config.dns.final === DNS_PROXY_TAG && !config.dns.servers.some((server: any) => server?.tag === DNS_PROXY_TAG)) {
+    delete config.dns.final
+  }
 }
 
 export const removePresetManagedItems = (config: Config, region: PresetRegion) => {
@@ -391,8 +438,8 @@ const makeRegionPreview = (
   const changes: string[] = []
   removePresetManagedItems(after, state.region)
   addDirectDnsServer(after, options.directOutbound, changes)
-  presetByRegion(state.region).apply(after, { directOutbound: options.directOutbound }, changes)
-  pruneUnusedPresetDnsServers(after)
+  addFallbackDohServer(after, options.proxyOutbound, changes)
+  presetByRegion(state.region).apply(after, { ...options }, changes)
 
   const desired = existingManagedItemsForRegion(after, state.region)
   const existingRuleSetTags = new Set(existing.routeRuleSets.map(item => String(item?.tag ?? '')))
@@ -460,13 +507,17 @@ export const applyPresets = (
 
   if (states.some(state => state.enabled)) {
     addDirectDnsServer(config, options.directOutbound, changes)
+    addFallbackDohServer(config, options.proxyOutbound, changes)
   }
 
   for (const state of states) {
     if (!state.enabled) continue
-    presetByRegion(state.region).apply(config, { directOutbound: options.directOutbound }, changes)
+    presetByRegion(state.region).apply(config, { ...options }, changes)
   }
 
+  if (!states.some(state => state.enabled) && config.dns.final === DNS_PROXY_TAG) {
+    delete config.dns.final
+  }
   pruneUnusedPresetDnsServers(config)
 
   return {
@@ -499,7 +550,12 @@ export const applyRoutingDnsPreset = (
     input,
     preset.region === 'RU' ? state : detected.ru,
     preset.region === 'ZH' ? state : detected.zh,
-    { directOutbound: options.directOutbound },
+    {
+      proxyOutbound: options.proxyOutbound,
+      directOutbound: options.directOutbound,
+      ruleSetPaths: options.ruleSetPaths,
+      requireLocalAssets: options.requireLocalAssets,
+    },
   )
 
   return {
@@ -507,6 +563,26 @@ export const applyRoutingDnsPreset = (
     changes: result.changes,
     preview: result.preview[regionKey(preset.region)],
   }
+}
+
+// requiredRuleSetSources lists the tag/URL pairs the enabled regions need, so
+// the caller can ask the panel to download exactly those before saving. The tag
+// matters: the panel names the file after it, and the returned path is what the
+// local rule-set entry points at.
+export const requiredRuleSetSources = (
+  ruState: RegionalPresetState,
+  zhState: RegionalPresetState,
+): { tag: string, url: string }[] => {
+  const sources: { tag: string, url: string }[] = []
+  for (const state of [ruState, zhState]) {
+    if (!state.enabled) continue
+    const regionSources = countrySources(state.region)
+    sources.push(
+      { tag: presetRuleSetTag(state.region, 'direct', 'geosite'), url: regionSources.geosite },
+      { tag: presetRuleSetTag(state.region, 'direct', 'geoip'), url: regionSources.geoip },
+    )
+  }
+  return sources
 }
 
 export const validatePresetCatalogShape = () => routingDnsPresetCatalog.every(preset =>
@@ -520,6 +596,6 @@ export const validatePresetCatalogShape = () => routingDnsPresetCatalog.every(pr
         parsed.password === '' &&
         (parsed.pathname.endsWith('.srs') || parsed.pathname.endsWith('/geosite.dat'))
     })()
-    const hasSafeManagedPath = !source.path || source.path === MANAGED_RU_SMART_RULESET_PATH
+    const hasSafeManagedPath = !source.path || (!source.path.startsWith('/') && !source.path.includes('..'))
     return hasSafeURL && hasSafeManagedPath && (Boolean(source.url) || Boolean(source.path))
   }))

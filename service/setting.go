@@ -98,6 +98,12 @@ var defaultValueMap = map[string]string{
 	"ipHistoryRetentionDays":      "30",
 	"observabilityMemoryCapMB":    "32",
 	"updateChannel":               "main",
+	// Rule-set assets. "direct" downloads .srs files with the panel's own
+	// network stack; "outbound" routes the download through a running core
+	// outbound (by tag), which is what lets a censored server fetch sources
+	// like raw.githubusercontent.com through its own proxy.
+	"ruleSetDownloadMode":         "direct",
+	"ruleSetDownloadOutbound":     "",
 	"telegramEnabled":             "false",
 	"telegramBotToken":            "",
 	"telegramChatID":              "",
@@ -965,6 +971,9 @@ func (s *SettingService) validateAll(settings map[string]string) error {
 		if err := validateObservabilitySettingInput(key, obj); err != nil {
 			return err
 		}
+		if err := validateRuleSetSettingInput(key, obj, settings); err != nil {
+			return err
+		}
 		if err := validateSubscriptionSettingInput(key, obj); err != nil {
 			return err
 		}
@@ -1377,6 +1386,32 @@ func validateTelegramSettingInput(key string, value string) error {
 	case "telegramOutboundTag":
 		if len(value) > 256 {
 			return common.NewError("telegramOutboundTag is too long")
+		}
+	}
+	return nil
+}
+
+// validateRuleSetSettingInput guards the rule-set download channel. The
+// "outbound" mode is only meaningful with a tag, and an empty tag would fail
+// later at download time with a much less obvious error.
+func validateRuleSetSettingInput(key string, value string, settings map[string]string) error {
+	switch key {
+	case "ruleSetDownloadMode":
+		switch value {
+		case "direct", "outbound":
+		default:
+			return common.NewError("rule-set download mode must be 'direct' or 'outbound'")
+		}
+		if value == "outbound" {
+			// Only enforce the companion tag when it is part of the same save,
+			// so unrelated partial saves of this key keep working.
+			if tag, ok := settings["ruleSetDownloadOutbound"]; ok && strings.TrimSpace(tag) == "" {
+				return common.NewError("rule-set download outbound is required when mode is 'outbound'")
+			}
+		}
+	case "ruleSetDownloadOutbound":
+		if len(value) > 256 {
+			return common.NewError("ruleSetDownloadOutbound is too long")
 		}
 	}
 	return nil

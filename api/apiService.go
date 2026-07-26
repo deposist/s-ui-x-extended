@@ -48,6 +48,7 @@ type ApiService struct {
 	service.VersionService
 	service.PanelUpdateService
 	service.DoctorService
+	service.RuleSetAssetService
 }
 
 type Option func(*ApiService)

@@ -884,10 +884,16 @@ export default {
       noExceptions: "No exceptions added.",
       invalidDomain: "Enter a valid domain.",
     },
+    ruleSetDownload: {
+      label: "Download rule-set files via",
+      hint: "The panel downloads the .srs files and keeps them on disk, so the core does not fetch them while starting. Pick an outbound if the sources are blocked for this server.",
+      direct: "Direct (panel network)",
+    },
     result: {
       customItemsKept: "Preset-managed rules and DNS entries were updated. Custom items were kept.",
       failed: "Preset was not applied",
       regionalDataUnavailable: "Required regional domain data is not available. Update regional data and try again.",
+      ruleSetDownloadFailed: "The rule-set files could not be downloaded, so nothing was changed. Try downloading them through an outbound.",
     },
   },
   delivery: {
