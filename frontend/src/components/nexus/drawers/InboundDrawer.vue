@@ -4,6 +4,7 @@
     :loading="loading"
     :model-value="visible"
     :save-disabled="!validate"
+    :save-disabled-reason="saveBlockedReason"
     :saving="loading"
     :title="$t('actions.' + title) + ' ' + $t('objects.inbound')"
     :width="720"
@@ -194,6 +195,7 @@ export default {
     }
   },
   methods: {
+    // Exposed so the tag field's error state uses the same blank rule as Save.
     isBlankIdentity,
     async loadData(id: number) {
       this.loading = true
@@ -298,13 +300,22 @@ export default {
     dirty(): boolean {
       return this.snapshot !== "" && (JSON.stringify(this.inbound) !== this.snapshot || JSON.stringify(this.initUsers) !== this.snapshotInitUsers)
     },
-    validate() {
-      if (this.inbound == undefined) return false
-      if (isBlankIdentity(this.inbound.tag)) return false
-      if (this.inbound.listen_port > 65535 || this.inbound.listen_port < 1) return false
-      if (this.OnlyTLS.includes(this.inbound.type) && this.inbound.tls_id == 0) return false
-      if (!this.selectedTlsTemplateCompatible) return false
-      return true
+    // Single source of truth for "why can't I save?": validate() is derived from
+    // it so the footer message can never drift out of sync with the disabled
+    // button. Empty string means the form is valid.
+    saveBlockedReason(): string {
+      if (this.inbound == undefined) return this.$t('error.invalidData')
+      if (isBlankIdentity(this.inbound.tag)) return this.$t('form.cannotSave.tagRequired')
+      // Tun has no listen_port; only range-check when the field is in use.
+      if (this.inbound.listen_port != null && (this.inbound.listen_port > 65535 || this.inbound.listen_port < 1)) {
+        return this.$t('form.cannotSave.portRange')
+      }
+      if (this.OnlyTLS.includes(this.inbound.type) && !this.inbound.tls_id) return this.$t('form.cannotSave.tlsRequired')
+      if (!this.selectedTlsTemplateCompatible) return this.$t('form.cannotSave.tlsIncompatible')
+      return ''
+    },
+    validate(): boolean {
+      return this.saveBlockedReason === ''
     },
     clients() {
       return Data().clients?? []

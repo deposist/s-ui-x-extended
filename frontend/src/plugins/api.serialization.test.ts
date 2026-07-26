@@ -46,4 +46,26 @@ describe('api instance form encoding', () => {
     expect(decoded).not.toBeNull()
     expect(JSON.parse(decoded as string)).toEqual({ sources })
   })
+
+  // The rule-conditions endpoint reads only c.PostForm("data") and deliberately
+  // has no fallback to flattened keys, so a deeply nested rule has to survive
+  // this encoding intact or the check would validate the wrong thing.
+  it('sends a nested rule to rule-conditions as a single data field', async () => {
+    const rule = {
+      type: 'logical',
+      mode: 'and',
+      rules: [
+        { domain: ['a.example'] },
+        // An empty nested branch must survive as {} rather than being flattened
+        // away: it is exactly the shape the endpoint reports on.
+        { type: 'logical', mode: 'or', rules: [{}] },
+      ],
+      outbound: 'direct',
+    }
+    const body = await serializeBody({ data: JSON.stringify({ kind: 'route', rule }) })
+
+    const params = new URLSearchParams(body)
+    expect([...params.keys()]).toEqual(['data'])
+    expect(JSON.parse(params.get('data') as string)).toEqual({ kind: 'route', rule })
+  })
 })

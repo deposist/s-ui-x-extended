@@ -1,6 +1,6 @@
 interface generalRule {
   invert: boolean
-  action: 'route' | 'route-options' | 'reject' | 'hijack-dns' | 'sniff' | 'resolve' | 'bypass'
+  action: 'route' | 'route-options' | 'direct' | 'reject' | 'hijack-dns' | 'sniff' | 'resolve' | 'bypass'
   outbound?: string
   override_address?: string
   override_port?: number
@@ -39,8 +39,118 @@ export const actionKeys = [
   'sniffer',
   'timeout',
   'strategy',
-  'server'
+  'server',
+  // Present on the resolve action alongside `server`/`strategy`, and on
+  // `route-options`. Their absence used to push them into the match half of the
+  // modal, which silently rewrote them as conditions on save.
+  'override_gateway',
+  'disable_cache',
+  'rewrite_ttl',
+  'client_subnet',
 ]
+
+/**
+ * `DialerOptions`, which the fork decodes into a rule only when its action is
+ * `direct` (`DirectActionOptions` is a type alias of `DialerOptions`, selected by
+ * `C.RuleActionTypeDirect`).
+ *
+ * Kept separate from `actionKeys` because of one genuine schema collision:
+ * `network_type` is a `DialerOptions` field *and* a `RawDefaultRule` match field.
+ * A flat key lookup has to guess wrong in one direction or the other, so the
+ * partition is resolved by action instead — see `isRouteActionKey`.
+ *
+ * `network_strategy` and `fallback_delay` are intentionally absent: they are
+ * already in `actionKeys` via `RawRouteOptionsActionOptions`, and listing a key
+ * in both would make the partition order-dependent.
+ */
+export const routeDialerActionKeys = [
+  'detour',
+  'bind_interface',
+  'inet4_bind_address',
+  'inet6_bind_address',
+  'bind_address_no_port',
+  'protect_path',
+  'routing_mark',
+  'reuse_addr',
+  'netns',
+  'connect_timeout',
+  'tcp_fast_open',
+  'tcp_multi_path',
+  'disable_tcp_keep_alive',
+  'tcp_keep_alive',
+  'tcp_keep_alive_interval',
+  'udp_fragment',
+  'domain_resolver',
+  'network_type',
+  'fallback_network_type',
+  'domain_strategy',
+] as const
+
+/**
+ * Whether a key belongs to the action half of a route rule.
+ *
+ * Context-sensitive on purpose. `network_type` is the only key the fork treats as
+ * both an action and a match field, and which of the two it is depends entirely
+ * on the rule's action, so this is decidable rather than a coin flip.
+ */
+export const isRouteActionKey = (key: string, action: unknown): boolean =>
+  actionKeys.includes(key) ||
+  (action === 'direct' && (routeDialerActionKeys as readonly string[]).includes(key))
+/**
+ * Every JSON field of the pinned fork's `option.RawDefaultRule` except `invert`,
+ * which is owned by the node shape control rather than by the match editor.
+ *
+ * Transcribed from the struct tags of
+ * `github.com/deposist/sing-box-extended@v1.13.14-extended-2.5.4`, not from the
+ * `rule` interface below, because the decoder also accepts deprecated aliases
+ * that the interface never modelled: `geosite`, `geoip`, `source_geoip`, and
+ * `rule_set_ipcidr_match_source`. A default -> logical conversion deletes exactly
+ * these keys, so anything missing here would survive the conversion and be
+ * silently misread as an action or passthrough field on the resulting node.
+ */
+export const routeDefaultMatchKeys = [
+  'inbound',
+  'ip_version',
+  'network',
+  'auth_user',
+  'protocol',
+  'client',
+  'domain',
+  'domain_suffix',
+  'domain_keyword',
+  'domain_regex',
+  'geosite',
+  'source_geoip',
+  'geoip',
+  'source_ip_cidr',
+  'source_ip_is_private',
+  'ip_cidr',
+  'ip_is_private',
+  'source_port',
+  'source_port_range',
+  'port',
+  'port_range',
+  'process_name',
+  'process_path',
+  'process_path_regex',
+  'package_name',
+  'user',
+  'user_id',
+  'clash_mode',
+  'network_type',
+  'network_is_expensive',
+  'network_is_constrained',
+  'wifi_ssid',
+  'wifi_bssid',
+  'interface_address',
+  'network_interface_address',
+  'default_interface_address',
+  'preferred_by',
+  'rule_set',
+  'rule_set_ip_cidr_match_source',
+  'rule_set_ipcidr_match_source',
+] as const
+
 export interface logicalRule extends generalRule {
   type: 'logical' | 'simple'
   mode: 'and' | 'or'

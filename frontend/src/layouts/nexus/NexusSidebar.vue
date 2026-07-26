@@ -103,10 +103,21 @@
         <v-list nav>
           <v-list-item
             :aria-label="$t('menu.logout')"
+            class="nexus-sidebar__item"
             prepend-icon="lucide:log-out"
             :title="$t('menu.logout')"
             @click="logout"
-          />
+          >
+            <!-- In rail mode the label is hidden, so the bare door icon was
+                 unidentifiable; match the nav items and expose a tooltip. -->
+            <v-tooltip
+              v-if="collapsed"
+              activator="parent"
+              :location="rtl ? 'start' : 'end'"
+            >
+              {{ $t('menu.logout') }}
+            </v-tooltip>
+          </v-list-item>
         </v-list>
         <slot name="footer" />
       </div>

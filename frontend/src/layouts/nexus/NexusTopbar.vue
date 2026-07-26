@@ -84,6 +84,10 @@
             <v-list-item-title>{{ $t(`nexus.palette.options.${item}`) }}</v-list-item-title>
           </v-list-item>
 
+          <v-divider />
+          <v-list-item prepend-icon="lucide:log-out" @click="logout">
+            <v-list-item-title>{{ $t('menu.logout') }}</v-list-item-title>
+          </v-list-item>
         </v-list>
       </v-menu>
 
@@ -161,6 +165,28 @@
           </v-list>
         </v-menu>
 
+        <!-- Account menu: logging out previously lived only at the bottom of the
+             sidebar, which is unreachable-by-label in rail mode. The topbar is
+             where users look for account actions. -->
+        <v-menu>
+          <template #activator="{ props }">
+            <v-btn
+              :aria-label="$t('menu.account')"
+              icon
+              :title="$t('menu.account')"
+              variant="text"
+              v-bind="props"
+            >
+              <v-icon icon="lucide:users" />
+            </v-btn>
+          </template>
+          <v-list>
+            <v-list-item prepend-icon="lucide:log-out" @click="logout">
+              <v-list-item-title>{{ $t('menu.logout') }}</v-list-item-title>
+            </v-list-item>
+          </v-list>
+        </v-menu>
+
       </template>
     </template>
   </v-app-bar>
@@ -169,6 +195,7 @@
 <script lang="ts" setup>
 import { pageHeader, topbarSearch } from '@/components/nexus/primitives/pageHeaderPortal'
 import { languages, setI18nLocale } from '@/locales'
+import { logout } from '@/plugins/httputil'
 import { UI_PALETTES, useUiPalette } from '@/uiMode/palette'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'

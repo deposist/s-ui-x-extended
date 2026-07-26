@@ -41,8 +41,15 @@
     </div>
 
     <div class="nexus-drawer__footer">
+      <!-- A disabled Save button with no explanation is a dead end, so when the
+           parent supplies a blocking reason it takes priority over the generic
+           "unsaved changes" chip (which is implied while a form is incomplete). -->
+      <span v-if="saveDisabled && saveDisabledReason" class="nexus-drawer__reason">
+        <v-icon icon="lucide:alert-circle" size="16" />
+        {{ saveDisabledReason }}
+      </span>
       <v-chip
-        v-if="dirty"
+        v-else-if="dirty"
         class="nexus-drawer__dirty"
         color="warning"
         prepend-icon="lucide:alert-triangle"
@@ -79,6 +86,8 @@ const props = withDefaults(defineProps<{
   dirty?: boolean
   saving?: boolean
   saveDisabled?: boolean
+  /** Human-readable reason Save is blocked; rendered in the footer. */
+  saveDisabledReason?: string
 }>(), {
   width: 560,
 })
@@ -186,6 +195,16 @@ const onModel = (value: boolean) => {
    Give every field a little top breathing room so labels always stay clear. */
 .nexus-drawer__body :deep(.v-input) {
   margin-block-start: var(--nexus-gap-2);
+}
+
+.nexus-drawer__reason {
+  align-items: center;
+  color: rgb(var(--v-theme-warning));
+  display: flex;
+  font-size: 0.8125rem;
+  gap: var(--nexus-gap-1);
+  line-height: 1.4;
+  min-width: 0;
 }
 
 .nexus-drawer__footer {

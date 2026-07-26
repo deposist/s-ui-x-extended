@@ -64,6 +64,11 @@ func (a *APIv2Handler) initRouter(g *gin.RouterGroup) {
 	g.POST("/telegram/backup", a.ApiService.BackupToTelegram)
 	g.POST("/telegram/backup/run", a.ApiService.RunTelegramBackup)
 	registerImportXUIRoutes(g, &a.ApiService)
+	// Declared before the /:postAction wildcard on purpose: the dispatcher only
+	// matches a single path segment, so a two-segment route resolves only when it
+	// is registered explicitly and ahead of it. The handler gates its own scope,
+	// which is why this path is absent from apiV2ActionScopes.
+	g.POST("/config/rule-conditions", a.ApiService.ValidateRuleConditions)
 	g.POST("/:postAction", a.postHandler)
 	g.GET("/:getAction", a.getHandler)
 }

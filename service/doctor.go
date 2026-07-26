@@ -245,83 +245,43 @@ func doctorReferenceChecks(rawConfig []byte) []DoctorItem {
 		items = append(items, doctorOK("route-references", "Route references", "Route final and rule outbound references resolve.", nil))
 	}
 
-	items = append(items, doctorRuleConditionChecks(cfg.Route.Rules, cfg.DNS.Rules)...)
+	items = append(items, doctorRuleConditionChecks(rawConfig)...)
 	items = append(items, doctorRuleSetURLChecks(cfg.Route.RuleSet)...)
 	items = append(items, doctorLocalRuleSetChecks(cfg.Route.RuleSet)...)
 	return items
 }
 
-var ruleStructuralKeys = map[string]bool{"type": true, "mode": true, "rules": true, "invert": true}
-
-// ruleHasConditions mirrors sing-box's rule validity check. Logical rules need
-// non-empty valid branches; simple rules need one non-zero meaningful field.
-func ruleHasConditions(rule map[string]any) bool {
-	if stringField(rule, "type") == "logical" {
-		nested, ok := rule["rules"].([]any)
-		if !ok || len(nested) == 0 {
-			return false
+// doctorRuleConditionChecks asks the core which rules it would reject, instead
+// of re-deriving its validity rules here.
+//
+// The map-walking predicates this replaces were a second, subtly different copy
+// of the same logic the save path used, so the doctor and the save path could
+// disagree about the very same config. Both now call core.RuleConditionIssues.
+//
+// Dropped rules are reported as a warning rather than an error: the core starts
+// fine, it just silently discards the rule, so this is data loss to be noticed
+// rather than a startup failure to be feared.
+func doctorRuleConditionChecks(rawConfig []byte) []DoctorItem {
+	issues, err := core.RuleConditionIssues(rawConfig)
+	if err != nil {
+		return []DoctorItem{doctorError("rule-conditions", "Rule conditions", err.Error(), "Fix malformed config JSON.", nil)}
+	}
+	var fatal, dropped []string
+	for _, issue := range issues {
+		entry := fmt.Sprintf("%s: %s", issue.Path, issue.Message)
+		if issue.Code == core.RuleConditionCodeDroppedRule {
+			dropped = append(dropped, entry)
+			continue
 		}
-		for _, item := range nested {
-			sub, ok := item.(map[string]any)
-			if !ok || !ruleHasConditions(sub) {
-				return false
-			}
-		}
-		return true
+		fatal = append(fatal, entry)
 	}
-	for key, value := range rule {
-		if !ruleStructuralKeys[key] && ruleValueIsMeaningful(value) {
-			return true
-		}
+	if len(fatal) > 0 {
+		return []DoctorItem{doctorError("rule-conditions", "Rule conditions", "Some rules have no conditions, so sing-box will not start.", "Add a condition to each listed rule, or delete the rule.", fatal)}
 	}
-	return false
-}
-
-func ruleValueIsMeaningful(value any) bool {
-	switch typed := value.(type) {
-	case nil:
-		return false
-	case string:
-		return strings.TrimSpace(typed) != ""
-	case bool:
-		return typed
-	case float64:
-		return typed != 0
-	case []any:
-		return len(typed) > 0
-	case map[string]any:
-		return len(typed) > 0
-	default:
-		return true
+	if len(dropped) > 0 {
+		return []DoctorItem{doctorWarn("rule-conditions", "Rule conditions", "Some rules are empty and are silently discarded when the config is loaded.", "Remove the empty rules, or give them a condition so they take effect.", dropped)}
 	}
-}
-
-func doctorRuleConditionChecks(routeRules, dnsRules []map[string]any) []DoctorItem {
-	var empty []string
-	scan := func(prefix string, rules []map[string]any) {
-		for i, rule := range rules {
-			if stringField(rule, "type") != "logical" {
-				continue
-			}
-			nested, _ := rule["rules"].([]any)
-			if len(nested) == 0 {
-				empty = append(empty, fmt.Sprintf("%s[%d] has no sub-rules", prefix, i))
-				continue
-			}
-			for j, item := range nested {
-				sub, ok := item.(map[string]any)
-				if !ok || !ruleHasConditions(sub) {
-					empty = append(empty, fmt.Sprintf("%s[%d].rules[%d] has no conditions", prefix, i, j))
-				}
-			}
-		}
-	}
-	scan("route.rules", routeRules)
-	scan("dns.rules", dnsRules)
-	if len(empty) > 0 {
-		return []DoctorItem{doctorError("rule-conditions", "Rule conditions", "Some logical rules have no conditions, so sing-box will not start.", "Add a condition to each listed rule, or delete the rule.", empty)}
-	}
-	return []DoctorItem{doctorOK("rule-conditions", "Rule conditions", "Every logical rule has at least one condition.", nil)}
+	return []DoctorItem{doctorOK("rule-conditions", "Rule conditions", "Every rule has at least one condition.", nil)}
 }
 
 func appendMissingRouteOutbound(missing []string, rule map[string]any, index int, tags map[string]bool) []string {

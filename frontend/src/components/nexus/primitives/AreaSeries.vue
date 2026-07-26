@@ -6,7 +6,11 @@
     :role="ariaLabel ? 'img' : undefined"
   >
     <Line v-if="hasValues" :data="chartData" :options="chartOptions" />
-    <div v-else class="nexus-area-series__empty" aria-hidden="true" />
+    <!-- An all-zero / all-missing series drawn as a flat line looks like a
+         working chart reporting nothing. Say so explicitly instead. -->
+    <div v-else class="nexus-area-series__empty">
+      <span class="nexus-area-series__empty-text">{{ emptyLabel ?? $t('nexus.overview.chart.noData') }}</span>
+    </div>
   </div>
 </template>
 
@@ -51,6 +55,8 @@ const props = withDefaults(defineProps<{
   ariaLabel?: string
   valueFormatter?: (value: number) => string
   compact?: boolean
+  // Overrides the default "no data" copy shown when every point is zero/missing.
+  emptyLabel?: string
 }>(), {
   labels: () => [],
   series: () => [],
@@ -318,16 +324,27 @@ const chartOptions = computed<ChartOptions<'line'>>(() => ({
 }
 
 .nexus-area-series__empty {
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--nexus-chart-1) 16%, transparent),
-      transparent 72%
-    );
-  border: 1px solid var(--nexus-border);
+  align-items: center;
+  background: var(--nexus-surface-2);
+  border: 1px dashed var(--nexus-border-strong);
   border-radius: var(--nexus-radius-md);
   block-size: 100%;
+  display: flex;
+  justify-content: center;
   min-block-size: inherit;
+  padding: var(--nexus-gap-2);
+}
+
+.nexus-area-series__empty-text {
+  color: rgb(var(--v-theme-on-surface) / 68%);
+  font-size: 0.8rem;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.nexus-area-series--compact .nexus-area-series__empty-text {
+  font-size: 0.72rem;
 }
 
 .nexus-area-series :deep(.nexus-area-series__tooltip) {

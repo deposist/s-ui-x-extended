@@ -12,6 +12,19 @@
 
     <overview-state v-else-if="clients.length === 0">
       {{ $t('nexus.overview.clients.empty') }}
+
+      <template #action>
+        <v-btn
+          append-icon="lucide:arrow-right"
+          color="primary"
+          density="comfortable"
+          size="small"
+          to="/clients"
+          variant="tonal"
+        >
+          {{ $t('nexus.overview.clients.emptyAction') }}
+        </v-btn>
+      </template>
     </overview-state>
 
     <div v-else class="nexus-top-clients__content">
@@ -98,7 +111,7 @@ const onlineCount = computed(() => {
 
 <style scoped>
 .nexus-top-clients {
-  height: var(--nexus-overview-primary-panel-height);
+  max-height: var(--nexus-overview-primary-panel-height);
   min-height: 0;
   overflow: hidden;
 }

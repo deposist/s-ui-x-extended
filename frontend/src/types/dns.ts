@@ -92,6 +92,64 @@ export const actionDnsRuleKeys = [
   'ns',
   'extra',
 ]
+/**
+ * Every JSON field of the pinned fork's `option.RawDefaultDNSRule` except
+ * `invert`, transcribed from the struct tags of
+ * `github.com/deposist/sing-box-extended@v1.13.14-extended-2.5.4`.
+ *
+ * Two entries are easy to get wrong and are the reason this is transcribed from
+ * the fork rather than from the `dnsRule` interface below:
+ *   - `outbound` is a *match* field on a DNS rule (the legacy outbound matcher),
+ *     even though it is an *action* field on a route rule. Classifying it as an
+ *     action here would leave it behind on a converted node.
+ *   - the deprecated aliases `geosite`, `geoip`, `source_geoip`, and
+ *     `rule_set_ipcidr_match_source` are still decoded by the fork.
+ */
+export const dnsDefaultMatchKeys = [
+  'inbound',
+  'ip_version',
+  'query_type',
+  'network',
+  'auth_user',
+  'protocol',
+  'domain',
+  'domain_suffix',
+  'domain_keyword',
+  'domain_regex',
+  'geosite',
+  'source_geoip',
+  'geoip',
+  'ip_cidr',
+  'ip_is_private',
+  'ip_accept_any',
+  'source_ip_cidr',
+  'source_ip_is_private',
+  'source_port',
+  'source_port_range',
+  'port',
+  'port_range',
+  'process_name',
+  'process_path',
+  'process_path_regex',
+  'package_name',
+  'user',
+  'user_id',
+  'outbound',
+  'clash_mode',
+  'network_type',
+  'network_is_expensive',
+  'network_is_constrained',
+  'wifi_ssid',
+  'wifi_bssid',
+  'interface_address',
+  'network_interface_address',
+  'default_interface_address',
+  'rule_set',
+  'rule_set_ip_cidr_match_source',
+  'rule_set_ip_cidr_accept_empty',
+  'rule_set_ipcidr_match_source',
+] as const
+
 export interface logicalDnsRule extends generalDnsRule {
   type: 'logical' | 'simple'
   mode: 'and' | 'or'

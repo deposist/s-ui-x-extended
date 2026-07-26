@@ -34,7 +34,19 @@
       </template>
 
       <template #empty>
-        <empty-state icon="lucide:user-cog" :title="$t('table.noData')" />
+        <!-- No search on this page, so a single explanatory state is enough.
+             In practice it only shows if the admin list fails to load. -->
+        <empty-state
+          :description="$t('emptyState.adminsHint')"
+          icon="lucide:user-cog"
+          :title="$t('emptyState.admins')"
+        >
+          <template #action>
+            <v-btn color="primary" prepend-icon="lucide:plus" variant="flat" @click="emit('add')">
+              {{ $t('admin.addAdmin') }}
+            </v-btn>
+          </template>
+        </empty-state>
       </template>
     </nexus-data-table>
   </div>

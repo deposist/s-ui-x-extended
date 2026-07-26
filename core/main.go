@@ -18,16 +18,17 @@ import (
 )
 
 type Core struct {
-	access          sync.RWMutex
-	ctx             context.Context
-	isRunning       bool
-	instance        *Box
-	inboundManager  adapter.InboundManager
-	outboundManager adapter.OutboundManager
-	serviceManager  adapter.ServiceManager
-	endpointManager adapter.EndpointManager
-	router          adapter.Router
-	factory         log.Factory
+	access             sync.RWMutex
+	wireGuardIPCAccess sync.Mutex
+	ctx                context.Context
+	isRunning          bool
+	instance           *Box
+	inboundManager     adapter.InboundManager
+	outboundManager    adapter.OutboundManager
+	serviceManager     adapter.ServiceManager
+	endpointManager    adapter.EndpointManager
+	router             adapter.Router
+	factory            log.Factory
 }
 
 type coreRuntime struct {
@@ -66,6 +67,8 @@ func (c *Core) GetInstance() *Box {
 }
 
 func (c *Core) Start(sbConfig []byte) error {
+	c.wireGuardIPCAccess.Lock()
+	defer c.wireGuardIPCAccess.Unlock()
 	var opt option.Options
 	ctx := c.GetCtx()
 	err := opt.UnmarshalJSONContext(ctx, sbConfig)
@@ -110,6 +113,8 @@ func (c *Core) Start(sbConfig []byte) error {
 }
 
 func (c *Core) Stop() error {
+	c.wireGuardIPCAccess.Lock()
+	defer c.wireGuardIPCAccess.Unlock()
 	c.access.Lock()
 	c.isRunning = false
 	if c.instance == nil {

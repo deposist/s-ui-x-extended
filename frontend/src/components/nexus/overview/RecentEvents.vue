@@ -89,7 +89,7 @@ const dateTimeValue = (timestamp: number): string | undefined => {
 
 <style scoped>
 .nexus-recent-events.nexus-overview-panel {
-  height: var(--nexus-overview-primary-panel-height);
+  max-height: var(--nexus-overview-primary-panel-height);
   min-height: 0;
   overflow: hidden;
 }

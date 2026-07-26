@@ -9,10 +9,16 @@
       :icon="statusIcon"
       size="20"
     />
+    <!-- Connection state was conveyed by icon colour and a title attribute only,
+         so losing the connection was silent for screen readers. This single live
+         region covers both rail and expanded modes. Metrics stay outside it on
+         purpose: they refresh every 10s and would otherwise be announced
+         constantly. -->
+    <span class="d-sr-only" role="status">S-UI-X Extended: {{ $t(statusLabel) }}</span>
     <div v-if="!rail" class="nexus-server-status__copy">
       <div class="nexus-server-status__row">
-        <strong>S-UI-X Extended</strong>
-        <span class="nexus-server-status__label">{{ $t(statusLabel) }}</span>
+        <strong aria-hidden="true">S-UI-X Extended</strong>
+        <span class="nexus-server-status__label" aria-hidden="true">{{ $t(statusLabel) }}</span>
       </div>
       <div v-if="hasUsageMetrics" class="nexus-server-status__metrics nexus-mono">
         <span>CPU: {{ cpuPercent }}%</span>

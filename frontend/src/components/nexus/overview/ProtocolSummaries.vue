@@ -12,6 +12,19 @@
 
     <overview-state v-else-if="summaries.length === 0">
       {{ $t('nexus.overview.protocols.empty') }}
+
+      <template #action>
+        <v-btn
+          append-icon="lucide:arrow-right"
+          color="primary"
+          density="comfortable"
+          size="small"
+          to="/inbounds"
+          variant="tonal"
+        >
+          {{ $t('nexus.overview.protocols.emptyAction') }}
+        </v-btn>
+      </template>
     </overview-state>
 
     <dense-table v-else>

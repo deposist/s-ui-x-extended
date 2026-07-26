@@ -15,6 +15,8 @@ func (c *Core) WithWireGuardIPC(tag string, fn func(WireGuardIPC) error) error {
 	if fn == nil {
 		return fmt.Errorf("wireguard IPC callback is nil")
 	}
+	c.wireGuardIPCAccess.Lock()
+	defer c.wireGuardIPCAccess.Unlock()
 	return c.withRuntime(func(rt coreRuntime) error {
 		endpoint, ok := rt.endpointManager.Get(tag)
 		if !ok {

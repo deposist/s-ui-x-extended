@@ -1,0 +1,298 @@
+From 684e48ae1996f695cecffa275d6e6141b82f7843 Mon Sep 17 00:00:00 2001
+From: deposist <deposist@users.noreply.github.com>
+Date: Sun, 26 Jul 2026 02:59:49 +0000
+Subject: [PATCH] rule-set: release binary rule-set file and decompressor
+ handles
+
+Loading a binary (.srs) rule-set leaked two handles:
+
+  * (*LocalRuleSet).reloadFile opened the file with os.Open and never
+    closed it, so the handle stayed alive for the process lifetime.
+  * srs.Read never closed its zlib reader.
+
+On Windows the retained file handle prevents the .srs file from being
+renamed or removed, which breaks callers that materialize rule-set assets
+into a temporary directory and clean it up afterwards.
+
+reloadFile now closes the file immediately after srs.Read, returning the
+read error first and a close error only when reading succeeded. srs.Read
+is refactored through an unexported read helper that takes a
+decompressor factory, so the zlib reader is closed on every return path
+with the same error precedence. The caller-owned input reader is never
+closed.
+
+Adds regression tests: rename/remove the same .srs immediately after a
+successful load and after a decode failure without retrying, and
+focused common/srs tests that inject a tracking closer to assert exactly
+one close on success and on parse failure, parse-error precedence over
+close error, and close-error propagation when parsing succeeded.
+---
+ common/srs/binary.go                   | 21 +++++-
+ common/srs/binary_close_test.go        | 95 ++++++++++++++++++++++++++
+ route/rule/rule_set_local.go           |  4 ++
+ route/rule/rule_set_local_file_test.go | 91 ++++++++++++++++++++++++
+ 4 files changed, 210 insertions(+), 1 deletion(-)
+ create mode 100644 common/srs/binary_close_test.go
+ create mode 100644 route/rule/rule_set_local_file_test.go
+
+diff --git a/common/srs/binary.go b/common/srs/binary.go
+index d2c865e1..222c6d49 100644
+--- a/common/srs/binary.go
++++ b/common/srs/binary.go
+@@ -50,6 +50,19 @@ const (
+ )
+ 
+ func Read(reader io.Reader, recover bool) (ruleSetCompat option.PlainRuleSetCompat, err error) {
++	return read(reader, recover, zlib.NewReader)
++}
++
++// read decodes a binary rule-set, decompressing it with newDecompressor.
++//
++// The decompressor is always closed before returning. An earlier parse error
++// takes precedence over a close error; a close error is reported only when
++// parsing otherwise succeeded. The caller-owned input reader is never closed.
++func read(
++	reader io.Reader,
++	recover bool,
++	newDecompressor func(io.Reader) (io.ReadCloser, error),
++) (ruleSetCompat option.PlainRuleSetCompat, err error) {
+ 	var magicBytes [3]byte
+ 	_, err = io.ReadFull(reader, magicBytes[:])
+ 	if err != nil {
+@@ -67,10 +80,16 @@ func Read(reader io.Reader, recover bool) (ruleSetCompat option.PlainRuleSetComp
+ 	if version > C.RuleSetVersionCurrent {
+ 		return ruleSetCompat, E.New("unsupported version: ", version)
+ 	}
+-	compressReader, err := zlib.NewReader(reader)
++	compressReader, err := newDecompressor(reader)
+ 	if err != nil {
+ 		return
+ 	}
++	defer func() {
++		closeErr := compressReader.Close()
++		if err == nil && closeErr != nil {
++			err = closeErr
++		}
++	}()
+ 	bReader := bufio.NewReader(compressReader)
+ 	length, err := binary.ReadUvarint(bReader)
+ 	if err != nil {
+diff --git a/common/srs/binary_close_test.go b/common/srs/binary_close_test.go
+new file mode 100644
+index 00000000..6dfe424f
+--- /dev/null
++++ b/common/srs/binary_close_test.go
+@@ -0,0 +1,95 @@
++package srs
++
++import (
++	"bytes"
++	"compress/zlib"
++	"errors"
++	"io"
++	"testing"
++
++	C "github.com/sagernet/sing-box/constant"
++	"github.com/sagernet/sing-box/option"
++
++	"github.com/stretchr/testify/require"
++)
++
++// trackingCloser counts Close calls and can report a close error.
++type trackingCloser struct {
++	io.Reader
++	closes   int
++	closeErr error
++}
++
++func (c *trackingCloser) Close() error {
++	c.closes++
++	return c.closeErr
++}
++
++// trackingDecompressor returns a decompressor factory that wraps zlib and
++// records the tracking closer it produced.
++func trackingDecompressor(closeErr error, out **trackingCloser) func(io.Reader) (io.ReadCloser, error) {
++	return func(reader io.Reader) (io.ReadCloser, error) {
++		zlibReader, err := zlib.NewReader(reader)
++		if err != nil {
++			return nil, err
++		}
++		closer := &trackingCloser{Reader: zlibReader, closeErr: closeErr}
++		*out = closer
++		return closer, nil
++	}
++}
++
++func validBinaryRuleSet(t *testing.T) []byte {
++	t.Helper()
++	var buffer bytes.Buffer
++	err := Write(&buffer, option.PlainRuleSet{
++		Rules: []option.HeadlessRule{
++			{
++				Type: C.RuleTypeDefault,
++				DefaultOptions: option.DefaultHeadlessRule{
++					Domain: []string{"example.com"},
++				},
++			},
++		},
++	}, C.RuleSetVersionCurrent)
++	require.NoError(t, err)
++	return buffer.Bytes()
++}
++
++func TestReadClosesDecompressorOnSuccess(t *testing.T) {
++	var closer *trackingCloser
++	ruleSet, err := read(bytes.NewReader(validBinaryRuleSet(t)), false, trackingDecompressor(nil, &closer))
++	require.NoError(t, err)
++	require.Len(t, ruleSet.Options.Rules, 1)
++	require.NotNil(t, closer)
++	require.Equal(t, 1, closer.closes, "decompressor must be closed exactly once on success")
++}
++
++func TestReadClosesDecompressorOnParseError(t *testing.T) {
++	content := validBinaryRuleSet(t)
++	var closer *trackingCloser
++	_, err := read(bytes.NewReader(content[:len(content)/2]), false, trackingDecompressor(nil, &closer))
++	require.Error(t, err)
++	require.NotNil(t, closer)
++	require.Equal(t, 1, closer.closes, "decompressor must be closed exactly once on parse failure")
++}
++
++func TestReadParseErrorTakesPrecedenceOverCloseError(t *testing.T) {
++	content := validBinaryRuleSet(t)
++	closeErr := errors.New("close failed")
++	var closer *trackingCloser
++	_, err := read(bytes.NewReader(content[:len(content)/2]), false, trackingDecompressor(closeErr, &closer))
++	require.Error(t, err)
++	require.NotErrorIs(t, err, closeErr, "parse error must take precedence over close error")
++	require.NotNil(t, closer)
++	require.Equal(t, 1, closer.closes)
++}
++
++func TestReadPropagatesCloseErrorWhenParseSucceeds(t *testing.T) {
++	closeErr := errors.New("close failed")
++	var closer *trackingCloser
++	_, err := read(bytes.NewReader(validBinaryRuleSet(t)), false, trackingDecompressor(closeErr, &closer))
++	require.ErrorIs(t, err, closeErr, "close error must surface when parsing succeeded")
++	require.NotNil(t, closer)
++	require.Equal(t, 1, closer.closes)
++}
+diff --git a/route/rule/rule_set_local.go b/route/rule/rule_set_local.go
+index ed873d70..02b4d492 100644
+--- a/route/rule/rule_set_local.go
++++ b/route/rule/rule_set_local.go
+@@ -115,9 +115,13 @@ func (s *LocalRuleSet) reloadFile(path string) error {
+ 			return err
+ 		}
+ 		ruleSet, err = srs.Read(setFile, false)
++		closeErr := setFile.Close()
+ 		if err != nil {
+ 			return err
+ 		}
++		if closeErr != nil {
++			return closeErr
++		}
+ 	default:
+ 		return E.New("unknown rule-set format: ", s.fileFormat)
+ 	}
+diff --git a/route/rule/rule_set_local_file_test.go b/route/rule/rule_set_local_file_test.go
+new file mode 100644
+index 00000000..28d0f722
+--- /dev/null
++++ b/route/rule/rule_set_local_file_test.go
+@@ -0,0 +1,91 @@
++package rule
++
++import (
++	"context"
++	"os"
++	"path/filepath"
++	"testing"
++
++	"github.com/sagernet/sing-box/common/srs"
++	C "github.com/sagernet/sing-box/constant"
++	"github.com/sagernet/sing-box/option"
++	"github.com/sagernet/sing/common/logger"
++
++	"github.com/stretchr/testify/require"
++)
++
++// writeBinaryRuleSet writes a valid binary rule-set and returns its path.
++func writeBinaryRuleSet(t *testing.T) string {
++	t.Helper()
++	path := filepath.Join(t.TempDir(), "test.srs")
++	file, err := os.Create(path)
++	require.NoError(t, err)
++	err = srs.Write(file, option.PlainRuleSet{
++		Rules: []option.HeadlessRule{
++			{
++				Type: C.RuleTypeDefault,
++				DefaultOptions: option.DefaultHeadlessRule{
++					Domain: []string{"example.com"},
++				},
++			},
++		},
++	}, C.RuleSetVersionCurrent)
++	require.NoError(t, err)
++	require.NoError(t, file.Close())
++	return path
++}
++
++func localBinaryRuleSetOptions(path string) option.RuleSet {
++	return option.RuleSet{
++		Type:   C.RuleSetTypeLocal,
++		Format: C.RuleSetFormatBinary,
++		LocalOptions: option.LocalRuleSet{
++			Path: path,
++		},
++	}
++}
++
++// TestLocalRuleSetBinaryReleasesFileOnSuccess proves the .srs handle is not
++// retained after a successful load, so the file can be replaced immediately.
++// On Windows a leaked handle makes the rename/remove below fail. No retries.
++func TestLocalRuleSetBinaryReleasesFileOnSuccess(t *testing.T) {
++	path := writeBinaryRuleSet(t)
++
++	for i := 0; i < 8; i++ {
++		ruleSet, err := NewLocalRuleSet(context.Background(), logger.NOP(), localBinaryRuleSetOptions(path))
++		require.NoError(t, err)
++		require.NoError(t, ruleSet.Close())
++
++		renamed := path + ".renamed"
++		require.NoErrorf(t, os.Rename(path, renamed), "rename after successful load, iteration %d", i)
++		require.NoErrorf(t, os.Rename(renamed, path), "rename back, iteration %d", i)
++	}
++
++	require.NoError(t, os.Remove(path))
++}
++
++// TestLocalRuleSetBinaryReleasesFileOnParseError proves the .srs handle is not
++// retained when decoding fails, so the malformed file can be replaced
++// immediately. No retries.
++func TestLocalRuleSetBinaryReleasesFileOnParseError(t *testing.T) {
++	valid := writeBinaryRuleSet(t)
++	content, err := os.ReadFile(valid)
++	require.NoError(t, err)
++	require.Greater(t, len(content), 8)
++
++	path := filepath.Join(t.TempDir(), "truncated.srs")
++	// Keep the magic bytes and version, truncate the compressed payload so
++	// rule decoding fails partway through.
++	require.NoError(t, os.WriteFile(path, content[:len(content)/2], 0o600))
++
++	for i := 0; i < 8; i++ {
++		_, err := NewLocalRuleSet(context.Background(), logger.NOP(), localBinaryRuleSetOptions(path))
++		require.Errorf(t, err, "expected decode error, iteration %d", i)
++
++		renamed := path + ".renamed"
++		require.NoErrorf(t, os.Rename(path, renamed), "rename after failed load, iteration %d", i)
++		require.NoErrorf(t, os.Rename(renamed, path), "rename back, iteration %d", i)
++	}
++
++	require.NoError(t, os.Remove(path))
++}
+-- 
+2.55.0.windows.2
+

@@ -3,7 +3,8 @@
     :dirty="dirty"
     :loading="loading"
     :model-value="visible"
-    :save-disabled="saveBlocked"
+    :save-disabled="saveBlockedReason !== ''"
+    :save-disabled-reason="saveBlockedReason"
     :saving="loading"
     :title="$t('actions.' + title) + ' ' + $t('objects.outbound')"
     :width="720"
@@ -186,6 +187,7 @@ export default {
     } catch { /* capabilities endpoint optional */ }
   },
   methods: {
+    // Exposed so the tag field's error state uses the same blank rule as Save.
     isBlankIdentity,
     updateData(id: number) {
       if (id > 0) {
@@ -252,8 +254,16 @@ export default {
     dirty(): boolean {
       return this.snapshot !== "" && JSON.stringify(this.outbound) !== this.snapshot
     },
-    saveBlocked(): boolean {
-      return isBlankIdentity(this.outbound?.tag)
+    // Saving was previously allowed with a blank tag, which produced an unnamed
+    // outbound that routing rules and selectors reference by tag and therefore
+    // could never target. Empty string means the form is valid.
+    saveBlockedReason(): string {
+      if (this.outbound == undefined) return this.$t('error.invalidData')
+      if (isBlankIdentity(this.outbound.tag)) return this.$t('form.cannotSave.tagRequired')
+      if (this.outbound.server_port != null && (this.outbound.server_port > 65535 || this.outbound.server_port < 1)) {
+        return this.$t('form.cannotSave.portRange')
+      }
+      return ''
     },
     currentFieldHints(): Record<string, string> {
       return outboundFieldHintsForType(this.outbound.type)

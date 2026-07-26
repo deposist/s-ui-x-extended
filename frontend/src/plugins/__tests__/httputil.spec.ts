@@ -155,16 +155,41 @@ describe('HttpUtils regression anchors', () => {
     expect(mocks.pushError).not.toHaveBeenCalled()
   })
 
-  it('marks non-Msg JSON payloads as unknown data instead of throwing', async () => {
+  it.each([
+    [{ message: 'reason' }, 'reason'],
+    [{ error: 'reason' }, 'reason'],
+    [{ detail: 'reason' }, 'reason'],
+    [{ unexpected: true }, '{"unexpected":true}'],
+    ['gateway unavailable', 'gateway unavailable'],
+    [42, '42'],
+    [undefined, 'undefined'],
+  ])('preserves diagnostic payload %j', async (payload, expected) => {
     const { default: HttpUtils } = await loadHttpUtils()
-    mocks.apiGet.mockResolvedValueOnce({ data: { unexpected: true } })
+    mocks.apiGet.mockResolvedValueOnce({ data: payload })
 
     const msg = await HttpUtils.get('api/load')
 
-    expect(msg).toEqual({ success: false, msg: 'unknown data: [object Object]', obj: null })
-    expect(mocks.pushError).toHaveBeenCalledWith({
-      title: 'failed',
-      message: 'unknown data: [object Object]',
-    })
+    expect(msg).toEqual({ success: payload == null, msg: payload == null ? '' : expected, obj: null })
+    if (payload == null) expect(mocks.pushError).not.toHaveBeenCalled()
+    else expect(mocks.pushError).toHaveBeenCalledWith({ title: 'failed', message: expected })
+  })
+
+  it('falls back safely for cyclic payloads', async () => {
+    const { default: HttpUtils } = await loadHttpUtils()
+    const payload: Record<string, unknown> = {}
+    payload.self = payload
+    mocks.apiGet.mockResolvedValueOnce({ data: payload })
+
+    const msg = await HttpUtils.get('api/load')
+
+    expect(msg).toEqual({ success: false, msg: '[object Object]', obj: null })
+  })
+
+  it('keeps valid Msg payloads unchanged', async () => {
+    const { default: HttpUtils } = await loadHttpUtils()
+    const payload = { success: false, msg: 'backend reason', obj: { code: 7 } }
+    mocks.apiGet.mockResolvedValueOnce({ data: payload })
+
+    expect(await HttpUtils.get('api/load')).toEqual(payload)
   })
 })

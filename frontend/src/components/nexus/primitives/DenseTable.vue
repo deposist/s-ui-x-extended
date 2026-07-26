@@ -59,7 +59,20 @@
   border-block-end: 0;
 }
 
-@media (max-width: 700px) {
+/* Column labels are short words, so `overflow-wrap: anywhere` had nothing safe to
+ * break on and shredded them mid-word ("NAM E", "GRO UP") whenever a fixed-layout
+ * column came out narrower than its own heading. Data cells still need `anywhere`
+ * for unbroken strings like UUIDs and links, so only headings opt out. */
+.nexus-dense-table__table :deep(th) {
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+
+/* Raised from 700px: between the old breakpoint and roughly 1000px the table was
+ * still forced into the viewport, leaving columns narrower than their contents.
+ * Dense multi-column tables now switch to horizontal scrolling early enough that
+ * labels and values stay legible instead of being crushed. */
+@media (max-width: 1000px) {
   .nexus-dense-table {
     -webkit-overflow-scrolling: touch;
     box-shadow: inset -14px 0 18px -18px var(--nexus-text-muted);

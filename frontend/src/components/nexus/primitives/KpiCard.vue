@@ -8,7 +8,9 @@
     </div>
 
     <div class="nexus-kpi-card__summary">
-      <strong class="nexus-kpi-card__value">{{ value }}</strong>
+      <strong class="nexus-kpi-card__value">
+        {{ amount }}<span v-if="unit" class="nexus-kpi-card__unit">{{ unit }}</span>
+      </strong>
       <span v-if="delta" class="nexus-kpi-card__delta">{{ delta }}</span>
     </div>
 
@@ -19,11 +21,30 @@
 </template>
 
 <script lang="ts" setup>
-defineProps<{
+import { computed } from 'vue'
+
+const props = defineProps<{
   label: string
   value: string
   delta?: string
 }>()
+
+// Formatted values arrive as a single string ("0 B", "1.4 GB", "12"). Split the
+// trailing unit off so it can be de-emphasised (smaller, secondary colour) —
+// otherwise a big bold "0 B" reads as two disconnected glyphs.
+const parsedValue = computed(() => {
+  const match = /^(.*?)(\s*[A-Za-z%/]+)$/.exec(props.value.trim())
+
+  if (!match) return { amount: props.value, unit: '' }
+
+  const [, amount, unit] = match
+
+  // No numeric part (e.g. "-" or a localized word) → render as-is.
+  return amount.trim() === '' ? { amount: props.value, unit: '' } : { amount, unit: unit.trim() }
+})
+
+const amount = computed(() => parsedValue.value.amount)
+const unit = computed(() => parsedValue.value.unit)
 </script>
 
 <style scoped>
@@ -77,7 +98,19 @@ defineProps<{
   letter-spacing: 0;
   line-height: 1.1;
   min-width: 0;
-  overflow-wrap: anywhere;
+  /* Never break inside the value: `overflow-wrap: anywhere` split short values
+   * like "0 B" mid-token onto two lines, which read as a rendering glitch.
+   * Values are short by construction; clip the rare overflow instead. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nexus-kpi-card__unit {
+  color: rgb(var(--v-theme-on-surface) / 68%);
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-inline-start: 0.28em;
 }
 
 .nexus-kpi-card__delta {

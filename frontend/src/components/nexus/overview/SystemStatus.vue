@@ -46,10 +46,6 @@
           {{ capacityLabel(metrics.disk) }}
         </span>
       </li>
-      <li class="nexus-system-status__item">
-        <span class="nexus-system-status__key">{{ $t('nexus.overview.system.realtime') }}</span>
-        <strong>{{ wsLabel }}</strong>
-      </li>
     </dense-list>
   </overview-panel>
 </template>
@@ -61,7 +57,6 @@ import { useI18n } from 'vue-i18n'
 import DenseList from '@/components/nexus/primitives/DenseList.vue'
 import StatusBadge from '@/components/nexus/primitives/StatusBadge.vue'
 import OverviewPanel from './OverviewPanel.vue'
-import type { WsConnectionState } from '@/store/ws'
 import {
   formatOverviewDuration,
   formatOverviewPercent,
@@ -79,7 +74,6 @@ const props = defineProps<{
   offline: boolean
   status: SystemStatus
   unavailable: boolean
-  wsState: WsConnectionState
 }>()
 
 const { t } = useI18n()
@@ -97,12 +91,6 @@ const statusTone = computed(() => {
   return props.loading ? 'info' : 'success'
 })
 
-const wsLabel = computed(() => {
-  if (props.wsState === 'connected') return t('nexus.status.connected')
-  if (props.wsState === 'reconnecting') return t('nexus.status.reconnecting')
-  return t('nexus.status.pollFallback')
-})
-
 const capacityLabel = (metric: OverviewCapacityMetric): string => {
   if (metric.current === undefined && metric.total === undefined) return '-'
 
@@ -112,7 +100,7 @@ const capacityLabel = (metric: OverviewCapacityMetric): string => {
 
 <style scoped>
 .nexus-system-status.nexus-overview-panel {
-  height: var(--nexus-overview-primary-panel-height);
+  max-height: var(--nexus-overview-primary-panel-height);
   min-height: 0;
   overflow: hidden;
 }

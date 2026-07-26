@@ -127,6 +127,11 @@ func (a *APIHandler) registerGroupedRoutes(g *gin.RouterGroup) {
 	rulesets := g.Group("/rulesets")
 	rulesets.POST("/materialize", a.ApiService.MaterializeRuleSets)
 
+	// Pre-save validation of a single rule, so the editor can reject a
+	// condition-less rule while the operator is still looking at it rather than
+	// failing the whole-config save afterwards.
+	configGroup := g.Group("/config")
+	configGroup.POST("/rule-conditions", a.ApiService.ValidateRuleConditions)
 	doctor := g.Group("/doctor")
 	doctor.POST("/run", a.ApiService.RunDoctor)
 	doctor.POST("/client", a.ApiService.DiagnoseClient)

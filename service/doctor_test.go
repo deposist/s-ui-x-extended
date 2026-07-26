@@ -100,6 +100,97 @@ func TestDoctorRunReportsMissingRuleConditions(t *testing.T) {
 	}
 }
 
+// TestDoctorRuleConditionDetailsNameDeepDescendant pins the exact "<path>:
+// <message>" detail lines the doctor reports, for both route and DNS. The path
+// is the only part of the report that tells an operator which nested branch to
+// open, so a truncated path makes the item nearly useless on a deep tree.
+func TestDoctorRuleConditionDetailsNameDeepDescendant(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		config   string
+		wantPath string
+	}{
+		{
+			name:     "route",
+			config:   `{"route":{"rules":[{"type":"logical","mode":"and","rules":[{"domain":["a.com"]},{"type":"logical","mode":"or","rules":[]}],"outbound":"direct"}]}}`,
+			wantPath: "route.rules[0].rules[1].rules",
+		},
+		{
+			name:     "dns",
+			config:   `{"dns":{"rules":[{"type":"logical","mode":"and","rules":[{"domain":["a.com"]},{"type":"logical","mode":"or","rules":[]}],"server":"local"}]}}`,
+			wantPath: "dns.rules[0].rules[1].rules",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			items := doctorRuleConditionChecks([]byte(tc.config))
+			if len(items) != 1 {
+				t.Fatalf("expected exactly one item, got %#v", items)
+			}
+			if items[0].Severity != DoctorSeverityError {
+				t.Fatalf("expected an error item, got %#v", items[0])
+			}
+			details, ok := items[0].Details.([]string)
+			if !ok {
+				t.Fatalf("expected string details, got %#v", items[0].Details)
+			}
+			if len(details) != 1 {
+				t.Fatalf("expected only the broken branch, got %#v", details)
+			}
+			if !strings.HasPrefix(details[0], tc.wantPath+": ") {
+				t.Fatalf("expected a %q: <message> detail, got %q", tc.wantPath, details[0])
+			}
+		})
+	}
+}
+
+// TestDoctorRuleConditionChecksAcceptsDecodedEmptyBranches guards the former
+// false positives. These shapes are all accepted by the core, so the doctor must
+// not raise an error item for them; the old map-walking heuristic flagged every
+// one of them.
+func TestDoctorRuleConditionChecksAcceptsDecodedEmptyBranches(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		config string
+	}{
+		{"empty branch beside a sibling", `{"route":{"rules":[{"type":"logical","mode":"and","rules":[{"domain":["a.com"]},{}],"outbound":"direct"}]}}`},
+		{"invert-only branch", `{"route":{"rules":[{"type":"logical","mode":"and","rules":[{"invert":true}],"outbound":"direct"}]}}`},
+		{"action-only rule", `{"route":{"rules":[{"action":"sniff"}]}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			items := doctorRuleConditionChecks([]byte(tc.config))
+			for _, item := range items {
+				if item.Severity == DoctorSeverityError {
+					t.Fatalf("unexpected error item: %#v", item)
+				}
+			}
+		})
+	}
+}
+
+// TestDoctorRuleConditionChecksWarnsOnDroppedRule keeps the two failure modes
+// distinct: a discarded rule is silent data loss the core tolerates, so it is a
+// warning, not a startup error.
+func TestDoctorRuleConditionChecksWarnsOnDroppedRule(t *testing.T) {
+	items := doctorRuleConditionChecks([]byte(`{"dns":{"rules":[{}]}}`))
+	if len(items) != 1 || items[0].Severity != DoctorSeverityWarn {
+		t.Fatalf("expected a single warning item, got %#v", items)
+	}
+	// The path is the collection, not an index: the discarded rule no longer has
+	// a position in the decoded list, so the count is what identifies the loss.
+	details, ok := items[0].Details.([]string)
+	if !ok || len(details) != 1 || !strings.HasPrefix(details[0], "dns.rules: ") {
+		t.Fatalf("expected a dns.rules detail line, got %#v", items[0].Details)
+	}
+}
+
+// TestDoctorRuleConditionChecksReportsDecodeError proves malformed rule JSON
+// becomes its own error item instead of being silently reported as healthy.
+func TestDoctorRuleConditionChecksReportsDecodeError(t *testing.T) {
+	items := doctorRuleConditionChecks([]byte(`{"route":{"rules":[{"type":"logical","mode":5}]}}`))
+	if len(items) != 1 || items[0].Severity != DoctorSeverityError {
+		t.Fatalf("expected a single error item, got %#v", items)
+	}
+}
 func TestDoctorRunAllowsActionOnlyRules(t *testing.T) {
 	initDoctorTestDB(t)
 	config := `{"log":{"disabled":true},"dns":{"servers":[],"rules":[{"action":"route","server":"local"}]},"route":{"rules":[{"action":"sniff"}],"rule_set":[]}}`

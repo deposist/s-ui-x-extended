@@ -41,7 +41,32 @@
       </template>
 
       <template #empty>
-        <empty-state icon="lucide:globe" :title="$t('table.noData')" />
+        <!-- Distinguishes "search matched nothing" from "section is genuinely
+             empty": the two states need different copy and different actions. -->
+        <empty-state
+          v-if="showNoMatches"
+          :description="$t('table.noResultsHint')"
+          icon="lucide:filter-x"
+          :title="$t('table.noResults')"
+        >
+          <template #action>
+            <v-btn prepend-icon="lucide:filter-x" variant="tonal" @click="search = ''">
+              {{ $t('table.clearFilters') }}
+            </v-btn>
+          </template>
+        </empty-state>
+        <empty-state
+          v-else
+          :description="$t('emptyState.endpointsHint')"
+          icon="lucide:globe"
+          :title="$t('emptyState.endpoints')"
+        >
+          <template #action>
+            <v-btn color="primary" prepend-icon="lucide:plus" variant="flat" @click="emit('add')">
+              {{ $t('actions.add') }}
+            </v-btn>
+          </template>
+        </empty-state>
       </template>
     </nexus-data-table>
   </div>
@@ -112,6 +137,12 @@ const filtered = computed<EndpointRow[]>(() => {
 
   return props.endpoints.filter(item => String(item.tag).toLowerCase().includes(query))
 })
+
+// A true-empty section takes precedence: telling someone to clear filters when
+// they simply have no endpoints yet would send them down the wrong path.
+const showNoMatches = computed(
+  () => search.value.trim().length > 0 && props.endpoints.length > 0,
+)
 
 const endpointActions = (item: EndpointRow): RowAction[] => [
   { key: 'edit', labelKey: 'actions.edit', icon: 'lucide:pencil', inline: true },

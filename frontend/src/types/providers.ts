@@ -36,6 +36,7 @@ export interface ProviderLocal extends ProviderBasics {
 export interface ProviderRemote extends ProviderBasics {
   url: string
   user_agent?: string
+  headers?: { [key: string]: string | string[] }
   download_detour?: string
   update_interval?: string
   exclude?: string

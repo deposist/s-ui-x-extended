@@ -41,6 +41,14 @@ watch(topbarSearch, (value) => {
   timer = setTimeout(() => emit('update:search', value), props.debounce)
 })
 
+watch(() => props.search, (value) => {
+  const next = value ?? ''
+  if (next === topbarSearch.value) return
+
+  clearTimeout(timer)
+  topbarSearch.value = next
+})
+
 onMounted(() => {
   topbarSearch.value = props.search ?? ''
 })

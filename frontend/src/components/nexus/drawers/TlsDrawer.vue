@@ -3,7 +3,8 @@
     :dirty="dirty"
     :loading="loading"
     :model-value="visible"
-    :save-disabled="saveBlocked"
+    :save-disabled="saveBlockedReason !== ''"
+    :save-disabled-reason="saveBlockedReason"
     :saving="loading"
     :title="$t('actions.' + title) + ' ' + $t('objects.tls')"
     :width="720"
@@ -315,6 +316,7 @@ export default {
     }
   },
   methods: {
+    // Exposed so the name field's error state uses the same blank rule as Save.
     isBlankIdentity,
     fieldHint(key: string): string {
       const hintKey = (this.currentFieldHints as Record<string, string>)[key]
@@ -446,8 +448,12 @@ export default {
     dirty(): boolean {
       return this.snapshot !== "" && JSON.stringify(this.tls) !== this.snapshot
     },
-    saveBlocked(): boolean {
-      return isBlankIdentity(this.tls?.name)
+    // New configs start with an empty name, and inbounds pick a TLS config by
+    // name, so an unnamed one is impossible to select later. Empty string means
+    // the form is valid.
+    saveBlockedReason(): string {
+      if (isBlankIdentity(this.tls?.name)) return this.$t('form.cannotSave.nameRequired')
+      return ''
     },
     inTls(): iTls {
       return this.tls.server

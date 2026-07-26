@@ -50,17 +50,38 @@ import NexusSidebar from './NexusSidebar.vue'
 import NexusTopbar from './NexusTopbar.vue'
 
 const { isRtl } = useLocale()
-const { mdAndDown, smAndDown } = useDisplay()
+const { lgAndUp, smAndDown } = useDisplay()
+
+const RAIL_STORAGE_KEY = 'nexus.sidebar.rail'
+
+const readStoredRail = () => {
+  try {
+    return localStorage.getItem(RAIL_STORAGE_KEY) === '1'
+  } catch {
+    // Private mode / disabled storage: fall back to expanded.
+    return false
+  }
+}
 
 const isMobile = computed(() => smAndDown.value)
-const isTablet = computed(() => !smAndDown.value && mdAndDown.value)
+// Auto-collapse only on true tablet widths (<= 1023px). `mdAndDown` covers up to
+// 1279px, which collapsed the sidebar on ordinary laptops and left 13 unlabeled
+// icons — the nav groups became unrecognisable at a glance.
+const isTablet = computed(() => !smAndDown.value && !lgAndUp.value)
 // Reference keeps the sidebar expanded on desktop; only tablet auto-collapses to
-// a rail. A manual toggle (sidebar brand hamburger) can also collapse it.
-const manualRail = ref(false)
+// a rail. A manual toggle (sidebar brand hamburger) can also collapse it, and
+// that preference is remembered across reloads.
+const manualRail = ref(readStoredRail())
 const sidebarRail = computed(() => !isMobile.value && (isTablet.value || manualRail.value))
 const sidebarOpen = ref(true)
 const toggleRail = () => {
   manualRail.value = !manualRail.value
+
+  try {
+    localStorage.setItem(RAIL_STORAGE_KEY, manualRail.value ? '1' : '0')
+  } catch {
+    // Non-fatal: the toggle still applies for this session.
+  }
 }
 
 watch(isMobile, async (mobile) => {
@@ -68,6 +89,9 @@ watch(isMobile, async (mobile) => {
   sidebarOpen.value = !mobile
 }, { immediate: true })
 
+// Palette→theme resolution (and the data-ui-palette sync that drives the
+// pre-mount token blocks) lives in useNexusTheme so the login route, which
+// renders outside this shell, can reuse the exact same accent colours.
 const nexusThemeName = useNexusTheme()
 
 const nexusDefaults = {

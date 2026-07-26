@@ -24,7 +24,6 @@
         :offline="!browserOnline"
         :status="systemStatus"
         :unavailable="statusUnavailable"
-        :ws-state="ws.state"
       />
       <operational-health
         :failover="data.onlines?.failover"
@@ -294,6 +293,9 @@ onBeforeUnmount(() => {
 }
 
 .nexus-overview__primary {
+  /* Upper bound only: panels scroll their own body past this height, but a panel
+   * with little content (e.g. an empty "Top clients") shrinks to fit instead of
+   * reserving ~230px of dead space. */
   --nexus-overview-primary-panel-height: 320px;
 
   display: grid;
@@ -303,7 +305,18 @@ onBeforeUnmount(() => {
     minmax(0, 1.2fr)
     minmax(0, 1.2fr)
     minmax(320px, 1fr);
-  align-items: stretch;
+  /* start (not stretch): a panel with little content sizes to its content rather
+   * than being stretched to the tallest sibling's height. */
+  align-items: start;
+}
+
+/* Four panels in a three-column grid stranded the fourth one in column 1 with two
+ * empty columns beside it. Operational health is a wide row (kind + tag + detail +
+ * status badge), so it reads as a full-width band under the three-up row, matching
+ * the protocol summaries band below it. Harmless in the single-column layout,
+ * where there is nothing to span. */
+.nexus-overview__primary > .nexus-operational-health {
+  grid-column: 1 / -1;
 }
 
 @media (max-width: 1264px) {
@@ -319,6 +332,10 @@ onBeforeUnmount(() => {
 
 @media (max-width: 960px) {
   .nexus-overview__primary {
+    /* Single column: no side-by-side panel to align with, so stop capping the
+     * height — content-sized panels avoid inner scrollbars on small screens. */
+    --nexus-overview-primary-panel-height: none;
+
     grid-template-columns: minmax(0, 1fr);
   }
 

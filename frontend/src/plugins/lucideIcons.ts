@@ -71,6 +71,7 @@ import {
   RotateCcw,
   RotateCw,
   Search,
+  Save,
   Send,
   Server,
   Settings,
@@ -96,6 +97,7 @@ import {
 // the mdi scan in mdiIcons.test.ts), catching typos/unmapped names that would
 // otherwise render a blank icon with only a DEV console.warn.
 export const iconMap: Record<string, Component> = {
+  save: Save,
   activity: Activity,
   // Sidebar navigation
   'layout-grid': LayoutGrid,

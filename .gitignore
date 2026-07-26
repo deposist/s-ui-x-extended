@@ -85,3 +85,13 @@ PROJECT_CONTEXT.md
 review.md
 .release-status.txt
 CHANGELOG-*.md0
+
+# v0 sandbox scratch files (agent workspace only, never part of a release)
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.snowflake/
+.v0-trash/
+.v0/
+.vercel/
+.next/

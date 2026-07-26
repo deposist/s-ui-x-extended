@@ -1,6 +1,9 @@
 package cronjob
 
 import (
+	"context"
+	"time"
+
 	"github.com/deposist/s-ui-x-extended/logger"
 	"github.com/deposist/s-ui-x-extended/service"
 )
@@ -23,7 +26,9 @@ func NewRuleSetRefreshJob() *RuleSetRefreshJob {
 }
 
 func (j *RuleSetRefreshJob) Run() {
-	count, err := j.RuleSetAssetService.Refresh()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	count, err := j.RuleSetAssetService.RefreshContext(ctx)
 	if err != nil {
 		logger.Warning("rule-set refresh failed, keeping existing files: ", err)
 		return

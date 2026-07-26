@@ -45,7 +45,32 @@
       </template>
 
       <template #empty>
-        <empty-state icon="lucide:server" :title="$t('table.noData')" />
+        <!-- Distinguishes "search matched nothing" from "section is genuinely
+             empty": the two states need different copy and different actions. -->
+        <empty-state
+          v-if="showNoMatches"
+          :description="$t('table.noResultsHint')"
+          icon="lucide:filter-x"
+          :title="$t('table.noResults')"
+        >
+          <template #action>
+            <v-btn prepend-icon="lucide:filter-x" variant="tonal" @click="search = ''">
+              {{ $t('table.clearFilters') }}
+            </v-btn>
+          </template>
+        </empty-state>
+        <empty-state
+          v-else
+          :description="$t('emptyState.servicesHint')"
+          icon="lucide:server"
+          :title="$t('emptyState.services')"
+        >
+          <template #action>
+            <v-btn color="primary" prepend-icon="lucide:plus" variant="flat" @click="emit('add')">
+              {{ $t('actions.add') }}
+            </v-btn>
+          </template>
+        </empty-state>
       </template>
     </nexus-data-table>
   </div>
@@ -106,6 +131,12 @@ const filtered = computed<ServiceRow[]>(() => {
 
   return props.services.filter(item => String(item.tag).toLowerCase().includes(query))
 })
+
+// A true-empty section takes precedence: telling someone to clear filters when
+// they simply have no services yet would send them down the wrong path.
+const showNoMatches = computed(
+  () => search.value.trim().length > 0 && props.services.length > 0,
+)
 
 const serviceActions = (): RowAction[] => [
   { key: 'edit', labelKey: 'actions.edit', icon: 'lucide:pencil', inline: true },

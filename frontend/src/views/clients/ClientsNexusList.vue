@@ -28,6 +28,17 @@
           variant="outlined"
           @update:model-value="filterGroup = $event"
         />
+        <!-- Without this the only way to undo a filter was to set each control
+             back to its default by hand. -->
+        <v-btn
+          v-if="hasActiveFilters"
+          prepend-icon="lucide:filter-x"
+          size="small"
+          variant="text"
+          @click="clearFilters"
+        >
+          {{ $t('table.clearFilters') }}
+        </v-btn>
       </template>
       <template #actions>
         <v-btn color="primary" prepend-icon="lucide:plus" variant="flat" @click="emit('add')">
@@ -93,7 +104,33 @@
       </template>
 
       <template #empty>
-        <empty-state icon="lucide:users" :title="$t('table.noData')" />
+        <!-- "No data" alone left users stuck: it read the same whether the panel
+             had zero clients or the active search/filters simply matched nothing.
+             Each case now names the cause and offers the matching next step. -->
+        <empty-state
+          v-if="showNoMatches"
+          :description="$t('table.noResultsHint')"
+          icon="lucide:filter-x"
+          :title="$t('table.noResults')"
+        >
+          <template #action>
+            <v-btn prepend-icon="lucide:filter-x" variant="tonal" @click="clearFilters">
+              {{ $t('table.clearFilters') }}
+            </v-btn>
+          </template>
+        </empty-state>
+        <empty-state
+          v-else
+          :description="$t('client.emptyHint')"
+          icon="lucide:users"
+          :title="$t('client.empty')"
+        >
+          <template #action>
+            <v-btn color="primary" prepend-icon="lucide:plus" variant="flat" @click="emit('add')">
+              {{ $t('actions.add') }}
+            </v-btn>
+          </template>
+        </empty-state>
       </template>
     </nexus-data-table>
   </div>
@@ -199,6 +236,22 @@ const filtered = computed<ClientRow[]>(() => {
 
   return rows
 })
+
+// Drives the two different empty states, and lets the toolbar surface a reset
+// affordance while a filter is narrowing the table.
+const hasActiveFilters = computed(
+  () => search.value.trim().length > 0 || filterState.value !== '' || filterGroup.value !== '-',
+)
+
+// When there are genuinely no clients, "no matches / clear filters" would be
+// misleading advice, so the true-empty state wins over the filtered one.
+const showNoMatches = computed(() => hasActiveFilters.value && props.clients.length > 0)
+
+const clearFilters = () => {
+  search.value = ''
+  filterState.value = ''
+  filterGroup.value = '-'
+}
 
 const inboundTag = (id: number) => props.inbounds.find(i => i.id === id)?.tag ?? id
 const percent = (c: ClientRow) => (c.volume > 0 ? Math.round((c.up + c.down) * 100 / c.volume) : 0)

@@ -6,13 +6,35 @@
 
 ## [Unreleased]
 
-- 面板会先下载并验证区域 `.srs` 文件，再将已验证的本地文件写入配置，核心启动不再依赖访问 GitHub。
-- 下载采用原子写入和 fail-closed 策略；损坏内容、不安全的标签或 URL、不完整的批次以及缺失的本地文件都会被拒绝。
-- 新增每日刷新任务和 `rulesets/sources.json` manifest。刷新失败时保留最后一份可用文件。
-- 新增受认证和 CSRF 保护的 `/rulesets/materialize` 接口、直接下载或通过 outbound 下载的设置、Doctor 检查以及保存时的本地 rule-set 校验。
-- 区域预设为非区域 DNS 查询使用 IP 字面量 DoH，同时保留区域 DNS 规则的作用范围。
-- 预设界面允许选择下载通道；materialize 失败时不会修改现有配置。
-- 新增 backend、frontend、序列化、cron 和跨平台路径测试。无需数据库迁移。
+- 暂无未发布变更。
+
+## [1.0.8-beta6] - 2026-07-27 - 本地 rule-set、嵌套规则与界面修复
+
+- 面板会在保存预设前下载并校验区域 `.srs` 文件，再把本地路径写入 sing-box 配置。核心启动不再依赖 GitHub。
+- 下载器只接受 HTTPS，并阻止私有网络地址、DNS 重绑定和超出文件或批次大小限制的内容。资源文件与 manifest 以事务方式替换；下载或刷新失败时保留上一份可用文件。
+- 每日任务根据 `rulesets/sources.json` 刷新资源。受身份认证和 CSRF 防护的 `/rulesets/materialize` 接口支持直连下载，也支持通过指定 outbound 下载。
+- Doctor 和保存时校验会拒绝缺失、过大、非普通文件或无效的本地 rule-set。区域预设对非区域查询使用以 IP 地址指定的 DoH 后备解析。
+- 路由和 DNS 编辑器支持嵌套的 `and` 与 `or` 条件。后端会指出无效子节点的准确路径，并将请求体限制为 1 MiB、每棵树限制为 64 层和 4096 个节点。
+- 列表页面会区分数据为空和搜索无结果，并提供相应的创建或设置操作。抽屉会说明 Save 被禁用的具体原因。
+- 登录页和 Settings 改善了窄屏布局。Settings 会跟踪未保存的更改、标明单位、解释零值，并更清楚地区分 Save 与 Restart。
+- Nexus 外壳增加了无障碍退出入口、记住桌面侧栏的折叠状态，并通过独立的 live region 播报服务器状态。Overview 在无数据时提供有效操作，也避免在窄屏上截断关键数值。
+- HTTP 错误消息现在能处理字符串、结构化响应、`null`，以及无法序列化为 JSON 的对象。
+- 内置核心为 `sing-box-extended v1.13.14-extended-2.5.4`。它包含 AmneziaWG 设备配置下发所需的 WireGuard endpoint IPC，并在读取后关闭 rule-set 文件和 zlib reader，因此 Windows 可以替换下载的 `.srs`。
+- 核心会拒绝截断文件、错误的 zlib 校验和，以及声明规则之后的多余数据。REALITY 继续声明客户端版本 `26.7.11`，满足当前 Xray 服务器默认的最低版本 `26.3.27`。
+- provider 可以设置 HTTP `headers`。分组的 `providers` 接受单个值或列表。用于替换的 `sing-vmess` 版本已更新为核心要求的 `0.2.8-extended`。
+- 默认 Compose 镜像和 frontend package 版本已更新为 `v1.0.8-beta6`；此前两处仍停留在 beta4。
+- 增加了后端、前端、序列化、cron、race、无障碍和跨平台 rule-set 测试。无需迁移数据库。
+
+完整发布说明：[`docs/releases/v1.0.8-beta6.md`](docs/releases/v1.0.8-beta6.md)。
+
+## [1.0.8-beta5] - 2026-07-24 - 不再依赖签名密钥的发布
+
+- 自更新不再依赖存放在 Actions secret 中的 Ed25519 签名密钥。它会校验一个未签名的 manifest，该 manifest 绑定归档文件名、版本、通道、平台和 SHA-256，并在替换已安装的二进制文件之前通过 HTTPS 获取这些信息。
+- 发布工作流会在每个 Linux 归档旁发布该 manifest。没有 manifest 的发布包不会用于自更新。
+- E2E 面板只从自己的 fixture 目录读取 bootstrap 密码。
+- 无需迁移数据库。
+
+完整发布说明：[`docs/releases/v1.0.8-beta5.md`](docs/releases/v1.0.8-beta5.md)。
 
 ## [1.0.8-beta4] - 2026-07-24 - CI 与 E2E 修复
 
@@ -20,19 +42,12 @@
 - E2E 面板在浏览器测试前清除首次登录强制改密标记。
 - 将 gRPC 更新到 v1.82.1，消除容器扫描器报告的 HIGH 漏洞。
 
+## [1.0.8-beta3] - 2026-07-24 - 签名发布包
 
-- No unreleased changes.
+- 由于上一次发布工作流缺少所需的 Actions secret，本次使用新生成的 Ed25519 签名密钥重新发布该 beta。
+- Linux 发布包只在 manifest 签名成功后才会发布。
 
-## [1.0.8-beta4] - 2026-07-24 - 签名发布包
-
-- Reissued the beta release with a newly generated Ed25519 signing key after the previous release workflow lacked its Actions secret.
-- Linux artifacts are published only after manifest signing succeeds.
-
-
-
-- 暂无未发布变更。
-
-## [1.0.8-beta4] - 2026-07-24 - 可靠恢复与签名自更新
+## [1.0.8-beta2] - 2026-07-24 - 可靠恢复与签名自更新
 
 - 自更新现在只接受带 Ed25519 签名 manifest 的发布包。签名绑定归档校验和、版本、通道、平台和归档文件名，未签名发布包不会被用于自更新。
 - 数据库恢复会等待面板、订阅和 cron 任务完成正在进行的数据库操作，然后安全切换 SQLite handle。x-ui 回滚不会再等待自身的请求 lease。
@@ -41,10 +56,10 @@
 - cron 停止和应用启动现在能更安全地处理活动任务。x-ui import 在 commit 成功但 checkpoint 出现问题时返回 warning，而不是把整个导入标记为失败。
 - Bootstrap password file 只会在密码成功修改后删除。前端修复了独立组件之间取消 GET 请求、polling、loading 状态，以及 `false`、`0` 和空字符串的处理。
 - `golang.org/x/text` 已更新到 0.39.0，frontend build 依赖也已更新。`npm audit --audit-level=moderate` 未发现漏洞。
-- 默认 Compose 镜像现在是 `ghcr.io/deposist/s-ui-x:v1.0.8-beta4`；nftables capability 仍通过单独的 Compose profile 按需启用。
+- 默认 Compose 镜像现在是 `ghcr.io/deposist/s-ui-x:v1.0.8-beta2`；nftables capability 仍通过单独的 Compose profile 按需启用。
 - 无需迁移数据库。
 
-完整发布说明：[`docs/releases/v1.0.8-beta4.md`](docs/releases/v1.0.8-beta4.md)。
+完整发布说明：[`docs/releases/v1.0.8-beta2.md`](docs/releases/v1.0.8-beta2.md)。
 
 ## [1.0.8-beta1] - 2026-07-21 - 安全加固与 IP 证书签发恢复
 

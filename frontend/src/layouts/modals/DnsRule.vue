@@ -6,10 +6,22 @@
       </v-card-title>
       <v-divider></v-divider>
       <v-card-text style="padding: 0 16px;">
+        <!-- Root-own issue: only reachable when the root is a simple rule that
+             the core rejected. Deeper issues are anchored by the nodes below. -->
+        <v-alert
+          v-if="rootOwnIssues.length > 0"
+          type="error"
+          variant="tonal"
+          density="compact"
+          class="mb-3"
+          :data-rule-issue="rootPath"
+        >
+          <div v-for="issue in rootOwnIssues" :key="issue.path + issue.message">{{ issue.message }}</div>
+        </v-alert>
         <v-row>
           <v-col cols="12" sm="6" md="4">
             <div class="d-flex align-center ga-1">
-              <v-switch color="primary" v-model="logical" :label="$t('rule.logical')" hide-details></v-switch>
+              <v-switch color="primary" :model-value="logical" :label="$t('rule.logical')" hide-details @update:model-value="onRootLogicalChange"></v-switch>
               <SettingInfo v-if="fieldHint('logical')" :text="fieldHint('logical')" />
             </div>
           </v-col>
@@ -18,16 +30,32 @@
             <v-btn color="primary" @click="ruleData.rules.push(<dnsRule>{})" hide-details>{{ $t('actions.add') + " " + $t('objects.rule') }}</v-btn>
           </v-col>
         </v-row>
-        <v-card style="background-color: inherit; margin-bottom: 5px;" v-for="(r, index) in ruleData.rules" v-if="ruleData.type == 'logical'">
-          <v-card-subtitle>{{ $t('objects.rule') + ' ' + (Number(index)+1) }}
-            <v-icon @click="ruleData.rules.splice(index,1)" icon="mdi-delete" v-if="ruleData.rules.length>1" />
+        <!-- The modal owns the root child-list anchor (dns.rules[0].rules),
+             which the core reports when a logical root has no sub-rules. -->
+        <v-alert
+          v-if="logical && rootChildListIssues.length > 0"
+          type="error"
+          variant="tonal"
+          density="compact"
+          class="mb-3"
+          :data-rule-issue="rootChildListPath"
+        >
+          <div v-for="issue in rootChildListIssues" :key="issue.path + issue.message">{{ issue.message }}</div>
+        </v-alert>
+        <v-card style="background-color: inherit; margin-bottom: 5px;" v-for="(r, index) in ruleData.rules" :key="nodeKey(r)" v-if="ruleData.type == 'logical'">
+          <v-card-subtitle class="d-flex align-center justify-space-between">
+            <span>{{ $t('objects.rule') + ' ' + (Number(index)+1) }}</span>
+            <v-btn v-if="ruleData.rules.length>1" icon="mdi-delete" size="small" variant="text" :aria-label="$t('actions.del')" @click="ruleData.rules.splice(index,1)" />
           </v-card-subtitle>
           <v-card-text style="padding: 0;">
-            <RuleOptions
-              :rule="r"
+            <DnsRuleNode
+              :node="r"
+              :path="topChildPath(Number(index))"
+              :issues="conditionIssues"
               :clients="clients"
-              :inTags="inTags"
-              :ruleSets="ruleSets"
+              :in-tags="inTags"
+              :rule-sets="ruleSets"
+              @mutate="clearConditionIssues"
               :field-hints="currentFieldHints" />
           </v-card-text>
         </v-card>
@@ -192,6 +220,17 @@
             </v-col>
           </v-row>
         </v-card>
+        <v-dialog v-model="rootConfirm.open" max-width="440">
+          <v-card class="rounded-xl">
+            <v-card-title>{{ $t('rule.convert.toDefaultTitle') }}</v-card-title>
+            <v-card-text>{{ $t('rule.convert.toDefaultMessage') }}</v-card-text>
+            <v-card-actions>
+              <v-spacer />
+              <v-btn variant="text" @click="resolveRootConversion(false)">{{ $t('actions.close') }}</v-btn>
+              <v-btn color="error" variant="flat" @click="resolveRootConversion(true)">{{ $t('rule.convert.discardConfirm') }}</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
       </v-card-text>
       <v-card-actions>
         <v-spacer></v-spacer>
@@ -219,10 +258,16 @@
 <script lang="ts">
 import { logicalDnsRule, dnsRule, actionDnsRuleKeys } from '@/types/dns'
 import RuleOptions from '@/components/DnsRule.vue'
+import DnsRuleNode from '@/components/rules/DnsRuleNode.vue'
 import { i18n } from '@/locales'
 import SettingInfo from '@/components/SettingInfo.vue'
 import { applyDnsRuleRecommendedValues, dnsRuleFieldHints, hasDnsRuleRecommendedPreset } from '@/utils/defaultRecommendations'
-import { isLogicalRuleMissingConditions } from '@/utils/ruleConditions'
+import { validateRuleConditions, type RuleConditionIssue } from '@/utils/ruleValidation'
+import { childListPath, childNodePath, issuesAtPath, nodeKey } from '@/utils/ruleTree'
+
+// The single DNS rule the modal edits is validated as dns.rules[0] (the backend
+// wraps it in a one-element array), so every issue path is rooted here.
+const ROOT_PATH = 'dns.rules[0]'
 export default {
   props: ['visible', 'data', 'index', 'clients', 'inTags', 'serverTags', 'ruleSets'],
   emits: ['close', 'save'],
@@ -230,6 +275,9 @@ export default {
     return {
       title: 'add',
       loading: false,
+      conditionIssues: <RuleConditionIssue[]>[],
+      validationRequest: 0,
+      rootConfirm: <{ open: boolean; resolve: ((confirmed: boolean) => void) | null }>{ open: false, resolve: null },
       ruleData: <any>{
         type: 'logical',
         mode: 'and',
@@ -271,6 +319,9 @@ export default {
       applyDnsRuleRecommendedValues(this.ruleData)
     },
     updateData() {
+      this.validationRequest += 1
+      this.loading = false
+      this.conditionIssues = []
       if (this.$props.index != -1) {
         const newData = JSON.parse(this.$props.data)
         if (newData.type) {
@@ -304,10 +355,13 @@ export default {
       }
     },
     closeModal() {
+      this.validationRequest += 1
+      this.loading = false
       this.$emit('close')
     },
-    saveChanges() {
+    async saveChanges() {
       this.loading = true
+      const validationRequest = ++this.validationRequest
       let newRule = <any>{
         action: this.ruleData.action,
         invert: this.ruleData.invert? this.ruleData.invert : undefined,
@@ -349,28 +403,92 @@ export default {
         newRule.mode = this.ruleData.mode
         newRule.rules = this.ruleData.rules
       }
+      // Validated against the core rather than a local predicate, and against
+      // newRule rather than ruleData: newRule is what actually gets persisted,
+      // so the pre-normalization editor state is the wrong thing to judge.
+      const verdict = await validateRuleConditions('dns', newRule)
+      if (validationRequest !== this.validationRequest) return
+      // Keep every issue, not just the blocking ones: the recursive nodes anchor
+      // each issue to the branch that owns it, so a non-blocking dropped-rule
+      // warning still needs to reach its node.
+      this.conditionIssues = verdict.issues
+      if (!verdict.ok) {
+        this.loading = false
+        return
+      }
+
       this.$emit('save', newRule)
       this.loading = false
     },
+    clearConditionIssues() {
+      this.conditionIssues = []
+    },
     deleteRule(index:number) {
       this.ruleData.rules.splice(index,1)
+      this.clearConditionIssues()
+    },
+    nodeKey(r: object): string {
+      return nodeKey(r)
+    },
+    // Path of the index-th top-level sub-rule, e.g. dns.rules[0].rules[2].
+    // childNodePath already appends `.rules[index]`, so it takes the node path.
+    topChildPath(index:number): string {
+      return childNodePath(ROOT_PATH, index)
+    },
+    async onRootLogicalChange(next:boolean | null) {
+      if (next) {
+        if (!Array.isArray(this.ruleData.rules) || this.ruleData.rules.length === 0) this.ruleData.rules = [{}]
+        this.clearConditionIssues()
+        this.ruleData.type = 'logical'
+        return
+      }
+      if (Array.isArray(this.ruleData.rules) && this.ruleData.rules.length > 1) {
+        const confirmed = await new Promise<boolean>((resolve) => {
+          this.rootConfirm.resolve = resolve
+          this.rootConfirm.open = true
+        })
+        if (!confirmed) return
+      }
+      this.ruleData.rules = [this.ruleData.rules?.[0] ?? {}]
+      this.ruleData.type = 'simple'
+      this.clearConditionIssues()
+    },
+    resolveRootConversion(confirmed:boolean) {
+      this.rootConfirm.open = false
+      const resolve = this.rootConfirm.resolve
+      this.rootConfirm.resolve = null
+      resolve?.(confirmed)
     }
   },
   computed: {
+    // Save is blocked only while the check is in flight. It is never disabled on
+    // a local guess: the previous predicate greyed Save out permanently, with no
+    // message, for rules the core accepts.
     saveBlocked(): boolean {
-      return isLogicalRuleMissingConditions(this.ruleData)
+      return this.loading
     },
     currentFieldHints(): Record<string, string> {
       return dnsRuleFieldHints()
     },
+    rootPath(): string {
+      return ROOT_PATH
+    },
+    rootChildListPath(): string {
+      return childListPath(ROOT_PATH)
+    },
+    // Issues owned by the root rule itself (a rejected simple rule). Excludes the
+    // root child-list path, which has its own alert, so the two never double up.
+    rootOwnIssues(): RuleConditionIssue[] {
+      return issuesAtPath(this.conditionIssues, ROOT_PATH)
+    },
+    rootChildListIssues(): RuleConditionIssue[] {
+      return issuesAtPath(this.conditionIssues, childListPath(ROOT_PATH))
+    },
     showDnsRuleRecommendedPreset(): boolean {
       return this.$props.index == -1 && hasDnsRuleRecommendedPreset()
     },
-    logical: {
-      get() { return this.ruleData.type == 'logical' },
-      set(v:boolean) {
-        this.ruleData.type = v? 'logical' : 'simple'
-      }
+    logical(): boolean {
+      return this.ruleData.type == 'logical'
     },
     answer: {
       get() { return this.ruleData.answer?.length > 0 ? this.ruleData.answer.join(',') : "" },
@@ -392,7 +510,7 @@ export default {
       }
     },
   },
-  components: { SettingInfo, RuleOptions }
+  components: { SettingInfo, RuleOptions, DnsRuleNode }
 }
 
 </script>

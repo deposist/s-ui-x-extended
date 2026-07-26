@@ -69,7 +69,33 @@
       </template>
 
       <template #empty>
-        <empty-state icon="lucide:zap" :title="$t('table.noData')" />
+        <!-- Same reasoning as the Clients list: a bare "No data" gave no clue
+             whether the panel was empty or the search had simply excluded
+             everything, and offered no way forward in either case. -->
+        <empty-state
+          v-if="showNoMatches"
+          :description="$t('table.noResultsHint')"
+          icon="lucide:filter-x"
+          :title="$t('table.noResults')"
+        >
+          <template #action>
+            <v-btn prepend-icon="lucide:filter-x" variant="tonal" @click="search = ''">
+              {{ $t('table.clearFilters') }}
+            </v-btn>
+          </template>
+        </empty-state>
+        <empty-state
+          v-else
+          :description="$t('in.emptyHint')"
+          icon="lucide:zap"
+          :title="$t('in.empty')"
+        >
+          <template #action>
+            <v-btn color="primary" prepend-icon="lucide:plus" variant="flat" @click="emit('add')">
+              {{ $t('actions.add') }}
+            </v-btn>
+          </template>
+        </empty-state>
       </template>
     </nexus-data-table>
   </div>
@@ -143,6 +169,12 @@ const filtered = computed<InboundRow[]>(() => {
 
   return props.inbounds.filter(item => String(item.tag).toLowerCase().includes(query))
 })
+
+// When there are genuinely no inbounds, "clear filters" would be misleading
+// advice, so the true-empty state takes precedence over the filtered one.
+const showNoMatches = computed(
+  () => search.value.trim().length > 0 && props.inbounds.length > 0,
+)
 
 // Named to NOT collide with the <row-actions> (RowActions) component: a
 // camelCase `rowActions` binding would shadow the component in the template and

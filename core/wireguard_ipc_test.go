@@ -38,3 +38,27 @@ func TestWithWireGuardIPCReportsMissingEndpoint(t *testing.T) {
 		t.Fatalf("WithWireGuardIPC error = %v; want missing-endpoint error", err)
 	}
 }
+
+func TestWireGuardIPCLockSerializesEndpointRemoval(t *testing.T) {
+	core := NewCore()
+	core.wireGuardIPCAccess.Lock()
+
+	entered := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		close(entered)
+		core.wireGuardIPCAccess.Lock()
+		core.wireGuardIPCAccess.Unlock()
+		close(done)
+	}()
+	<-entered
+
+	select {
+	case <-done:
+		core.wireGuardIPCAccess.Unlock()
+		t.Fatal("a competing endpoint operation entered the IPC critical section")
+	default:
+	}
+	core.wireGuardIPCAccess.Unlock()
+	<-done
+}

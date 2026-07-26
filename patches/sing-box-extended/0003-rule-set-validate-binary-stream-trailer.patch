@@ -1,0 +1,68 @@
+From cc570469bcd24ef5fd12179e191978806e396ff9 Mon Sep 17 00:00:00 2001
+From: deposist <deposist@users.noreply.github.com>
+Date: Sun, 26 Jul 2026 23:51:01 +0300
+Subject: [PATCH] rule-set: validate binary stream trailer
+
+Read one byte past the declared rule payload so zlib validates its trailer and checksum. Reject decompressed trailing data instead of silently accepting it, and cover corrupt, truncated, and trailing payloads with regression tests.
+---
+ common/srs/binary.go            |  7 +++++++
+ common/srs/binary_close_test.go | 28 ++++++++++++++++++++++++++++
+ 2 files changed, 35 insertions(+)
+
+diff --git a/common/srs/binary.go b/common/srs/binary.go
+index 222c6d49..c36ed80b 100644
+--- a/common/srs/binary.go
++++ b/common/srs/binary.go
+@@ -104,6 +104,13 @@ func read(
+ 			return
+ 		}
+ 	}
++	_, err = bReader.ReadByte()
++	if err == nil {
++		return ruleSetCompat, E.New("unexpected trailing rule-set data")
++	}
++	if err == io.EOF {
++		err = nil
++	}
+ 	return
+ }
+ 
+diff --git a/common/srs/binary_close_test.go b/common/srs/binary_close_test.go
+index 6dfe424f..3ab3f931 100644
+--- a/common/srs/binary_close_test.go
++++ b/common/srs/binary_close_test.go
+@@ -93,3 +93,31 @@ func TestReadPropagatesCloseErrorWhenParseSucceeds(t *testing.T) {
+ 	require.NotNil(t, closer)
+ 	require.Equal(t, 1, closer.closes)
+ }
++
++func TestReadRejectsCorruptOrTruncatedTrailer(t *testing.T) {
++	var buffer bytes.Buffer
++	require.NoError(t, Write(&buffer, option.PlainRuleSet{}, C.RuleSetVersionCurrent))
++	valid := buffer.Bytes()
++
++	corrupt := append([]byte(nil), valid...)
++	corrupt[len(corrupt)-1] ^= 0xff
++	_, err := Read(bytes.NewReader(corrupt), false)
++	require.Error(t, err)
++
++	_, err = Read(bytes.NewReader(valid[:len(valid)-1]), false)
++	require.Error(t, err)
++}
++
++func TestReadRejectsTrailingRuleSetData(t *testing.T) {
++	var compressed bytes.Buffer
++	compressWriter := zlib.NewWriter(&compressed)
++	_, err := compressWriter.Write([]byte{0, 1})
++	require.NoError(t, err)
++	require.NoError(t, compressWriter.Close())
++
++	content := append([]byte(nil), MagicBytes[:]...)
++	content = append(content, C.RuleSetVersionCurrent)
++	content = append(content, compressed.Bytes()...)
++	_, err = Read(bytes.NewReader(content), false)
++	require.ErrorContains(t, err, "unexpected trailing rule-set data")
++}
+-- 
+2.55.0.windows.2
+

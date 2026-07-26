@@ -22,20 +22,44 @@
       :class="{ 'settings-actions--nexus': nexus }"
       justify="center"
     >
+      <!-- Save is the primary action: it must outrank "Restart app" visually.
+           Previously Save was a muted tonal button next to an outlined warning
+           button, which made restarting look like the main thing to do. -->
       <v-col cols="auto" v-if="tab !== 't6'">
-        <v-btn color="primary" @click="save" :loading="loading" :disabled="!stateChange">
+        <v-btn
+          color="primary"
+          variant="flat"
+          prepend-icon="lucide:save"
+          @click="save"
+          :loading="loading"
+          :disabled="!stateChange"
+        >
           {{ $t('actions.save') }}
         </v-btn>
       </v-col>
       <v-col cols="auto" v-else>
-        <v-btn color="primary" @click="saveBasicsConfig" :loading="loading" :disabled="!basicsStateChange">
+        <v-btn
+          color="primary"
+          variant="flat"
+          prepend-icon="lucide:save"
+          @click="saveBasicsConfig"
+          :loading="loading"
+          :disabled="!basicsStateChange"
+        >
           {{ $t('actions.save') }}
         </v-btn>
       </v-col>
       <v-col cols="auto">
-        <v-btn variant="outlined" color="warning" @click="restartApp" :loading="loading" :disabled="tab !== 't6' ? stateChange : basicsStateChange">
+        <v-btn variant="text" color="warning" @click="restartApp" :loading="loading" :disabled="tab !== 't6' ? stateChange : basicsStateChange">
           {{ $t('actions.restartApp') }}
         </v-btn>
+      </v-col>
+      <!-- Tells the user *why* Save is enabled and that leaving now loses work. -->
+      <v-col cols="auto" v-if="tab !== 't6' ? stateChange : basicsStateChange">
+        <span class="settings-dirty">
+          <v-icon icon="lucide:alert-circle" size="14" />
+          {{ $t('form.unsavedChanges') }}
+        </span>
       </v-col>
     </v-row>
     <v-window v-model="tab">
@@ -89,12 +113,14 @@
               <v-card-title class="settings-section-title">Security & Maintenance</v-card-title>
               <v-card-text class="pa-4 pt-2">
                 <v-row>
-                  <v-col cols="12" sm="6">
+                  <!-- Filesystem paths get the full row: at half width both the
+                       label and the value ("/etc/s-ui/panel.key") were clipped. -->
+                  <v-col cols="12">
                     <v-text-field v-model="settings.webKeyFile" :label="$t('setting.sslKey')" placeholder="/etc/s-ui/panel.key" persistent-placeholder hide-details>
                       <template v-slot:append-inner><SettingInfo :text="$t('setting.hint.sslKey')" /></template>
                     </v-text-field>
                   </v-col>
-                  <v-col cols="12" sm="6">
+                  <v-col cols="12">
                     <v-text-field v-model="settings.webCertFile" :label="$t('setting.sslCert')" placeholder="/etc/s-ui/panel.crt" persistent-placeholder hide-details>
                       <template v-slot:append-inner><SettingInfo :text="$t('setting.hint.sslCert')" /></template>
                     </v-text-field>
@@ -105,10 +131,11 @@
                       v-model.number="sessionMaxAge"
                       min="0"
                       :label="$t('setting.sessionAge')"
-                      :suffix="$t('date.m')"
+                      :suffix="$t('setting.unit.minutes')"
                       placeholder="0"
                       persistent-placeholder
-                      hide-details
+                      :hint="$t('setting.unit.sessionZero')"
+                      persistent-hint
                       >
                       <template v-slot:append-inner><SettingInfo :text="$t('setting.hint.sessionAge')" /></template>
                     </v-text-field>
@@ -119,10 +146,11 @@
                       v-model.number="trafficAge"
                       min="0"
                       :label="$t('setting.trafficAge')"
-                      :suffix="$t('date.d')"
+                      :suffix="$t('setting.unit.days')"
                       placeholder="30"
                       persistent-placeholder
-                      hide-details
+                      :hint="$t('setting.unit.trafficZero')"
+                      persistent-hint
                       >
                       <template v-slot:append-inner><SettingInfo :text="$t('setting.hint.trafficAge')" /></template>
                     </v-text-field>
@@ -1837,15 +1865,30 @@ const stateChange = computed(() => {
   min-width: 0;
 }
 
-.settings-nexus-card :deep(.v-field) {
-  overflow: visible;
+/* Two half-width fields in a stacked card can end up ~180px wide, which
+ * ellipsizes both the label and the value. Below that, let them take the full
+ * row instead of shrinking further. */
+.settings-nexus-card :deep(.v-row > .v-col[class*="col-sm-6"]) {
+  flex-basis: 15rem;
 }
 
+/* Unit hints ("0 = keep forever") are short; keep them on one line so the two
+ * side-by-side fields stay vertically aligned. */
+.settings-nexus-card :deep(.v-messages__message) {
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+/* Floating labels must stay on a single line. Forcing `white-space: normal` +
+ * `overflow: visible` made long labels ("Session Maximum Age", "SSL Certificate
+ * Path") wrap to 2-3 lines; because the label is absolutely positioned inside
+ * the field, those extra lines spilled out and overlapped the row above.
+ * Long labels are instead ellipsized, with the full text available in the
+ * adjacent info tooltip. */
 .settings-nexus-card :deep(.v-field-label) {
-  max-width: none !important;
-  overflow: visible !important;
-  text-overflow: clip !important;
-  white-space: normal !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-actions--nexus {
@@ -1857,22 +1900,51 @@ const stateChange = computed(() => {
   padding: var(--nexus-gap-1);
 }
 
+.settings-dirty {
+  align-items: center;
+  color: rgb(var(--v-theme-warning));
+  display: inline-flex;
+  font-size: 0.8rem;
+  font-weight: 600;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
 @media (max-width: 600px) {
   .settings-nexus-card :deep(.v-card-text) {
     padding: var(--nexus-gap-3);
   }
 
+  /* On phones two stacked full-width buttons pushed the actual settings below
+   * the fold. Pin them to the bottom of the viewport instead so the content
+   * starts immediately and Save is always reachable. */
   .settings-actions--nexus {
+    background: var(--nexus-surface-1);
+    border-block-start: 1px solid var(--nexus-border);
+    bottom: 0;
+    flex-wrap: nowrap !important;
+    gap: var(--nexus-gap-1);
     justify-content: stretch !important;
+    margin-block-end: 0;
+    margin-inline: calc(-1 * var(--nexus-gap-3));
+    padding: var(--nexus-gap-2) var(--nexus-gap-3);
+    position: sticky;
+    z-index: 3;
   }
 
   .settings-actions--nexus :deep(.v-col) {
-    flex: 1 1 100%;
+    flex: 1 1 0;
     max-width: 100%;
   }
 
   .settings-actions--nexus :deep(.v-btn) {
     width: 100%;
+  }
+
+  /* The "unsaved changes" chip is redundant next to an enabled Save button
+   * once space is this tight. */
+  .settings-dirty {
+    display: none;
   }
 }
 </style>

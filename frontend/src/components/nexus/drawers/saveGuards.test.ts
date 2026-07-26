@@ -1,47 +1,111 @@
+/**
+ * Guards the "Save is blocked for a blank identity" rule in all four entity
+ * drawers.
+ *
+ * These call each drawer's real saveBlockedReason computed with a stand-in `this`
+ * rather than mounting the component: the drawers pull in the full Vuetify
+ * protocol component tree, which the node test environment cannot render. The
+ * computed is the single source of truth the Save button is bound to, so calling
+ * it directly still covers the behaviour that regressed.
+ */
 import { describe, expect, it, vi } from 'vitest'
 
+// The drawers transitively import the app router, which calls createWebHistory()
+// and needs a real `window`. Stubbing the module keeps these tests in the node
+// environment instead of pulling in a DOM implementation for a pure rule check.
 vi.mock('@/router', () => ({ default: { push: vi.fn(), currentRoute: { value: {} } } }))
 
 import InboundDrawer from './InboundDrawer.vue'
 import OutboundDrawer from './OutboundDrawer.vue'
 import ServiceDrawer from './ServiceDrawer.vue'
 import TlsDrawer from './TlsDrawer.vue'
-type Computed = (this: Record<string, unknown>) => boolean
-type DrawerOptions = { computed?: Record<string, Computed> }
 
-function resultFor(component: unknown, name: string, context: Record<string, unknown>): boolean {
-  // Vue's SFC type omits Options API internals that remain available at runtime.
-  const computed = (component as DrawerOptions).computed?.[name]
+type Computed = (this: Record<string, unknown>) => string
+
+function reasonFor(component: any, name: string, context: Record<string, unknown>): string {
+  const computed = component.computed?.[name] as Computed | undefined
   if (!computed) throw new Error(`${name} computed not found`)
-  return computed.call(context)
+  // $t echoes the key so assertions read as the message key, not a translation.
+  return computed.call({ $t: (key: string) => key, ...context })
 }
 
 const blankIdentities = ['', ' ', '   ', '\t', '\n', ' \t ']
 
-describe('entity drawer identity guards', () => {
-  it.each(blankIdentities)('blocks inbound Save for a blank tag (%j)', (tag) => {
-    expect(resultFor(InboundDrawer, 'validate', {
+describe('InboundDrawer saveBlockedReason', () => {
+  const base = { OnlyTLS: [], selectedTlsTemplateCompatible: true }
+
+  it.each(blankIdentities)('blocks Save for a blank tag (%j)', (tag) => {
+    const reason = reasonFor(InboundDrawer, 'saveBlockedReason', {
+      ...base,
       inbound: { tag, type: 'direct', listen_port: 443 },
-      OnlyTLS: [],
-      selectedTlsTemplateCompatible: true,
-    })).toBe(false)
+    })
+    expect(reason).toBe('form.cannotSave.tagRequired')
   })
 
-  it.each(blankIdentities)('blocks outbound Save for a blank tag (%j)', (tag) => {
-    expect(resultFor(OutboundDrawer, 'saveBlocked', { outbound: { tag } })).toBe(true)
+  it('allows Save for a real tag', () => {
+    const reason = reasonFor(InboundDrawer, 'saveBlockedReason', {
+      ...base,
+      inbound: { tag: 'in-1', type: 'direct', listen_port: 443 },
+    })
+    expect(reason).toBe('')
   })
 
-  it.each(blankIdentities)('blocks service Save for a blank tag (%j)', (tag) => {
-    expect(resultFor(ServiceDrawer, 'saveBlocked', { srv: { tag } })).toBe(true)
+  it('still reports the port range problem for a valid tag', () => {
+    const reason = reasonFor(InboundDrawer, 'saveBlockedReason', {
+      ...base,
+      inbound: { tag: 'in-1', type: 'direct', listen_port: 70000 },
+    })
+    expect(reason).toBe('form.cannotSave.portRange')
+  })
+})
+
+describe('OutboundDrawer saveBlockedReason', () => {
+  it.each(blankIdentities)('blocks Save for a blank tag (%j)', (tag) => {
+    const reason = reasonFor(OutboundDrawer, 'saveBlockedReason', {
+      outbound: { tag, type: 'direct' },
+    })
+    expect(reason).toBe('form.cannotSave.tagRequired')
   })
 
-  it.each(blankIdentities)('blocks TLS Save for a blank name (%j)', (name) => {
-    expect(resultFor(TlsDrawer, 'saveBlocked', { tls: { name } })).toBe(true)
+  it('allows Save for a real tag', () => {
+    const reason = reasonFor(OutboundDrawer, 'saveBlockedReason', {
+      outbound: { tag: 'direct', type: 'direct' },
+    })
+    expect(reason).toBe('')
   })
 
-  it('allows real identities, including the tag "0"', () => {
-    expect(resultFor(OutboundDrawer, 'saveBlocked', { outbound: { tag: '0' } })).toBe(false)
-    expect(resultFor(ServiceDrawer, 'saveBlocked', { srv: { tag: 'service-a' } })).toBe(false)
-    expect(resultFor(TlsDrawer, 'saveBlocked', { tls: { name: 'tls-a' } })).toBe(false)
+  it('does not treat the falsy-looking tag "0" as blank', () => {
+    const reason = reasonFor(OutboundDrawer, 'saveBlockedReason', {
+      outbound: { tag: '0', type: 'direct' },
+    })
+    expect(reason).toBe('')
+  })
+})
+
+describe('ServiceDrawer saveBlockedReason', () => {
+  it.each(blankIdentities)('blocks Save for a blank tag (%j)', (tag) => {
+    const reason = reasonFor(ServiceDrawer, 'saveBlockedReason', {
+      srv: { tag, type: 'derp', listen_port: 443 },
+    })
+    expect(reason).toBe('form.cannotSave.tagRequired')
+  })
+
+  it('allows Save for a real tag', () => {
+    const reason = reasonFor(ServiceDrawer, 'saveBlockedReason', {
+      srv: { tag: 'derp-abc', type: 'derp', listen_port: 443 },
+    })
+    expect(reason).toBe('')
+  })
+})
+
+describe('TlsDrawer saveBlockedReason', () => {
+  it.each(blankIdentities)('blocks Save for a blank name (%j)', (name) => {
+    const reason = reasonFor(TlsDrawer, 'saveBlockedReason', { tls: { name } })
+    expect(reason).toBe('form.cannotSave.nameRequired')
+  })
+
+  it('allows Save for a real name', () => {
+    const reason = reasonFor(TlsDrawer, 'saveBlockedReason', { tls: { name: 'reality-1' } })
+    expect(reason).toBe('')
   })
 })

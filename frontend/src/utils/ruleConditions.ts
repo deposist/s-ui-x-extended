@@ -28,13 +28,3 @@ export const hasRuleConditions = (rule: unknown): boolean => {
     ([key, value]) => !STRUCTURAL_KEYS[key] && isMeaningfulValue(value),
   );
 };
-
-export const isLogicalRuleMissingConditions = (ruleData: unknown): boolean => {
-  if (ruleData == null || typeof ruleData !== "object") return false;
-
-  const candidate = ruleData as Record<string, unknown>;
-  if (candidate.type !== "logical") return false;
-
-  const subRules = Array.isArray(candidate.rules) ? candidate.rules : [];
-  return subRules.length === 0 || !subRules.every(hasRuleConditions);
-};

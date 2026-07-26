@@ -7,10 +7,22 @@
     @close="closeModal"
     @save="saveChanges"
   >
+        <!-- Root-own issue: only reachable when the root is a simple rule that
+             the core rejected. Deeper issues are anchored by the nodes below. -->
+        <v-alert
+          v-if="rootOwnIssues.length > 0"
+          type="error"
+          variant="tonal"
+          density="compact"
+          class="mb-3"
+          :data-rule-issue="rootPath"
+        >
+          <div v-for="issue in rootOwnIssues" :key="issue.path + issue.message">{{ issue.message }}</div>
+        </v-alert>
         <v-row>
           <v-col cols="12" sm="6" md="4">
             <div class="d-flex align-center ga-1">
-              <v-switch color="primary" v-model="logical" :label="$t('rule.logical')" hide-details></v-switch>
+              <v-switch color="primary" :model-value="logical" :label="$t('rule.logical')" hide-details @update:model-value="onRootLogicalChange"></v-switch>
               <SettingInfo v-if="fieldHint('logical')" :text="fieldHint('logical')" />
             </div>
           </v-col>
@@ -19,17 +31,33 @@
             <v-btn color="primary" @click="ruleData.rules.push(<rule>{})" hide-details>{{ $t('actions.add') + " " + $t('objects.rule') }}</v-btn>
           </v-col>
         </v-row>
+        <!-- The modal owns the root child-list anchor (route.rules[0].rules),
+             which the core reports when a logical root has no sub-rules. -->
+        <v-alert
+          v-if="logical && rootChildListIssues.length > 0"
+          type="error"
+          variant="tonal"
+          density="compact"
+          class="mb-3"
+          :data-rule-issue="rootChildListPath"
+        >
+          <div v-for="issue in rootChildListIssues" :key="issue.path + issue.message">{{ issue.message }}</div>
+        </v-alert>
         <v-card style="background-color: inherit; margin-bottom: 5px;" v-for="(r, index) in ruleData.rules" :key="ruleObjectKey(r)" v-if="ruleData.type == 'logical'">
-          <v-card-subtitle>{{ $t('objects.rule') + ' ' + (Number(index)+1) }}
-            <v-icon @click="ruleData.rules.splice(index,1)" icon="mdi-delete" v-if="ruleData.rules.length>1" />
+          <v-card-subtitle class="d-flex align-center justify-space-between">
+            <span>{{ $t('objects.rule') + ' ' + (Number(index)+1) }}</span>
+            <v-btn v-if="ruleData.rules.length>1" icon="mdi-delete" size="small" variant="text" :aria-label="$t('actions.del')" @click="ruleData.rules.splice(index,1)" />
           </v-card-subtitle>
           <v-card-text style="padding: 0;">
-            <RuleOptions
-              :rule="r"
+            <RouteRuleNode
+              :node="r"
+              :path="topChildPath(Number(index))"
+              :issues="conditionIssues"
               :clients="clients"
-              :inTags="inTags"
-              :outTags="outTags"
-              :rsTags="rsTags"
+              :in-tags="inTags"
+              :out-tags="outTags"
+              :rs-tags="rsTags"
+              @mutate="clearConditionIssues"
               :field-hints="currentFieldHints" />
           </v-card-text>
         </v-card>
@@ -54,7 +82,7 @@
             </v-select>
           </v-col>
           <v-col cols="12" sm="6" md="4" v-if="logical">
-            <v-combobox
+            <v-select
               v-model="ruleData.mode"
               :items="['and', 'or']"
               :label="$t('rule.mode')"
@@ -62,7 +90,7 @@
               <template #append-inner>
                 <SettingInfo v-if="fieldHint('mode')" :text="fieldHint('mode')" />
               </template>
-            </v-combobox>
+            </v-select>
           </v-col>
           <v-col cols="12" sm="6" md="4">
             <div class="d-flex align-center ga-1">
@@ -262,16 +290,34 @@
             </v-col>
           </v-row>
         </v-card>
+        <v-dialog v-model="rootConfirm.open" max-width="440">
+          <v-card class="rounded-xl">
+            <v-card-title>{{ $t('rule.convert.toDefaultTitle') }}</v-card-title>
+            <v-card-text>{{ $t('rule.convert.toDefaultMessage') }}</v-card-text>
+            <v-card-actions>
+              <v-spacer />
+              <v-btn variant="text" @click="resolveRootConversion(false)">{{ $t('actions.close') }}</v-btn>
+              <v-btn color="error" variant="flat" @click="resolveRootConversion(true)">{{ $t('rule.convert.discardConfirm') }}</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
   </form-shell>
 </template>
 
 <script lang="ts">
-import { logicalRule, rule, actionKeys } from '@/types/rules'
+import { logicalRule, rule, isRouteActionKey, routeDialerActionKeys } from '@/types/rules'
 import RuleOptions from '@/components/Rule.vue'
+import RouteRuleNode from '@/components/rules/RouteRuleNode.vue'
 import FormShell from '@/components/nexus/drawers/FormShell.vue'
 import SettingInfo from '@/components/SettingInfo.vue'
 import { applyRouteRuleRecommendedValues, hasRouteRuleRecommendedPreset, routeRuleFieldHints } from '@/utils/defaultRecommendations'
-import { isLogicalRuleMissingConditions } from '@/utils/ruleConditions'
+import { validateRuleConditions, type RuleConditionIssue } from '@/utils/ruleValidation'
+import { childListPath, childNodePath, issuesAtPath } from '@/utils/ruleTree'
+
+// The single rule the modal edits is validated as route.rules[0] (the backend
+// wraps it in a one-element array), so every issue path the core returns is
+// rooted here. The recursive nodes hang off route.rules[0].rules[i].
+const ROOT_PATH = 'route.rules[0]'
 
 // Stable identity key for each sub-rule object so the v-for is not keyed by array
 // index. Splicing out a middle rule then re-binds the remaining RuleOptions
@@ -287,6 +333,9 @@ export default {
     return {
       title: 'add',
       loading: false,
+      conditionIssues: <RuleConditionIssue[]>[],
+      validationRequest: 0,
+      rootConfirm: <{ open: boolean; resolve: ((confirmed: boolean) => void) | null }>{ open: false, resolve: null },
       snapshot: '',
       ruleData: <any>{
         type: 'logical',
@@ -298,6 +347,7 @@ export default {
       },
       actions: [
         { title: 'Route', value: 'route'},
+        { title: 'Direct', value: 'direct'},
         { title: 'Route Options', value: 'route-options'},
         { title: 'Bypass', value: 'bypass'},
         { title: 'Reject', value: 'reject'},
@@ -349,6 +399,9 @@ export default {
       applyRouteRuleRecommendedValues(this.ruleData)
     },
     updateData() {
+      this.validationRequest += 1
+      this.loading = false
+      this.conditionIssues = []
       if (this.$props.index != -1) {
         const newData = JSON.parse(this.$props.data)
         if (newData.type) {
@@ -360,7 +413,11 @@ export default {
             rules: <rule[]>[{}],
           }
           Object.keys(newData).forEach(key => {
-            if (actionKeys.includes(key)) {
+            // Action-aware: a `direct` rule carries DialerOptions, and one of
+            // those keys (network_type) is also a match field. A flat lookup
+            // pushed every unlisted dialer key into rules[0], which rewrote it
+            // as a match condition on save.
+            if (isRouteActionKey(key, newData.action)) {
               this.ruleData[key] = newData[key]
             } else {
               this.ruleData.rules[0][key] = newData[key]
@@ -383,11 +440,14 @@ export default {
       this.snapshot = JSON.stringify(this.ruleData)
     },
     closeModal() {
+      this.validationRequest += 1
+      this.loading = false
       this.updateData() // reset
       this.$emit('close')
     },
-    saveChanges() {
+    async saveChanges() {
       this.loading = true
+      const validationRequest = ++this.validationRequest
       let newRule = <any>{
         action: this.ruleData.action,
         invert: this.ruleData.invert? this.ruleData.invert : undefined,
@@ -406,6 +466,9 @@ export default {
         case 'route-options':
           this.applyRouteOptions(newRule)
           break
+        case 'direct':
+          this.applyDirectOptions(newRule)
+          break
         case 'reject':
           newRule.method = this.ruleData.method?.length > 0 ? this.ruleData.method : undefined
           newRule.no_drop = this.ruleData.no_drop? true : undefined
@@ -417,6 +480,9 @@ export default {
         case 'resolve':
           newRule.strategy = this.ruleData.strategy?.length > 0 ? this.ruleData.strategy : undefined
           newRule.server = this.ruleData.server?.length > 0 ? this.ruleData.server : undefined
+          newRule.disable_cache = this.ruleData.disable_cache ? true : undefined
+          newRule.rewrite_ttl = this.ruleData.rewrite_ttl > 0 ? this.ruleData.rewrite_ttl : undefined
+          newRule.client_subnet = this.ruleData.client_subnet?.length > 0 ? this.ruleData.client_subnet : undefined
           break
       }
 
@@ -428,15 +494,69 @@ export default {
         newRule.mode = this.ruleData.mode
         newRule.rules = this.ruleData.rules
       }
+      // Validated against the core rather than a local predicate, and against
+      // newRule rather than ruleData: newRule is what actually gets persisted,
+      // so the pre-normalization editor state is the wrong thing to judge.
+      const verdict = await validateRuleConditions('route', newRule)
+      if (validationRequest !== this.validationRequest) return
+      // Keep every issue, not just the blocking ones: the recursive nodes anchor
+      // each issue to the branch that owns it, so a non-blocking dropped-rule
+      // warning still needs to reach its node.
+      this.conditionIssues = verdict.issues
+      if (!verdict.ok) {
+        this.loading = false
+        return
+      }
+
       this.$emit('save', newRule)
       this.loading = false
     },
+    clearConditionIssues() {
+      this.conditionIssues = []
+    },
     deleteRule(index:number) {
       this.ruleData.rules.splice(index,1)
+      this.clearConditionIssues()
+    },
+    // Path of the index-th top-level sub-rule, e.g. route.rules[0].rules[2].
+    // childNodePath already appends `.rules[index]`, so it takes the node path,
+    // not the child-list path. The recursive node extends this for its own kids.
+    topChildPath(index:number): string {
+      return childNodePath(ROOT_PATH, index)
+    },
+    async onRootLogicalChange(next:boolean | null) {
+      if (next) {
+        if (!Array.isArray(this.ruleData.rules) || this.ruleData.rules.length === 0) this.ruleData.rules = [{}]
+        this.clearConditionIssues()
+        this.ruleData.type = 'logical'
+        return
+      }
+      if (Array.isArray(this.ruleData.rules) && this.ruleData.rules.length > 1) {
+        const confirmed = await new Promise<boolean>((resolve) => {
+          this.rootConfirm.resolve = resolve
+          this.rootConfirm.open = true
+        })
+        if (!confirmed) return
+      }
+      this.ruleData.rules = [this.ruleData.rules?.[0] ?? {}]
+      this.ruleData.type = 'simple'
+      this.clearConditionIssues()
+    },
+    resolveRootConversion(confirmed:boolean) {
+      this.rootConfirm.open = false
+      const resolve = this.rootConfirm.resolve
+      this.rootConfirm.resolve = null
+      resolve?.(confirmed)
+    },
+    applyDirectOptions(newRule:any) {
+      for (const key of [...routeDialerActionKeys, 'network_strategy', 'fallback_delay']) {
+        if (Object.prototype.hasOwnProperty.call(this.ruleData, key)) newRule[key] = this.ruleData[key]
+      }
     },
     applyRouteOptions(newRule:any) {
       newRule.override_address = this.ruleData.override_address?.length > 0 ? this.ruleData.override_address : undefined
       newRule.override_port = this.ruleData?.override_port > 0 ? this.ruleData.override_port : undefined
+      newRule.override_gateway = this.ruleData.override_gateway?.length > 0 ? this.ruleData.override_gateway : undefined
       newRule.network_strategy = this.ruleData.network_strategy?.length > 0 ? this.ruleData.network_strategy : undefined
       newRule.fallback_delay = this.ruleData.fallback_delay > 0 ? this.ruleData.fallback_delay : undefined
       newRule.udp_disable_domain_unmapping = this.ruleData.udp_disable_domain_unmapping? true : undefined
@@ -451,20 +571,34 @@ export default {
     dirty(): boolean {
       return this.snapshot !== '' && JSON.stringify(this.ruleData) !== this.snapshot
     },
+    // Save is blocked only while the check is in flight. It is never disabled on
+    // a local guess: the previous predicate greyed Save out permanently, with no
+    // message, for rules the core accepts.
     saveBlocked(): boolean {
-      return isLogicalRuleMissingConditions(this.ruleData)
+      return this.loading
     },
     currentFieldHints(): Record<string, string> {
       return routeRuleFieldHints()
     },
+    rootPath(): string {
+      return ROOT_PATH
+    },
+    rootChildListPath(): string {
+      return childListPath(ROOT_PATH)
+    },
+    // Issues owned by the root rule itself (a rejected simple rule). Excludes the
+    // root child-list path, which has its own alert, so the two never double up.
+    rootOwnIssues(): RuleConditionIssue[] {
+      return issuesAtPath(this.conditionIssues, ROOT_PATH)
+    },
+    rootChildListIssues(): RuleConditionIssue[] {
+      return issuesAtPath(this.conditionIssues, childListPath(ROOT_PATH))
+    },
     showRouteRuleRecommendedPreset(): boolean {
       return this.$props.index == -1 && hasRouteRuleRecommendedPreset()
     },
-    logical: {
-      get() { return this.ruleData.type == 'logical' },
-      set(v:boolean) {
-        this.ruleData.type = v? 'logical' : 'simple'
-      }
+    logical(): boolean {
+      return this.ruleData.type == 'logical'
     },
     tlsRecordFragment: {
       get() { return this.ruleData.tls_record_fragment ?? false },
@@ -492,7 +626,7 @@ export default {
       }
     },
   },
-  components: { FormShell, SettingInfo, RuleOptions }
+  components: { FormShell, SettingInfo, RuleOptions, RouteRuleNode }
 }
 
 </script>

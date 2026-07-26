@@ -15,6 +15,22 @@ export default {
     expandRow: "展開列詳情",
     clearFilters: "清除篩選",
     noData: "暫無資料",
+    noResults: "找不到符合項目",
+    noResultsHint: "目前搜尋和篩選條件沒有符合的資料列。",
+  },
+  emptyState: {
+    outbounds: "暫無出站",
+    outboundsHint: "出站用於將流量轉送到上游伺服器。請新增一個出站。",
+    services: "暫無服務",
+    servicesHint: "服務與核心一起執行，例如 DERP 或 OOM killer。",
+    endpoints: "暫無端點",
+    endpointsHint: "端點是 WireGuard 等通道介面。請新增一個以連接對等網路。",
+    tls: "暫無 TLS 設定",
+    tlsHint: "TLS 設定保存入站共用的憑證和 REALITY 金鑰。",
+    admins: "暫無管理員",
+    adminsHint: "面板管理員顯示在這裡。新增管理員以授予存取權。",
+    orders: "暫無訂單",
+    ordersHint: "客戶支付訂閱方案後，訂單將顯示在這裡。",
   },
   form: {
     unsavedChanges: "未儲存的變更",
@@ -24,6 +40,13 @@ export default {
     sections: {
       basic: "基本",
       configuration: "設定",
+    },
+    cannotSave: {
+      tagRequired: "請輸入標籤後儲存",
+      nameRequired: "請輸入名稱後儲存",
+      portRange: "連接埠必須介於 1 到 65535 之間",
+      tlsRequired: "此協定需要 TLS 設定",
+      tlsIncompatible: "所選 TLS 設定與此協定不相容",
     },
   },
   success: "成功",
@@ -355,7 +378,8 @@ export default {
         state: "狀態",
         total: "總計",
         viewAll: "查看所有用戶端",
-      },
+              emptyAction: "前往客戶端",
+},
       events: {
         title: "最近事件",
         loading: "正在載入稽核事件。",
@@ -375,8 +399,12 @@ export default {
         empty: "未設定入站。",
         inboundTags: "{count} 個入站標籤",
         noTag: "未回報標籤。",
+              emptyAction: "新增入站",
+},
+          chart: {
+        noData: "暫無流量資料",
       },
-    },
+},
   },
   objects: {
     inbound: "入站",
@@ -437,7 +465,8 @@ export default {
     language: "語言",
     theme: "主題",
     navigation: "切換導覽",
-  },
+      account: "帳戶",
+},
   admin: {
     addAdmin: "新增管理員",
     deleteAdmin: "刪除管理員",
@@ -526,6 +555,12 @@ export default {
       subClashRules: "建議：Rules added to generated Clash profiles. Recommended: keep a final MATCH rule and only intentional direct/block rules.",
       subClashOptions: "建議：Optional Clash subscription sections. Recommended: enable only sections that generated clients need.",
     },
+    unit: {
+      minutes: "分鐘",
+      days: "天",
+      sessionZero: "0 表示停用工作階段逾時。",
+      trafficZero: "0 表示永久保留流量歷史。",
+    },
 },
   client: {
     awg: {
@@ -557,7 +592,9 @@ export default {
     showRawIpConfirm: "原始 IP 可能識別使用者，僅應在主動管理時查看。繼續？",
     firstSeen: "首次出現",
     lastSeen: "最後出現",
-  },
+      empty: "暫無客戶端",
+    emptyHint: "建立客戶端並指派至入站以開始使用。",
+},
   bulk: {
     order: "排序",
     random: "隨機",
@@ -1115,7 +1152,9 @@ export default {
     multiDomain: "多域名",
     remark: "備註",
     mdOption: "多域名選項",
-  },
+      empty: "暫無入站",
+    emptyHint: "新增入站以開始接收流量。",
+},
   listen: {
     options: "監聽選項",
     tcpOptions: "TCP 選項",

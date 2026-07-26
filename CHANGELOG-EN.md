@@ -7,13 +7,35 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 ## [Unreleased]
 
-- Regional `.srs` rule-set files are downloaded and validated by the panel before they are referenced from the sing-box configuration. Saved configurations use verified local files, so core startup no longer depends on reaching GitHub.
-- Downloads are atomic and fail closed: invalid payloads, unsafe tags, unsafe URLs, partial batches, and missing local files are rejected without replacing a working asset.
-- Added a daily refresh job and a `rulesets/sources.json` manifest. Refresh failures keep the last known-good files in place.
-- Added an authenticated, CSRF-protected `/rulesets/materialize` endpoint, direct/outbound download settings, doctor checks, and save-time validation for local rule-set files.
-- Regional presets now use an IP-literal DNS-over-HTTPS fallback for non-regional queries while keeping regional resolvers scoped to their own geosite rules.
-- The preset UI lets operators choose the download path and leaves the configuration unchanged when materialization fails.
-- Added backend, frontend, serialization, cron, and cross-platform rule-set tests. No database migration is required.
+- No unreleased changes.
+
+## [1.0.8-beta6] - 2026-07-27 - local rule-sets, nested rules, and UI fixes
+
+- The panel downloads regional `.srs` files before saving a preset, verifies them, and writes local paths into the sing-box configuration. Core startup no longer waits on GitHub.
+- Sources must use HTTPS. In direct mode, the downloader rejects private and infrastructure addresses at connection time, including redirects and DNS rebinding. One file is limited to 32 MiB, and one batch to 64 MiB. Assets and their manifest are replaced atomically, so an error leaves the last working files in place.
+- A daily job refreshes assets listed in `rulesets/sources.json`. The authenticated, CSRF-protected `/rulesets/materialize` endpoint downloads either directly or through the outbound selected in the regional preset drawer.
+- Doctor checks and save-time validation reject missing, non-regular, oversized, or invalid local rule-set files. Regional presets use an IP-literal DNS-over-HTTPS fallback for non-regional queries.
+- Route and DNS editors now support nested `and` and `or` conditions. The backend pinpoints invalid descendants and caps the request body at 1 MiB and each tree at 64 levels and 4,096 nodes.
+- List pages distinguish an empty collection from filtered results and offer the relevant create or setup action. Drawers explain why Save is unavailable instead of leaving operators to infer the missing field.
+- Login and Settings work better on narrow screens. Settings tracks unsaved changes, clarifies units and zero-value behavior, and separates Save from Restart more clearly.
+- The Nexus shell adds accessible logout controls, remembers the collapsed desktop sidebar, and exposes server status through a dedicated live region. Overview panels show useful empty states and handle constrained widths without clipping key values.
+- HTTP errors retain useful text for strings, structured payloads, null values, and objects that cannot be serialized as JSON.
+- The bundled core is `sing-box-extended v1.13.14-extended-2.5.4`. It includes the WireGuard endpoint IPC methods used for AmneziaWG provisioning and closes rule-set files and zlib readers after use, which lets Windows replace downloaded `.srs` files.
+- The core rejects truncated files, bad zlib checksums, and data after the declared rules. REALITY continues to advertise client version `26.7.11`, which meets the `26.3.27` default minimum in current Xray servers.
+- Provider definitions accept custom HTTP `headers`. Group `providers` accepts one value or a list. The `sing-vmess` replacement now matches the core requirement, `0.2.8-extended`.
+- The default Compose image and frontend package version are now `v1.0.8-beta6`. Previous Compose and frontend metadata still pointed at beta4.
+- Added backend, frontend, serialization, cron, race, accessibility, and cross-platform rule-set coverage. No database migration is required.
+
+Full release notes: [`docs/releases/v1.0.8-beta6.md`](docs/releases/v1.0.8-beta6.md).
+
+## [1.0.8-beta5] - 2026-07-24 - release without a signing-key dependency
+
+- Self-update no longer depends on an Ed25519 signing key stored as an Actions secret. It verifies an unsigned manifest that binds the archive name, version, channel, platform, and SHA-256 checksum, and it fetches that metadata over HTTPS before the installed binary is replaced.
+- The release workflow publishes the manifest beside every Linux archive. Releases without a manifest are not offered through self-update.
+- The E2E panel reads its bootstrap password only from its own fixture directory.
+- No database migration is required.
+
+Full release notes: [`docs/releases/v1.0.8-beta5.md`](docs/releases/v1.0.8-beta5.md).
 
 ## [1.0.8-beta4] - 2026-07-24 - CI race and E2E fixture fixes
 
@@ -21,19 +43,12 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 - Made the E2E panel clear the generated first-login reset flag before browser tests.
 - Updated gRPC to v1.82.1 to remove the HIGH vulnerability reported by the container scanner.
 
-
-- No unreleased changes.
-
-## [1.0.8-beta4] - 2026-07-24 - signed release artifacts
+## [1.0.8-beta3] - 2026-07-24 - signed release artifacts
 
 - Reissued the beta release with a newly generated Ed25519 signing key after the previous release workflow lacked its Actions secret.
 - Linux artifacts are published only after manifest signing succeeds.
 
-
-
-- No unreleased changes.
-
-## [1.0.8-beta4] - 2026-07-24 - durable recovery and signed self-update
+## [1.0.8-beta2] - 2026-07-24 - durable recovery and signed self-update
 
 - Self-update accepts only releases with an Ed25519-signed manifest that binds the archive checksum, version, channel, platform, and archive filename. Unsigned releases are not offered through self-update.
 - Database restore drains panel, subscription, and cron database work before swapping SQLite. The x-ui rollback route no longer deadlocks on its own request lease.
@@ -42,10 +57,10 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 - Application and cron shutdown handle active work more safely, and an x-ui import reports a post-commit checkpoint problem as a warning rather than a failed import.
 - The bootstrap password file is consumed only after a successful password change. Frontend request, polling, loading-state, and falsy-payload handling were tightened.
 - Updated `golang.org/x/text` to 0.39.0 and frontend build dependencies. `npm audit --audit-level=moderate` reports no vulnerabilities.
-- The default Compose image is now `ghcr.io/deposist/s-ui-x:v1.0.8-beta4`; nftables capability remains opt-in in a separate Compose profile.
+- The default Compose image is now `ghcr.io/deposist/s-ui-x:v1.0.8-beta2`; nftables capability remains opt-in in a separate Compose profile.
 - No database migration is required.
 
-Full release notes: [`docs/releases/v1.0.8-beta4.md`](docs/releases/v1.0.8-beta4.md).
+Full release notes: [`docs/releases/v1.0.8-beta2.md`](docs/releases/v1.0.8-beta2.md).
 
 ## [1.0.8-beta1] - 2026-07-21 - security hardening and IP certificate recovery
 

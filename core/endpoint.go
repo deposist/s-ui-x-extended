@@ -73,6 +73,8 @@ func (c *Core) AddEndpoint(config []byte) error {
 }
 
 func (c *Core) RemoveEndpoint(tag string) error {
+	c.wireGuardIPCAccess.Lock()
+	defer c.wireGuardIPCAccess.Unlock()
 	return c.withRuntime(func(rt coreRuntime) error {
 		logger.Info("remove endpoint: ", tag)
 		return rt.endpointManager.Remove(tag)

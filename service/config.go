@@ -580,29 +580,34 @@ func validateConfigLogOutput(data json.RawMessage) error {
 	return nil
 }
 
-// validateConfigRuleConditions rejects logical rules that sing-box reports as
-// missing conditions. Simple action-only catch-all rules remain valid.
+// validateConfigRuleConditions rejects rules that sing-box would refuse to
+// start on, by asking the core itself rather than guessing.
+//
+// The previous implementation walked the rules as maps and looked for a
+// "meaningful" field. That heuristic disagreed with the core in both
+// directions: it rejected action-only and invert-only rules that the core
+// happily accepts (decoding defaults the action, and validity is defined as
+// "not deeply equal to the zero value"), and it only ever inspected rules
+// tagged `type: logical`, so an invalid nested branch went unnoticed. See
+// core.RuleConditionIssues for the exact semantics it now defers to.
+//
+// Only validity failures block the save, because only those stop the core from
+// starting. A dropped rule is logged instead: the core accepts such a config, so
+// refusing it here would make the panel stricter than the core and would also
+// wedge operators whose stored config already contains an empty rule, blocking
+// edits unrelated to it. The doctor and the rule-condition endpoint surface the
+// loss where it can be acted on.
 func validateConfigRuleConditions(data json.RawMessage) error {
-	var top struct {
-		Route struct {
-			Rules []map[string]any `json:"rules"`
-		} `json:"route"`
-		DNS struct {
-			Rules []map[string]any `json:"rules"`
-		} `json:"dns"`
+	issues, err := core.RuleConditionIssues(data)
+	if err != nil {
+		return common.NewErrorf("decode config rules: %v", err)
 	}
-	if err := json.Unmarshal(data, &top); err != nil {
-		return nil
-	}
-	for _, group := range []struct {
-		name  string
-		rules []map[string]any
-	}{{"route.rules", top.Route.Rules}, {"dns.rules", top.DNS.Rules}} {
-		for i, rule := range group.rules {
-			if stringField(rule, "type") == "logical" && !ruleHasConditions(rule) {
-				return common.NewErrorf("%s[%d] has no conditions; add at least one condition or remove the rule, otherwise sing-box will not start", group.name, i)
-			}
+	for _, issue := range issues {
+		if issue.Code == core.RuleConditionCodeDroppedRule {
+			logger.Warningf("config %s: %s", issue.Path, issue.Message)
+			continue
 		}
+		return common.NewErrorf("%s %s; fix or remove the rule, otherwise sing-box will not start", issue.Path, issue.Message)
 	}
 	return nil
 }

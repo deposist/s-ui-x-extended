@@ -3,7 +3,8 @@
     :dirty="dirty"
     :loading="loading"
     :model-value="visible"
-    :save-disabled="saveBlocked"
+    :save-disabled="saveBlockedReason !== ''"
+    :save-disabled-reason="saveBlockedReason"
     :saving="loading"
     :title="$t('actions.' + title) + ' ' + $t('objects.service')"
     :width="720"
@@ -92,6 +93,7 @@ export default {
     }
   },
   methods: {
+    // Exposed so the tag field's error state uses the same blank rule as Save.
     isBlankIdentity,
     async updateData(id: number) {
       if (id > 0) {
@@ -154,8 +156,16 @@ export default {
     dirty(): boolean {
       return this.snapshot !== "" && JSON.stringify(this.srv) !== this.snapshot
     },
-    saveBlocked(): boolean {
-      return isBlankIdentity(this.srv?.tag)
+    // A service saved without a tag cannot be referenced or told apart in the
+    // list, so block it up front instead of failing later.
+    saveBlockedReason(): string {
+      if (this.srv == undefined) return this.$t('error.invalidData')
+      if (isBlankIdentity(this.srv.tag)) return this.$t('form.cannotSave.tagRequired')
+      // OOMKiller/Profiler have no listen_port; only check when present.
+      if (this.srv.listen_port != null && (this.srv.listen_port > 65535 || this.srv.listen_port < 1)) {
+        return this.$t('form.cannotSave.portRange')
+      }
+      return ''
     },
     currentFieldHints(): Record<string, string> {
       return serviceFieldHintsForType(this.srv.type)

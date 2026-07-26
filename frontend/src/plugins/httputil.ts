@@ -85,19 +85,32 @@ export const logout = async () => {
   }
 }
 
+function _describePayload(data: unknown): string {
+  if (typeof data === 'object' && data !== null) {
+    for (const key of ['message', 'error', 'detail'] as const) {
+      const value = Object.hasOwn(data, key) ? (data as Record<string, unknown>)[key] : undefined
+      if (typeof value === 'string' && value !== '') return value
+    }
+
+    try {
+      return JSON.stringify(data)
+    } catch {
+      return String(data)
+    }
+  }
+
+  return String(data)
+}
+
 function _respToMsg(resp: any): Msg {
   const data = resp.data
   if (data == null) {
     return { success: true, msg: "", obj: null }
-  } else if (isMsg(data)) {
-    if (data.hasOwnProperty('success')) {
-        return { success: data.success, msg: data.msg, obj: data.obj ?? null }
-    } else {
-        return data
-    }
-  } else {
-    return { success: false, msg: `unknown data: ${data}`, obj: null }
   }
+  if (isMsg(data)) {
+    return { success: data.success, msg: data.msg, obj: data.obj ?? null }
+  }
+  return { success: false, msg: _describePayload(data), obj: null }
 }
 
 function _errorToMsg(error: any): Msg {
@@ -113,8 +126,9 @@ function _errorToMsg(error: any): Msg {
   return { success: false, msg: error.toString(), obj: null }
 }
 
-function isMsg(obj: any): obj is Msg {
-  return Object.hasOwn(obj,'success') && Object.hasOwn(obj,'msg') && Object.hasOwn(obj, 'obj')
+function isMsg(obj: unknown): obj is Msg {
+  if (obj === null || typeof obj !== 'object') return false
+  return Object.hasOwn(obj, 'success') && Object.hasOwn(obj, 'msg') && Object.hasOwn(obj, 'obj')
 }
   
 const HttpUtils = {

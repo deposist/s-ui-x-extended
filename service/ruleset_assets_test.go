@@ -2,10 +2,16 @@ package service
 
 import (
 	"bytes"
+	"context"
+	"crypto/tls"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/sagernet/sing-box/common/srs"
@@ -33,15 +39,59 @@ func validRuleSetBytes(t *testing.T, domain string) []byte {
 	return buf.Bytes()
 }
 
+func configureTestRuleSetTLSClient(t *testing.T, servers ...*httptest.Server) {
+	t.Helper()
+	allowed := make(map[string]struct{}, len(servers))
+	for _, server := range servers {
+		allowed[server.Listener.Addr().String()] = struct{}{}
+	}
+	original := ruleSetDirectTransportFactory
+	ruleSetDirectTransportFactory = func() *http.Transport {
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.Proxy = nil
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // test TLS server only
+		transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+			if _, ok := allowed[address]; !ok {
+				return nil, fmt.Errorf("unexpected test target %s", address)
+			}
+			return (&net.Dialer{}).DialContext(ctx, network, address)
+		}
+		return transport
+	}
+
+	originalValidation := validateDirectRuleSetURL
+	validateDirectRuleSetURL = func(context.Context, string) error { return nil }
+	t.Cleanup(func() { validateDirectRuleSetURL = originalValidation })
+	t.Cleanup(func() { ruleSetDirectTransportFactory = original })
+}
+
+func TestVerifyRuleSetBytesRejectsCorruptTrailer(t *testing.T) {
+	valid := validRuleSetBytes(t, "checksum.example")
+	if len(valid) < 8 {
+		t.Fatalf("unexpected short fixture: %d", len(valid))
+	}
+
+	corrupt := append([]byte(nil), valid...)
+	corrupt[len(corrupt)-1] ^= 0xff
+	if err := verifyRuleSetBytes(corrupt); err == nil {
+		t.Fatal("a corrupt zlib checksum must be rejected")
+	}
+
+	if err := verifyRuleSetBytes(valid[:len(valid)-1]); err == nil {
+		t.Fatal("a truncated zlib trailer must be rejected")
+	}
+}
+
 func TestMaterializeWritesVerifiedRuleSets(t *testing.T) {
 	initDoctorTestDB(t)
 	payload := validRuleSetBytes(t, "example.com")
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write(payload)
 	}))
 	defer server.Close()
 
 	svc := RuleSetAssetService{}
+	configureTestRuleSetTLSClient(t, server)
 	assets, err := svc.Materialize([]RuleSetSource{{Tag: "geosite-ru", URL: server.URL + "/geosite.srs"}})
 	if err != nil {
 		t.Fatalf("Materialize: %v", err)
@@ -63,13 +113,14 @@ func TestRefreshUpdatesFilesFromManifest(t *testing.T) {
 	initDoctorTestDB(t)
 	payload := validRuleSetBytes(t, "first.example")
 	var hits int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits++
 		w.Write(payload)
 	}))
 	defer server.Close()
 
 	svc := RuleSetAssetService{}
+	configureTestRuleSetTLSClient(t, server)
 	assets, err := svc.Materialize([]RuleSetSource{{Tag: "geosite-ru", URL: server.URL + "/geosite.srs"}})
 	if err != nil {
 		t.Fatalf("Materialize: %v", err)
@@ -116,7 +167,7 @@ func TestRefreshFailureKeepsPreviousFile(t *testing.T) {
 	initDoctorTestDB(t)
 	good := validRuleSetBytes(t, "keep.example")
 	serveGood := true
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if serveGood {
 			w.Write(good)
 			return
@@ -126,6 +177,7 @@ func TestRefreshFailureKeepsPreviousFile(t *testing.T) {
 	defer server.Close()
 
 	svc := RuleSetAssetService{}
+	configureTestRuleSetTLSClient(t, server)
 	assets, err := svc.Materialize([]RuleSetSource{{Tag: "geoip-ru", URL: server.URL + "/geoip.srs"}})
 	if err != nil {
 		t.Fatalf("Materialize: %v", err)
@@ -145,12 +197,13 @@ func TestRefreshFailureKeepsPreviousFile(t *testing.T) {
 // that kills the core at startup.
 func TestMaterializeRejectsNonRuleSetPayload(t *testing.T) {
 	initDoctorTestDB(t)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("<html><body>404 not found</body></html>"))
 	}))
 	defer server.Close()
 
 	svc := RuleSetAssetService{}
+	configureTestRuleSetTLSClient(t, server)
 	_, err := svc.Materialize([]RuleSetSource{{Tag: "geosite-ru", URL: server.URL}})
 	if err == nil {
 		t.Fatal("Materialize must reject a payload that is not a binary rule-set")
@@ -165,17 +218,18 @@ func TestMaterializeRejectsNonRuleSetPayload(t *testing.T) {
 func TestMaterializeKeepsPreviousFileOnFailure(t *testing.T) {
 	initDoctorTestDB(t)
 	good := validRuleSetBytes(t, "example.com")
-	okServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	okServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write(good)
 	}))
 	defer okServer.Close()
 
 	svc := RuleSetAssetService{}
+	configureTestRuleSetTLSClient(t, okServer)
 	if _, err := svc.Materialize([]RuleSetSource{{Tag: "geoip-ru", URL: okServer.URL}}); err != nil {
 		t.Fatalf("initial Materialize: %v", err)
 	}
 
-	failServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	failServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "boom", http.StatusInternalServerError)
 	}))
 	defer failServer.Close()
@@ -192,16 +246,17 @@ func TestMaterializeKeepsPreviousFileOnFailure(t *testing.T) {
 func TestMaterializeIsAllOrNothing(t *testing.T) {
 	initDoctorTestDB(t)
 	good := validRuleSetBytes(t, "example.com")
-	okServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	okServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write(good)
 	}))
 	defer okServer.Close()
-	failServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	failServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "boom", http.StatusNotFound)
 	}))
 	defer failServer.Close()
 
 	svc := RuleSetAssetService{}
+	configureTestRuleSetTLSClient(t, okServer, failServer)
 	_, err := svc.Materialize([]RuleSetSource{
 		{Tag: "geosite-ru", URL: okServer.URL},
 		{Tag: "geoip-ru", URL: failServer.URL},
@@ -278,4 +333,65 @@ func TestValidateRuleSetSettingInput(t *testing.T) {
 	if err := validateRuleSetSettingInput("ruleSetDownloadMode", "outbound", withTag); err != nil {
 		t.Fatalf("outbound mode with a tag must be accepted: %v", err)
 	}
+}
+
+func TestMaterializeConcurrentCallsPreserveManifestEntries(t *testing.T) {
+	initDoctorTestDB(t)
+	payload := validRuleSetBytes(t, "concurrent.example")
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(payload)
+	}))
+	defer server.Close()
+	configureTestRuleSetTLSClient(t, server)
+
+	svc := RuleSetAssetService{}
+	var wg sync.WaitGroup
+	errors := make(chan error, 2)
+	for _, tag := range []string{"first", "second"} {
+		wg.Add(1)
+		go func(tag string) {
+			defer wg.Done()
+			_, err := svc.Materialize([]RuleSetSource{{Tag: tag, URL: server.URL + "/" + tag + ".srs"}})
+			errors <- err
+		}(tag)
+	}
+	wg.Wait()
+	close(errors)
+	for err := range errors {
+		if err != nil {
+			t.Fatalf("concurrent Materialize: %v", err)
+		}
+	}
+	manifest := readManifest()
+	for _, tag := range []string{"first", "second"} {
+		if manifest[tag] == "" {
+			t.Fatalf("manifest lost %q: %#v", tag, manifest)
+		}
+	}
+}
+
+func TestVerifyRuleSetFileRejectsUnboundedInputs(t *testing.T) {
+	t.Run("directory", func(t *testing.T) {
+		if err := VerifyRuleSetFile(t.TempDir()); err == nil {
+			t.Fatal("a directory must not be read as a rule-set")
+		}
+	})
+
+	t.Run("oversized sparse file", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "oversized.srs")
+		file, err := os.Create(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := file.Truncate(ruleSetMaxBytes + 1); err != nil {
+			file.Close()
+			t.Fatal(err)
+		}
+		if err := file.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := VerifyRuleSetFile(path); err == nil || !strings.Contains(err.Error(), "larger") {
+			t.Fatalf("expected an oversized-file error, got %v", err)
+		}
+	})
 }

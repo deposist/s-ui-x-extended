@@ -307,7 +307,13 @@
             <row-actions :actions="orderActions(item)" @action="(key) => handleOrderAction(key, item)" />
           </template>
           <template #empty>
-            <empty-state icon="lucide:receipt" :title="$t('table.noData')" />
+            <!-- No action button here: orders are created by paying customers,
+                 not by the admin, so there is nothing for them to click. -->
+            <empty-state
+              :description="$t('emptyState.ordersHint')"
+              icon="lucide:receipt"
+              :title="$t('emptyState.orders')"
+            />
           </template>
         </nexus-data-table>
         <v-data-table v-else :headers="orderHeaders" :items="orders" :loading="ordersLoading" density="comfortable">
