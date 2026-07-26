@@ -72,7 +72,7 @@ test('websocket survives repeated offline/online chaos and returns to connected'
     }
 
     const WebSocketProxy = function (this: any, url: string | URL, protocols?: string | string[]) {
-      if (String(url).includes('/api/realtime/ws')) {
+      if (String(url).includes('/realtime/ws')) {
         return new FakeRealtimeWebSocket(url)
       }
       return new NativeWebSocket(url, protocols)

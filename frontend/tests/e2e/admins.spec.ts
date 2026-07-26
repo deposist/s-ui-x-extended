@@ -45,7 +45,7 @@ const login = async (
 const openAdmins = async (page: Page) => {
   await page.goto('admins', { waitUntil: 'domcontentloaded' })
   await disableNotificationPointerEvents(page)
-  await expect(page.getByRole('button', { name: 'Add admin' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Add admin' }).first()).toBeVisible()
 
   await expect(page.locator('.nexus-shell')).toBeVisible()
 }
@@ -58,7 +58,7 @@ const assertSelfDeleteHidden = async (page: Page) => {
 }
 
 const submitAdd = async (page: Page, username: string, password: string, currentPass: string) => {
-  await page.getByRole('button', { name: 'Add admin' }).click()
+  await page.getByRole('button', { name: 'Add admin' }).first().click()
   await expect(page.getByRole('dialog')).toContainText('Add admin')
   await page.getByLabel('Current Password').fill(currentPass)
   await page.getByLabel('New Username').fill(username)

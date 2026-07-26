@@ -1,6 +1,7 @@
 package core
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -43,18 +44,18 @@ func TestWireGuardIPCLockSerializesEndpointRemoval(t *testing.T) {
 	core := NewCore()
 	core.wireGuardIPCAccess.Lock()
 
-	entered := make(chan struct{})
+	acquired := make(chan struct{})
 	done := make(chan struct{})
 	go func() {
-		close(entered)
 		core.wireGuardIPCAccess.Lock()
+		close(acquired)
 		core.wireGuardIPCAccess.Unlock()
 		close(done)
 	}()
-	<-entered
+	runtime.Gosched()
 
 	select {
-	case <-done:
+	case <-acquired:
 		core.wireGuardIPCAccess.Unlock()
 		t.Fatal("a competing endpoint operation entered the IPC critical section")
 	default:

@@ -365,7 +365,7 @@ func stageRuleSetFile(path string, data []byte) (string, error) {
 		err = closeErr
 	}
 	if err == nil {
-		err = os.Chmod(name, 0o640)
+		err = os.Chmod(name, 0o600)
 	}
 	if err != nil {
 		_ = os.Remove(name)
@@ -391,6 +391,7 @@ func reserveBackupName(path string) (string, error) {
 }
 
 func syncDirectory(path string) error {
+	// #nosec G304 -- path is the containing directory of an internally generated ruleset path.
 	dir, err := os.Open(path)
 	if err != nil {
 		return err
@@ -511,6 +512,7 @@ func verifyRuleSetBytes(data []byte) error {
 	if err != nil {
 		return common.NewErrorf("not a valid binary rule-set: %v", err)
 	}
+	// #nosec G110 -- data is already bounded by ruleSetMaxBytes before verification.
 	_, readErr := io.Copy(io.Discard, reader)
 	closeErr := reader.Close()
 	if readErr != nil {
@@ -537,6 +539,7 @@ func VerifyRuleSetFile(path string) error {
 		return common.NewErrorf("rule-set is larger than %d bytes", ruleSetMaxBytes)
 	}
 
+	// #nosec G304 -- callers intentionally validate an operator-configured local ruleset path.
 	file, err := os.Open(path)
 	if err != nil {
 		return err
@@ -550,20 +553,4 @@ func VerifyRuleSetFile(path string) error {
 		return common.NewErrorf("rule-set is larger than %d bytes", ruleSetMaxBytes)
 	}
 	return verifyRuleSetBytes(data)
-}
-
-// writeFileAtomic writes via a temporary file and a rename, so a crash or a
-// concurrent core start never observes a partially written rule-set.
-// writeFileAtomic stages, renames, and syncs the containing directory so the
-// replacement survives a power loss after the function reports success.
-func writeFileAtomic(path string, data []byte) error {
-	temporary, err := stageRuleSetFile(path, data)
-	if err != nil {
-		return err
-	}
-	defer os.Remove(temporary)
-	if err := os.Rename(temporary, path); err != nil {
-		return err
-	}
-	return syncDirectory(filepath.Dir(path))
 }

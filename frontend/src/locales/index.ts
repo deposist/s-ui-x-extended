@@ -25,7 +25,7 @@ const normalizeLocale = (value?: string | null): LocaleCode => {
 }
 
 const storedLocale = () => {
-  if (typeof localStorage === 'undefined') {
+  if (typeof localStorage === 'undefined' || typeof localStorage.getItem !== 'function') {
     return DEFAULT_LOCALE
   }
   return normalizeLocale(localStorage.getItem('locale'))
