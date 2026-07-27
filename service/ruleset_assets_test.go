@@ -86,7 +86,9 @@ func TestMaterializeWritesVerifiedRuleSets(t *testing.T) {
 	initDoctorTestDB(t)
 	payload := validRuleSetBytes(t, "example.com")
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(payload)
+		if _, err := w.Write(payload); err != nil {
+			t.Errorf("write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -115,7 +117,9 @@ func TestRefreshUpdatesFilesFromManifest(t *testing.T) {
 	var hits int
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits++
-		w.Write(payload)
+		if _, err := w.Write(payload); err != nil {
+			t.Errorf("write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -169,7 +173,9 @@ func TestRefreshFailureKeepsPreviousFile(t *testing.T) {
 	serveGood := true
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if serveGood {
-			w.Write(good)
+			if _, err := w.Write(good); err != nil {
+				t.Errorf("write response: %v", err)
+			}
 			return
 		}
 		w.WriteHeader(http.StatusInternalServerError)
@@ -198,7 +204,9 @@ func TestRefreshFailureKeepsPreviousFile(t *testing.T) {
 func TestMaterializeRejectsNonRuleSetPayload(t *testing.T) {
 	initDoctorTestDB(t)
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("<html><body>404 not found</body></html>"))
+		if _, err := w.Write([]byte("<html><body>404 not found</body></html>")); err != nil {
+			t.Errorf("write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -219,7 +227,9 @@ func TestMaterializeKeepsPreviousFileOnFailure(t *testing.T) {
 	initDoctorTestDB(t)
 	good := validRuleSetBytes(t, "example.com")
 	okServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(good)
+		if _, err := w.Write(good); err != nil {
+			t.Errorf("write response: %v", err)
+		}
 	}))
 	defer okServer.Close()
 
@@ -247,7 +257,9 @@ func TestMaterializeIsAllOrNothing(t *testing.T) {
 	initDoctorTestDB(t)
 	good := validRuleSetBytes(t, "example.com")
 	okServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(good)
+		if _, err := w.Write(good); err != nil {
+			t.Errorf("write response: %v", err)
+		}
 	}))
 	defer okServer.Close()
 	failServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -15,7 +15,7 @@ import (
 
 // postRuleConditions drives the handler through the exact envelope the frontend
 // uses: a single form field named "data" holding the whole JSON payload.
-func postRuleConditions(t *testing.T, payload string, scope string) *httptest.ResponseRecorder {
+func postRuleConditions(t *testing.T, payload string) *httptest.ResponseRecorder {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
@@ -24,9 +24,6 @@ func postRuleConditions(t *testing.T, payload string, scope string) *httptest.Re
 	form.Set("data", payload)
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/config/rule-conditions", strings.NewReader(form.Encode()))
 	c.Request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if scope != "" {
-		c.Set(apiTokenScopeKey, scope)
-	}
 	(&ApiService{}).ValidateRuleConditions(c)
 	return recorder
 }
@@ -51,7 +48,7 @@ func decodeIssues(t *testing.T, body string) []core.RuleConditionIssue {
 
 func TestValidateRuleConditionsReportsIssues(t *testing.T) {
 	t.Run("logical rule without branches is reported with its exact path", func(t *testing.T) {
-		recorder := postRuleConditions(t, `{"kind":"route","rule":{"type":"logical","mode":"and","rules":[],"outbound":"direct"}}`, "")
+		recorder := postRuleConditions(t, `{"kind":"route","rule":{"type":"logical","mode":"and","rules":[],"outbound":"direct"}}`)
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
 		}
@@ -71,7 +68,7 @@ func TestValidateRuleConditionsReportsIssues(t *testing.T) {
 	// accepted by the core, so the endpoint must not invent an issue for it.
 	// This is exactly the shape the replaced heuristic used to block.
 	t.Run("nested empty branch beside a sibling is accepted", func(t *testing.T) {
-		recorder := postRuleConditions(t, `{"kind":"route","rule":{"type":"logical","mode":"and","rules":[{"domain":["a.example"]},{}],"outbound":"direct"}}`, "")
+		recorder := postRuleConditions(t, `{"kind":"route","rule":{"type":"logical","mode":"and","rules":[{"domain":["a.example"]},{}],"outbound":"direct"}}`)
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
 		}
@@ -83,7 +80,7 @@ func TestValidateRuleConditionsReportsIssues(t *testing.T) {
 	// An action-only rule is a legitimate catch-all that the old "meaningful
 	// field" heuristic rejected.
 	t.Run("action-only rule is accepted", func(t *testing.T) {
-		recorder := postRuleConditions(t, `{"kind":"route","rule":{"action":"sniff"}}`, "")
+		recorder := postRuleConditions(t, `{"kind":"route","rule":{"action":"sniff"}}`)
 		if issues := decodeIssues(t, recorder.Body.String()); len(issues) != 0 {
 			t.Fatalf("expected no issues, got %+v", issues)
 		}
@@ -93,7 +90,7 @@ func TestValidateRuleConditionsReportsIssues(t *testing.T) {
 	// so the operator must be told the rule would not exist even though the
 	// config would load.
 	t.Run("empty dns rule is reported as discarded", func(t *testing.T) {
-		recorder := postRuleConditions(t, `{"kind":"dns","rule":{}}`, "")
+		recorder := postRuleConditions(t, `{"kind":"dns","rule":{}}`)
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
 		}
@@ -106,7 +103,7 @@ func TestValidateRuleConditionsReportsIssues(t *testing.T) {
 	// The response always carries an array so the caller never has to tell "no
 	// issues" apart from a missing field.
 	t.Run("valid rule returns an explicit empty array", func(t *testing.T) {
-		recorder := postRuleConditions(t, `{"kind":"dns","rule":{"domain":["a.example"]}}`, "")
+		recorder := postRuleConditions(t, `{"kind":"dns","rule":{"domain":["a.example"]}}`)
 		if body := recorder.Body.String(); !strings.Contains(body, `"issues":[]`) {
 			t.Fatalf("expected an explicit empty array, got %s", body)
 		}
@@ -128,7 +125,7 @@ func TestValidateRuleConditionsRejectsMalformedPayloads(t *testing.T) {
 		{"unknown rule field", `{"kind":"route","rule":{"nope":true}}`},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			recorder := postRuleConditions(t, testCase.payload, "")
+			recorder := postRuleConditions(t, testCase.payload)
 			if recorder.Code != http.StatusBadRequest {
 				t.Fatalf("expected 400, got %d: %s", recorder.Code, recorder.Body.String())
 			}
@@ -157,7 +154,7 @@ func TestValidateRuleConditionsRejectsMalformedPayloads(t *testing.T) {
 	// The submitted rule must never be echoed back, so a rejected payload cannot
 	// leak config fragments into logs or error surfaces.
 	t.Run("rejection does not echo the rule", func(t *testing.T) {
-		recorder := postRuleConditions(t, `{"kind":"route","rule":{"nope":"s3cret-marker"}}`, "")
+		recorder := postRuleConditions(t, `{"kind":"route","rule":{"nope":"s3cret-marker"}}`)
 		if strings.Contains(recorder.Body.String(), "s3cret-marker") {
 			t.Fatalf("response echoed the submitted rule: %s", recorder.Body.String())
 		}
@@ -166,7 +163,7 @@ func TestValidateRuleConditionsRejectsMalformedPayloads(t *testing.T) {
 
 func TestValidateRuleConditionsRejectsOversizedPayload(t *testing.T) {
 	gigantic := strings.Repeat("x", int(maxRuleConditionRequestBytes)+1)
-	recorder := postRuleConditions(t, gigantic, "")
+	recorder := postRuleConditions(t, gigantic)
 	if recorder.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("expected 413, got %d: %s", recorder.Code, recorder.Body.String())
 	}
