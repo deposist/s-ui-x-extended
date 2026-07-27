@@ -60,7 +60,13 @@ export class WsRuntime {
     if (this.ws || this.state === 'connected') return
     this.setState('reconnecting')
     this.stopFallback()
-    const token = await this.deps.getToken()
+    let token: string | null
+    try {
+      token = await this.deps.getToken()
+    } catch {
+      this.startFallback()
+      return
+    }
     if (!token) {
       this.startFallback()
       return

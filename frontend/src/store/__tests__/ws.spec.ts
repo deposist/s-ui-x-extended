@@ -127,6 +127,33 @@ describe('WsRuntime regression anchors', () => {
     expect(deps.loadData).toHaveBeenCalledTimes(1)
   })
 
+  it('falls back and retries when fetching the websocket token rejects', async () => {
+    const timers = new ManualTimers()
+    const socket = new FakeSocket()
+    const deps = runtimeDeps({
+      getToken: vi.fn()
+        .mockRejectedValueOnce(new Error('network offline'))
+        .mockResolvedValueOnce('ws-token'),
+      createSocket: vi.fn(() => socket),
+      setInterval: timers.setInterval,
+      clearInterval: timers.clearInterval,
+    })
+    const runtime = new WsRuntime(deps)
+
+    await expect(runtime.connect()).resolves.toBeUndefined()
+
+    expect(runtime.state).toBe('degraded')
+    expect(timers.setInterval).toHaveBeenCalledWith(expect.any(Function), 10000)
+
+    timers.runInterval()
+    await flushPromises()
+
+    expect(deps.getToken).toHaveBeenCalledTimes(2)
+    expect(deps.createSocket).toHaveBeenCalledTimes(1)
+    socket.onopen?.()
+    expect(runtime.state).toBe('connected')
+  })
+
   it('falls back when the socket does not open before the timeout', async () => {
     const timers = new ManualTimers()
     const socket = new FakeSocket()
