@@ -84,7 +84,7 @@ export interface DetectedPresetState {
 }
 
 const SOURCE_URLS = {
-  ruGeosite: 'https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-ru.srs',
+  ruGeosite: 'https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite/geosite-category-ru.srs',
   ruGeoip: 'https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geoip/geoip-ru.srs',
   cnGeosite: 'https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-cn.srs',
   cnGeoip: 'https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs',
@@ -280,7 +280,7 @@ const countrySources = (region: PresetRegion) => region === 'RU'
       geosite: SOURCE_URLS.ruGeosite,
       geoip: SOURCE_URLS.ruGeoip,
       names: [
-        { name: 'SagerNet/sing-geosite: geolocation-ru', url: SOURCE_URLS.ruGeosite },
+        { name: 'runetfreedom/russia-v2ray-rules-dat: category-ru', url: SOURCE_URLS.ruGeosite },
         { name: 'runetfreedom/russia-v2ray-rules-dat: geoip-ru', url: SOURCE_URLS.ruGeoip },
       ],
     }

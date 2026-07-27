@@ -8,6 +8,14 @@
 
 - 暂无未发布变更。
 
+## [1.0.8-beta7] - 2026-07-27 - 修复俄罗斯区域预设下载
+
+- 俄罗斯区域路由与 DNS 预设现在从持续维护的 runetfreedom rule-set 集合下载 `geosite-category-ru.srs`。原 SagerNet 路径 `geosite-geolocation-ru.srs` 返回 HTTP 404，导致预设无法应用。
+- 新来源通过 HTTPS 提供 sing-box 二进制 rule-set，面板仍会先下载并校验，再修改本地配置。
+- 无需迁移数据库。
+
+完整发布说明：[`docs/releases/v1.0.8-beta7.md`](docs/releases/v1.0.8-beta7.md)。
+
 ## [1.0.8-beta6] - 2026-07-27 - 本地 rule-set、嵌套规则与界面修复
 
 - 面板会在保存预设前下载并校验区域 `.srs` 文件，再把本地路径写入 sing-box 配置。核心启动不再依赖 GitHub。

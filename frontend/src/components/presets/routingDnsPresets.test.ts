@@ -181,7 +181,7 @@ describe('routing DNS preset catalog', () => {
     expect(ruleSets['preset-ru-direct-geosite']).toMatchObject({
       type: 'remote',
       format: 'binary',
-      url: 'https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-ru.srs',
+      url: 'https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite/geosite-category-ru.srs',
       download_detour: 'direct',
     })
     expect(ruleSets['preset-ru-direct-geoip']).toMatchObject({

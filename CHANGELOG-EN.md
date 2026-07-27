@@ -9,6 +9,14 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.8-beta7] - 2026-07-27 - Russia regional preset download fix
+
+- The Russia regional routing and DNS preset now downloads `geosite-category-ru.srs` from the maintained runetfreedom rule-set collection. The previous SagerNet `geosite-geolocation-ru.srs` path returned HTTP 404 and prevented the preset from being applied.
+- The replacement source is an HTTPS binary sing-box rule-set and continues to be downloaded and validated by the panel before the local configuration changes.
+- No database migration is required.
+
+Full release notes: [`docs/releases/v1.0.8-beta7.md`](docs/releases/v1.0.8-beta7.md).
+
 ## [1.0.8-beta6] - 2026-07-27 - local rule-sets, nested rules, and UI fixes
 
 - The panel downloads regional `.srs` files before saving a preset, verifies them, and writes local paths into the sing-box configuration. Core startup no longer waits on GitHub.
