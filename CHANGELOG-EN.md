@@ -9,6 +9,14 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.8-beta8] - 2026-07-28 - WebSocket recovery and Windows tests
+
+- Realtime updates recover after the WebSocket token request fails while the browser is offline. The client enters degraded polling and retries after connectivity returns instead of remaining closed.
+- Frontend unit tests now run from a canonical Windows path. This avoids Vitest losing its runner context when the drive letter case differs between the shell and the resolved filesystem path.
+- No database migration is required.
+
+Full release notes: [`docs/releases/v1.0.8-beta8.md`](docs/releases/v1.0.8-beta8.md).
+
 ## [1.0.8-beta7] - 2026-07-27 - Russia regional preset download fix
 
 - The Russia regional routing and DNS preset now downloads `geosite-category-ru.srs` from the maintained runetfreedom rule-set collection. The previous SagerNet `geosite-geolocation-ru.srs` path returned HTTP 404 and prevented the preset from being applied.

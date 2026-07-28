@@ -3,6 +3,10 @@ import { expect, test } from '@playwright/test'
 import { login } from './helpers'
 
 test('websocket returns from offline/degraded state back to connected', async ({ page }) => {
+  await page.route('**/api/realtime/ws-token', (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ success: true, msg: '', obj: { token: 'e2e-ws-token' } }),
+  }))
   await page.addInitScript(() => {
     const NativeWebSocket = window.WebSocket
     const nativeSetTimeout = window.setTimeout

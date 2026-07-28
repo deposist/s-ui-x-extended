@@ -8,6 +8,14 @@
 
 - 暂无未发布变更。
 
+## [1.0.8-beta8] - 2026-07-28 - WebSocket 恢复与 Windows 测试
+
+- 浏览器离线时，如果 WebSocket token 请求失败，实时更新仍可恢复。客户端会进入降级轮询，并在网络恢复后重试连接，不再停留在 `closed` 状态。
+- 前端单元测试现在从规范化的 Windows 路径启动。即使 shell 与文件系统解析出的盘符大小写不同，Vitest 也不会丢失 runner 上下文。
+- 无需迁移数据库。
+
+完整发布说明：[`docs/releases/v1.0.8-beta8.md`](docs/releases/v1.0.8-beta8.md)。
+
 ## [1.0.8-beta7] - 2026-07-27 - 修复俄罗斯区域预设下载
 
 - 俄罗斯区域路由与 DNS 预设现在从持续维护的 runetfreedom rule-set 集合下载 `geosite-category-ru.srs`。原 SagerNet 路径 `geosite-geolocation-ru.srs` 返回 HTTP 404，导致预设无法应用。

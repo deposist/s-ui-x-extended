@@ -1,3 +1,4 @@
+import { markRaw } from 'vue'
 import { defineStore } from 'pinia'
 import { push } from 'notivue'
 import HttpUtils from '@/plugins/httputil'
@@ -53,69 +54,78 @@ export class WsRuntime {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private fallbackTimer: ReturnType<typeof setInterval> | null = null
   private closeCount = 0
+  private connecting = false
 
   constructor(private deps: WsRuntimeDeps) {}
 
   async connect() {
-    if (this.ws || this.state === 'connected') return
-    this.setState('reconnecting')
-    this.stopFallback()
-    let token: string | null
+    if (this.ws || this.state === 'connected' || this.connecting) return
+    this.connecting = true
     try {
-      token = await this.deps.getToken()
-    } catch {
-      this.startFallback()
-      return
-    }
-    if (!token) {
-      this.startFallback()
-      return
-    }
-    try {
-      const ws = this.deps.createSocket(this.wsURL(), token)
-      this.ws = ws
-      this.noOpenTimer = this.setRuntimeTimeout(() => {
-        this.ws = null
-        ws.onclose = null
-        ws.close()
+      this.setState('reconnecting')
+      this.stopFallback()
+      let token: string | null
+      try {
+        token = await this.deps.getToken()
+      } catch {
         this.startFallback()
-      }, noOpenFallbackMs)
-      ws.onopen = () => {
-        this.closeCount = 0
-        this.clearNoOpenTimer()
-        this.setState('connected')
-        this.stopFallback()
+        return
       }
-      ws.onmessage = (event) => {
-        try {
-          this.deps.onEvent?.(JSON.parse(event.data))
-        } catch {
-          // Keep realtime open when a single event is malformed.
-        }
+      if (!token) {
+        this.startFallback()
+        return
       }
-      ws.onclose = (event) => {
-        if (isSessionClose(event)) {
-          clearCSRFToken()
-        }
-        this.clearNoOpenTimer()
-        this.ws = null
-        this.closeCount++
-        if (this.closeCount >= closeFallbackThreshold) {
+      try {
+        const ws = this.deps.createSocket(this.wsURL(), token)
+        this.ws = ws
+        this.noOpenTimer = this.setRuntimeTimeout(() => {
+          if (this.ws !== ws) return
+          this.ws = null
+          ws.onclose = null
+          ws.close()
           this.startFallback()
-          return
+        }, noOpenFallbackMs)
+        ws.onopen = () => {
+          if (this.ws !== ws) return
+          this.closeCount = 0
+          this.clearNoOpenTimer()
+          this.setState('connected')
+          this.stopFallback()
         }
-        this.setState('reconnecting')
-        const retry = this.closeCount - 1
-        this.reconnectTimer = this.setRuntimeTimeout(() => {
-          this.reconnectTimer = null
-          void this.connect()
-        }, reconnectDelayForRetry(retry))
+        ws.onmessage = (event) => {
+          try {
+            this.deps.onEvent?.(JSON.parse(event.data))
+          } catch {
+            // Keep realtime open when a single event is malformed.
+          }
+        }
+        ws.onclose = (event) => {
+          if (this.ws !== ws) return
+          if (isSessionClose(event)) {
+            clearCSRFToken()
+          }
+          this.clearNoOpenTimer()
+          this.ws = null
+          this.closeCount++
+          if (this.closeCount >= closeFallbackThreshold) {
+            this.startFallback()
+            return
+          }
+          this.setState('reconnecting')
+          const retry = this.closeCount - 1
+          this.reconnectTimer = this.setRuntimeTimeout(() => {
+            this.reconnectTimer = null
+            void this.connect()
+          }, reconnectDelayForRetry(retry))
+        }
+        ws.onerror = () => {
+          ws.close()
+        }
+      } catch {
+        this.startFallback()
       }
-      ws.onerror = () => {
-        ws.close()
-      }
-    } catch {
-      this.startFallback()
+    } finally {
+      this.connecting = false
     }
   }
 
@@ -238,7 +248,7 @@ const Ws = defineStore('Ws', {
   actions: {
     ensureRuntime() {
       if (!this.runtime) {
-        this.runtime = new WsRuntime({
+        this.runtime = markRaw(new WsRuntime({
           getToken: async () => {
             const tokenResponse = await HttpUtils.get('api/realtime/ws-token')
             const token = tokenResponse.obj?.token
@@ -250,7 +260,7 @@ const Ws = defineStore('Ws', {
             this.state = state
           },
           onEvent: applyRealtimeEvent,
-        })
+        }))
       }
       return this.runtime
     },

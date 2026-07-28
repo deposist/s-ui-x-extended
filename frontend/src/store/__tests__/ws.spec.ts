@@ -108,6 +108,27 @@ describe('WsRuntime regression anchors', () => {
     expect(onEvent).toHaveBeenCalledWith({ type: 'onlines', payload: { alice: true } })
   })
 
+  it('deduplicates concurrent connection attempts while fetching a token', async () => {
+    let resolveToken: ((token: string) => void) | undefined
+    const token = new Promise<string>((resolve) => {
+      resolveToken = resolve
+    })
+    const socket = new FakeSocket()
+    const deps = runtimeDeps({
+      getToken: vi.fn(() => token),
+      createSocket: vi.fn(() => socket),
+    })
+    const runtime = new WsRuntime(deps)
+
+    const first = runtime.connect()
+    const second = runtime.connect()
+    resolveToken?.('ws-token')
+    await Promise.all([first, second])
+
+    expect(deps.getToken).toHaveBeenCalledTimes(1)
+    expect(deps.createSocket).toHaveBeenCalledTimes(1)
+  })
+
   it('falls back to degraded polling when no websocket token is available', async () => {
     const timers = new ManualTimers()
     const deps = runtimeDeps({
@@ -218,6 +239,32 @@ describe('WsRuntime regression anchors', () => {
     await flushPromises()
 
     expect(deps.getToken).toHaveBeenCalledTimes(2)
+    expect(deps.createSocket).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignores close events from a socket replaced by a newer connection', async () => {
+    const timers = new ManualTimers()
+    const sockets: FakeSocket[] = []
+    const deps = runtimeDeps({
+      createSocket: vi.fn(() => {
+        const socket = new FakeSocket()
+        sockets.push(socket)
+        return socket
+      }),
+      setTimeout: timers.setTimeout,
+      clearTimeout: timers.clearTimeout,
+    })
+    const runtime = new WsRuntime(deps)
+
+    await runtime.connect()
+    sockets[0].onclose?.({ code: 1006 })
+    timers.runNextTimeout()
+    await flushPromises()
+    sockets[1].onopen?.()
+
+    sockets[0].onclose?.({ code: 1006 })
+
+    expect(runtime.state).toBe('connected')
     expect(deps.createSocket).toHaveBeenCalledTimes(2)
   })
 

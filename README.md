@@ -217,7 +217,7 @@ Use the stable build for normal installations. Use beta releases only if you wan
 | Channel | Version | Notes |
 |---|---|---|
 | Stable | `v1.0.7` | Recommended for production. Keeps the management menu available while the service is starting, improves Sudoku key controls, and makes the domain-reset action stop using panel and subscription certificates. Release notes: [`docs/releases/v1.0.7.md`](docs/releases/v1.0.7.md). |
-| Beta | [`v1.0.8-beta7`](docs/releases/v1.0.8-beta7.md) | For testing. Fixes the Russia regional preset download after its upstream geosite file was removed. |
+| Beta | [`v1.0.8-beta8`](docs/releases/v1.0.8-beta8.md) | For testing. Restores realtime updates after offline WebSocket token requests and fixes the Windows frontend test runner. |
 
 ### Linux/macOS, stable
 

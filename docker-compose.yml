@@ -1,6 +1,6 @@
 services:
   s-ui:
-    image: ghcr.io/deposist/s-ui-x:v1.0.8-beta7
+    image: ghcr.io/deposist/s-ui-x:v1.0.8-beta8
     container_name: s-ui
     hostname: "s-ui"
     network_mode: host

@@ -18,6 +18,10 @@ const waitForFreshE2ECredentials = async () => {
 }
 
 test('websocket survives repeated offline/online chaos and returns to connected', async ({ context, page }, testInfo) => {
+  await page.route('**/api/realtime/ws-token', (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ success: true, msg: '', obj: { token: 'e2e-ws-token' } }),
+  }))
   await page.addInitScript(() => {
     const NativeWebSocket = window.WebSocket
     const realtimeSockets: any[] = []
