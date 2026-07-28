@@ -6,8 +6,8 @@
     "dev": "vite --host",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run",
-    "test:unit": "vitest run",
+    "test": "node scripts/run-vitest.mjs",
+    "test:unit": "node scripts/run-vitest.mjs",
     "lint": "eslint ."
   },
   "dependencies": {
