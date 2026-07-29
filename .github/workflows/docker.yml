@@ -25,10 +25,14 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - name: Check out repository
+      - name: Check out release tooling
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Check out exact release tag
+        id: release-ref
+        uses: ./.github/actions/checkout-release-tag
         with:
-          submodules: recursive
+          tag: ${{ inputs.tag || github.ref_name }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4
@@ -43,18 +47,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Normalize release tag
+      - name: Set image tags
         id: vars
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ inputs.tag }}"
-          else
-            TAG="${GITHUB_REF_NAME}"
-          fi
-          case "$TAG" in
-            v*) ;;
-            *) TAG="v$TAG" ;;
-          esac
+          TAG="${{ steps.release-ref.outputs.tag }}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           case "$TAG" in
             *-alpha*|*-beta*|*-rc*|*-pre*)

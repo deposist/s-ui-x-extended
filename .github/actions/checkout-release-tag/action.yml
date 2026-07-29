@@ -1,0 +1,60 @@
+name: Checkout release tag
+description: Validate and check out the exact annotated or lightweight release tag
+
+inputs:
+  tag:
+    description: Release tag selected from workflow input or the tag push
+    required: true
+  expected_commit:
+    description: Previously resolved tag commit; downstream jobs fail if the tag moved
+    required: false
+    default: ""
+
+outputs:
+  tag:
+    description: Validated release tag
+    value: ${{ steps.verify.outputs.tag }}
+  commit:
+    description: Commit referenced by the release tag
+    value: ${{ steps.verify.outputs.commit }}
+  version:
+    description: Version read from config/version
+    value: ${{ steps.verify.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate release tag
+      id: input
+      shell: bash
+      env:
+        INPUT_TAG: ${{ inputs.tag }}
+      run: echo "tag=$(scripts/validate-release-tag.sh "$INPUT_TAG")" >> "$GITHUB_OUTPUT"
+
+    - name: Check out release tag
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        ref: refs/tags/${{ steps.input.outputs.tag }}
+        fetch-depth: 0
+        submodules: recursive
+
+    - name: Verify release ref and version
+      id: verify
+      shell: bash
+      env:
+        TAG: ${{ steps.input.outputs.tag }}
+        EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+      run: |
+        set -euo pipefail
+        TAG_COMMIT=$(git rev-list -n 1 "refs/tags/$TAG")
+        test "$(git rev-parse HEAD)" = "$TAG_COMMIT"
+        if [ -n "$EXPECTED_COMMIT" ]; then
+          test "$TAG_COMMIT" = "$EXPECTED_COMMIT"
+        fi
+        VERSION=$(git show "$TAG_COMMIT:config/version" | tr -d '\r\n')
+        test "$VERSION" = "${TAG#v}"
+        {
+          echo "tag=$TAG"
+          echo "commit=$TAG_COMMIT"
+          echo "version=$VERSION"
+        } >> "$GITHUB_OUTPUT"

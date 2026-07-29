@@ -16,6 +16,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
 env:
   NODE_VERSION: "25"
   CRONET_GO_VERSION: "2faf34666c2cc8234f10f2ab6d4c4d6104d34ae2"
@@ -26,10 +30,33 @@ env:
   RELEASE_BUILD_TAGS: "with_quic,with_grpc,with_utls,with_acme,with_gvisor,badlinkname,tfogo_checklinkname0,with_tailscale,with_dhcp,with_wireguard,with_masque,with_mtproxy,with_openvpn,with_sudoku,with_trusttunnel,with_ccm,with_ocm,with_oomkiller"
 
 jobs:
+  release-ref:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.checkout.outputs.tag }}
+      version: ${{ steps.checkout.outputs.version }}
+      commit: ${{ steps.checkout.outputs.commit }}
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Check out exact release tag
+        id: checkout
+        uses: ./.github/actions/checkout-release-tag
+        with:
+          tag: ${{ inputs.tag || github.ref_name }}
+
   awg-integration:
+    needs: release-ref
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Check out release tooling
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: ./.github/actions/checkout-release-tag
+        with:
+          tag: ${{ needs.release-ref.outputs.tag }}
+          expected_commit: ${{ needs.release-ref.outputs.commit }}
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
           go-version-file: go.mod
@@ -38,13 +65,17 @@ jobs:
         run: sudo -E "$(command -v go)" test -tags="integration with_wireguard with_gvisor" ./core -run TestAWG2ServerEndpoint -count=1
 
   build-frontend:
+    needs: release-ref
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
+      - name: Check out release tooling
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Check out exact release tag
+        uses: ./.github/actions/checkout-release-tag
         with:
-          submodules: recursive
-          fetch-depth: 1
+          tag: ${{ needs.release-ref.outputs.tag }}
+          expected_commit: ${{ needs.release-ref.outputs.commit }}
 
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
@@ -84,10 +115,16 @@ jobs:
 
   security-gate:
     name: Source security gate
-    needs: build-frontend
+    needs: [release-ref, build-frontend]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Check out release tooling
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: ./.github/actions/checkout-release-tag
+        with:
+          tag: ${{ needs.release-ref.outputs.tag }}
+          expected_commit: ${{ needs.release-ref.outputs.commit }}
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: frontend-dist
@@ -114,7 +151,7 @@ jobs:
 
   build-linux:
     name: Build-${{ matrix.platform }}
-    needs: [build-frontend, awg-integration, security-gate]
+    needs: [release-ref, build-frontend, awg-integration, security-gate]
     strategy:
       fail-fast: false
       matrix:
@@ -128,8 +165,14 @@ jobs:
           - { platform: s390x, arch: s390x, bootlin: s390x-z13, naive: false }
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
+      - name: Check out release tooling
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Check out exact release tag
+        uses: ./.github/actions/checkout-release-tag
+        with:
+          tag: ${{ needs.release-ref.outputs.tag }}
+          expected_commit: ${{ needs.release-ref.outputs.commit }}
 
       - name: Download frontend build artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -218,6 +261,9 @@ jobs:
           go build -ldflags="-w -s -checklinkname=0 -linkmode external -extldflags '-static' -X github.com/deposist/s-ui-x-extended/config.ArtifactPlatform=${{ matrix.platform }}" -tags "$BUILD_TAGS" -o sui main.go
           file sui
           ldd sui 2>/dev/null || echo "Static binary confirmed"
+          if [ "${{ matrix.platform }}" = "amd64" ]; then
+            test "$(./sui -v | awk 'NR == 1 { print $NF }')" = "${{ needs.release-ref.outputs.version }}"
+          fi
 
           mkdir s-ui
           cp sui s-ui/
@@ -244,11 +290,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            tag="${{ inputs.tag }}"
-          else
-            tag="$GITHUB_REF_NAME"
-          fi
+          tag="${{ needs.release-ref.outputs.tag }}"
           tag="${tag#v}"
           channel=main
           case "$tag" in *-alpha*|*-beta*|*-rc*|*-pre*) channel=beta ;; esac
@@ -280,26 +322,23 @@ jobs:
     permissions:
       contents: write
     name: Publish Linux artifacts
-    needs: [build-linux, release-security]
+    needs: [release-ref, build-linux, release-security]
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository (for release notes)
+      - name: Check out release tooling
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 1
 
-      - name: Normalize release tag
+      - name: Check out exact release tag
+        uses: ./.github/actions/checkout-release-tag
+        with:
+          tag: ${{ needs.release-ref.outputs.tag }}
+          expected_commit: ${{ needs.release-ref.outputs.commit }}
+
+      - name: Set release properties
         id: vars
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ inputs.tag }}"
-          else
-            TAG="${GITHUB_REF_NAME}"
-          fi
-          case "$TAG" in
-            v*) echo "tag=$TAG" >> "$GITHUB_OUTPUT" ;;
-            *) TAG="v$TAG"; echo "tag=$TAG" >> "$GITHUB_OUTPUT" ;;
-          esac
+          TAG="${{ needs.release-ref.outputs.tag }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           case "$TAG" in
             *-alpha*|*-beta*|*-rc*|*-pre*)
               echo "prerelease=true" >> "$GITHUB_OUTPUT"
@@ -330,16 +369,23 @@ jobs:
           name: release-security-assets
           path: release-assets
 
+      - name: Reject existing release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-ref.outputs.tag }}
+        run: scripts/check-release-assets.sh "$GITHUB_REPOSITORY" "$TAG" release-assets
+
       - name: Publish to current repository Release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
         with:
           tag_name: ${{ steps.vars.outputs.tag }}
           name: s-ui ${{ steps.vars.outputs.tag }}
-          target_commitish: ${{ github.sha }}
+          target_commitish: ${{ needs.release-ref.outputs.commit }}
           prerelease: ${{ steps.vars.outputs.prerelease == 'true' }}
           make_latest: ${{ steps.vars.outputs.make_latest }}
           body_path: ${{ steps.vars.outputs.notes_path }}
           fail_on_unmatched_files: true
+          overwrite_files: false
           files: release-assets/*
 
   release-security:
@@ -348,11 +394,17 @@ jobs:
       id-token: write
       attestations: write
     name: Release artifact security
-    needs: build-linux
+    needs: [release-ref, build-linux]
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
+      - name: Check out release tooling
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Check out exact release tag
+        uses: ./.github/actions/checkout-release-tag
+        with:
+          tag: ${{ needs.release-ref.outputs.tag }}
+          expected_commit: ${{ needs.release-ref.outputs.commit }}
 
       - name: Download Linux build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
