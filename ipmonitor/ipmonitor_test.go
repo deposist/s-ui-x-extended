@@ -25,9 +25,6 @@ func initIPMonitorTestDB(t *testing.T) {
 	allowCache.Lock()
 	allowCache.byClient = map[string]allowCacheEntry{}
 	allowCache.Unlock()
-	allowCacheRefresh.Lock()
-	allowCacheRefresh.inFlight = map[string]struct{}{}
-	allowCacheRefresh.Unlock()
 	securityEvents.Lock()
 	securityEvents.lastEmittedAt = map[string]time.Time{}
 	securityEvents.Unlock()
@@ -458,7 +455,7 @@ func TestWarmUpLoadsActiveEnforceClients(t *testing.T) {
 	}
 }
 
-func TestAllowFailOpenOnCacheMissAndRefreshesAsync(t *testing.T) {
+func TestAllowEnforceCacheMissRefreshesBeforeDecision(t *testing.T) {
 	initIPMonitorTestDB(t)
 	if err := database.GetDB().Create(&model.Client{
 		Enable:      true,
@@ -479,12 +476,109 @@ func TestAllowFailOpenOnCacheMissAndRefreshesAsync(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !Allow("alice", "198.51.100.11") {
-		t.Fatal("cache miss should fail open while async refresh starts")
+	if Allow("alice", "198.51.100.11") {
+		t.Fatal("first forbidden IP after a cache miss must be rejected")
 	}
-	waitForIPMonitorCondition(t, time.Second, func() bool {
-		return !Allow("alice", "198.51.100.11")
-	})
+}
+
+func TestAllowConcurrentCacheMissPerformsOneRefresh(t *testing.T) {
+	initIPMonitorTestDB(t)
+	if err := database.GetDB().Create(&model.Client{Enable: true, Name: "alice", LimitIP: 1, IPLimitMode: ModeEnforce, Inbounds: []byte("[]"), Links: []byte("[]")}).Error; err != nil {
+		t.Fatal(err)
+	}
+	ipHashSalt.Lock()
+	ipHashSalt.value = []byte("test-salt")
+	ipHashSalt.Unlock()
+	queryCounter := &countingGormLogger{}
+	database.GetDB().Config.Logger = queryCounter
+	oldLoad := loadCacheEntryForAllow
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var once sync.Once
+	loadCacheEntryForAllow = func(clientName string, now time.Time) (allowCacheEntry, bool) {
+		once.Do(func() { close(started) })
+		<-release
+		return oldLoad(clientName, now)
+	}
+	t.Cleanup(func() { loadCacheEntryForAllow = oldLoad })
+
+	const workers = 32
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			Allow("alice", "198.51.100.10")
+		}()
+	}
+	close(start)
+	<-started
+	time.Sleep(50 * time.Millisecond)
+	close(release)
+	wg.Wait()
+	if got := queryCounter.Count(); got != 2 {
+		t.Fatalf("concurrent miss ran %d DB queries, want one two-query refresh", got)
+	}
+}
+
+func TestAllowRefreshErrorKeepsStaleEnforcePolicy(t *testing.T) {
+	initIPMonitorTestDB(t)
+	if err := database.GetDB().Create(&model.Client{Enable: true, Name: "alice", LimitIP: 1, IPLimitMode: ModeEnforce, Inbounds: []byte("[]"), Links: []byte("[]")}).Error; err != nil {
+		t.Fatal(err)
+	}
+	Record("alice", "198.51.100.10")
+	warmUpIPMonitorForTest(t)
+	allowCache.Lock()
+	entry := allowCache.byClient["alice"]
+	entry.expiresAt = time.Now().Add(-time.Second)
+	allowCache.byClient["alice"] = entry
+	allowCache.Unlock()
+	if err := database.GetDB().Migrator().DropTable(&model.ClientIP{}); err != nil {
+		t.Fatal(err)
+	}
+
+	if Allow("alice", "198.51.100.11") {
+		t.Fatal("refresh failure discarded stale enforce policy")
+	}
+	allowCache.Lock()
+	_, ok := allowCache.byClient["alice"]
+	allowCache.Unlock()
+	if !ok {
+		t.Fatal("refresh failure removed last known policy")
+	}
+}
+
+func TestAllowColdStartDatabaseFailureFailsClosed(t *testing.T) {
+	initIPMonitorTestDB(t)
+	closeIPMonitorTestDB(database.GetDB())
+	if Allow("unknown", "198.51.100.10") {
+		t.Fatal("cold start without policy database or hash salt must fail closed")
+	}
+}
+
+func TestAllowMonitorModeDoesNotBlockOnRefresh(t *testing.T) {
+	initIPMonitorTestDB(t)
+	if err := database.GetDB().Create(&model.Client{Enable: true, Name: "alice", LimitIP: 1, IPLimitMode: ModeMonitor, Inbounds: []byte("[]"), Links: []byte("[]")}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.GetDB().Create(&model.ClientIP{ClientName: "alice", IP: "198.51.100.10", FirstSeen: 1, LastSeen: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	warmUpIPMonitorForTest(t)
+	allowCache.Lock()
+	entry := allowCache.byClient["alice"]
+	entry.expiresAt = time.Now().Add(-time.Second)
+	allowCache.byClient["alice"] = entry
+	allowCache.Unlock()
+	if err := database.GetDB().Migrator().DropTable(&model.ClientIP{}); err != nil {
+		t.Fatal(err)
+	}
+
+	if !Allow("alice", "198.51.100.11") {
+		t.Fatal("monitor mode blocked traffic after refresh failure")
+	}
 }
 
 func TestAllowCacheConcurrent10K(t *testing.T) {
@@ -542,9 +636,6 @@ func TestResetCachesClearsSaltAndAllowState(t *testing.T) {
 		"alice": {limit: 1, mode: ModeEnforce, ips: map[string]struct{}{"hash": {}}, expiresAt: time.Now().Add(time.Minute)},
 	}
 	allowCache.Unlock()
-	allowCacheRefresh.Lock()
-	allowCacheRefresh.inFlight = map[string]struct{}{"alice": {}}
-	allowCacheRefresh.Unlock()
 	securityEvents.Lock()
 	securityEvents.lastEmittedAt = map[string]time.Time{"alice|reject": time.Now()}
 	securityEvents.Unlock()
@@ -564,9 +655,6 @@ func TestResetCachesClearsSaltAndAllowState(t *testing.T) {
 	allowCache.Lock()
 	allowCount := len(allowCache.byClient)
 	allowCache.Unlock()
-	allowCacheRefresh.Lock()
-	refreshCount := len(allowCacheRefresh.inFlight)
-	allowCacheRefresh.Unlock()
 	securityEvents.Lock()
 	securityCount := len(securityEvents.lastEmittedAt)
 	securityEvents.Unlock()
@@ -578,9 +666,9 @@ func TestResetCachesClearsSaltAndAllowState(t *testing.T) {
 	privacyExpired := ipPrivacySettings.expiresAt.IsZero()
 	ipPrivacySettings.Unlock()
 
-	if pendingCount != 0 || allowCount != 0 || refreshCount != 0 || securityCount != 0 || saltLen != 0 || showRaw || !privacyExpired {
-		t.Fatalf("reset did not clear caches: pending=%d allow=%d refresh=%d security=%d salt=%d showRaw=%v privacyExpired=%v",
-			pendingCount, allowCount, refreshCount, securityCount, saltLen, showRaw, privacyExpired)
+	if pendingCount != 0 || allowCount != 0 || securityCount != 0 || saltLen != 0 || showRaw || !privacyExpired {
+		t.Fatalf("reset did not clear caches: pending=%d allow=%d security=%d salt=%d showRaw=%v privacyExpired=%v",
+			pendingCount, allowCount, securityCount, saltLen, showRaw, privacyExpired)
 	}
 }
 

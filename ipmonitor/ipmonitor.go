@@ -15,6 +15,7 @@ import (
 	"github.com/deposist/s-ui-x-extended/logger"
 	"github.com/deposist/s-ui-x-extended/realtime"
 	"github.com/deposist/s-ui-x-extended/util/common"
+	"golang.org/x/sync/singleflight"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -55,12 +56,9 @@ var allowCache = struct {
 	byClient: map[string]allowCacheEntry{},
 }
 
-var allowCacheRefresh = struct {
-	sync.Mutex
-	inFlight map[string]struct{}
-}{
-	inFlight: map[string]struct{}{},
-}
+var allowCacheRefresh singleflight.Group
+
+var loadCacheEntryForAllow = loadCacheEntry
 
 var securityEvents = struct {
 	sync.Mutex
@@ -92,10 +90,6 @@ func ResetCaches() {
 	allowCache.Lock()
 	allowCache.byClient = map[string]allowCacheEntry{}
 	allowCache.Unlock()
-
-	allowCacheRefresh.Lock()
-	allowCacheRefresh.inFlight = map[string]struct{}{}
-	allowCacheRefresh.Unlock()
 
 	securityEvents.Lock()
 	securityEvents.lastEmittedAt = map[string]time.Time{}
@@ -138,12 +132,29 @@ func Allow(clientName string, ip string) bool {
 	}
 	ipHash, err := hashIP(ip)
 	if err != nil {
-		return true
+		// Without the installation salt the source cannot be compared with the
+		// allow set. At cold start the policy is unknown, so fail closed.
+		return false
 	}
 	entry, ok := cachedClient(clientName, time.Now())
 	if !ok {
-		refreshClientAsync(clientName)
-		return true
+		refreshed, _, _ := allowCacheRefresh.Do(clientName, func() (any, error) {
+			entry, loaded := loadCacheEntryForAllow(clientName, time.Now())
+			if loaded {
+				allowCache.Lock()
+				allowCache.byClient[clientName] = entry
+				allowCache.Unlock()
+			}
+			return cacheRefreshResult{entry: entry, loaded: loaded}, nil
+		})
+		result := refreshed.(cacheRefreshResult)
+		if result.loaded {
+			entry = result.entry
+		} else if stale, found := staleCachedClient(clientName); found {
+			entry = stale
+		} else {
+			return false
+		}
 	}
 	if entry.mode != ModeEnforce || entry.limit <= 0 {
 		return true
@@ -178,7 +189,7 @@ func WarmUp() error {
 	if _, err := getInstallSalt(); err != nil {
 		return err
 	}
-	entries, err := loadActiveEnforceEntries(db, time.Now())
+	entries, err := loadPolicyEntries(db, time.Now())
 	if err != nil {
 		return err
 	}
@@ -390,13 +401,25 @@ func cachedClient(clientName string, now time.Time) (allowCacheEntry, bool) {
 	if entry, ok := allowCache.byClient[clientName]; ok && now.Before(entry.expiresAt) {
 		return cloneCacheEntry(entry), true
 	}
-	delete(allowCache.byClient, clientName)
 	return allowCacheEntry{}, false
 }
 
-// loadErrLog throttles fail-open DB-error logging so a database outage cannot
-// flood the log: ip-limit checks fail open (allow) on a DB error, and without a
-// throttle every refresh during the outage would emit a line.
+func staleCachedClient(clientName string) (allowCacheEntry, bool) {
+	allowCache.Lock()
+	defer allowCache.Unlock()
+	entry, ok := allowCache.byClient[clientName]
+	if !ok {
+		return allowCacheEntry{}, false
+	}
+	return cloneCacheEntry(entry), true
+}
+
+type cacheRefreshResult struct {
+	entry  allowCacheEntry
+	loaded bool
+}
+
+// loadErrLog throttles DB-error logging so an outage cannot flood the log.
 var loadErrLog = struct {
 	sync.Mutex
 	last time.Time
@@ -409,7 +432,7 @@ func logLoadCacheError(context string, err error) {
 		return
 	}
 	loadErrLog.last = time.Now()
-	logger.Warning("ipmonitor: ip-limit ", context, " lookup failed; failing open (allowing): ", err)
+	logger.Warning("ipmonitor: ip-limit ", context, " lookup failed; keeping stale policy or failing closed: ", err)
 }
 
 func loadCacheEntry(clientName string, now time.Time) (allowCacheEntry, bool) {
@@ -425,7 +448,7 @@ func loadCacheEntry(clientName string, now time.Time) (allowCacheEntry, bool) {
 		return allowCacheEntry{}, false
 	}
 	if !client.Enable {
-		return allowCacheEntry{}, false
+		return allowCacheEntry{expiresAt: now.Add(allowCacheTTL)}, true
 	}
 	entry := allowCacheEntry{
 		limit:     client.LimitIP,
@@ -458,7 +481,7 @@ type activeEnforceCacheRow struct {
 	IPHash      sql.NullString
 }
 
-func loadActiveEnforceEntries(db *gorm.DB, now time.Time) (map[string]allowCacheEntry, error) {
+func loadPolicyEntries(db *gorm.DB, now time.Time) (map[string]allowCacheEntry, error) {
 	rows := make([]activeEnforceCacheRow, 0)
 	err := db.Raw(`
 		SELECT
@@ -470,10 +493,9 @@ func loadActiveEnforceEntries(db *gorm.DB, now time.Time) (map[string]allowCache
 		FROM clients
 		LEFT JOIN client_ips ON client_ips.client_name = clients.name
 		WHERE clients.enable = true
-			AND clients.ip_limit_mode = ?
-			AND clients.limit_ip > 0
+			AND clients.ip_limit_mode IN (?, ?)
 		ORDER BY clients.name
-	`, ModeEnforce).Scan(&rows).Error
+	`, ModeMonitor, ModeEnforce).Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -504,34 +526,14 @@ func loadActiveEnforceEntries(db *gorm.DB, now time.Time) (map[string]allowCache
 	return entries, nil
 }
 
-func refreshClientAsync(clientName string) {
-	allowCacheRefresh.Lock()
-	if _, ok := allowCacheRefresh.inFlight[clientName]; ok {
-		allowCacheRefresh.Unlock()
-		return
-	}
-	allowCacheRefresh.inFlight[clientName] = struct{}{}
-	allowCacheRefresh.Unlock()
-
-	go func() {
-		defer func() {
-			allowCacheRefresh.Lock()
-			delete(allowCacheRefresh.inFlight, clientName)
-			allowCacheRefresh.Unlock()
-		}()
-		refreshClient(clientName, time.Now())
-	}()
-}
-
 func refreshClient(clientName string, now time.Time) bool {
 	entry, ok := loadCacheEntry(clientName, now)
-	allowCache.Lock()
-	defer allowCache.Unlock()
 	if !ok {
-		delete(allowCache.byClient, clientName)
 		return false
 	}
+	allowCache.Lock()
 	allowCache.byClient[clientName] = entry
+	allowCache.Unlock()
 	return true
 }
 
