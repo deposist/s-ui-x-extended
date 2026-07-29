@@ -123,6 +123,120 @@ func TestEnsureSchemaAddsAWGColumnsToLegacyTables(t *testing.T) {
 	}
 }
 
+func TestEnsureSchemaCancelsLegacyPendingOrdersWithoutSnapshot(t *testing.T) {
+	db := openTestDB(t)
+	if err := db.Exec(`CREATE TABLE payment_orders (
+		id INTEGER PRIMARY KEY AUTOINCREMENT, client_id INTEGER NOT NULL, tariff_id INTEGER NOT NULL,
+		provider TEXT NOT NULL, amount INTEGER NOT NULL DEFAULT 0, currency TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending', telegram_user_id INTEGER NOT NULL DEFAULT 0,
+		idempotency_key TEXT NOT NULL, provider_charge_id TEXT, provider_payload BLOB,
+		external_url TEXT, created_at INTEGER NOT NULL DEFAULT 0, paid_at INTEGER NOT NULL DEFAULT 0,
+		expires_at INTEGER NOT NULL DEFAULT 0, granted_up INTEGER NOT NULL DEFAULT 0,
+		granted_down INTEGER NOT NULL DEFAULT 0, granted_awg_devices INTEGER NOT NULL DEFAULT 0
+	)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`INSERT INTO payment_orders(client_id, tariff_id, provider, amount, currency, status, idempotency_key)
+		VALUES (1, 1, 'cryptobot', 100, 'USDT', 'pending', 'legacy-pending')`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureSchema(db); err != nil {
+		t.Fatalf("EnsureSchema legacy payment migration: %v", err)
+	}
+	var order PaymentOrder
+	if err := db.Where("idempotency_key = ?", "legacy-pending").First(&order).Error; err != nil {
+		t.Fatalf("legacy order was lost: %v", err)
+	}
+	if order.Status != StatusFailed || order.SnapshotVersion != 0 {
+		t.Fatalf("legacy pending order = status %q snapshot %d; want failed/0", order.Status, order.SnapshotVersion)
+	}
+	for _, column := range []string{"granted_days", "granted_traffic_bytes", "snapshot_version"} {
+		if !db.Migrator().HasColumn(&PaymentOrder{}, column) {
+			t.Fatalf("legacy migration did not add %q", column)
+		}
+	}
+}
+
+func TestEnsureSchemaFreezesLegacyPaidOrderForRefund(t *testing.T) {
+	db := openTestDB(t)
+	if err := db.Exec(`CREATE TABLE tariffs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, description TEXT,
+		price INTEGER NOT NULL DEFAULT 0, currency TEXT NOT NULL DEFAULT 'RUB',
+		stars_amount INTEGER NOT NULL DEFAULT 0, add_days INTEGER NOT NULL DEFAULT 0,
+		add_traffic_bytes INTEGER NOT NULL DEFAULT 0, max_awg_devices INTEGER NOT NULL DEFAULT 0,
+		sort INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1,
+		created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0
+	)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`CREATE TABLE payment_orders (
+		id INTEGER PRIMARY KEY AUTOINCREMENT, client_id INTEGER NOT NULL, tariff_id INTEGER NOT NULL,
+		provider TEXT NOT NULL, amount INTEGER NOT NULL DEFAULT 0, currency TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending', telegram_user_id INTEGER NOT NULL DEFAULT 0,
+		idempotency_key TEXT NOT NULL, provider_charge_id TEXT, provider_payload BLOB,
+		external_url TEXT, created_at INTEGER NOT NULL DEFAULT 0, paid_at INTEGER NOT NULL DEFAULT 0,
+		expires_at INTEGER NOT NULL DEFAULT 0, granted_up INTEGER NOT NULL DEFAULT 0,
+		granted_down INTEGER NOT NULL DEFAULT 0, granted_awg_devices INTEGER NOT NULL DEFAULT 0
+	)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`INSERT INTO tariffs(id, name, add_days, add_traffic_bytes, max_awg_devices)
+		VALUES (7, 'legacy', 30, 4096, 4)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`INSERT INTO payment_orders(client_id, tariff_id, provider, amount, currency, status, idempotency_key)
+		VALUES (1, 7, 'cryptobot', 100, 'RUB', 'paid', 'legacy-paid')`).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	if err := EnsureSchema(db); err != nil {
+		t.Fatalf("EnsureSchema legacy paid migration: %v", err)
+	}
+	if err := db.Model(&Tariff{}).Where("id = ?", 7).Updates(map[string]any{
+		"add_days": 1, "add_traffic_bytes": 2, "max_awg_devices": 1,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureSchema(db); err != nil {
+		t.Fatalf("EnsureSchema idempotent snapshot migration: %v", err)
+	}
+
+	var order PaymentOrder
+	if err := db.Where("idempotency_key = ?", "legacy-paid").First(&order).Error; err != nil {
+		t.Fatal(err)
+	}
+	if order.GrantedDays != 30 || order.GrantedTrafficBytes != 4096 || order.GrantedAWGDevices != 4 || order.SnapshotVersion != paymentOrderSnapshotVersion {
+		t.Fatalf("legacy paid snapshot changed: %+v", order)
+	}
+}
+
+func TestEnsureSchemaMigratesLegacyCryptoBotProviderReference(t *testing.T) {
+	db := openTestDB(t)
+	if err := EnsureSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	orders := []PaymentOrder{
+		{ClientId: 1, TariffId: 1, Provider: string(ProviderCryptoBot), Currency: "RUB", Status: StatusPaid, IdempotencyKey: "legacy-payload", ProviderPayload: []byte(`{"ref":"123"}`)},
+		{ClientId: 1, TariffId: 1, Provider: string(ProviderCryptoBot), Currency: "RUB", Status: StatusRefunded, IdempotencyKey: "legacy-charge", ProviderChargeID: "cryptobot:456"},
+	}
+	if err := db.Create(&orders).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&PaymentOrder{}).Where("id IN ?", []uint{orders[0].Id, orders[1].Id}).Update("provider_ref", "").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	var got []PaymentOrder
+	if err := db.Where("id IN ?", []uint{orders[0].Id, orders[1].Id}).Order("id ASC").Find(&got).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].ProviderRef != "123" || got[1].ProviderRef != "456" {
+		t.Fatalf("legacy provider references were not migrated: %+v", got)
+	}
+}
+
 func TestAWGSchemaConstraints(t *testing.T) {
 	db := openTestDB(t)
 	if err := EnsureSchema(db); err != nil {

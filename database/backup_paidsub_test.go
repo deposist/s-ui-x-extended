@@ -34,7 +34,10 @@ func TestBackupIncludesPaidSubAndAWGState(t *testing.T) {
 	}
 	binding := model.PaidSubBinding{ClientId: 11, TgUserId: 22}
 	tariff := model.PaidSubTariff{Name: "AWG", Currency: "RUB", MaxAWGDevices: 4}
-	order := model.PaidSubPaymentOrder{ClientId: 11, TariffId: 1, Provider: "test", Currency: "RUB", Status: "paid", IdempotencyKey: "backup-order", GrantedAWGDevices: 4}
+	order := model.PaidSubPaymentOrder{
+		ClientId: 11, TariffId: 1, Provider: "test", Currency: "RUB", Status: "paid", IdempotencyKey: "backup-order",
+		ProviderRef: "provider-123", GrantedDays: 30, GrantedTrafficBytes: 4096, GrantedAWGDevices: 4, SnapshotVersion: 1,
+	}
 	device := model.AWGDevice{
 		ClientId: 11, Name: "phone", CreateRequestKey: "telegram-update-100", RotateRequestKey: "telegram-update-200", CryptoContext: []byte("context"), PublicKey: "public",
 		PrivateKeyEnc: []byte("encrypted-private"), PSKEnc: []byte("encrypted-psk"),
@@ -82,6 +85,15 @@ func TestBackupIncludesPaidSubAndAWGState(t *testing.T) {
 	}
 	if restored.RotateRequestKey != device.RotateRequestKey {
 		t.Fatalf("AWG rotate request key = %q; want %q", restored.RotateRequestKey, device.RotateRequestKey)
+	}
+	var restoredOrder model.PaidSubPaymentOrder
+	if err := backupDB.Where("idempotency_key = ?", order.IdempotencyKey).First(&restoredOrder).Error; err != nil {
+		t.Fatal(err)
+	}
+	if restoredOrder.GrantedDays != order.GrantedDays || restoredOrder.GrantedTrafficBytes != order.GrantedTrafficBytes ||
+		restoredOrder.GrantedAWGDevices != order.GrantedAWGDevices || restoredOrder.SnapshotVersion != order.SnapshotVersion ||
+		restoredOrder.ProviderRef != order.ProviderRef {
+		t.Fatalf("payment snapshot was not preserved: %+v", restoredOrder)
 	}
 }
 

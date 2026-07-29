@@ -29,15 +29,89 @@ func (h *paymentAWGHook) SuspendClients(_ context.Context, ids []uint) error {
 
 func TestNewPaymentOrderSnapshotsAWGEntitlement(t *testing.T) {
 	client := &model.Client{Id: 7}
-	tariff := &Tariff{Id: 9, MaxAWGDevices: 4}
+	tariff := &Tariff{Id: 9, AddDays: 30, AddTrafficBytes: 1 << 30, MaxAWGDevices: 4}
 	order := newPaymentOrder(client, tariff, ProviderStars, 11, 100, "XTR", 1_000, 15)
 
+	tariff.AddDays = 1
+	tariff.AddTrafficBytes = 2
 	tariff.MaxAWGDevices = 1
-	if order.GrantedAWGDevices != 4 {
-		t.Fatalf("GrantedAWGDevices = %d; want immutable snapshot 4", order.GrantedAWGDevices)
+	if order.GrantedDays != 30 || order.GrantedTrafficBytes != 1<<30 || order.GrantedAWGDevices != 4 {
+		t.Fatalf("grant snapshot = days %d, traffic %d, AWG %d", order.GrantedDays, order.GrantedTrafficBytes, order.GrantedAWGDevices)
 	}
-	if order.ClientId != 7 || order.TariffId != 9 || order.ExpiresAt != 1_900 {
+	if order.ClientId != 7 || order.TariffId != 9 || order.ExpiresAt != 1_900 || order.SnapshotVersion != paymentOrderSnapshotVersion {
 		t.Fatalf("unexpected order snapshot: %+v", order)
+	}
+}
+
+func TestApplyPaidOrderUsesSnapshotAfterTariffChanges(t *testing.T) {
+	db := openTestDB(t)
+	if err := EnsureSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	client := model.Client{Enable: false, Name: "snapshot-change", Inbounds: json.RawMessage("[]")}
+	if err := db.Create(&client).Error; err != nil {
+		t.Fatal(err)
+	}
+	tariff := Tariff{Name: "Original", Price: 100, Currency: "RUB", AddDays: 30, AddTrafficBytes: 1 << 30, MaxAWGDevices: 4, Enabled: true}
+	if err := db.Create(&tariff).Error; err != nil {
+		t.Fatal(err)
+	}
+	order := newPaymentOrder(&client, &tariff, ProviderYooKassa, 42, tariff.Price, tariff.Currency, time.Now().Unix(), 15)
+	if err := db.Create(order).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&tariff).Updates(map[string]any{"add_days": 1, "add_traffic_bytes": 2, "max_awg_devices": 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	before := time.Now().Unix()
+	applied, _, err := NewPaymentService().ApplyPaidOrder(order.Id, "charge-snapshot", nil)
+	if err != nil || !applied {
+		t.Fatalf("ApplyPaidOrder = applied %v, err %v", applied, err)
+	}
+	var got model.Client
+	if err := db.First(&got, client.Id).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got.Volume != 1<<30 || got.Expiry < before+30*86400 || got.Expiry > before+30*86400+5 {
+		t.Fatalf("client received changed tariff: volume=%d expiry=%d", got.Volume, got.Expiry)
+	}
+	if limit, err := NewTariffService().EffectiveAWGDeviceLimit(client.Id, 2); err != nil || limit != 4 {
+		t.Fatalf("AWG limit = %d, %v; want snapshotted 4", limit, err)
+	}
+}
+
+func TestApplyPaidOrderUsesSnapshotAfterTariffDeletion(t *testing.T) {
+	db := openTestDB(t)
+	if err := EnsureSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	client := model.Client{Enable: false, Name: "snapshot-delete", Inbounds: json.RawMessage("[]")}
+	if err := db.Create(&client).Error; err != nil {
+		t.Fatal(err)
+	}
+	tariff := Tariff{Name: "Deleted", Price: 100, Currency: "RUB", AddDays: 7, AddTrafficBytes: 1024, Enabled: true}
+	if err := db.Create(&tariff).Error; err != nil {
+		t.Fatal(err)
+	}
+	order := newPaymentOrder(&client, &tariff, ProviderYooKassa, 42, tariff.Price, tariff.Currency, time.Now().Unix(), 15)
+	if err := db.Create(order).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Delete(&tariff).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	applied, _, err := NewPaymentService().ApplyPaidOrder(order.Id, "charge-deleted", nil)
+	if err != nil || !applied {
+		t.Fatalf("ApplyPaidOrder after tariff deletion = applied %v, err %v", applied, err)
+	}
+	var got model.Client
+	if err := db.First(&got, client.Id).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got.Volume != 1024 {
+		t.Fatalf("volume = %d; want snapshotted 1024", got.Volume)
 	}
 }
 
@@ -72,6 +146,7 @@ func TestApplyPaidOrderIdempotentRenewal(t *testing.T) {
 		ClientId: client.Id, TariffId: tariff.Id, Provider: "yookassa",
 		Amount: 10000, Currency: "RUB", Status: StatusPending,
 		TelegramUserId: 42, IdempotencyKey: "key-1", CreatedAt: time.Now().Unix(),
+		GrantedDays: tariff.AddDays, GrantedTrafficBytes: tariff.AddTrafficBytes, SnapshotVersion: paymentOrderSnapshotVersion,
 	}
 	if err := db.Create(&order).Error; err != nil {
 		t.Fatalf("create order: %v", err)
@@ -150,7 +225,7 @@ func TestApplyPaidOrderNotifiesAWGOnlyAfterSuccessfulCommit(t *testing.T) {
 	if err := db.Create(&tariff).Error; err != nil {
 		t.Fatal(err)
 	}
-	order := PaymentOrder{ClientId: client.Id, TariffId: tariff.Id, Provider: "manual", Amount: 100, Currency: "RUB", Status: StatusPending, IdempotencyKey: "awg-hook"}
+	order := PaymentOrder{ClientId: client.Id, TariffId: tariff.Id, Provider: "manual", Amount: 100, Currency: "RUB", Status: StatusPending, IdempotencyKey: "awg-hook", GrantedDays: tariff.AddDays, SnapshotVersion: paymentOrderSnapshotVersion}
 	if err := db.Create(&order).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -309,7 +384,7 @@ func TestFinalizeRefundRevokeRollsBackOnce(t *testing.T) {
 	db.Create(&client)
 	tariff := Tariff{Name: "M", Price: 10000, Currency: "RUB", AddDays: 30, AddTrafficBytes: 1 << 30, Enabled: true}
 	db.Create(&tariff)
-	order := PaymentOrder{ClientId: client.Id, TariffId: tariff.Id, Provider: "yookassa", Amount: 10000, Currency: "RUB", Status: StatusPaid, TelegramUserId: 7, IdempotencyKey: "r1"}
+	order := PaymentOrder{ClientId: client.Id, TariffId: tariff.Id, Provider: "yookassa", Amount: 10000, Currency: "RUB", Status: StatusPaid, TelegramUserId: 7, IdempotencyKey: "r1", GrantedDays: tariff.AddDays, GrantedTrafficBytes: tariff.AddTrafficBytes, SnapshotVersion: paymentOrderSnapshotVersion}
 	db.Create(&order)
 
 	ps := NewPaymentService()
@@ -355,7 +430,7 @@ func TestFinalizeRefundNoRevokeKeepsClient(t *testing.T) {
 	db.Create(&client)
 	tariff := Tariff{Name: "M", Price: 10000, Currency: "RUB", AddDays: 30, AddTrafficBytes: 1 << 30, Enabled: true}
 	db.Create(&tariff)
-	order := PaymentOrder{ClientId: client.Id, TariffId: tariff.Id, Provider: "yookassa", Amount: 10000, Currency: "RUB", Status: StatusPaid, TelegramUserId: 8, IdempotencyKey: "r2"}
+	order := PaymentOrder{ClientId: client.Id, TariffId: tariff.Id, Provider: "yookassa", Amount: 10000, Currency: "RUB", Status: StatusPaid, TelegramUserId: 8, IdempotencyKey: "r2", GrantedDays: tariff.AddDays, GrantedTrafficBytes: tariff.AddTrafficBytes, SnapshotVersion: paymentOrderSnapshotVersion}
 	db.Create(&order)
 
 	ps := NewPaymentService()
@@ -385,7 +460,7 @@ func TestFinalizeRefundFloorsExpiryAndVolume(t *testing.T) {
 	db.Create(&client)
 	tariff := Tariff{Name: "Y", Price: 1, Currency: "RUB", AddDays: 365, AddTrafficBytes: 1 << 30, Enabled: true}
 	db.Create(&tariff)
-	order := PaymentOrder{ClientId: client.Id, TariffId: tariff.Id, Provider: "yookassa", Amount: 1, Currency: "RUB", Status: StatusPaid, TelegramUserId: 9, IdempotencyKey: "r3"}
+	order := PaymentOrder{ClientId: client.Id, TariffId: tariff.Id, Provider: "yookassa", Amount: 1, Currency: "RUB", Status: StatusPaid, TelegramUserId: 9, IdempotencyKey: "r3", GrantedDays: tariff.AddDays, GrantedTrafficBytes: tariff.AddTrafficBytes, SnapshotVersion: paymentOrderSnapshotVersion}
 	db.Create(&order)
 
 	ps := NewPaymentService()

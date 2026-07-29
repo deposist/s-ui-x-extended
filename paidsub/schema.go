@@ -1,6 +1,8 @@
 package paidsub
 
 import (
+	"strings"
+
 	"github.com/deposist/s-ui-x-extended/database/model"
 
 	"gorm.io/gorm"
@@ -44,6 +46,7 @@ func EnsureSchema(db *gorm.DB) error {
 			status TEXT NOT NULL DEFAULT 'pending',
 			telegram_user_id INTEGER NOT NULL DEFAULT 0,
 			idempotency_key TEXT NOT NULL,
+			provider_ref TEXT NOT NULL DEFAULT '',
 			provider_charge_id TEXT,
 			provider_payload BLOB,
 			external_url TEXT,
@@ -52,7 +55,10 @@ func EnsureSchema(db *gorm.DB) error {
 			expires_at INTEGER NOT NULL DEFAULT 0,
 			granted_up INTEGER NOT NULL DEFAULT 0,
 			granted_down INTEGER NOT NULL DEFAULT 0,
-			granted_awg_devices INTEGER NOT NULL DEFAULT 0
+			granted_days INTEGER NOT NULL DEFAULT 0,
+			granted_traffic_bytes INTEGER NOT NULL DEFAULT 0,
+			granted_awg_devices INTEGER NOT NULL DEFAULT 0,
+			snapshot_version INTEGER NOT NULL DEFAULT 0
 		)`,
 		`CREATE TABLE IF NOT EXISTS client_endpoint_access (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -98,9 +104,6 @@ func EnsureSchema(db *gorm.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_payment_orders_pending_poll ON payment_orders(provider, status, created_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_payment_orders_telegram ON payment_orders(telegram_user_id)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_orders_idem ON payment_orders(idempotency_key)`,
-		// Partial unique index: many pending orders have an empty charge id, so
-		// the uniqueness only applies once a provider charge id is recorded.
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_orders_charge ON payment_orders(provider, provider_charge_id) WHERE provider_charge_id != ''`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_client_endpoint_access ON client_endpoint_access(client_id, endpoint_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_client_endpoint_access_endpoint ON client_endpoint_access(endpoint_id)`,
 	}
@@ -123,7 +126,11 @@ func EnsureSchema(db *gorm.DB) error {
 	}{
 		{&PaymentOrder{}, "granted_up", `ALTER TABLE payment_orders ADD COLUMN granted_up INTEGER NOT NULL DEFAULT 0`},
 		{&PaymentOrder{}, "granted_down", `ALTER TABLE payment_orders ADD COLUMN granted_down INTEGER NOT NULL DEFAULT 0`},
+		{&PaymentOrder{}, "provider_ref", `ALTER TABLE payment_orders ADD COLUMN provider_ref TEXT NOT NULL DEFAULT ''`},
+		{&PaymentOrder{}, "granted_days", `ALTER TABLE payment_orders ADD COLUMN granted_days INTEGER NOT NULL DEFAULT 0`},
+		{&PaymentOrder{}, "granted_traffic_bytes", `ALTER TABLE payment_orders ADD COLUMN granted_traffic_bytes INTEGER NOT NULL DEFAULT 0`},
 		{&PaymentOrder{}, "granted_awg_devices", `ALTER TABLE payment_orders ADD COLUMN granted_awg_devices INTEGER NOT NULL DEFAULT 0`},
+		{&PaymentOrder{}, "snapshot_version", `ALTER TABLE payment_orders ADD COLUMN snapshot_version INTEGER NOT NULL DEFAULT 0`},
 		{&Tariff{}, "max_awg_devices", `ALTER TABLE tariffs ADD COLUMN max_awg_devices INTEGER NOT NULL DEFAULT 0`},
 		{&model.AWGDevice{}, "create_request_key", `ALTER TABLE awg_devices ADD COLUMN create_request_key TEXT NOT NULL DEFAULT ''`},
 		{&model.AWGDevice{}, "rotate_request_key", `ALTER TABLE awg_devices ADD COLUMN rotate_request_key TEXT NOT NULL DEFAULT ''`},
@@ -134,6 +141,20 @@ func EnsureSchema(db *gorm.DB) error {
 			continue
 		}
 		if err := db.Exec(migration.ddl).Error; err != nil {
+			return err
+		}
+	}
+	if err := migratePaymentOrderSnapshots(db); err != nil {
+		return err
+	}
+	if err := migratePaymentProviderRefs(db); err != nil {
+		return err
+	}
+	for _, stmt := range []string{
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_orders_ref ON payment_orders(provider, provider_ref) WHERE provider_ref != ''`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_orders_charge ON payment_orders(provider, provider_charge_id) WHERE provider_charge_id != ''`,
+	} {
+		if err := db.Exec(stmt).Error; err != nil {
 			return err
 		}
 	}
@@ -156,4 +177,53 @@ func EnsureSchema(db *gorm.DB) error {
 		}
 	}
 	return nil
+}
+
+func migratePaymentProviderRefs(db *gorm.DB) error {
+	var orders []PaymentOrder
+	if err := db.Where("provider = ? AND provider_ref = ''", string(ProviderCryptoBot)).Find(&orders).Error; err != nil {
+		return err
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		for _, order := range orders {
+			ref := extractProviderRef(order.ProviderPayload)
+			if ref == "" {
+				ref = strings.TrimPrefix(order.ProviderChargeID, "cryptobot:")
+			}
+			if ref == "" {
+				continue
+			}
+			if err := tx.Model(&PaymentOrder{}).Where("id = ? AND provider_ref = ''", order.Id).
+				Update("provider_ref", ref).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func migratePaymentOrderSnapshots(db *gorm.DB) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		// The original purchase-time grants cannot be reconstructed for pending
+		// legacy orders, so cancel them instead of granting a mutable tariff.
+		if err := tx.Model(&PaymentOrder{}).
+			Where("status = ? AND snapshot_version = 0", StatusPending).
+			Update("status", StatusFailed).Error; err != nil {
+			return err
+		}
+
+		// Paid legacy orders need a frozen baseline for future refunds. Capture
+		// the current tariff once; subsequent tariff edits/deletion cannot alter it.
+		return tx.Exec(`UPDATE payment_orders
+			SET granted_days = COALESCE((SELECT add_days FROM tariffs WHERE tariffs.id = payment_orders.tariff_id), 0),
+				granted_traffic_bytes = COALESCE((SELECT add_traffic_bytes FROM tariffs WHERE tariffs.id = payment_orders.tariff_id), 0),
+				granted_awg_devices = CASE
+					WHEN granted_awg_devices > 0 THEN granted_awg_devices
+					ELSE COALESCE((SELECT max_awg_devices FROM tariffs WHERE tariffs.id = payment_orders.tariff_id), 0)
+				END,
+				snapshot_version = ?
+			WHERE status = ? AND snapshot_version = 0
+				AND EXISTS (SELECT 1 FROM tariffs WHERE tariffs.id = payment_orders.tariff_id)`,
+			paymentOrderSnapshotVersion, StatusPaid).Error
+	})
 }

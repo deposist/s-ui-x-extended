@@ -20,8 +20,16 @@ import (
 // cryptoBotBase is pinned (never configurable) to prevent token exfiltration.
 const cryptoBotBase = "https://pay.crypt.bot"
 
+const cryptoBotReconcilePageSize = 1000
+
+type cryptoBotHTTPDoer interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
 type cryptoBotProvider struct {
-	token string
+	token   string
+	baseURL string
+	client  cryptoBotHTTPDoer
 }
 
 func (p *cryptoBotProvider) Kind() ProviderKind  { return ProviderCryptoBot }
@@ -52,11 +60,22 @@ func (p *cryptoBotProvider) CreateInvoice(ctx context.Context, order *PaymentOrd
 	}, nil
 }
 
+func (p *cryptoBotProvider) DeleteInvoice(ctx context.Context, providerRef string) error {
+	invoiceID, err := strconv.ParseInt(providerRef, 10, 64)
+	if err != nil || invoiceID <= 0 {
+		return fmt.Errorf("cryptobot: invalid invoice reference")
+	}
+	return p.call(ctx, http.MethodPost, "/api/deleteInvoice", map[string]any{"invoice_id": invoiceID}, nil)
+}
+
 func (p *cryptoBotProvider) Poll(ctx context.Context, pending []PaymentOrder) ([]PollResult, error) {
 	idToOrder := map[string]PaymentOrder{}
 	var ids []string
 	for _, o := range pending {
-		ref := extractProviderRef(o.ProviderPayload)
+		ref := o.ProviderRef
+		if ref == "" {
+			ref = extractProviderRef(o.ProviderPayload)
+		}
 		if ref == "" {
 			continue
 		}
@@ -116,12 +135,76 @@ func (p *cryptoBotProvider) Poll(ctx context.Context, pending []PaymentOrder) ([
 	return results, nil
 }
 
+func (p *cryptoBotProvider) ReconcileInvoices(ctx context.Context, unresolved []PaymentOrder) ([]ReconciledInvoice, error) {
+	byPayload := make(map[string]PaymentOrder, len(unresolved))
+	for _, order := range unresolved {
+		byPayload[order.IdempotencyKey] = order
+	}
+	if len(byPayload) == 0 {
+		return nil, nil
+	}
+
+	var reconciled []ReconciledInvoice
+	for offset := 0; ; offset += cryptoBotReconcilePageSize {
+		var out struct {
+			Items []struct {
+				InvoiceID json.Number `json:"invoice_id"`
+				Status    string      `json:"status"`
+				Amount    string      `json:"amount"`
+				Fiat      string      `json:"fiat"`
+				Payload   string      `json:"payload"`
+				PayURL    string      `json:"bot_invoice_url"`
+				LegacyURL string      `json:"pay_url"`
+			} `json:"items"`
+		}
+		path := fmt.Sprintf("/api/getInvoices?offset=%d&count=%d", offset, cryptoBotReconcilePageSize)
+		if err := p.call(ctx, http.MethodGet, path, nil, &out); err != nil {
+			return nil, err
+		}
+		for _, invoice := range out.Items {
+			order, ok := byPayload[invoice.Payload]
+			if !ok || !cryptoBotInvoiceMatches(order, invoice.Amount, invoice.Fiat) {
+				continue
+			}
+			payURL := invoice.PayURL
+			if payURL == "" {
+				payURL = invoice.LegacyURL
+			}
+			ref := invoice.InvoiceID.String()
+			reconciled = append(reconciled, ReconciledInvoice{
+				OrderID:          order.Id,
+				ProviderRef:      ref,
+				PayURL:           payURL,
+				Paid:             invoice.Status == "paid",
+				ProviderChargeID: "cryptobot:" + ref,
+			})
+			delete(byPayload, invoice.Payload)
+		}
+		if len(out.Items) < cryptoBotReconcilePageSize || len(byPayload) == 0 {
+			return reconciled, nil
+		}
+	}
+}
+
+func cryptoBotInvoiceMatches(order PaymentOrder, amount, fiat string) bool {
+	want := fmt.Sprintf("%.2f", float64(order.Amount)/100.0)
+	got := amount
+	if paid, err := strconv.ParseFloat(amount, 64); err == nil {
+		got = fmt.Sprintf("%.2f", paid)
+	}
+	return got == want && strings.EqualFold(fiat, order.Currency)
+}
+
 // call performs a CryptoBot API request. The API token is sent in a header
 // (never the URL) and is never logged; errors carry no request details.
 func (p *cryptoBotProvider) call(ctx context.Context, method, path string, body any, out any) error {
-	client, err := service.NewPaidSubHTTPClient(15 * time.Second)
-	if err != nil {
-		return err
+	client := p.client
+	if client == nil {
+		configured, err := service.NewPaidSubHTTPClient(15 * time.Second)
+		if err != nil {
+			return err
+		}
+		client = configured
 	}
 	var reader io.Reader
 	if body != nil {
@@ -131,7 +214,11 @@ func (p *cryptoBotProvider) call(ctx context.Context, method, path string, body 
 		}
 		reader = bytes.NewReader(bb)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, cryptoBotBase+path, reader)
+	baseURL := p.baseURL
+	if baseURL == "" {
+		baseURL = cryptoBotBase
+	}
+	req, err := http.NewRequestWithContext(ctx, method, baseURL+path, reader)
 	if err != nil {
 		return err
 	}

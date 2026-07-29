@@ -39,16 +39,53 @@ func PollOnce(ctx context.Context) {
 
 	ps := NewPaymentService()
 
-	// 1. Confirm out-of-band payments first (before any expiry can hide them).
+	// 1. Recover provider invoices created before their local reference was saved.
+	reconcileCryptoBot(ctx, ps)
+	// 2. Confirm out-of-band payments first (before any expiry can hide them).
 	pollCryptoBot(ctx, ps)
 
-	// 2. Expire non-polled providers on the short order TTL.
+	// 3. Expire non-polled providers on the short order TTL.
 	if err := ps.ExpireStaleOrders(); err != nil {
 		logger.Warning("paidsub: expire stale orders: ", err)
 	}
-	// 3. Reap abandoned CryptoBot invoices only after a long grace window.
+	// 4. Reap abandoned CryptoBot invoices only after a long grace window.
 	if err := ps.ExpireStalePolledOrders(cryptoBotPollGraceSeconds); err != nil {
 		logger.Warning("paidsub: expire stale polled orders: ", err)
+	}
+}
+
+func reconcileCryptoBot(ctx context.Context, ps *PaymentService) {
+	prov := ps.providerByKind(ProviderCryptoBot)
+	reconciler, ok := prov.(invoiceReconciler)
+	if !ok {
+		return
+	}
+	var unresolved []PaymentOrder
+	if err := database.GetDB().Where("provider = ? AND status IN ?", string(ProviderCryptoBot), []string{StatusInvoiceCreating, StatusRecoverable}).
+		Order("created_at ASC, id ASC").Limit(100).Find(&unresolved).Error; err != nil {
+		logger.Warning("paidsub: reconcile load unresolved: ", err)
+		return
+	}
+	results, err := reconciler.ReconcileInvoices(ctx, unresolved)
+	if err != nil {
+		logger.Warning("paidsub: cryptobot reconcile: ", err)
+		return
+	}
+	for _, result := range results {
+		res := database.GetDB().Model(&PaymentOrder{}).
+			Where("id = ? AND status IN ?", result.OrderID, []string{StatusInvoiceCreating, StatusRecoverable}).
+			Updates(map[string]any{"provider_ref": result.ProviderRef, "external_url": result.PayURL, "status": StatusPending})
+		if res.Error != nil || res.RowsAffected != 1 {
+			if res.Error != nil {
+				logger.Warning("paidsub: save reconciled invoice: ", res.Error)
+			}
+			continue
+		}
+		if result.Paid {
+			if _, _, err := ps.ApplyPaidOrder(result.OrderID, result.ProviderChargeID, nil); err != nil {
+				logger.Warning("paidsub: apply reconciled invoice: ", err)
+			}
+		}
 	}
 }
 

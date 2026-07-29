@@ -54,11 +54,27 @@ type PollResult struct {
 	RawPayload       []byte
 }
 
+type ReconciledInvoice struct {
+	OrderID          uint
+	ProviderRef      string
+	PayURL           string
+	Paid             bool
+	ProviderChargeID string
+}
+
 // PaymentProvider prepares invoices and declares how it confirms.
 type PaymentProvider interface {
 	Kind() ProviderKind
 	Title(l lang) string
 	CreateInvoice(ctx context.Context, order *PaymentOrder, tariff *Tariff, client *model.Client) (*Invoice, error)
+}
+
+type invoiceDeleter interface {
+	DeleteInvoice(ctx context.Context, providerRef string) error
+}
+
+type invoiceReconciler interface {
+	ReconcileInvoices(ctx context.Context, unresolved []PaymentOrder) ([]ReconciledInvoice, error)
 }
 
 // pollingProvider is implemented by providers confirmed via polling (CryptoBot).

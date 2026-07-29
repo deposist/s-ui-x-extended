@@ -13,9 +13,11 @@ type Binding = model.PaidSubBinding
 
 // Order status constants.
 const (
-	StatusPending  = "pending"
-	StatusPaid     = "paid"
-	StatusFailed   = "failed"
-	StatusExpired  = "expired"
-	StatusRefunded = "refunded"
+	StatusPending         = "pending"
+	StatusInvoiceCreating = "invoice_creating"
+	StatusRecoverable     = "recoverable"
+	StatusPaid            = "paid"
+	StatusFailed          = "failed"
+	StatusExpired         = "expired"
+	StatusRefunded        = "refunded"
 )

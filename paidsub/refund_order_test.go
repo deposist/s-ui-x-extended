@@ -40,7 +40,7 @@ func TestRefundOrderNonStarsMarksManualAndRevokes(t *testing.T) {
 	db.Create(&client)
 	tariff := Tariff{Name: "M", Price: 10000, Currency: "RUB", AddDays: 30, AddTrafficBytes: 1 << 30, Enabled: true}
 	db.Create(&tariff)
-	order := PaymentOrder{ClientId: client.Id, TariffId: tariff.Id, Provider: "yookassa", Amount: 10000, Currency: "RUB", Status: StatusPaid, TelegramUserId: 7, IdempotencyKey: "man"}
+	order := PaymentOrder{ClientId: client.Id, TariffId: tariff.Id, Provider: "yookassa", Amount: 10000, Currency: "RUB", Status: StatusPaid, TelegramUserId: 7, IdempotencyKey: "man", GrantedDays: tariff.AddDays, GrantedTrafficBytes: tariff.AddTrafficBytes, SnapshotVersion: paymentOrderSnapshotVersion}
 	db.Create(&order)
 
 	ps := NewPaymentService()
@@ -174,7 +174,7 @@ func TestRefundRestoresUsageCounters(t *testing.T) {
 	db.Create(&client)
 	tariff := Tariff{Name: "M", Price: 10000, Currency: "RUB", AddTrafficBytes: 1 << 30, Enabled: true}
 	db.Create(&tariff)
-	order := PaymentOrder{ClientId: client.Id, TariffId: tariff.Id, Provider: "yookassa", Amount: 10000, Currency: "RUB", Status: StatusPending, TelegramUserId: 7, IdempotencyKey: "ctr"}
+	order := PaymentOrder{ClientId: client.Id, TariffId: tariff.Id, Provider: "yookassa", Amount: 10000, Currency: "RUB", Status: StatusPending, TelegramUserId: 7, IdempotencyKey: "ctr", GrantedDays: tariff.AddDays, GrantedTrafficBytes: tariff.AddTrafficBytes, SnapshotVersion: paymentOrderSnapshotVersion}
 	db.Create(&order)
 
 	ps := NewPaymentService()
@@ -211,5 +211,65 @@ func TestRefundRestoresUsageCounters(t *testing.T) {
 	}
 	if afterRefund.Volume != 5<<30 {
 		t.Errorf("refund must roll back volume, got %d", afterRefund.Volume)
+	}
+}
+
+func TestRefundUsesOrderSnapshotAfterTariffDeletion(t *testing.T) {
+	db := openTestDB(t)
+	if err := EnsureSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	client := model.Client{Enable: true, Name: "refund-snapshot", Inbounds: json.RawMessage("[]"), Volume: 4096}
+	if err := db.Create(&client).Error; err != nil {
+		t.Fatal(err)
+	}
+	tariff := Tariff{Name: "Deleted", Price: 100, Currency: "RUB", AddTrafficBytes: 1024, Enabled: true}
+	if err := db.Create(&tariff).Error; err != nil {
+		t.Fatal(err)
+	}
+	order := newPaymentOrder(&client, &tariff, ProviderYooKassa, 7, tariff.Price, tariff.Currency, time.Now().Unix(), 15)
+	order.Status = StatusPaid
+	if err := db.Create(order).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Delete(&tariff).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := NewPaymentService().RefundOrder(context.Background(), order.Id, true); err != nil {
+		t.Fatalf("RefundOrder after tariff deletion: %v", err)
+	}
+	var got model.Client
+	if err := db.First(&got, client.Id).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got.Volume != 3072 {
+		t.Fatalf("refund volume = %d; want 3072", got.Volume)
+	}
+}
+
+func TestRefundWithRevokeRejectsLegacyOrderWithoutSnapshot(t *testing.T) {
+	db := openTestDB(t)
+	if err := EnsureSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	client := model.Client{Enable: true, Name: "refund-legacy", Inbounds: json.RawMessage("[]"), Volume: 4096}
+	if err := db.Create(&client).Error; err != nil {
+		t.Fatal(err)
+	}
+	order := PaymentOrder{ClientId: client.Id, TariffId: 999, Provider: "manual", Amount: 100, Currency: "RUB", Status: StatusPaid, IdempotencyKey: "legacy-no-snapshot"}
+	if err := db.Create(&order).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := NewPaymentService().RefundOrder(context.Background(), order.Id, true); err == nil {
+		t.Fatal("refund revoke accepted a legacy order without an entitlement snapshot")
+	}
+	var stored PaymentOrder
+	if err := db.First(&stored, order.Id).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status != StatusPaid {
+		t.Fatalf("failed refund changed status to %q", stored.Status)
 	}
 }

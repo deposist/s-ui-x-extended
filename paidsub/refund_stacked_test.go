@@ -26,7 +26,8 @@ func TestRefundOldOrderDoesNotClobberCurrentWindow(t *testing.T) {
 	ps := NewPaymentService()
 	apply := func(key string) uint {
 		o := PaymentOrder{ClientId: client.Id, TariffId: tariff.Id, Provider: "yookassa",
-			Amount: 10000, Currency: "RUB", Status: StatusPending, TelegramUserId: 7, IdempotencyKey: key}
+			Amount: 10000, Currency: "RUB", Status: StatusPending, TelegramUserId: 7, IdempotencyKey: key,
+			GrantedDays: tariff.AddDays, GrantedTrafficBytes: tariff.AddTrafficBytes, SnapshotVersion: paymentOrderSnapshotVersion}
 		db.Create(&o)
 		if applied, _, err := ps.ApplyPaidOrder(o.Id, "ch:"+key, nil); err != nil || !applied {
 			t.Fatalf("ApplyPaidOrder(%s) = (%v,%v)", key, applied, err)
