@@ -86,7 +86,7 @@ func TestApplyPipelineRequiresSignedManifestBindingArtifact(t *testing.T) {
 	target.AssetURL = server.URL + "/asset"
 	target.ChecksumURL = server.URL + "/checksum"
 	deps := panelUpdateDeps{client: server.Client(), execPath: execPath}
-	if err := applyPipeline(target, deps, func(UpdateStage) {}); err != nil {
+	if _, err := applyPipeline(target, deps, func(UpdateStage) {}); err != nil {
 		t.Fatalf("signed update failed: %v", err)
 	}
 	if got, _ := os.ReadFile(execPath); !bytes.Equal(got, []byte("NEW-BINARY")) {
@@ -129,7 +129,7 @@ func TestApplyPipelineRejectsTamperedSignedReleaseInputs(t *testing.T) {
 			server := httptest.NewTLSServer(mux)
 			defer server.Close()
 			target.AssetURL, target.ChecksumURL = server.URL+"/asset", server.URL+"/checksum"
-			err := applyPipeline(target, panelUpdateDeps{client: server.Client(), execPath: execPath}, func(UpdateStage) {})
+			_, err := applyPipeline(target, panelUpdateDeps{client: server.Client(), execPath: execPath}, func(UpdateStage) {})
 			if err == nil {
 				t.Fatal("tampered signed release was accepted")
 			}
@@ -216,7 +216,7 @@ func TestApplyPipelineRejectsChecksumMismatch(t *testing.T) {
 
 	target := ReleaseTarget{Channel: "main", Platform: "amd64", AssetURL: server.URL + "/asset", ChecksumURL: server.URL + "/checksum", Version: "9.9.9"}
 	deps := panelUpdateDeps{client: server.Client(), execPath: execPath}
-	if err := applyPipeline(target, deps, func(UpdateStage) {}); err != errManifestInvalid {
+	if _, err := applyPipeline(target, deps, func(UpdateStage) {}); err != errManifestInvalid {
 		t.Fatalf("expected errManifestInvalid for checksum not bound by the manifest, got %v", err)
 	}
 	got, _ := os.ReadFile(execPath)
@@ -244,7 +244,7 @@ func TestApplyPipelineReplacesBinaryAndKeepsBackup(t *testing.T) {
 
 	target := ReleaseTarget{Channel: "main", Platform: "amd64", AssetURL: server.URL + "/asset", ChecksumURL: server.URL + "/checksum", Version: "9.9.9"}
 	deps := panelUpdateDeps{client: server.Client(), execPath: execPath}
-	if err := applyPipeline(target, deps, func(UpdateStage) {}); err != nil {
+	if _, err := applyPipeline(target, deps, func(UpdateStage) {}); err != nil {
 		t.Fatalf("apply pipeline failed: %v", err)
 	}
 	if got, _ := os.ReadFile(execPath); !bytes.Equal(got, newContent) {
@@ -319,6 +319,139 @@ func TestCheckPendingUpdateRollsBackAfterThreshold(t *testing.T) {
 	}
 }
 
+func TestFailedUpdateBeforeSwapDoesNotRestorePreviousBackup(t *testing.T) {
+	resetPanelUpdateStateForTest()
+	t.Cleanup(resetPanelUpdateStateForTest)
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	if err := os.WriteFile(execPath, []byte("CURRENT-B"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("STALE-A"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	(&PanelUpdateService{}).fail(errors.New("download failed before swap"), execPath, false)
+
+	if got, _ := os.ReadFile(execPath); string(got) != "CURRENT-B" {
+		t.Fatalf("pre-swap failure restored stale backup, got %q", got)
+	}
+	if got, _ := os.ReadFile(execPath + backupSuffix); string(got) != "STALE-A" {
+		t.Fatalf("pre-swap failure changed stale backup, got %q", got)
+	}
+}
+
+func TestMarkerWriteFailureRestoresCurrentTransactionBackup(t *testing.T) {
+	resetPanelUpdateStateForTest()
+	t.Cleanup(resetPanelUpdateStateForTest)
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	if err := os.WriteFile(execPath, []byte("CURRENT-B"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("STALE-A"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(execPath+pendingSuffix, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(execPath + pendingSuffix) })
+
+	tarball := makeTarGz(t, []byte("CANDIDATE-C"))
+	server := artifactServer(t, tarball, checksumHex(tarball))
+	oldDeps := newPanelUpdateDeps
+	newPanelUpdateDeps = func() panelUpdateDeps {
+		return panelUpdateDeps{client: server.Client(), execPath: execPath}
+	}
+	t.Cleanup(func() { newPanelUpdateDeps = oldDeps })
+
+	oldSink := panelUpdateAuditSink
+	auditDone := make(chan struct{})
+	panelUpdateAuditSink = func(UpdateJob, string, string) { close(auditDone) }
+	t.Cleanup(func() { panelUpdateAuditSink = oldSink })
+
+	target := ReleaseTarget{Channel: "main", Version: "9.9.9", Platform: "amd64", AssetURL: server.URL + "/asset", ChecksumURL: server.URL + "/checksum"}
+	if err := (&PanelUpdateService{}).Apply(target, "admin"); err != nil {
+		t.Fatalf("apply start failed: %v", err)
+	}
+	waitForUpdateStage(t, UpdateStageFailed)
+	select {
+	case <-auditDone:
+	case <-time.After(15 * time.Second):
+		t.Fatal("failed update did not finish its audit sink")
+	}
+
+	if got, _ := os.ReadFile(execPath); string(got) != "CURRENT-B" {
+		t.Fatalf("marker failure restored wrong binary, got %q", got)
+	}
+	if _, err := os.Stat(execPath + backupSuffix); !os.IsNotExist(err) {
+		t.Fatalf("current transaction backup was not consumed: %v", err)
+	}
+}
+
+func TestPostSwapFailureRestoresCurrentTransactionBackup(t *testing.T) {
+	resetPanelUpdateStateForTest()
+	t.Cleanup(resetPanelUpdateStateForTest)
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	if err := os.WriteFile(execPath, []byte("CURRENT-B"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("STALE-A"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tarball := makeTarGz(t, []byte("CANDIDATE-C"))
+	server := artifactServer(t, tarball, checksumHex(tarball))
+	target := ReleaseTarget{Channel: "main", Version: "9.9.9", Platform: "amd64", AssetURL: server.URL + "/asset", ChecksumURL: server.URL + "/checksum"}
+
+	swapped, err := applyPipeline(target, panelUpdateDeps{client: server.Client(), execPath: execPath}, func(UpdateStage) {})
+	if err != nil || !swapped {
+		t.Fatalf("apply pipeline did not report its binary swap: swapped=%t err=%v", swapped, err)
+	}
+	oldSink := panelUpdateAuditSink
+	panelUpdateAuditSink = func(UpdateJob, string, string) {}
+	t.Cleanup(func() { panelUpdateAuditSink = oldSink })
+	(&PanelUpdateService{}).fail(errors.New("failed after swap"), execPath, swapped)
+
+	if got, _ := os.ReadFile(execPath); string(got) != "CURRENT-B" {
+		t.Fatalf("post-swap failure restored wrong backup, got %q", got)
+	}
+	if _, err := os.Stat(execPath + backupSuffix); !os.IsNotExist(err) {
+		t.Fatalf("current transaction backup was not consumed: %v", err)
+	}
+}
+
+func TestClearPendingUpdateRemovesMarkerAndBackup(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	if err := os.WriteFile(execPath+pendingSuffix, []byte("0"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("OLD"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	ClearPendingUpdate(execPath)
+
+	for _, path := range []string{execPath + pendingSuffix, execPath + backupSuffix} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("successful boot left update artifact %q: %v", path, err)
+		}
+	}
+}
+
+func waitForUpdateStage(t *testing.T, want UpdateStage) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		if got := (&PanelUpdateService{}).Status().Stage; got == want {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("update stage = %q, want %q", (&PanelUpdateService{}).Status().Stage, want)
+}
+
 // SR-006 / SC-008: a failed apply records its terminal OUTCOME (not just the
 // attempt) in the audit log, and releases the guard.
 func TestFailRecordsFailedOutcomeAudit(t *testing.T) {
@@ -335,7 +468,7 @@ func TestFailRecordsFailedOutcomeAudit(t *testing.T) {
 	panelUpdateAuditSink = func(job UpdateJob, result string, errMsg string) { gotResult, gotErr, gotJob = result, errMsg, job }
 	t.Cleanup(func() { panelUpdateAuditSink = oldSink })
 
-	(&PanelUpdateService{}).fail(errors.New("boom"), "")
+	(&PanelUpdateService{}).fail(errors.New("boom"), "", false)
 
 	if gotResult != "failed" {
 		t.Fatalf("expected failed outcome audit, got %q", gotResult)

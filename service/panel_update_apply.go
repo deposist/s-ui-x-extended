@@ -68,9 +68,9 @@ func defaultPanelUpdateDeps() panelUpdateDeps {
 // applyPipeline downloads, integrity-checks, extracts and atomically swaps the
 // panel binary. It only mutates the live executable at the final rename, and
 // only after a successful checksum verification (SR-002, SR-007).
-func applyPipeline(target ReleaseTarget, deps panelUpdateDeps, setStage func(UpdateStage)) error {
+func applyPipeline(target ReleaseTarget, deps panelUpdateDeps, setStage func(UpdateStage)) (bool, error) {
 	if deps.execPath == "" {
-		return errors.New("cannot locate current executable")
+		return false, errors.New("cannot locate current executable")
 	}
 	dir := filepath.Dir(deps.execPath)
 
@@ -82,25 +82,28 @@ func applyPipeline(target ReleaseTarget, deps panelUpdateDeps, setStage func(Upd
 		}
 	}()
 	if err := downloadToFile(deps.client, target.AssetURL, archive); err != nil {
-		return err
+		return false, err
 	}
 	expected, err := downloadChecksum(deps.client, target.ChecksumURL)
 	if err != nil {
-		return err
+		return false, err
 	}
 	manifest, err := downloadUpdateManifest(deps.client, target.AssetURL+".manifest.json")
 	if err != nil {
-		return err
+		return false, err
 	}
 	setStage(UpdateStageVerifying)
 	if err := verifyUpdateManifest(manifest, target, expected); err != nil {
-		return err
+		return false, err
 	}
 	if err := verifySHA256(archive, expected); err != nil {
-		return err
+		return false, err
 	}
 	setStage(UpdateStageApplying)
-	return swapBinary(archive, deps.execPath)
+	if err := swapBinary(archive, deps.execPath); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // swapBinary extracts the new binary next to the current one and atomically
@@ -396,11 +399,19 @@ func writePendingMarker(execPath string) error {
 	return os.WriteFile(execPath+pendingSuffix, []byte("0"), 0o600)
 }
 
-// ClearPendingUpdate removes the pending-update marker. The freshly-booted new
-// binary calls this once it has started successfully, so a clean boot does not
-// trigger a rollback.
+// ClearPendingUpdate confirms a successful boot by removing the transaction's
+// marker and backup. Without a marker, an unrelated .bak file is left alone.
 func ClearPendingUpdate(execPath string) {
-	_ = os.Remove(execPath + pendingSuffix)
+	marker := execPath + pendingSuffix
+	if err := os.Remove(marker); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			logger.Warning("panel update: could not clear pending marker: ", err)
+		}
+		return
+	}
+	if err := removeUpdateFile(execPath + backupSuffix); err != nil {
+		logger.Warning("panel update: could not remove confirmed update backup: ", err)
+	}
 }
 
 // CheckPendingUpdate runs at startup before the marker is cleared: it counts how

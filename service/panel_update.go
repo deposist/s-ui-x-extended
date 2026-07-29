@@ -107,8 +107,9 @@ func (s *PanelUpdateService) Apply(target ReleaseTarget, initiator string) error
 
 func (s *PanelUpdateService) run(target ReleaseTarget) {
 	deps := newPanelUpdateDeps()
-	if err := applyPipeline(target, deps, s.setStage); err != nil {
-		s.fail(err, deps.execPath)
+	swapped, err := applyPipeline(target, deps, s.setStage)
+	if err != nil {
+		s.fail(err, deps.execPath, swapped)
 		return
 	}
 	s.setStage(UpdateStageRestarting)
@@ -117,7 +118,7 @@ func (s *PanelUpdateService) run(target ReleaseTarget) {
 	// safety net would be gone - restore the previous binary and abort the
 	// restart rather than boot unprotected, instead of swallowing the error.
 	if err := writePendingMarker(deps.execPath); err != nil {
-		s.fail(fmt.Errorf("rollback marker could not be written after apply: %w", err), deps.execPath)
+		s.fail(fmt.Errorf("rollback marker could not be written after apply: %w", err), deps.execPath, swapped)
 		return
 	}
 	// Durably record the successful outcome (SR-006/SC-008) BEFORE exiting, since
@@ -135,13 +136,12 @@ func (s *PanelUpdateService) setStage(stage UpdateStage) {
 	}
 }
 
-// fail marks the job failed, releases the guard, and best-effort restores the
-// previous binary from backup so a partial apply never leaves a broken panel
-// (SR-007). The pipeline only touches the live binary at the final atomic
-// rename, so in practice the backup restore is a belt-and-braces safety net.
-func (s *PanelUpdateService) fail(err error, execPath string) {
+// fail marks the job failed, releases the guard, and restores only a binary
+// replaced by this update transaction. Pre-swap failures must not consume a
+// stale backup left by an earlier update.
+func (s *PanelUpdateService) fail(err error, execPath string, swapped bool) {
 	logger.Warning("panel update failed:", err)
-	if execPath != "" {
+	if swapped && execPath != "" {
 		if restoreErr := RestoreBackup(execPath); restoreErr != nil && !os.IsNotExist(restoreErr) {
 			logger.Warning("panel update: backup restore failed:", restoreErr)
 		}
