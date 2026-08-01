@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-tag=$("$(dirname "${BASH_SOURCE[0]}")/validate-release-tag.sh" "${1-}")
+tag=$(bash "$(dirname "${BASH_SOURCE[0]}")/validate-release-tag.sh" "${1-}")
 expected_commit=${2-}
 event_commit=${3-}
 

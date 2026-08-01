@@ -15,7 +15,7 @@ if [[ ! $repository =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
     printf 'invalid GitHub repository: %q\n' "$repository" >&2
     exit 1
 fi
-tag=$("$(dirname "${BASH_SOURCE[0]}")/validate-release-tag.sh" "$tag")
+tag=$(bash "$(dirname "${BASH_SOURCE[0]}")/validate-release-tag.sh" "$tag")
 if [[ ! -d $asset_dir ]]; then
     printf 'release asset directory does not exist: %q\n' "$asset_dir" >&2
     exit 1
