@@ -187,7 +187,7 @@ jobs:
           import shutil
           import zipfile
 
-          archive = shutil.make_archive("s-ui-windows-${{ matrix.arch }}", "zip", ".", "s-ui-windows")
+          archive = shutil.make_archive("s-ui-windows-${{ matrix.arch }}", "zip", "s-ui-windows")
           expected = {
               "README.md", "install-windows.bat", "libcronet.dll", "s-ui-windows.bat",
               "s-ui-windows.xml", "sui.exe", "uninstall-windows.bat",
