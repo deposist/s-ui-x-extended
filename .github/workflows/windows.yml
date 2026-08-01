@@ -26,7 +26,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ inputs.tag || github.ref_name }}
+  group: windows-release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 env:
