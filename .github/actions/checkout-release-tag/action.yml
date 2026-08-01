@@ -36,7 +36,7 @@ runs:
       shell: bash
       env:
         INPUT_TAG: ${{ inputs.tag }}
-      run: echo "tag=$(scripts/validate-release-tag.sh "$INPUT_TAG")" >> "$GITHUB_OUTPUT"
+      run: echo "tag=$(bash scripts/validate-release-tag.sh "$INPUT_TAG")" >> "$GITHUB_OUTPUT"
 
     - name: Stage trusted release verifier
       shell: bash
@@ -44,6 +44,7 @@ runs:
         set -euo pipefail
         mkdir -p "$RUNNER_TEMP/s-ui-release-tooling"
         cp scripts/validate-release-tag.sh scripts/verify-release-tag-checkout.sh "$RUNNER_TEMP/s-ui-release-tooling/"
+        chmod +x "$RUNNER_TEMP/s-ui-release-tooling/validate-release-tag.sh" "$RUNNER_TEMP/s-ui-release-tooling/verify-release-tag-checkout.sh"
 
     - name: Check out release tag
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
