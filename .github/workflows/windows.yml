@@ -229,7 +229,7 @@ jobs:
           }
           if ('${{ matrix.arch }}' -eq 'amd64') {
             $expectedVersion = '${{ needs.release-ref.outputs.tag }}'.TrimStart('v')
-            $actualVersion = (& (Join-Path $unpack 'sui.exe') -v | Select-Object -First 1).Split()[-1]
+            $actualVersion = ((& (Join-Path $unpack 'sui.exe') -v | Select-Object -First 1).Split()[-1]).Trim()
             if ($LASTEXITCODE -ne 0 -or $actualVersion -ne $expectedVersion) {
               throw "packaged amd64 runtime version $actualVersion, expected $expectedVersion"
             }
