@@ -452,13 +452,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.release-ref.outputs.tag }}
-        run: scripts/check-release-assets.sh "$GITHUB_REPOSITORY" "$TAG" release-assets
+        run: bash scripts/check-release-assets.sh "$GITHUB_REPOSITORY" "$TAG" release-assets
 
       - name: Verify exact remote inventory and digests
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.release-ref.outputs.tag }}
-        run: scripts/check-release-assets.sh --verify "$GITHUB_REPOSITORY" "$TAG" release-assets
+        run: bash scripts/check-release-assets.sh --verify "$GITHUB_REPOSITORY" "$TAG" release-assets
 
       - name: Recheck tag and publish Release
         if: steps.create-release.outputs.is_draft != 'false'
@@ -488,7 +488,7 @@ jobs:
           PRERELEASE: ${{ needs.release-ref.outputs.prerelease }}
         run: |
           set -euo pipefail
-          scripts/check-release-assets.sh --verify "$GITHUB_REPOSITORY" "$TAG" release-assets
+          bash scripts/check-release-assets.sh --verify "$GITHUB_REPOSITORY" "$TAG" release-assets
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease > /tmp/published-release.json
           test "$(jq -r .isDraft /tmp/published-release.json)" = false
           test "$(jq -r .isPrerelease /tmp/published-release.json)" = "$PRERELEASE"
