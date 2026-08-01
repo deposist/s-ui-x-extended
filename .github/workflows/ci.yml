@@ -54,7 +54,7 @@ jobs:
         run: go vet ./...
 
       - name: Release workflow regression tests
-        run: tests/release-tag-validation.sh
+        run: bash tests/release-tag-validation.sh
 
       - name: Go race tests
         run: go test -race -timeout=10m ./...

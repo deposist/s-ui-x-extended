@@ -210,8 +210,17 @@ jobs:
           EXPECTED_VERSION: ${{ needs.release-ref.outputs.tag }}
         run: |
           set -euo pipefail
+          manifest=$(docker buildx imagetools inspect "$IMAGE_NAME@$CANDIDATE_DIGEST" --raw)
           for platform in linux/amd64 linux/arm64; do
-            actual=$(docker run --rm --platform "$platform" --entrypoint ./sui "$IMAGE_NAME@$CANDIDATE_DIGEST" -v | awk 'NR == 1 { print $NF }')
+            os=${platform%/*}
+            architecture=${platform#*/}
+            platform_digest=$(jq -er --arg os "$os" --arg architecture "$architecture" '
+              [.manifests[] | select(.platform.os == $os and .platform.architecture == $architecture)]
+              | if length == 1 then .[0].digest else error("expected exactly one manifest for \($os)/\($architecture)") end
+            ' <<<"$manifest")
+            expected_digest=$(cat "digests/$architecture")
+            test "$platform_digest" = "$expected_digest"
+            actual=$(docker run --rm --platform "$platform" --entrypoint ./sui "$IMAGE_NAME@$platform_digest" -v | awk 'NR == 1 { print $NF }')
             test "$actual" = "${EXPECTED_VERSION#v}"
           done
 

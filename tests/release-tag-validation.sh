@@ -5,6 +5,12 @@ root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 validator="$root_dir/scripts/validate-release-tag.sh"
 checkout_verifier="$root_dir/scripts/verify-release-tag-checkout.sh"
 asset_guard="$root_dir/scripts/check-release-assets.sh"
+for tool in jq sha256sum; do
+    if ! command -v "$tool" >/dev/null; then
+        echo "release tag validation smoke test requires $tool" >&2
+        exit 1
+    fi
+done
 
 for tag in v1.2.3 v2.0.0-rc.1 v1.5.2-beta-hotfix2 v3.4.5-hotfix1 v3.4.5-preview.7; do
     actual=$("$validator" "$tag")
@@ -52,6 +58,8 @@ release_workflow="$root_dir/.github/workflows/release.yml"
 windows_workflow="$root_dir/.github/workflows/windows.yml"
 docker_workflow="$root_dir/.github/workflows/docker.yml"
 ci_workflow="$root_dir/.github/workflows/ci.yml"
+# The grep needle intentionally contains a GitHub expression.
+# shellcheck disable=SC2016
 grep -q 'value: ${{ steps.verify.outputs.prerelease }}' "$checkout_action"
 grep -q 'scripts/check-release-assets.sh --verify' "$release_workflow"
 grep -q 'uses: ./.github/workflows/windows.yml' "$release_workflow"
@@ -61,9 +69,13 @@ grep -q 'npm run test' "$windows_workflow"
 grep -q 'npm run verify:dist' "$windows_workflow"
 grep -q 'npm run verify:dist' "$release_workflow"
 grep -q 'npm run verify:dist' "$ci_workflow"
+grep -q 'run: bash tests/release-tag-validation.sh' "$ci_workflow"
 grep -q 'push-by-digest=true,name-canonical=true' "$docker_workflow"
 grep -q 'Runtime smoke immutable platform image' "$docker_workflow"
 grep -q 'Final runtime smoke for every candidate platform' "$docker_workflow"
+# The grep needle intentionally contains shell variables.
+# shellcheck disable=SC2016
+grep -Fq '"$IMAGE_NAME@$platform_digest"' "$docker_workflow"
 grep -q 'Promote final Docker tags' "$docker_workflow"
 grep -q 'BOOTLIN_ARMV5_SHA256: 8cdb4ad70c6b5a66427fa3315fe3ddde1c19c90232674dec59045e04d2a36cf1' "$release_workflow"
 grep -q 'BOOTLIN_S390X_SHA256: 23f536ff2bf1a9d3b93210465471996bc7c918fbb5702a277d8e1e42ffab8559' "$release_workflow"
@@ -144,10 +156,23 @@ git -C "$tmp_dir" checkout --quiet v1.0.0
 cat > "$tmp_dir/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-if [[ $1 == api && $2 == repos/*/releases/tags/* ]]; then
-    printf '7\n'
-elif [[ $1 == api && $2 == --paginate ]]; then
-    printf '[[%s]]\n' "${FAKE_GH_ASSETS}"
+if [[ $1 == api ]]; then
+    api_path=
+    for arg in "$@"; do
+        [[ $arg == repos/* ]] && api_path=$arg
+    done
+    case $api_path in
+        *releases?per_page=100)
+            printf '[[{"id":7,"tag_name":"v1.2.3"}]]\n'
+            ;;
+        *releases/7/assets?per_page=100)
+            printf '[[%s]]\n' "${FAKE_GH_ASSETS}"
+            ;;
+        *)
+            echo "unexpected fake gh API path: $api_path" >&2
+            exit 1
+            ;;
+    esac
 elif [[ $1 == release && $2 == upload ]]; then
     exit 0
 else
@@ -160,18 +185,18 @@ printf 'new asset\n' > "$tmp_dir/assets/new.tar.gz"
 asset_digest=$(sha256sum "$tmp_dir/assets/new.tar.gz" | awk '{print $1}')
 matching_asset=$(printf '{"name":"new.tar.gz","state":"uploaded","digest":"sha256:%s"}' "$asset_digest")
 PATH="$tmp_dir/bin:$PATH" GH_TOKEN=test FAKE_GH_ASSETS="$matching_asset" \
-    "$asset_guard" owner/repository v1.2.3 "$tmp_dir/assets"
+    bash "$asset_guard" owner/repository v1.2.3 "$tmp_dir/assets"
 
 bad_asset='{"name":"new.tar.gz","state":"uploaded","digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'
 if PATH="$tmp_dir/bin:$PATH" GH_TOKEN=test FAKE_GH_ASSETS="$bad_asset" \
-    "$asset_guard" owner/repository v1.2.3 "$tmp_dir/assets" >/dev/null 2>&1; then
+    bash "$asset_guard" owner/repository v1.2.3 "$tmp_dir/assets" >/dev/null 2>&1; then
     echo 'divergent existing release asset was accepted' >&2
     exit 1
 fi
 
 unexpected_asset='{"name":"old.tar.gz","state":"uploaded","digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'
 if PATH="$tmp_dir/bin:$PATH" GH_TOKEN=test FAKE_GH_ASSETS="$unexpected_asset" \
-    "$asset_guard" owner/repository v1.2.3 "$tmp_dir/assets" >/dev/null 2>&1; then
+    bash "$asset_guard" owner/repository v1.2.3 "$tmp_dir/assets" >/dev/null 2>&1; then
     echo 'unexpected release asset was accepted' >&2
     exit 1
 fi
