@@ -231,6 +231,7 @@ jobs:
             $expectedVersion = '${{ needs.release-ref.outputs.tag }}'.TrimStart('v')
             $versionLine = & (Join-Path $unpack 'sui.exe') -v | Select-Object -First 1
             $versionExitCode = $LASTEXITCODE
+            if ($null -eq $versionExitCode) { $versionExitCode = 0 }
             $actualVersion = ($versionLine.Split()[-1]).Trim()
             if ($versionExitCode -ne 0 -or $actualVersion -ne $expectedVersion) {
               throw "packaged amd64 runtime version $actualVersion (exit $versionExitCode), expected $expectedVersion"
