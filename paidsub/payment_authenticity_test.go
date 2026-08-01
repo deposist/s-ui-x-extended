@@ -64,7 +64,9 @@ func TestHandlePreCheckoutApprovesValidOrder(t *testing.T) {
 
 	rt := &recordingTransport{}
 	b := newTestBot(rt)
-	b.handlePreCheckout(context.Background(), &tgPreCheckoutQuery{ID: "q1", From: tgUser{ID: 7}, Currency: "XTR", TotalAmount: 100, InvoicePayload: "pc-ok"})
+	if err := b.handlePreCheckout(context.Background(), &tgPreCheckoutQuery{ID: "q1", From: tgUser{ID: 7}, Currency: "XTR", TotalAmount: 100, InvoicePayload: "pc-ok"}); err != nil {
+		t.Fatal(err)
+	}
 
 	call, ok := rt.lastCall("answerPreCheckoutQuery")
 	if !ok {
@@ -101,7 +103,9 @@ func TestHandlePreCheckoutRejectsInvalid(t *testing.T) {
 			rt := &recordingTransport{}
 			b := newTestBot(rt)
 			q := tc.q
-			b.handlePreCheckout(context.Background(), &q)
+			if err := b.handlePreCheckout(context.Background(), &q); err != nil {
+				t.Fatal(err)
+			}
 			call, ok := rt.lastCall("answerPreCheckoutQuery")
 			if !ok {
 				t.Fatal("expected answerPreCheckoutQuery to be called")
@@ -128,10 +132,12 @@ func TestHandleSuccessfulPaymentAppliesRenewalOnMatch(t *testing.T) {
 
 	rt := &recordingTransport{}
 	b := newTestBot(rt)
-	b.handleSuccessfulPayment(context.Background(), &tgMessage{
+	if err := b.handleSuccessfulPayment(context.Background(), &tgMessage{
 		From: &tgUser{ID: 7}, Chat: tgChat{ID: 7},
 		SuccessfulPayment: &tgSuccessfulPayment{Currency: "XTR", TotalAmount: 100, InvoicePayload: "sp-ok", TelegramPaymentChargeID: "ch1"},
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	var o PaymentOrder
 	db.Where("id = ?", order.Id).First(&o)
@@ -173,7 +179,9 @@ func TestHandleSuccessfulPaymentRefusesMismatch(t *testing.T) {
 			rt := &recordingTransport{}
 			b := newTestBot(rt)
 			sp := tc.sp
-			b.handleSuccessfulPayment(context.Background(), &tgMessage{From: &tgUser{ID: 7}, Chat: tgChat{ID: 7}, SuccessfulPayment: &sp})
+			if err := b.handleSuccessfulPayment(context.Background(), &tgMessage{From: &tgUser{ID: 7}, Chat: tgChat{ID: 7}, SuccessfulPayment: &sp}); err != nil {
+				t.Fatal(err)
+			}
 
 			var o PaymentOrder
 			db.Where("id = ?", order.Id).First(&o)
@@ -204,10 +212,12 @@ func TestHandleSuccessfulPaymentRefusesWrongTelegramUser(t *testing.T) {
 
 	rt := &recordingTransport{}
 	b := newTestBot(rt)
-	b.handleSuccessfulPayment(context.Background(), &tgMessage{
+	if err := b.handleSuccessfulPayment(context.Background(), &tgMessage{
 		From: &tgUser{ID: 999}, Chat: tgChat{ID: 999},
 		SuccessfulPayment: &tgSuccessfulPayment{Currency: "XTR", TotalAmount: 100, InvoicePayload: "spw", TelegramPaymentChargeID: "x"},
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	var o PaymentOrder
 	db.Where("id = ?", order.Id).First(&o)
@@ -231,10 +241,13 @@ func TestHandleSuccessfulPaymentUnknownPayloadIsNoop(t *testing.T) {
 
 	rt := &recordingTransport{}
 	b := newTestBot(rt)
-	b.handleSuccessfulPayment(context.Background(), &tgMessage{
+	err := b.handleSuccessfulPayment(context.Background(), &tgMessage{
 		From: &tgUser{ID: 7}, Chat: tgChat{ID: 7},
 		SuccessfulPayment: &tgSuccessfulPayment{Currency: "XTR", TotalAmount: 100, InvoicePayload: "ghost", TelegramPaymentChargeID: "x"},
 	})
+	if err == nil {
+		t.Fatal("unknown payment payload unexpectedly succeeded")
+	}
 
 	// The known order must be untouched (no order matched the unknown payload).
 	var o PaymentOrder

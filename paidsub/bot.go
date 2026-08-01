@@ -204,7 +204,6 @@ func (b *Bot) run(ctx context.Context, done chan struct{}) {
 			if err := b.setting.SetPaidSubUpdateOffset(maxID); err != nil {
 				logger.Warning("paidsub: persist offset: ", err)
 			}
-			offset = maxID
 		}
 	}
 }

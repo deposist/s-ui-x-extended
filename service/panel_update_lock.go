@@ -16,6 +16,8 @@ func acquirePanelUpdateProcessLock(execPath string) (panelUpdateProcessLock, err
 	if execPath == "" {
 		return nil, errors.New("cannot locate current executable")
 	}
+	// #nosec G304 -- execPath is the validated running executable path; the
+	// sibling lock file intentionally follows it across supported install roots.
 	file, err := os.OpenFile(execPath+panelUpdateLockSuffix, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("open update process lock: %w", err)

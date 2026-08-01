@@ -189,14 +189,13 @@ func (h *hub) snapshot(topic Topic) []*client {
 	return clients
 }
 
-func (h *hub) removeLocked(c *client) bool {
+func (h *hub) removeLocked(c *client) {
 	if c == nil || !c.active {
-		return false
+		return
 	}
 	delete(h.clients, c)
 	delete(h.bySend, c.sendCh)
 	c.active = false
-	return true
 }
 
 func (c *client) callDrop(reason string) {

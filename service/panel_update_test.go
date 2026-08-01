@@ -339,7 +339,11 @@ func TestApplyRejectsUpdateLockedByAnotherProcess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer first.release()
+	t.Cleanup(func() {
+		if err := first.release(); err != nil {
+			t.Errorf("release process lock: %v", err)
+		}
+	})
 
 	oldDeps := newPanelUpdateDeps
 	newPanelUpdateDeps = func() panelUpdateDeps { return panelUpdateDeps{execPath: execPath} }
@@ -781,7 +785,11 @@ func TestPendingRecoveryAndConfirmationRespectProcessLock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer lock.release()
+	t.Cleanup(func() {
+		if err := lock.release(); err != nil {
+			t.Errorf("release process lock: %v", err)
+		}
+	})
 
 	if _, err := RecoverPendingUpdate(execPath); !errors.Is(err, errUpdateInProgress) {
 		t.Fatalf("recovery lock error = %v, want %v", err, errUpdateInProgress)
