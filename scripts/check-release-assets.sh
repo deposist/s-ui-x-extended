@@ -52,7 +52,8 @@ if ((${#local_path[@]} == 0)); then
     exit 1
 fi
 
-release_id=$(gh api "repos/$repository/releases/tags/$tag" --jq '.id')
+release_id=$(gh api --paginate --slurp "repos/$repository/releases?per_page=100" |
+    jq -cer --arg tag "$tag" 'add | map(select(.tag_name == $tag)) | if length == 1 then .[0].id else error("expected exactly one release for " + $tag) end')
 [[ $release_id =~ ^[0-9]+$ ]] || { echo "release for $tag has no valid id" >&2; exit 1; }
 
 fetch_remote_assets() {
