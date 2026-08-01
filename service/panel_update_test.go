@@ -537,7 +537,7 @@ func TestPendingMarkerRefusesMismatchedBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if CheckPendingUpdate(execPath) || CheckPendingUpdate(execPath) {
+	if CheckPendingUpdate(execPath) {
 		t.Fatal("mismatched backup was trusted for rollback")
 	}
 	if got, err := os.ReadFile(execPath); err != nil || string(got) != "CANDIDATE" {

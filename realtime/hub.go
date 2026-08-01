@@ -199,15 +199,6 @@ func (h *hub) removeLocked(c *client) bool {
 	return true
 }
 
-func (h *hub) drop(c *client, reason string) {
-	h.mu.Lock()
-	ok := h.removeLocked(c)
-	h.mu.Unlock()
-	if ok {
-		c.callDrop(reason)
-	}
-}
-
 func (c *client) callDrop(reason string) {
 	if c.onDrop != nil {
 		c.onDrop(reason)

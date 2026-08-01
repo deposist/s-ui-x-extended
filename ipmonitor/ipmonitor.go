@@ -880,13 +880,6 @@ type activeEnforceCacheRow struct {
 	IPHash      sql.NullString
 }
 
-func loadPolicyEntries(db *gorm.DB, now time.Time) (map[string]allowCacheEntry, error) {
-	pending.Lock()
-	generation := pending.generation
-	pending.Unlock()
-	return loadPolicyEntriesContext(context.Background(), db, now, generation)
-}
-
 func loadPolicyEntriesContext(ctx context.Context, db *gorm.DB, now time.Time, generation uint64) (map[string]allowCacheEntry, error) {
 	ctx, cancel := boundedDatabaseContext(ctx)
 	defer cancel()
@@ -1011,15 +1004,6 @@ func boundedDatabaseContext(ctx context.Context) (context.Context, context.Cance
 	return context.WithTimeout(ctx, databaseReadTimeout)
 }
 
-func recordIPFields(ip string) (string, *string, bool) {
-	lifecycleGate.RLock()
-	defer lifecycleGate.RUnlock()
-	pending.Lock()
-	generation := pending.generation
-	pending.Unlock()
-	return recordIPFieldsContext(context.Background(), ip, generation)
-}
-
 func recordIPFieldsContext(ctx context.Context, ip string, generation uint64) (string, *string, bool) {
 	ipHash, err := hashIPContext(ctx, ip, generation)
 	if err != nil {
@@ -1054,15 +1038,6 @@ func hashIPContext(ctx context.Context, ip string, generation uint64) (string, e
 	_, _ = h.Write(salt)
 	_, _ = h.Write([]byte(ip))
 	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-func getInstallSalt() ([]byte, error) {
-	lifecycleGate.RLock()
-	defer lifecycleGate.RUnlock()
-	pending.Lock()
-	generation := pending.generation
-	pending.Unlock()
-	return getInstallSaltContext(context.Background(), generation)
 }
 
 func getInstallSaltContext(ctx context.Context, generation uint64) ([]byte, error) {
