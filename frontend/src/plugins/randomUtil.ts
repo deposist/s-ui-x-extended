@@ -1,22 +1,39 @@
+const UINT64_SAMPLE_SPACE = 1n << 64n
+
+const normalizeBounds = (min: number, max: number): [number, number] => {
+  // Invalid lower/upper bounds deliberately expand to the corresponding safe-integer endpoint.
+  const normalizedMin = Number.isSafeInteger(min) ? min : Number.MIN_SAFE_INTEGER
+  const normalizedMax = Number.isSafeInteger(max) ? max : Number.MAX_SAFE_INTEGER
+
+  return normalizedMin <= normalizedMax
+    ? [normalizedMin, normalizedMax]
+    : [normalizedMax, normalizedMin]
+}
+
+const randomUint64 = (): bigint => {
+  const words = new Uint32Array(2)
+  window.crypto.getRandomValues(words)
+  return (BigInt(words[0]) << 32n) | BigInt(words[1])
+}
+
 const seq = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 
 const RandomUtil = {
   randomIntRange(min: number, max: number): number {
-    if (!Number.isSafeInteger(min)){
-      return this.randomIntRange(Number.MIN_SAFE_INTEGER, max)
+    const [lower, upper] = normalizeBounds(min, max)
+    if (lower === upper) {
+      return lower
     }
-    if (!Number.isSafeInteger(max)){
-      return this.randomIntRange(min, Number.MAX_SAFE_INTEGER)
-    }
-    if (max < min) {
-      return this.randomIntRange(max, min)
-    }
-    const array = new Uint32Array(2);
-    window.crypto.getRandomValues(array);
-    const highbits = array[0]
-    const lowbits = array[1] >>> 11
-    const random = (highbits * 2 ** 21 + lowbits) / (Number.MAX_SAFE_INTEGER + 1)
-    return Math.floor(random * (max - min + 1) + min)
+
+    const range = BigInt(upper) - BigInt(lower) + 1n
+    const rejectionLimit = UINT64_SAMPLE_SPACE - (UINT64_SAMPLE_SPACE % range)
+
+    let sample: bigint
+    do {
+      sample = randomUint64()
+    } while (sample >= rejectionLimit)
+
+    return Number(BigInt(lower) + (sample % range))
   },
   randomInt(n: number) {
     return this.randomIntRange(0, n)
@@ -27,7 +44,7 @@ const RandomUtil = {
     }
     let str = ''
     for (let i = 0; i < count; ++i) {
-        str += seq[this.randomInt(62)]
+        str += seq[this.randomInt(seq.length - 1)]
     }
     return str
   },
@@ -37,7 +54,7 @@ const RandomUtil = {
     }
     let str = ''
     for (let i = 0; i < count; ++i) {
-        str += seq[this.randomInt(36)]
+        str += seq[this.randomInt(35)]
     }
     return str
   },
@@ -64,7 +81,7 @@ const RandomUtil = {
     let shortIds = new Array(24).fill('')
     for (var ii = 1; ii < 24; ii++) {
       for (var jj = 0; jj <= this.randomInt(7); jj++){
-          let randomNum = this.randomInt(256)
+          let randomNum = this.randomInt(255)
           shortIds[ii] += ('0' + randomNum.toString(16)).slice(-2)
       }
   }

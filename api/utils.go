@@ -110,13 +110,6 @@ func resolveCookieSecure(c *gin.Context, settingService *service.SettingService)
 			logger.Warning("unable to get webURI:", err)
 		}
 
-		if webDomain, err := settingService.GetWebDomain(); err == nil {
-			if strings.HasPrefix(strings.ToLower(strings.TrimSpace(webDomain)), "https://") {
-				return true
-			}
-		} else {
-			logger.Warning("unable to get webDomain:", err)
-		}
 	}
 	return RequestIsHTTPS(c)
 }

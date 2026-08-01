@@ -2,6 +2,7 @@ package ipmonitor
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,6 +22,9 @@ func initIPMonitorTestDB(t *testing.T) {
 	t.Helper()
 	pending.Lock()
 	pending.byClient = map[string]map[string]pendingIP{}
+	pending.inFlight = map[*PendingSnapshot]struct{}{}
+	pending.clientLifecycle = map[string]clientLifecycle{}
+	pending.generation++
 	pending.Unlock()
 	allowCache.Lock()
 	allowCache.byClient = map[string]allowCacheEntry{}
@@ -30,10 +34,12 @@ func initIPMonitorTestDB(t *testing.T) {
 	securityEvents.Unlock()
 	ipHashSalt.Lock()
 	ipHashSalt.value = nil
+	ipHashSalt.generation = 0
 	ipHashSalt.Unlock()
 	ipPrivacySettings.Lock()
 	ipPrivacySettings.showRaw = false
 	ipPrivacySettings.expiresAt = time.Time{}
+	ipPrivacySettings.generation = 0
 	ipPrivacySettings.Unlock()
 	realtime.CloseAll("test_reset")
 	tempDir := makeIPMonitorTempDir(t, "s-ui-ipmonitor-test-")
@@ -488,6 +494,9 @@ func TestAllowConcurrentCacheMissPerformsOneRefresh(t *testing.T) {
 	}
 	ipHashSalt.Lock()
 	ipHashSalt.value = []byte("test-salt")
+	pending.Lock()
+	ipHashSalt.generation = pending.generation
+	pending.Unlock()
 	ipHashSalt.Unlock()
 	queryCounter := &countingGormLogger{}
 	database.GetDB().Config.Logger = queryCounter
@@ -495,10 +504,10 @@ func TestAllowConcurrentCacheMissPerformsOneRefresh(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
 	var once sync.Once
-	loadCacheEntryForAllow = func(clientName string, now time.Time) (allowCacheEntry, bool) {
+	loadCacheEntryForAllow = func(ctx context.Context, clientName string, now time.Time) (allowCacheEntry, bool) {
 		once.Do(func() { close(started) })
 		<-release
-		return oldLoad(clientName, now)
+		return oldLoad(ctx, clientName, now)
 	}
 	t.Cleanup(func() { loadCacheEntryForAllow = oldLoad })
 
@@ -520,6 +529,165 @@ func TestAllowConcurrentCacheMissPerformsOneRefresh(t *testing.T) {
 	wg.Wait()
 	if got := queryCounter.Count(); got != 2 {
 		t.Fatalf("concurrent miss ran %d DB queries, want one two-query refresh", got)
+	}
+}
+
+func TestObserveAndAllowConcurrentFirstIPsReservesLimit(t *testing.T) {
+	initIPMonitorTestDB(t)
+	if err := database.GetDB().Create(&model.Client{
+		Enable: true, Name: "alice", LimitIP: 1, IPLimitMode: ModeEnforce,
+		Inbounds: []byte("[]"), Links: []byte("[]"),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	warmUpIPMonitorForTest(t)
+
+	const workers = 32
+	start := make(chan struct{})
+	var allowed atomic.Int64
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			if ObserveAndAllow("alice", fmt.Sprintf("198.51.100.%d", i+1)) {
+				allowed.Add(1)
+			}
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+
+	if got := allowed.Load(); got != 1 {
+		t.Fatalf("concurrent first observations allowed %d IPs; want exactly 1", got)
+	}
+	pending.Lock()
+	reserved := len(pending.byClient["alice"])
+	pending.Unlock()
+	if reserved != 1 {
+		t.Fatalf("concurrent first observations reserved %d IPs; want 1", reserved)
+	}
+}
+
+func TestAllowRefreshCannotPublishAcrossInvalidation(t *testing.T) {
+	initIPMonitorTestDB(t)
+	ipHashSalt.Lock()
+	ipHashSalt.value = []byte("test-salt")
+	pending.Lock()
+	ipHashSalt.generation = pending.generation
+	pending.Unlock()
+	ipHashSalt.Unlock()
+	oldLoad := loadCacheEntryForAllow
+	started := make(chan struct{})
+	release := make(chan struct{})
+	loadCacheEntryForAllow = func(context.Context, string, time.Time) (allowCacheEntry, bool) {
+		close(started)
+		<-release
+		return allowCacheEntry{mode: ModeMonitor, limit: 1, ips: map[string]struct{}{}, expiresAt: time.Now().Add(time.Minute)}, true
+	}
+	t.Cleanup(func() { loadCacheEntryForAllow = oldLoad })
+
+	result := make(chan bool, 1)
+	go func() { result <- Allow("alice", "198.51.100.10") }()
+	<-started
+	invalidateCache("alice")
+	close(release)
+
+	if <-result {
+		t.Fatal("refresh result from before invalidation was used for admission")
+	}
+	allowCache.Lock()
+	_, published := allowCache.byClient["alice"]
+	allowCache.Unlock()
+	if published {
+		t.Fatal("refresh result from before invalidation repopulated cache")
+	}
+}
+
+func TestAllowContextCancellationUnblocksRefreshWaiter(t *testing.T) {
+	initIPMonitorTestDB(t)
+	ipHashSalt.Lock()
+	ipHashSalt.value = []byte("test-salt")
+	pending.Lock()
+	ipHashSalt.generation = pending.generation
+	pending.Unlock()
+	ipHashSalt.Unlock()
+	oldLoad := loadCacheEntryForAllow
+	started := make(chan struct{})
+	release := make(chan struct{})
+	loadCacheEntryForAllow = func(context.Context, string, time.Time) (allowCacheEntry, bool) {
+		close(started)
+		<-release
+		return allowCacheEntry{mode: ModeMonitor, expiresAt: time.Now().Add(time.Minute)}, true
+	}
+	t.Cleanup(func() { loadCacheEntryForAllow = oldLoad })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan bool, 1)
+	go func() { result <- AllowContext(ctx, "alice", "198.51.100.10") }()
+	<-started
+	cancel()
+	select {
+	case allowed := <-result:
+		if allowed {
+			t.Fatal("canceled refresh waiter was allowed")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("canceled refresh waiter remained blocked")
+	}
+	close(release)
+}
+
+func TestDetachedSnapshotKeepsAdmissionReservationUntilAck(t *testing.T) {
+	initIPMonitorTestDB(t)
+	if err := database.GetDB().Create(&model.Client{
+		Enable: true, Name: "alice", LimitIP: 1, IPLimitMode: ModeEnforce,
+		Inbounds: []byte("[]"), Links: []byte("[]"),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	warmUpIPMonitorForTest(t)
+	if !ObserveAndAllow("alice", "198.51.100.10") {
+		t.Fatal("first IP was rejected")
+	}
+	snapshot := SnapshotPending()
+	invalidateCache("alice")
+	if ObserveAndAllow("alice", "198.51.100.11") {
+		t.Fatal("detached uncommitted snapshot released the reserved IP slot")
+	}
+	snapshot.Requeue()
+}
+
+func TestAllowDoesNotUseSingleflightResultAfterInvalidation(t *testing.T) {
+	initIPMonitorTestDB(t)
+	ipHashSalt.Lock()
+	ipHashSalt.value = []byte("test-salt")
+	pending.Lock()
+	ipHashSalt.generation = pending.generation
+	pending.Unlock()
+	ipHashSalt.Unlock()
+	oldLoad := loadCacheEntryForAllow
+	started := make(chan struct{})
+	release := make(chan struct{})
+	loadCacheEntryForAllow = func(context.Context, string, time.Time) (allowCacheEntry, bool) {
+		close(started)
+		<-release
+		return allowCacheEntry{mode: ModeMonitor, limit: 1, ips: map[string]struct{}{}, expiresAt: time.Now().Add(time.Minute)}, true
+	}
+	t.Cleanup(func() { loadCacheEntryForAllow = oldLoad })
+
+	first := make(chan bool, 1)
+	go func() { first <- Allow("alice", "198.51.100.10") }()
+	<-started
+	allowCache.Lock()
+	allowCache.revision++
+	close(release)
+	time.Sleep(20 * time.Millisecond)
+	delete(allowCache.byClient, "alice")
+	allowCache.Unlock()
+	if <-first {
+		t.Fatal("caller used refresh result after its revision was invalidated")
 	}
 }
 
@@ -676,6 +844,181 @@ func warmUpIPMonitorForTest(t *testing.T) {
 	t.Helper()
 	if err := WarmUp(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestSnapshotPendingAtomicallyMovesToInFlight(t *testing.T) {
+	initIPMonitorTestDB(t)
+	Record("alice", "198.51.100.10")
+	snapshot := SnapshotPending()
+	defer snapshot.Requeue()
+
+	pending.Lock()
+	_, pendingVisible := pending.byClient["alice"]
+	_, inFlightVisible := pending.inFlight[snapshot]
+	pending.Unlock()
+	if pendingVisible || !inFlightVisible {
+		t.Fatalf("snapshot transition was not atomic: pending=%v inFlight=%v", pendingVisible, inFlightVisible)
+	}
+}
+
+func TestClearDropsPendingAndDetachedSnapshot(t *testing.T) {
+	initIPMonitorTestDB(t)
+	if err := database.GetDB().Create(&model.Client{
+		Enable: true, Name: "alice", IPLimitMode: ModeMonitor,
+		Inbounds: []byte("[]"), Links: []byte("[]"),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	Record("alice", "198.51.100.10")
+	snapshot := SnapshotPending()
+	Record("alice", "198.51.100.11")
+	if err := Clear("alice"); err != nil {
+		t.Fatal(err)
+	}
+	snapshot.Requeue()
+	if err := Flush(); err != nil {
+		t.Fatal(err)
+	}
+	var count int64
+	if err := database.GetDB().Model(&model.ClientIP{}).Where("client_name = ?", "alice").Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("cleared observations were resurrected: %d rows", count)
+	}
+}
+
+func TestResetInvalidatesDetachedSnapshot(t *testing.T) {
+	initIPMonitorTestDB(t)
+	Record("alice", "198.51.100.10")
+	snapshot := SnapshotPending()
+	ResetCaches()
+	snapshot.Requeue()
+	pending.Lock()
+	pendingCount := len(pending.byClient)
+	inFlightCount := len(pending.inFlight)
+	pending.Unlock()
+	if pendingCount != 0 || inFlightCount != 0 {
+		t.Fatalf("reset snapshot resurrected state: pending=%d inFlight=%d", pendingCount, inFlightCount)
+	}
+}
+
+func TestPendingSnapshotAckRequeueOneTerminalOutcome(t *testing.T) {
+	initIPMonitorTestDB(t)
+	Record("alice", "198.51.100.10")
+	snapshot := SnapshotPending()
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); <-start; snapshot.Ack() }()
+	go func() { defer wg.Done(); <-start; snapshot.Requeue() }()
+	close(start)
+	wg.Wait()
+
+	pending.Lock()
+	_, tracked := pending.inFlight[snapshot]
+	pendingRows := len(pending.byClient["alice"])
+	pending.Unlock()
+	if tracked || pendingRows > 1 {
+		t.Fatalf("snapshot had multiple terminal effects: tracked=%v pendingRows=%d", tracked, pendingRows)
+	}
+}
+
+func TestAllowLoaderPanicFailsClosed(t *testing.T) {
+	initIPMonitorTestDB(t)
+	oldLoad := loadCacheEntryForAllow
+	loadCacheEntryForAllow = func(context.Context, string, time.Time) (allowCacheEntry, bool) {
+		panic("loader failure")
+	}
+	t.Cleanup(func() { loadCacheEntryForAllow = oldLoad })
+	if Allow("alice", "198.51.100.10") {
+		t.Fatal("loader panic allowed admission")
+	}
+}
+
+func TestPackageFlushToAcknowledgesAfterCommit(t *testing.T) {
+	initIPMonitorTestDB(t)
+	if err := database.GetDB().Create(&model.Client{
+		Enable: true, Name: "alice", IPLimitMode: ModeMonitor,
+		Inbounds: []byte("[]"), Links: []byte("[]"),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	Record("alice", "198.51.100.10")
+	tx := database.GetDB().Begin()
+	if err := FlushTo(tx); err != nil {
+		t.Fatal(err)
+	}
+	pending.Lock()
+	inFlightBeforeCommit := len(pending.inFlight)
+	pending.Unlock()
+	if inFlightBeforeCommit != 1 {
+		t.Fatalf("snapshot acknowledged before commit: inFlight=%d", inFlightBeforeCommit)
+	}
+	if err := tx.Commit().Error; err != nil {
+		t.Fatal(err)
+	}
+	pending.Lock()
+	inFlightAfterCommit := len(pending.inFlight)
+	pending.Unlock()
+	if inFlightAfterCommit != 0 {
+		t.Fatalf("snapshot remained in flight after commit: %d", inFlightAfterCommit)
+	}
+}
+
+func TestWarmUpCannotPublishAcrossInvalidation(t *testing.T) {
+	initIPMonitorTestDB(t)
+	oldLoad := loadPolicyEntriesForWarmUp
+	started := make(chan struct{})
+	release := make(chan struct{})
+	loadPolicyEntriesForWarmUp = func(context.Context, *gorm.DB, time.Time, uint64) (map[string]allowCacheEntry, error) {
+		close(started)
+		<-release
+		return map[string]allowCacheEntry{
+			"alice": {mode: ModeMonitor, ips: map[string]struct{}{}, expiresAt: time.Now().Add(time.Minute)},
+		}, nil
+	}
+	t.Cleanup(func() { loadPolicyEntriesForWarmUp = oldLoad })
+
+	done := make(chan error, 1)
+	go func() { done <- WarmUp() }()
+	<-started
+	InvalidateAllCache()
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	allowCache.Lock()
+	_, published := allowCache.byClient["alice"]
+	allowCache.Unlock()
+	if published {
+		t.Fatal("WarmUp published entries loaded before invalidation")
+	}
+}
+
+func TestPackageFlushToRollbackRequeues(t *testing.T) {
+	initIPMonitorTestDB(t)
+	if err := database.GetDB().Create(&model.Client{
+		Enable: true, Name: "alice", IPLimitMode: ModeMonitor,
+		Inbounds: []byte("[]"), Links: []byte("[]"),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	Record("alice", "198.51.100.10")
+	tx := database.GetDB().Begin()
+	if err := FlushTo(tx); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Rollback().Error; err != nil {
+		t.Fatal(err)
+	}
+	pending.Lock()
+	queued := len(pending.byClient["alice"])
+	inFlight := len(pending.inFlight)
+	pending.Unlock()
+	if queued != 1 || inFlight != 0 {
+		t.Fatalf("rollback lifecycle mismatch: queued=%d inFlight=%d", queued, inFlight)
 	}
 }
 

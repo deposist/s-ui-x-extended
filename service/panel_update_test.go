@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -14,6 +15,11 @@ import (
 	"testing"
 	"time"
 )
+
+func TestMain(m *testing.M) {
+	PanelUpdateDatabaseSnapshot = func() (string, string, error) { return "", "", nil }
+	os.Exit(m.Run())
+}
 
 func makeTarGz(t *testing.T, suiContent []byte) []byte {
 	t.Helper()
@@ -86,7 +92,7 @@ func TestApplyPipelineRequiresSignedManifestBindingArtifact(t *testing.T) {
 	target.AssetURL = server.URL + "/asset"
 	target.ChecksumURL = server.URL + "/checksum"
 	deps := panelUpdateDeps{client: server.Client(), execPath: execPath}
-	if _, err := applyPipeline(target, deps, func(UpdateStage) {}); err != nil {
+	if _, err := applyPipeline(context.Background(), target, deps, func(UpdateStage) {}); err != nil {
 		t.Fatalf("signed update failed: %v", err)
 	}
 	if got, _ := os.ReadFile(execPath); !bytes.Equal(got, []byte("NEW-BINARY")) {
@@ -129,7 +135,7 @@ func TestApplyPipelineRejectsTamperedSignedReleaseInputs(t *testing.T) {
 			server := httptest.NewTLSServer(mux)
 			defer server.Close()
 			target.AssetURL, target.ChecksumURL = server.URL+"/asset", server.URL+"/checksum"
-			_, err := applyPipeline(target, panelUpdateDeps{client: server.Client(), execPath: execPath}, func(UpdateStage) {})
+			_, err := applyPipeline(context.Background(), target, panelUpdateDeps{client: server.Client(), execPath: execPath}, func(UpdateStage) {})
 			if err == nil {
 				t.Fatal("tampered signed release was accepted")
 			}
@@ -158,7 +164,7 @@ func TestDownloadToFileEnforcesExactLimit(t *testing.T) {
 			}))
 			defer server.Close()
 			dest := filepath.Join(t.TempDir(), "artifact")
-			err := downloadToFileLimit(server.Client(), server.URL, dest, limit)
+			err := downloadToFileLimit(context.Background(), server.Client(), server.URL, dest, limit)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("download error = %v, want %v", err, tt.wantErr)
 			}
@@ -182,7 +188,7 @@ func TestDownloadChecksumRejectsOversize(t *testing.T) {
 		_, _ = w.Write(bytes.Repeat([]byte("a"), int(limit+1)))
 	}))
 	defer server.Close()
-	if _, err := downloadChecksumLimit(server.Client(), server.URL, limit); !errors.Is(err, errChecksumTooLarge) {
+	if _, err := downloadChecksumLimit(context.Background(), server.Client(), server.URL, limit); !errors.Is(err, errChecksumTooLarge) {
 		t.Fatalf("checksum error = %v, want %v", err, errChecksumTooLarge)
 	}
 }
@@ -216,7 +222,7 @@ func TestApplyPipelineRejectsChecksumMismatch(t *testing.T) {
 
 	target := ReleaseTarget{Channel: "main", Platform: "amd64", AssetURL: server.URL + "/asset", ChecksumURL: server.URL + "/checksum", Version: "9.9.9"}
 	deps := panelUpdateDeps{client: server.Client(), execPath: execPath}
-	if _, err := applyPipeline(target, deps, func(UpdateStage) {}); err != errManifestInvalid {
+	if _, err := applyPipeline(context.Background(), target, deps, func(UpdateStage) {}); err != errManifestInvalid {
 		t.Fatalf("expected errManifestInvalid for checksum not bound by the manifest, got %v", err)
 	}
 	got, _ := os.ReadFile(execPath)
@@ -244,7 +250,7 @@ func TestApplyPipelineReplacesBinaryAndKeepsBackup(t *testing.T) {
 
 	target := ReleaseTarget{Channel: "main", Platform: "amd64", AssetURL: server.URL + "/asset", ChecksumURL: server.URL + "/checksum", Version: "9.9.9"}
 	deps := panelUpdateDeps{client: server.Client(), execPath: execPath}
-	if _, err := applyPipeline(target, deps, func(UpdateStage) {}); err != nil {
+	if _, err := applyPipeline(context.Background(), target, deps, func(UpdateStage) {}); err != nil {
 		t.Fatalf("apply pipeline failed: %v", err)
 	}
 	if got, _ := os.ReadFile(execPath); !bytes.Equal(got, newContent) {
@@ -252,6 +258,59 @@ func TestApplyPipelineReplacesBinaryAndKeepsBackup(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(execPath + backupSuffix); !bytes.Equal(got, oldContent) {
 		t.Fatalf("previous binary was not backed up for rollback")
+	}
+}
+
+func TestSwapBinaryRenameFailureRemovesStagedFiles(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	archive := filepath.Join(dir, "update.tar.gz")
+	if err := os.WriteFile(execPath, []byte("CURRENT"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(archive, makeTarGz(t, []byte("CANDIDATE")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	renameErr := errors.New("forced rename failure")
+	_, err := swapBinaryWithRename(archive, execPath, func(string, string) error { return renameErr })
+	if !errors.Is(err, renameErr) {
+		t.Fatalf("swap error = %v, want %v", err, renameErr)
+	}
+	if got, readErr := os.ReadFile(execPath); readErr != nil || string(got) != "CURRENT" {
+		t.Fatalf("live binary changed after failed rename: %q, %v", got, readErr)
+	}
+	for _, path := range []string{execPath + ".new", execPath + backupSuffix + ".new", execPath + backupSuffix + ".previous"} {
+		if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+			t.Fatalf("failed rename left transaction artifact %q: %v", path, statErr)
+		}
+	}
+	if _, statErr := os.Stat(execPath + backupSuffix); !os.IsNotExist(statErr) {
+		t.Fatalf("failed rename left a new transaction backup: %v", statErr)
+	}
+}
+
+func TestSwapBinaryRenameFailurePreservesPreexistingBackup(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	archive := filepath.Join(dir, "update.tar.gz")
+	if err := os.WriteFile(execPath, []byte("CURRENT"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("KNOWN-GOOD"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(archive, makeTarGz(t, []byte("CANDIDATE")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := swapBinaryWithRename(archive, execPath, func(string, string) error {
+		return errors.New("forced rename failure")
+	})
+	if err == nil {
+		t.Fatal("expected rename failure")
+	}
+	if got, readErr := os.ReadFile(execPath + backupSuffix); readErr != nil || string(got) != "KNOWN-GOOD" {
+		t.Fatalf("failed transaction consumed preexisting backup: %q, %v", got, readErr)
 	}
 }
 
@@ -265,6 +324,53 @@ func TestApplyRejectsConcurrentUpdate(t *testing.T) {
 
 	if err := (&PanelUpdateService{}).Apply(ReleaseTarget{Version: "9.9.9"}, "admin"); err != errUpdateInProgress {
 		t.Fatalf("expected errUpdateInProgress, got %v", err)
+	}
+}
+
+func TestApplyRejectsUpdateLockedByAnotherProcess(t *testing.T) {
+	resetPanelUpdateStateForTest()
+	t.Cleanup(resetPanelUpdateStateForTest)
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	if err := os.WriteFile(execPath, []byte("CURRENT"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	first, err := acquirePanelUpdateProcessLock(execPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.release()
+
+	oldDeps := newPanelUpdateDeps
+	newPanelUpdateDeps = func() panelUpdateDeps { return panelUpdateDeps{execPath: execPath} }
+	t.Cleanup(func() { newPanelUpdateDeps = oldDeps })
+
+	if err := (&PanelUpdateService{}).Apply(ReleaseTarget{Version: "9.9.9"}, "admin"); !errors.Is(err, errUpdateInProgress) {
+		t.Fatalf("Apply with process lock error = %v, want %v", err, errUpdateInProgress)
+	}
+	if (&PanelUpdateService{}).InProgress() {
+		t.Fatal("rejected process-locked update left in-memory guard active")
+	}
+}
+
+func TestApplyRejectsUnresolvedUpdateTransaction(t *testing.T) {
+	resetPanelUpdateStateForTest()
+	t.Cleanup(resetPanelUpdateStateForTest)
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	if err := os.WriteFile(execPath+pendingSuffix, []byte("1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	oldDeps := newPanelUpdateDeps
+	newPanelUpdateDeps = func() panelUpdateDeps { return panelUpdateDeps{execPath: execPath} }
+	t.Cleanup(func() { newPanelUpdateDeps = oldDeps })
+
+	err := (&PanelUpdateService{}).Apply(ReleaseTarget{Version: "9.9.9"}, "admin")
+	if !errors.Is(err, errUpdateRecoveryRequired) {
+		t.Fatalf("Apply with unresolved transaction error = %v, want %v", err, errUpdateRecoveryRequired)
+	}
+	if (&PanelUpdateService{}).InProgress() {
+		t.Fatal("rejected recovery transaction left update guard active")
 	}
 }
 
@@ -319,6 +425,129 @@ func TestCheckPendingUpdateRollsBackAfterThreshold(t *testing.T) {
 	}
 }
 
+func TestCheckPendingUpdateRollsBackWhenAttemptCannotBePersisted(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	if err := os.WriteFile(execPath, []byte("BROKEN-NEW"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("GOOD-OLD"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePendingMarker(execPath); err != nil {
+		t.Fatal(err)
+	}
+
+	if !checkPendingUpdateWithWriter(execPath, func(string, int) error { return errors.New("disk full") }) {
+		t.Fatal("marker persistence failure did not fail closed to rollback")
+	}
+	if got, err := os.ReadFile(execPath); err != nil || string(got) != "GOOD-OLD" {
+		t.Fatalf("marker persistence failure did not restore backup: %q, %v", got, err)
+	}
+}
+
+func TestRecoverPendingUpdateInvalidMarkerFailsClosed(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	if err := os.WriteFile(execPath, []byte("BROKEN-NEW"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("GOOD-OLD"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+pendingSuffix, []byte("invalid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if rolledBack, err := RecoverPendingUpdate(execPath); err == nil || rolledBack {
+		t.Fatalf("invalid marker recovery = (%t, %v), want unresolved error", rolledBack, err)
+	}
+	if got, err := os.ReadFile(execPath); err != nil || string(got) != "BROKEN-NEW" {
+		t.Fatalf("invalid marker changed live binary: %q, %v", got, err)
+	}
+}
+
+func TestPreparedPendingUpdateRollsBackAfterCrashBeforeSwapCompletion(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	if err := os.WriteFile(execPath, []byte("CANDIDATE"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("KNOWN-GOOD"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePendingMarker(execPath); err != nil {
+		t.Fatal(err)
+	}
+
+	if CheckPendingUpdate(execPath) {
+		t.Fatal("prepared transaction rolled back on its first candidate boot")
+	}
+	if !CheckPendingUpdate(execPath) {
+		t.Fatal("prepared transaction did not roll back after repeated candidate boot")
+	}
+	if got, err := os.ReadFile(execPath); err != nil || string(got) != "KNOWN-GOOD" {
+		t.Fatalf("crash recovery did not restore known-good binary: %q, %v", got, err)
+	}
+}
+
+func TestPreparedTransactionWithUnswappedBinaryCleansUpWithoutRollback(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	newPath := execPath + ".new"
+	if err := os.WriteFile(execPath, []byte("KNOWN-GOOD"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("KNOWN-GOOD"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(newPath, []byte("CANDIDATE"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePendingMarkerForCandidate(execPath, newPath); err != nil {
+		t.Fatal(err)
+	}
+
+	if CheckPendingUpdate(execPath) {
+		t.Fatal("unswapped prepared transaction reported rollback")
+	}
+	if got, err := os.ReadFile(execPath); err != nil || string(got) != "KNOWN-GOOD" {
+		t.Fatalf("unswapped transaction changed live binary: %q, %v", got, err)
+	}
+	for _, path := range []string{execPath + pendingSuffix, execPath + backupSuffix} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("unswapped transaction left recovery artifact %q: %v", path, err)
+		}
+	}
+}
+
+func TestPendingMarkerRefusesMismatchedBackup(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	if err := os.WriteFile(execPath, []byte("CANDIDATE"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("KNOWN-GOOD"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePendingMarker(execPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("UNRELATED"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if CheckPendingUpdate(execPath) || CheckPendingUpdate(execPath) {
+		t.Fatal("mismatched backup was trusted for rollback")
+	}
+	if got, err := os.ReadFile(execPath); err != nil || string(got) != "CANDIDATE" {
+		t.Fatalf("mismatched backup replaced live binary: %q, %v", got, err)
+	}
+	if _, err := os.Stat(execPath + pendingSuffix); err != nil {
+		t.Fatalf("unresolved identity marker was removed: %v", err)
+	}
+}
+
 func TestFailedUpdateBeforeSwapDoesNotRestorePreviousBackup(t *testing.T) {
 	resetPanelUpdateStateForTest()
 	t.Cleanup(resetPanelUpdateStateForTest)
@@ -352,10 +581,16 @@ func TestMarkerWriteFailureRestoresCurrentTransactionBackup(t *testing.T) {
 	if err := os.WriteFile(execPath+backupSuffix, []byte("STALE-A"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Mkdir(execPath+pendingSuffix, 0o700); err != nil {
+	markerBlocker := execPath + pendingSuffix + ".blocker"
+	if err := os.Mkdir(markerBlocker, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(execPath + pendingSuffix) })
+	oldWriter := panelUpdateMarkerWriter
+	panelUpdateMarkerWriter = func(string, string) error { return errors.New("forced marker failure") }
+	t.Cleanup(func() {
+		panelUpdateMarkerWriter = oldWriter
+		_ = os.RemoveAll(markerBlocker)
+	})
 
 	tarball := makeTarGz(t, []byte("CANDIDATE-C"))
 	server := artifactServer(t, tarball, checksumHex(tarball))
@@ -384,8 +619,35 @@ func TestMarkerWriteFailureRestoresCurrentTransactionBackup(t *testing.T) {
 	if got, _ := os.ReadFile(execPath); string(got) != "CURRENT-B" {
 		t.Fatalf("marker failure restored wrong binary, got %q", got)
 	}
-	if _, err := os.Stat(execPath + backupSuffix); !os.IsNotExist(err) {
-		t.Fatalf("current transaction backup was not consumed: %v", err)
+	if got, readErr := os.ReadFile(execPath + backupSuffix); readErr != nil || string(got) != "STALE-A" {
+		t.Fatalf("marker failure did not restore preexisting backup: %q, %v", got, readErr)
+	}
+}
+
+func TestPostRenameSyncFailureReportsSwapForRollback(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	if err := os.WriteFile(execPath, []byte("CURRENT-B"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tarball := makeTarGz(t, []byte("CANDIDATE-C"))
+	server := artifactServer(t, tarball, checksumHex(tarball))
+	target := ReleaseTarget{Channel: "main", Version: "9.9.9", Platform: "amd64", AssetURL: server.URL + "/asset", ChecksumURL: server.URL + "/checksum"}
+
+	oldSync := panelUpdatePostSwapSync
+	panelUpdatePostSwapSync = func(string) error { return errors.New("forced directory sync failure") }
+	t.Cleanup(func() { panelUpdatePostSwapSync = oldSync })
+
+	swapped, err := applyPipeline(context.Background(), target, panelUpdateDeps{client: server.Client(), execPath: execPath}, func(UpdateStage) {})
+	if err == nil || !swapped {
+		t.Fatalf("post-rename failure = swapped %t, err %v; want swapped=true with error", swapped, err)
+	}
+	oldSink := panelUpdateAuditSink
+	panelUpdateAuditSink = func(UpdateJob, string, string) {}
+	t.Cleanup(func() { panelUpdateAuditSink = oldSink })
+	(&PanelUpdateService{}).fail(err, execPath, swapped)
+	if got, readErr := os.ReadFile(execPath); readErr != nil || string(got) != "CURRENT-B" {
+		t.Fatalf("post-rename failure did not restore current binary: %q, %v", got, readErr)
 	}
 }
 
@@ -404,7 +666,7 @@ func TestPostSwapFailureRestoresCurrentTransactionBackup(t *testing.T) {
 	server := artifactServer(t, tarball, checksumHex(tarball))
 	target := ReleaseTarget{Channel: "main", Version: "9.9.9", Platform: "amd64", AssetURL: server.URL + "/asset", ChecksumURL: server.URL + "/checksum"}
 
-	swapped, err := applyPipeline(target, panelUpdateDeps{client: server.Client(), execPath: execPath}, func(UpdateStage) {})
+	swapped, err := applyPipeline(context.Background(), target, panelUpdateDeps{client: server.Client(), execPath: execPath}, func(UpdateStage) {})
 	if err != nil || !swapped {
 		t.Fatalf("apply pipeline did not report its binary swap: swapped=%t err=%v", swapped, err)
 	}
@@ -421,22 +683,325 @@ func TestPostSwapFailureRestoresCurrentTransactionBackup(t *testing.T) {
 	}
 }
 
-func TestClearPendingUpdateRemovesMarkerAndBackup(t *testing.T) {
+type blockingUpdateHTTPDoer struct {
+	started chan struct{}
+}
+
+func (d *blockingUpdateHTTPDoer) Do(req *http.Request) (*http.Response, error) {
+	select {
+	case <-d.started:
+	default:
+		close(d.started)
+	}
+	<-req.Context().Done()
+	return nil, req.Context().Err()
+}
+
+func TestStopPanelUpdateCancelsAndWaitsForActiveDownload(t *testing.T) {
+	resetPanelUpdateStateForTest()
+	t.Cleanup(resetPanelUpdateStateForTest)
 	dir := t.TempDir()
 	execPath := filepath.Join(dir, "sui")
-	if err := os.WriteFile(execPath+pendingSuffix, []byte("0"), 0o600); err != nil {
+	if err := os.WriteFile(execPath, []byte("CURRENT"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	doer := &blockingUpdateHTTPDoer{started: make(chan struct{})}
+	oldDeps := newPanelUpdateDeps
+	newPanelUpdateDeps = func() panelUpdateDeps { return panelUpdateDeps{client: doer, execPath: execPath} }
+	t.Cleanup(func() { newPanelUpdateDeps = oldDeps })
+	oldSink := panelUpdateAuditSink
+	panelUpdateAuditSink = func(UpdateJob, string, string) {}
+	t.Cleanup(func() { panelUpdateAuditSink = oldSink })
+
+	target := ReleaseTarget{Channel: "main", Version: "9.9.9", Platform: "amd64", AssetURL: "https://example.invalid/asset", ChecksumURL: "https://example.invalid/checksum"}
+	if err := (&PanelUpdateService{}).Apply(target, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-doer.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("update download did not start")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := StopPanelUpdate(ctx); err != nil {
+		t.Fatalf("StopPanelUpdate: %v", err)
+	}
+	if (&PanelUpdateService{}).InProgress() {
+		t.Fatal("cancelled update still active after StopPanelUpdate returned")
+	}
+	if _, err := os.Stat(execPath + panelUpdateLockSuffix); err != nil {
+		t.Fatalf("process lock file should remain reusable after unlock: %v", err)
+	}
+}
+
+func TestConfirmPendingUpdateRemovesMarkerAndBackup(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	if err := os.WriteFile(execPath, []byte("NEW"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(execPath+backupSuffix, []byte("OLD"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if err := writePendingMarker(execPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := markPendingUpdateApplied(execPath); err != nil {
+		t.Fatal(err)
+	}
 
-	ClearPendingUpdate(execPath)
+	if err := MarkPendingUpdateBooting(execPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := ConfirmPendingUpdate(execPath); err != nil {
+		t.Fatal(err)
+	}
 
 	for _, path := range []string{execPath + pendingSuffix, execPath + backupSuffix} {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Fatalf("successful boot left update artifact %q: %v", path, err)
 		}
+	}
+}
+
+func TestPendingRecoveryAndConfirmationRespectProcessLock(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	if err := os.WriteFile(execPath, []byte("CANDIDATE"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("KNOWN-GOOD"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePendingMarker(execPath); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := acquirePanelUpdateProcessLock(execPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.release()
+
+	if _, err := RecoverPendingUpdate(execPath); !errors.Is(err, errUpdateInProgress) {
+		t.Fatalf("recovery lock error = %v, want %v", err, errUpdateInProgress)
+	}
+	if err := ConfirmPendingUpdate(execPath); !errors.Is(err, errUpdateInProgress) {
+		t.Fatalf("confirmation lock error = %v, want %v", err, errUpdateInProgress)
+	}
+	for _, path := range []string{execPath + pendingSuffix, execPath + backupSuffix} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("locked recovery mutated %q: %v", path, err)
+		}
+	}
+}
+
+func TestRecoverPendingUpdateReportsIdentityMismatch(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	if err := os.WriteFile(execPath, []byte("CANDIDATE"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("KNOWN-GOOD"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePendingMarker(execPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("UNRELATED"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RecoverPendingUpdate(execPath); err == nil {
+		t.Fatal("identity mismatch was treated as no pending update")
+	}
+}
+
+func TestPendingMarkerCarriesRandomTransactionAndAppliedPhase(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	if err := os.WriteFile(execPath, []byte("CANDIDATE"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("KNOWN-GOOD"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePendingMarker(execPath); err != nil {
+		t.Fatal(err)
+	}
+	marker, err := readPendingUpdateMarker(execPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(marker.TransactionID) != 32 || marker.Phase != updatePhasePrepared {
+		t.Fatalf("prepared marker = %#v", marker)
+	}
+	if err := markPendingUpdateApplied(execPath); err != nil {
+		t.Fatal(err)
+	}
+	applied, err := readPendingUpdateMarker(execPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if applied.TransactionID != marker.TransactionID || applied.Phase != updatePhaseApplied {
+		t.Fatalf("applied marker = %#v, prepared = %#v", applied, marker)
+	}
+	if err := MarkPendingUpdateBooting(execPath); err != nil {
+		t.Fatal(err)
+	}
+	booting, err := readPendingUpdateMarker(execPath)
+	if err != nil || booting.TransactionID != marker.TransactionID || booting.Phase != updatePhaseBooting {
+		t.Fatalf("booting marker = %#v, err = %v", booting, err)
+	}
+}
+
+func TestPendingRollbackRestoresDatabaseBeforeBinary(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	dbPath := filepath.Join(dir, "s-ui.db")
+	snapshotSource := filepath.Join(dir, "snapshot-source.db")
+	if err := os.WriteFile(execPath, []byte("CANDIDATE"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("KNOWN-GOOD"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dbPath, []byte("MIGRATED"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(snapshotSource, []byte("PRE-UPDATE"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	oldSnapshot, oldRestore := PanelUpdateDatabaseSnapshot, PanelUpdateDatabaseRestore
+	PanelUpdateDatabaseSnapshot = func() (string, string, error) { return snapshotSource, dbPath, nil }
+	PanelUpdateDatabaseRestore = func(snapshotPath, targetPath string) error {
+		contents, err := os.ReadFile(snapshotPath)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(targetPath, contents, 0o600)
+	}
+	t.Cleanup(func() {
+		PanelUpdateDatabaseSnapshot, PanelUpdateDatabaseRestore = oldSnapshot, oldRestore
+	})
+	if err := writePendingMarker(execPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := markPendingUpdateApplied(execPath); err != nil {
+		t.Fatal(err)
+	}
+	marker, err := readPendingUpdateMarker(execPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker.Attempts = rollbackAfterAttempts - 1
+	if err := writePendingUpdateMarker(execPath, marker); err != nil {
+		t.Fatal(err)
+	}
+	rolledBack, err := RecoverPendingUpdate(execPath)
+	if err != nil || !rolledBack {
+		t.Fatalf("recovery = (%t, %v)", rolledBack, err)
+	}
+	if got, _ := os.ReadFile(execPath); string(got) != "KNOWN-GOOD" {
+		t.Fatalf("binary rollback = %q", got)
+	}
+	if got, _ := os.ReadFile(dbPath); string(got) != "PRE-UPDATE" {
+		t.Fatalf("database rollback = %q", got)
+	}
+}
+
+func TestPendingRollbackDatabaseFailurePreservesTransaction(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	dbPath := filepath.Join(dir, "s-ui.db")
+	snapshotSource := filepath.Join(dir, "snapshot-source.db")
+	if err := os.WriteFile(execPath, []byte("CANDIDATE"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("KNOWN-GOOD"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(snapshotSource, []byte("PRE-UPDATE"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	oldSnapshot, oldRestore := PanelUpdateDatabaseSnapshot, PanelUpdateDatabaseRestore
+	PanelUpdateDatabaseSnapshot = func() (string, string, error) { return snapshotSource, dbPath, nil }
+	PanelUpdateDatabaseRestore = func(string, string) error { return errors.New("restore failed") }
+	t.Cleanup(func() {
+		PanelUpdateDatabaseSnapshot, PanelUpdateDatabaseRestore = oldSnapshot, oldRestore
+	})
+	if err := writePendingMarker(execPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := markPendingUpdateApplied(execPath); err != nil {
+		t.Fatal(err)
+	}
+	marker, err := readPendingUpdateMarker(execPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker.Attempts = rollbackAfterAttempts - 1
+	if err := writePendingUpdateMarker(execPath, marker); err != nil {
+		t.Fatal(err)
+	}
+	rolledBack, err := RecoverPendingUpdate(execPath)
+	if err == nil || rolledBack {
+		t.Fatalf("failed DB recovery = (%t, %v), want unresolved", rolledBack, err)
+	}
+	for _, path := range []string{execPath + pendingSuffix, execPath + backupSuffix, pendingDatabaseSnapshotPath(execPath, marker)} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("failed DB recovery removed %q: %v", path, err)
+		}
+	}
+	if got, _ := os.ReadFile(execPath); string(got) != "CANDIDATE" {
+		t.Fatalf("binary changed before DB recovery: %q", got)
+	}
+}
+
+func TestBootingTransactionRollsBackImmediatelyAfterMigrationFailure(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	dbPath := filepath.Join(dir, "s-ui.db")
+	snapshotSource := filepath.Join(dir, "snapshot-source.db")
+	if err := os.WriteFile(execPath, []byte("CANDIDATE"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("KNOWN-GOOD"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(snapshotSource, []byte("PRE-UPDATE"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	oldSnapshot, oldRestore := PanelUpdateDatabaseSnapshot, PanelUpdateDatabaseRestore
+	PanelUpdateDatabaseSnapshot = func() (string, string, error) { return snapshotSource, dbPath, nil }
+	PanelUpdateDatabaseRestore = func(snapshotPath, targetPath string) error {
+		contents, err := os.ReadFile(snapshotPath)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(targetPath, contents, 0o600)
+	}
+	t.Cleanup(func() { PanelUpdateDatabaseSnapshot, PanelUpdateDatabaseRestore = oldSnapshot, oldRestore })
+	if err := writePendingMarker(execPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := markPendingUpdateApplied(execPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := MarkPendingUpdateBooting(execPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dbPath, []byte("PARTIALLY-MIGRATED"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rolledBack, err := RecoverPendingUpdate(execPath)
+	if err != nil || !rolledBack {
+		t.Fatalf("booting recovery = (%t, %v), want successful rollback", rolledBack, err)
+	}
+	if got, _ := os.ReadFile(execPath); string(got) != "KNOWN-GOOD" {
+		t.Fatalf("binary rollback = %q", got)
+	}
+	if got, _ := os.ReadFile(dbPath); string(got) != "PRE-UPDATE" {
+		t.Fatalf("database rollback = %q", got)
 	}
 }
 

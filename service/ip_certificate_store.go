@@ -26,8 +26,10 @@ func sanitizeIPForFilename(ip string) string {
 	return r.Replace(strings.TrimSpace(ip))
 }
 
-// writeCertFiles persists the fullchain and private key to the managed dir and
-// returns their absolute paths. Certificate and key files are 0600, the dir 0700.
+// writeCertFiles writes a complete certificate generation into a private
+// directory before returning either path. Callers publish the returned pair
+// only after both writes succeed, so a failed key write can never expose a new
+// certificate beside an older key.
 func writeCertFiles(ip string, certPEM, keyPEM []byte) (certPath, keyPath string, err error) {
 	if len(certPEM) == 0 || len(keyPEM) == 0 {
 		return "", "", common.NewError("ip cert: empty certificate or key material")
@@ -36,15 +38,26 @@ func writeCertFiles(ip string, certPEM, keyPEM []byte) (certPath, keyPath string
 	if err = os.MkdirAll(dir, 0o700); err != nil {
 		return "", "", err
 	}
+	generationDir, err := os.MkdirTemp(dir, "generation-")
+	if err != nil {
+		return "", "", err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = os.RemoveAll(generationDir)
+		}
+	}()
 	base := "ip-" + sanitizeIPForFilename(ip)
-	certPath = filepath.Join(dir, base+".crt")
-	keyPath = filepath.Join(dir, base+".key")
+	certPath = filepath.Join(generationDir, base+".crt")
+	keyPath = filepath.Join(generationDir, base+".key")
 	if err = os.WriteFile(certPath, certPEM, 0o600); err != nil {
 		return "", "", err
 	}
 	if err = os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
 		return "", "", err
 	}
+	committed = true
 	return certPath, keyPath, nil
 }
 

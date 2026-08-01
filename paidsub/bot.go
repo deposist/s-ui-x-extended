@@ -192,7 +192,10 @@ func (b *Bot) run(ctx context.Context, done chan struct{}) {
 
 		maxID := offset
 		for i := range updates {
-			b.handleUpdate(ctx, &updates[i])
+			if err := b.handleUpdate(ctx, &updates[i]); err != nil {
+				logger.Warning("paidsub: handle update: ", err)
+				break
+			}
 			if updates[i].UpdateID >= maxID {
 				maxID = updates[i].UpdateID + 1
 			}
@@ -201,6 +204,7 @@ func (b *Bot) run(ctx context.Context, done chan struct{}) {
 			if err := b.setting.SetPaidSubUpdateOffset(maxID); err != nil {
 				logger.Warning("paidsub: persist offset: ", err)
 			}
+			offset = maxID
 		}
 	}
 }
@@ -240,17 +244,18 @@ func (b *Bot) classifyError(err error, backoff time.Duration) time.Duration {
 
 // ---- dispatch ----
 
-func (b *Bot) handleUpdate(ctx context.Context, u *tgUpdate) {
+func (b *Bot) handleUpdate(ctx context.Context, u *tgUpdate) error {
 	switch {
 	case u.PreCheckoutQuery != nil:
-		b.handlePreCheckout(ctx, u.PreCheckoutQuery)
+		return b.handlePreCheckout(ctx, u.PreCheckoutQuery)
 	case u.Message != nil && u.Message.SuccessfulPayment != nil:
-		b.handleSuccessfulPayment(ctx, u.Message)
+		return b.handleSuccessfulPayment(ctx, u.Message)
 	case u.Message != nil:
 		b.handleMessage(ctx, u.Message)
 	case u.CallbackQuery != nil:
 		b.handleCallback(ctx, u.CallbackQuery)
 	}
+	return nil
 }
 
 func (b *Bot) handleMessage(ctx context.Context, m *tgMessage) {

@@ -287,11 +287,14 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 			}
 			// ech outbounds
 			if ech, ok := tls["ech"].(map[string]interface{}); ok && asBool(ech["enabled"]) {
-				ech_config, _ := ech["config"].([]interface{})
-				ech_string := ""
-				for i := 1; i < len(ech_config)-1; i++ {
-					ech_string += asString(ech_config[i])
+				echConfig, ok := ech["config"].([]interface{})
+				var echBuilder strings.Builder
+				if ok {
+					for _, config := range echConfig {
+						echBuilder.WriteString(asString(config))
+					}
 				}
+				ech_string := echBuilder.String()
 				if ech_string != "" {
 					proxy["ech-opts"] = map[string]interface{}{
 						"enable": true,
@@ -433,9 +436,11 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 
 	// Merge proxies and proxy groups if exist
 	var output map[string]interface{}
-	err = yaml.Unmarshal([]byte(basicConfig), &output)
-	if err != nil {
-		logger.Error(err.Error())
+	if err := yaml.Unmarshal([]byte(basicConfig), &output); err != nil {
+		return "", err
+	}
+	if output == nil {
+		return "", common.NewError("clash base config must be a YAML map")
 	}
 
 	if p, ok := output["proxies"].([]interface{}); ok {

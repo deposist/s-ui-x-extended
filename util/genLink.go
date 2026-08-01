@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -361,6 +362,12 @@ func prepareTls(t *model.Tls) map[string]interface{} {
 	if err := json.Unmarshal(t.Server, &iTls); err != nil {
 		return nil
 	}
+	if oTls == nil {
+		oTls = map[string]interface{}{}
+	}
+	if iTls == nil {
+		return oTls
+	}
 
 	for k, v := range iTls {
 		switch k {
@@ -373,7 +380,7 @@ func prepareTls(t *model.Tls) map[string]interface{} {
 				continue
 			}
 			clientReality["enabled"] = reality["enabled"]
-			if shortIDs, hasSIds := reality["short_id"].([]interface{}); hasSIds && len(shortIDs) > 0 {
+			if shortIDs, hasSIDs := reality["short_id"].([]interface{}); hasSIDs && len(shortIDs) > 0 {
 				clientReality["short_id"] = shortIDs[common.RandomInt(len(shortIDs))]
 			}
 			oTls["reality"] = clientReality
@@ -382,24 +389,46 @@ func prepareTls(t *model.Tls) map[string]interface{} {
 	return oTls
 }
 
+func shareHost(host string) string {
+	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		return strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
+	}
+	return host
+}
+
+func shareURL(scheme string, user *url.Userinfo, host string, port float64, params []LinkParam, remark string) string {
+	u := &url.URL{
+		Scheme: scheme,
+		User:   user,
+		Host:   net.JoinHostPort(shareHost(host), strconv.FormatUint(uint64(port), 10)),
+	}
+	q := url.Values{}
+	for _, p := range params {
+		q.Add(p.Key, p.Value)
+	}
+	u.RawQuery = q.Encode()
+	u.Fragment = remark
+	return u.String()
+}
+
 func socksLink(userConfig map[string]interface{}, addrs []map[string]interface{}) []string {
 	var links []string
 	for _, addr := range addrs {
 		port, _ := addr["server_port"].(float64)
-		links = append(links, fmt.Sprintf("socks5://%s:%s@%s:%d", userConfig["username"], userConfig["password"], mapString(addr, "server"), uint(port)))
+		links = append(links, shareURL("socks5", url.UserPassword(mapString(userConfig, "username"), mapString(userConfig, "password")), mapString(addr, "server"), port, nil, ""))
 	}
 	return links
 }
 
 func httpLink(userConfig map[string]interface{}, addrs []map[string]interface{}) []string {
 	var links []string
-	protocol := "http"
 	for _, addr := range addrs {
+		protocol := "http"
 		if addr["tls"] != nil {
 			protocol = "https"
 		}
 		port, _ := addr["server_port"].(float64)
-		links = append(links, fmt.Sprintf("%s://%s:%s@%s:%d", protocol, userConfig["username"], userConfig["password"], mapString(addr, "server"), uint(port)))
+		links = append(links, shareURL(protocol, url.UserPassword(mapString(userConfig, "username"), mapString(userConfig, "password")), mapString(addr, "server"), port, nil, ""))
 	}
 	return links
 }
@@ -423,12 +452,12 @@ func shadowsocksLink(
 	}
 	userPass = append(userPass, pass)
 
-	uriBase := fmt.Sprintf("ss://%s", toBase64([]byte(fmt.Sprintf("%s:%s", method, strings.Join(userPass, ":")))))
+	userinfo := url.User(toBase64([]byte(fmt.Sprintf("%s:%s", method, strings.Join(userPass, ":")))))
 
 	var links []string
 	for _, addr := range addrs {
 		port, _ := addr["server_port"].(float64)
-		links = append(links, fmt.Sprintf("%s@%s:%.0f#%s", uriBase, mapString(addr, "server"), port, mapString(addr, "remark")))
+		links = append(links, shareURL("ss", userinfo, mapString(addr, "server"), port, nil, mapString(addr, "remark")))
 	}
 	return links
 }
@@ -469,8 +498,8 @@ func naiveLink(
 		}
 
 		port, _ := addr["server_port"].(float64)
-		uri := baseUri + toBase64([]byte(fmt.Sprintf("%s:%s@%s:%.0f", username, password, mapString(addr, "server"), port)))
-		links = append(links, addParams(uri, params, mapString(addr, "remark")))
+		encoded := toBase64([]byte(fmt.Sprintf("%s:%s@%s", username, password, net.JoinHostPort(shareHost(mapString(addr, "server")), strconv.FormatUint(uint64(port), 10)))))
+		links = append(links, addParams(baseUri+encoded, params, mapString(addr, "remark")))
 	}
 	return links
 }
@@ -480,7 +509,6 @@ func hysteriaLink(
 	inbound map[string]interface{},
 	addrs []map[string]interface{}) []string {
 
-	baseUri := "hysteria://"
 	var links []string
 
 	for _, addr := range addrs {
@@ -519,8 +547,7 @@ func hysteriaLink(
 		}
 
 		port, _ := addr["server_port"].(float64)
-		uri := fmt.Sprintf("%s%s:%.0f", baseUri, mapString(addr, "server"), port)
-		links = append(links, addParams(uri, params, mapString(addr, "remark")))
+		links = append(links, shareURL("hysteria", nil, mapString(addr, "server"), port, params, mapString(addr, "remark")))
 	}
 
 	return links
@@ -532,7 +559,6 @@ func hysteria2Link(
 	addrs []map[string]interface{}) []string {
 
 	password, _ := userConfig["password"].(string)
-	baseUri := fmt.Sprintf("%s%s@", "hysteria2://", password)
 	var links []string
 
 	for _, addr := range addrs {
@@ -573,8 +599,7 @@ func hysteria2Link(
 		}
 
 		port, _ := addr["server_port"].(float64)
-		uri := fmt.Sprintf("%s%s:%.0f", baseUri, mapString(addr, "server"), port)
-		links = append(links, addParams(uri, params, mapString(addr, "remark")))
+		links = append(links, shareURL("hysteria2", url.User(password), mapString(addr, "server"), port, params, mapString(addr, "remark")))
 	}
 
 	return links
@@ -585,7 +610,6 @@ func anytlsLink(
 	addrs []map[string]interface{}) []string {
 
 	password, _ := userConfig["password"].(string)
-	baseUri := fmt.Sprintf("%s%s@", "anytls://", password)
 	var links []string
 
 	for _, addr := range addrs {
@@ -595,8 +619,7 @@ func anytlsLink(
 		}
 
 		port, _ := addr["server_port"].(float64)
-		uri := fmt.Sprintf("%s%s:%.0f", baseUri, mapString(addr, "server"), port)
-		links = append(links, addParams(uri, params, mapString(addr, "remark")))
+		links = append(links, shareURL("anytls", url.User(password), mapString(addr, "server"), port, params, mapString(addr, "remark")))
 	}
 
 	return links
@@ -609,7 +632,6 @@ func tuicLink(
 
 	password, _ := userConfig["password"].(string)
 	uuid, _ := userConfig["uuid"].(string)
-	baseUri := fmt.Sprintf("%s%s:%s@", "tuic://", uuid, password)
 	udpRelayMode := tuicUDPRelayMode(inbound)
 	var links []string
 
@@ -626,8 +648,7 @@ func tuicLink(
 		}
 
 		port, _ := addr["server_port"].(float64)
-		uri := fmt.Sprintf("%s%s:%.0f", baseUri, mapString(addr, "server"), port)
-		links = append(links, addParams(uri, params, mapString(addr, "remark")))
+		links = append(links, shareURL("tuic", url.UserPassword(uuid, password), mapString(addr, "server"), port, params, mapString(addr, "remark")))
 	}
 
 	return links
@@ -693,9 +714,7 @@ func vlessLink(
 			}
 		}
 		port, _ := addr["server_port"].(float64)
-		uri := fmt.Sprintf("vless://%s@%s:%.0f", uuid, mapString(addr, "server"), port)
-		uri = addParams(uri, params, mapString(addr, "remark"))
-		links = append(links, uri)
+		links = append(links, shareURL("vless", url.User(uuid), mapString(addr, "server"), port, params, mapString(addr, "remark")))
 	}
 
 	return links
@@ -716,9 +735,7 @@ func trojanLink(
 			getTlsParams(&params, tls, "allowInsecure")
 		}
 		port, _ := addr["server_port"].(float64)
-		uri := fmt.Sprintf("trojan://%s@%s:%.0f", password, mapString(addr, "server"), port)
-		uri = addParams(uri, params, mapString(addr, "remark"))
-		links = append(links, uri)
+		links = append(links, shareURL("trojan", url.User(password), mapString(addr, "server"), port, params, mapString(addr, "remark")))
 	}
 
 	return links
@@ -818,25 +835,17 @@ func toBase64(d []byte) string {
 }
 
 func addParams(uri string, params []LinkParam, remark string) string {
-	URL, err := url.Parse(uri)
-	if err != nil || URL == nil {
-		// uri is assembled from operator-controlled inbound metadata (server addr);
-		// a stray control byte / bad escape makes url.Parse return (nil, err). Bail
-		// out instead of dereferencing nil and panicking the link-generation path.
+	parsed, err := url.Parse(uri)
+	if err != nil || parsed == nil {
 		return uri
 	}
-	var q []string
+	q := url.Values{}
 	for _, p := range params {
-		switch p.Key {
-		case "mport", "alpn":
-			q = append(q, fmt.Sprintf("%s=%s", p.Key, p.Value))
-		default:
-			q = append(q, fmt.Sprintf("%s=%s", p.Key, url.QueryEscape(p.Value)))
-		}
+		q.Add(p.Key, p.Value)
 	}
-	URL.RawQuery = strings.Join(q, "&")
-	URL.Fragment = remark
-	return URL.String()
+	parsed.RawQuery = q.Encode()
+	parsed.Fragment = remark
+	return parsed.String()
 }
 
 func getTransportParams(t interface{}) []LinkParam {

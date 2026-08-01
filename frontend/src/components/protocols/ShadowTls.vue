@@ -130,7 +130,6 @@ export default {
   computed: {
     version: {
       get() {
-        this.version = this.Inbound.version
         return this.Inbound.version
       },
       set(newValue: any) {

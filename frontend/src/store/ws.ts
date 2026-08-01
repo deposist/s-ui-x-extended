@@ -55,11 +55,14 @@ export class WsRuntime {
   private fallbackTimer: ReturnType<typeof setInterval> | null = null
   private closeCount = 0
   private connecting = false
+  private generation = 0
+  private fallbackLoadPending = false
 
   constructor(private deps: WsRuntimeDeps) {}
 
   async connect() {
     if (this.ws || this.state === 'connected' || this.connecting) return
+    const generation = this.generation
     this.connecting = true
     try {
       this.setState('reconnecting')
@@ -67,7 +70,9 @@ export class WsRuntime {
       let token: string | null
       try {
         token = await this.deps.getToken()
+        if (generation !== this.generation) return
       } catch {
+        if (generation !== this.generation) return
         this.startFallback()
         return
       }
@@ -75,6 +80,7 @@ export class WsRuntime {
         this.startFallback()
         return
       }
+      if (generation !== this.generation) return
       try {
         const ws = this.deps.createSocket(this.wsURL(), token)
         this.ws = ws
@@ -86,13 +92,14 @@ export class WsRuntime {
           this.startFallback()
         }, noOpenFallbackMs)
         ws.onopen = () => {
-          if (this.ws !== ws) return
+          if (generation !== this.generation || this.ws !== ws) return
           this.closeCount = 0
           this.clearNoOpenTimer()
           this.setState('connected')
           this.stopFallback()
         }
         ws.onmessage = (event) => {
+          if (generation !== this.generation || this.ws !== ws) return
           try {
             this.deps.onEvent?.(JSON.parse(event.data))
           } catch {
@@ -100,7 +107,7 @@ export class WsRuntime {
           }
         }
         ws.onclose = (event) => {
-          if (this.ws !== ws) return
+          if (generation !== this.generation || this.ws !== ws) return
           if (isSessionClose(event)) {
             clearCSRFToken()
           }
@@ -122,14 +129,17 @@ export class WsRuntime {
           ws.close()
         }
       } catch {
+        if (generation !== this.generation) return
         this.startFallback()
       }
     } finally {
-      this.connecting = false
+      if (generation === this.generation) this.connecting = false
     }
   }
 
   disconnect() {
+    this.generation++
+    this.connecting = false
     this.clearNoOpenTimer()
     if (this.reconnectTimer) {
       this.clearRuntimeTimeout(this.reconnectTimer)
@@ -150,7 +160,12 @@ export class WsRuntime {
     this.setState('degraded')
     if (this.fallbackTimer) return
     this.fallbackTimer = this.setRuntimeInterval(() => {
-      void this.deps.loadData()
+      if (!this.fallbackLoadPending) {
+        this.fallbackLoadPending = true
+        void Promise.resolve(this.deps.loadData()).finally(() => {
+          this.fallbackLoadPending = false
+        })
+      }
       if (this.reconnectTimer || this.ws) return
       void this.connect()
     }, fallbackPollMs)

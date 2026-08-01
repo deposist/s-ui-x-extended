@@ -20,6 +20,43 @@ REM Каталог установки
 set "INSTALL_DIR=C:\Program Files\s-ui"
 set "SERVICE_NAME=s-ui"
 
+REM WinSW v2.12.0 hashes are pinned from ScoopInstaller/Main commit
+REM 5ea81de9099ade91e1f3a69330532b4ed2b71678 bucket/winsw.json.
+REM The upstream v2.12.0 PE files are not Authenticode-signed, so there is no
+REM trusted publisher constant to pin today. Keep this empty and fail closed;
+REM service delivery can be enabled only when both this publisher and the hash
+REM are updated from an independently trusted source.
+set "WINSW_VERSION=v2.12.0"
+set "WINSW_PUBLISHER="
+set "NATIVE_ARCH=%PROCESSOR_ARCHITECTURE%"
+if defined PROCESSOR_ARCHITEW6432 set "NATIVE_ARCH=%PROCESSOR_ARCHITEW6432%"
+if /I "%NATIVE_ARCH%"=="AMD64" (
+    set "WINSW_ASSET=WinSW-x64.exe"
+    set "WINSW_SHA256=05b82d46ad331cc16bdc00de5c6332c1ef818df8ceefcd49c726553209b3a0da"
+) else if /I "%NATIVE_ARCH%"=="x86" (
+    set "WINSW_ASSET=WinSW-x86.exe"
+    set "WINSW_SHA256=0c21327463a43a61f2efb227ec4afd2467fde91618cc725148c1099001ca91ae"
+) else (
+    echo Ошибка: для архитектуры %NATIVE_ARCH% нет доверенного WinSW service wrapper.
+    exit /b 1
+)
+if not defined WINSW_PUBLISHER (
+    echo Ошибка: WinSW %WINSW_VERSION% не имеет проверяемой подписи Authenticode.
+    echo Установка службы остановлена: использование wrapper без доверенного издателя запрещено.
+    exit /b 1
+)
+set "WINSW_VERIFIED=%TEMP%\s-ui-winsw-%RANDOM%-%RANDOM%.exe"
+set "WINSW_URL=https://github.com/winsw/winsw/releases/download/%WINSW_VERSION%/%WINSW_ASSET%"
+powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; $path=$env:WINSW_VERIFIED; try { Invoke-WebRequest -UseBasicParsing -Uri $env:WINSW_URL -OutFile $path; $actual=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant(); if ($actual -cne $env:WINSW_SHA256) { throw ('WinSW SHA-256 mismatch: expected {0}, got {1}' -f $env:WINSW_SHA256,$actual) }; $signature=Get-AuthenticodeSignature -LiteralPath $path; if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid -or $null -eq $signature.SignerCertificate) { throw ('WinSW Authenticode validation failed: {0}' -f $signature.Status) }; if ($signature.SignerCertificate.Subject -cne $env:WINSW_PUBLISHER) { throw ('WinSW publisher mismatch: {0}' -f $signature.SignerCertificate.Subject) } } catch { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue; throw }"
+if errorlevel 1 (
+    echo Ошибка: проверка WinSW не пройдена; непроверенный wrapper удален.
+    exit /b 1
+)
+if not exist "%WINSW_VERIFIED%" (
+    echo Ошибка: проверенный WinSW отсутствует.
+    exit /b 1
+)
+
 echo Установка S-UI в каталог: %INSTALL_DIR%
 
 REM Создание каталога установки
@@ -31,37 +68,55 @@ if not exist "%INSTALL_DIR%\cert" mkdir "%INSTALL_DIR%\cert"
 REM Копирование файлов
 echo Копирование файлов...
 copy "sui.exe" "%INSTALL_DIR%\" >nul
+if errorlevel 1 (
+    echo Ошибка: не удалось скопировать sui.exe
+    exit /b 1
+)
+copy "libcronet.dll" "%INSTALL_DIR%\" >nul
+if errorlevel 1 (
+    echo Ошибка: не удалось скопировать libcronet.dll
+    exit /b 1
+)
 copy "s-ui-windows.xml" "%INSTALL_DIR%\" >nul
 copy "s-ui-windows.bat" "%INSTALL_DIR%\" >nul
 
-REM Проверка наличия WinSW
-set "WINSW_PATH=%INSTALL_DIR%\winsw.exe"
-if not exist "%WINSW_PATH%" (
-    echo Загрузка WinSW...
-    powershell -Command "& {Invoke-WebRequest -Uri 'https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe' -OutFile '%WINSW_PATH%'}"
-    if exist "%WINSW_PATH%" (
-        echo WinSW успешно загружен
-    ) else (
-        echo Предупреждение: не удалось загрузить WinSW. Установка службы будет пропущена.
-        echo Вы можете скачать WinSW вручную: https://github.com/winsw/winsw/releases
-    )
+if errorlevel 1 (
+    echo Ошибка: не удалось скопировать файлы конфигурации
+    exit /b 1
 )
 
-REM Установка службы Windows
-if exist "%WINSW_PATH%" (
-    echo Установка службы Windows...
-    cd /d "%INSTALL_DIR%"
-    copy "winsw.exe" "s-ui-service.exe" >nul
-    copy "s-ui-windows.xml" "s-ui-service.xml" >nul
-        
-    REM Установка службы
-    s-ui-service.exe install
-    if %errorLevel% equ 0 (
-        echo Служба успешно установлена
-    ) else (
-        echo Предупреждение: не удалось установить службу. Ее можно установить вручную позже.
-    )
+REM Программа и wrapper доступны только для чтения/выполнения службе и обычным пользователям.
+REM LocalService (S-1-5-19) получает Modify исключительно в каталогах данных.
+echo Настройка прав доступа...
+icacls "%INSTALL_DIR%" /inheritance:r >nul || exit /b 1
+icacls "%INSTALL_DIR%" /remove:g *S-1-5-19 *S-1-5-32-545 >nul 2>&1
+icacls "%INSTALL_DIR%" /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" "*S-1-5-19:(OI)(CI)RX" "*S-1-5-32-545:(OI)(CI)RX" >nul || exit /b 1
+for %%D in (db logs cert) do (
+    icacls "%INSTALL_DIR%\%%D" /inheritance:r >nul || exit /b 1
+    icacls "%INSTALL_DIR%\%%D" /remove:g *S-1-5-19 *S-1-5-32-545 >nul 2>&1
+    icacls "%INSTALL_DIR%\%%D" /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" "*S-1-5-19:(OI)(CI)M" >nul || exit /b 1
 )
+
+REM Копирование только что проверенного wrapper; ранее установленный файл не доверяется.
+set "WINSW_PATH=%INSTALL_DIR%\winsw.exe"
+copy /y "%WINSW_VERIFIED%" "%WINSW_PATH%" >nul
+if errorlevel 1 (
+    del /f /q "%WINSW_VERIFIED%" >nul 2>&1
+    echo Ошибка: не удалось установить проверенный WinSW.
+    exit /b 1
+)
+del /f /q "%WINSW_VERIFIED%" >nul 2>&1
+REM Проверенный wrapper установлен.
+
+echo Установка службы Windows...
+copy /y "%WINSW_PATH%" "%INSTALL_DIR%\s-ui-service.exe" >nul || exit /b 1
+copy /y "%INSTALL_DIR%\s-ui-windows.xml" "%INSTALL_DIR%\s-ui-service.xml" >nul || exit /b 1
+"%INSTALL_DIR%\s-ui-service.exe" install
+if errorlevel 1 (
+    echo Ошибка: не удалось установить службу.
+    exit /b 1
+)
+echo Служба успешно установлена
 
 REM Запуск миграции
 echo Запуск миграции базы данных...
@@ -151,11 +206,6 @@ if exist "%START_MENU%" (
     echo Ярлык в меню Пуск создан
 )
 
-REM Настройка прав
-echo Настройка прав доступа...
-icacls "%INSTALL_DIR%" /grant "Users:(OI)(CI)RX" /T >nul
-icacls "%INSTALL_DIR%\db" /grant "Users:(OI)(CI)F" /T >nul
-icacls "%INSTALL_DIR%\logs" /grant "Users:(OI)(CI)F" /T >nul
 
 REM Создание переменной окружения
 echo Настройка переменной окружения...

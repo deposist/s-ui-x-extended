@@ -8,6 +8,16 @@ on:
         required: true
         default: "v1.0.1"
         type: string
+  workflow_call:
+    inputs:
+      tag:
+        description: Validated release tag from the caller
+        required: true
+        type: string
+      expected_commit:
+        description: Commit already resolved by the calling release workflow
+        required: true
+        type: string
   push:
     tags:
       - "v*"
@@ -32,6 +42,7 @@ jobs:
     outputs:
       tag: ${{ steps.checkout.outputs.tag }}
       commit: ${{ steps.checkout.outputs.commit }}
+      version: ${{ steps.checkout.outputs.version }}
     steps:
       - name: Check out release tooling
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -41,6 +52,8 @@ jobs:
         uses: ./.github/actions/checkout-release-tag
         with:
           tag: ${{ inputs.tag || github.ref_name }}
+          event_commit: ${{ github.event_name == 'push' && github.sha || '' }}
+          expected_commit: ${{ inputs.expected_commit || '' }}
 
   build-frontend:
     needs: release-ref
@@ -63,11 +76,25 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Install frontend dependencies (strict)
+        working-directory: frontend
+        run: npm ci
+
+      - name: Frontend lint (no warnings)
+        working-directory: frontend
+        run: npm run lint -- --max-warnings=0
+
+      - name: Frontend unit tests
+        working-directory: frontend
+        run: npm run test
+
       - name: Build frontend
-        run: |
-          cd frontend
-          npm install
-          npm run build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Verify production frontend dist
+        working-directory: frontend
+        run: npm run verify:dist
 
       - name: Upload frontend build artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -81,6 +108,7 @@ jobs:
     name: Build-windows-${{ matrix.arch }}
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix:
         include:
           - { arch: amd64, runner: windows-latest, cgo: "1" }
@@ -111,6 +139,7 @@ jobs:
       - name: Build s-ui
         shell: bash
         run: |
+          set -euo pipefail
           export CGO_ENABLED=${{ matrix.cgo }}
           export GOOS=windows
           export GOARCH=${{ matrix.arch }}
@@ -120,98 +149,101 @@ jobs:
           go env GOOS GOARCH
 
           go build -ldflags="-w -s -checklinkname=0" -tags "${{ env.TAGS }}" -o sui.exe main.go
-          file sui.exe
-          if [ "${{ matrix.arch }}" = "amd64" ]; then
+          FILE_INFO=$(file sui.exe)
+          echo "$FILE_INFO"
+          case "${{ matrix.arch }}" in
+            amd64) grep -q 'PE32+ executable.*x86-64' <<<"$FILE_INFO" ;;
+            arm64) grep -q 'PE32+ executable.*Aarch64' <<<"$FILE_INFO" ;;
+            *) echo "unsupported Windows architecture: ${{ matrix.arch }}" >&2; exit 1 ;;
+          esac
+          if [[ "${{ matrix.arch }}" == amd64 ]]; then
             EXPECTED_VERSION="${{ needs.release-ref.outputs.tag }}"
             test "$(./sui.exe -v | awk 'NR == 1 { print $NF }')" = "${EXPECTED_VERSION#v}"
           fi
 
           mkdir s-ui-windows
           cp sui.exe s-ui-windows/
-          cp -r windows/* s-ui-windows/
+          cp windows/install-windows.bat windows/s-ui-windows.bat windows/uninstall-windows.bat windows/s-ui-windows.xml windows/README.md s-ui-windows/
 
-      - name: Download libcronet-go
+      - name: Download and verify libcronet-go
         shell: bash
         run: |
+          set -euo pipefail
           # Pinned release tag (env.LIBCRONET_BASE_URL) + sha256 verification.
           # Asset digests captured from the GitHub release API; update the tag and
-          # hashes together. Fail closed on download error or hash mismatch.
+          # hashes together. Fail closed on download error, hash, or PE mismatch.
           case "${{ matrix.arch }}" in
-            amd64) CRONET_SHA256="c7434cfa93c3041321dd19111c4de6c52b8a9531a65661ba45425d3c51ec69e2" ;;
-            arm64) CRONET_SHA256="fc9e3bae0b326d83092a5de2c04d8b4139dc5c1ba576a035dee4bde780a3c95f" ;;
+            amd64) CRONET_SHA256="c7434cfa93c3041321dd19111c4de6c52b8a9531a65661ba45425d3c51ec69e2"; PE_ARCH='x86-64' ;;
+            arm64) CRONET_SHA256="fc9e3bae0b326d83092a5de2c04d8b4139dc5c1ba576a035dee4bde780a3c95f"; PE_ARCH='Aarch64' ;;
             *) echo "no pinned libcronet sha256 for arch ${{ matrix.arch }}" >&2; exit 1 ;;
           esac
-          curl -fsSL -o s-ui-windows/libcronet.dll ${{ env.LIBCRONET_BASE_URL }}/libcronet-windows-${{ matrix.arch }}.dll
-          echo "${CRONET_SHA256}  s-ui-windows/libcronet.dll" | sha256sum -c -
+          curl --fail --location --silent --show-error -o s-ui-windows/libcronet.dll "${{ env.LIBCRONET_BASE_URL }}/libcronet-windows-${{ matrix.arch }}.dll"
+          echo "${CRONET_SHA256}  s-ui-windows/libcronet.dll" | sha256sum --check --strict -
+          file s-ui-windows/libcronet.dll | grep -q "PE32+ executable.*${PE_ARCH}"
 
-      - name: Package
+      - name: Package and verify exact archive inventory
         shell: python
         run: |
           import shutil
+          import zipfile
 
           archive = shutil.make_archive("s-ui-windows-${{ matrix.arch }}", "zip", ".", "s-ui-windows")
-          print(f"Created {archive}")
+          expected = {
+              "README.md", "install-windows.bat", "libcronet.dll", "s-ui-windows.bat",
+              "s-ui-windows.xml", "sui.exe", "uninstall-windows.bat",
+          }
+          with zipfile.ZipFile(archive) as package:
+              names = package.namelist()
+              if len(names) != len(set(names)):
+                  raise SystemExit("Windows ZIP contains duplicate entries")
+              if set(names) != expected:
+                  raise SystemExit(f"Windows ZIP inventory mismatch: got={sorted(names)!r}")
+              for info in package.infolist():
+                  if info.is_dir() or info.filename.startswith(("/", "\\")) or ".." in info.filename.replace("\\", "/").split("/"):
+                      raise SystemExit(f"unsafe Windows ZIP entry: {info.filename!r}")
+          print(f"Verified final package inventory: {archive}")
+
+      - name: Verify final Windows package runtime and architecture
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = "s-ui-windows-${{ matrix.arch }}.zip"
+          $unpack = Join-Path $PWD "verified-${{ matrix.arch }}"
+          Expand-Archive -LiteralPath $archive -DestinationPath $unpack
+          $expectedMachine = if ('${{ matrix.arch }}' -eq 'amd64') { 0x8664 } else { 0xAA64 }
+          foreach ($relativePath in @('sui.exe', 'libcronet.dll')) {
+            $path = Join-Path $unpack $relativePath
+            $stream = [System.IO.File]::OpenRead($path)
+            try {
+              $reader = [System.IO.BinaryReader]::new($stream)
+              if ($reader.ReadUInt16() -ne 0x5A4D) { throw "$relativePath is not an MZ executable" }
+              $stream.Position = 0x3C
+              $peOffset = $reader.ReadUInt32()
+              $stream.Position = $peOffset
+              if ($reader.ReadUInt32() -ne 0x00004550) { throw "$relativePath has no PE signature" }
+              $machine = $reader.ReadUInt16()
+              if ($machine -ne $expectedMachine) { throw ("{0} machine 0x{1:X4}, expected 0x{2:X4}" -f $relativePath, $machine, $expectedMachine) }
+            } finally {
+              $stream.Dispose()
+            }
+          }
+          if ('${{ matrix.arch }}' -eq 'amd64') {
+            $expectedVersion = '${{ needs.release-ref.outputs.tag }}'.TrimStart('v')
+            $actualVersion = (& (Join-Path $unpack 'sui.exe') -v | Select-Object -First 1).Split()[-1]
+            if ($LASTEXITCODE -ne 0 -or $actualVersion -ne $expectedVersion) {
+              throw "packaged amd64 runtime version $actualVersion, expected $expectedVersion"
+            }
+          }
+
+      - name: Generate Windows SHA256 checksum
+        shell: bash
+        run: sha256sum s-ui-windows-${{ matrix.arch }}.zip > s-ui-windows-${{ matrix.arch }}.zip.sha256
 
       - name: Upload build artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: s-ui-windows-${{ matrix.arch }}
-          path: ./s-ui-windows-${{ matrix.arch }}.zip
+          path: |
+            ./s-ui-windows-${{ matrix.arch }}.zip
+            ./s-ui-windows-${{ matrix.arch }}.zip.sha256
           retention-days: 1
-
-  publish-windows:
-    name: Publish Windows artifacts
-    needs: [release-ref, build-windows]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Check out release tooling
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Check out exact release tag
-        uses: ./.github/actions/checkout-release-tag
-        with:
-          tag: ${{ needs.release-ref.outputs.tag }}
-          expected_commit: ${{ needs.release-ref.outputs.commit }}
-
-      - name: Set release properties
-        id: vars
-        run: |
-          TAG="${{ needs.release-ref.outputs.tag }}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          case "$TAG" in
-            *-alpha*|*-beta*|*-rc*|*-pre*)
-              echo "prerelease=true" >> "$GITHUB_OUTPUT"
-              echo "make_latest=false" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              echo "prerelease=false" >> "$GITHUB_OUTPUT"
-              echo "make_latest=true" >> "$GITHUB_OUTPUT"
-              ;;
-          esac
-
-      - name: Download Windows build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          pattern: s-ui-windows-*
-          path: release-assets
-          merge-multiple: true
-
-      - name: Reject existing release assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.release-ref.outputs.tag }}
-        run: scripts/check-release-assets.sh "$GITHUB_REPOSITORY" "$TAG" release-assets
-
-      - name: Publish to current repository Release
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
-        with:
-          tag_name: ${{ steps.vars.outputs.tag }}
-          name: s-ui ${{ steps.vars.outputs.tag }}
-          target_commitish: ${{ needs.release-ref.outputs.commit }}
-          prerelease: ${{ steps.vars.outputs.prerelease == 'true' }}
-          make_latest: ${{ steps.vars.outputs.make_latest }}
-          fail_on_unmatched_files: true
-          overwrite_files: false
-          files: release-assets/*

@@ -4,6 +4,7 @@ import Login from '@/views/Login.vue'
 import Data from '@/store/modules/data'
 import Ws from '@/store/ws'
 import { getBaseUrl } from '@/plugins/base-url'
+import { SnapshotSession } from './snapshotSession'
 
 const routes = [
   {
@@ -122,7 +123,8 @@ const reloadOnce = () => {
     if (sessionStorage.getItem(reloadKey) === '1') return
     sessionStorage.setItem(reloadKey, '1')
   } catch {
-    // sessionStorage may be disabled (private mode); fall through.
+    // Without durable storage a reload cannot be bounded across navigations.
+    return
   }
   window.location.reload()
 }
@@ -138,40 +140,22 @@ window.addEventListener('vite:preloadError', () => reloadOnce())
 router.onError((err) => {
   if (isPreloadError(err)) reloadOnce()
 })
-router.afterEach(() => {
-  try {
-    sessionStorage.removeItem(reloadKey)
-  } catch {
-    // ignore
-  }
-})
-
-let intervalId: any
 
 // The session cookie is HttpOnly (set by api/session.go) so it cannot be
 // observed from the client; auth is enforced server-side. Every API call
 // returns `Invalid login` when the cookie is missing or expired, and
-// httputil._handleMsg redirects the user to /login in that case. The router
-// guard below only handles the UX detail of pulling fresh data on first
-// navigation to a protected page and stopping the polling timer when we
-// land on /login.
-router.beforeEach((to) => {
-  if (to.path !== '/login') {
-    loadDataInterval()
-    Ws().connect()
-  } else if (intervalId) {
-    clearInterval(intervalId)
-    intervalId = undefined
-    Ws().disconnect()
-  }
+// httputil._handleMsg redirects the user to /login in that case. Load one
+// shared snapshot when the authenticated session starts. WsRuntime owns the
+// only recurring fallback load and suspends it while realtime is healthy.
+const snapshotSession = new SnapshotSession({
+  loadSnapshot: () => Data().loadData(),
+  connectRealtime: () => Ws().connect(),
+  disconnectRealtime: () => Ws().disconnect(),
 })
 
-const loadDataInterval = () => {
-  if (intervalId) return
-  Data().loadData()
-  intervalId = setInterval(() => {
-    Data().loadData()
-  }, 10000)
-}
+router.beforeEach((to) => {
+  if (to.path !== '/login') snapshotSession.enter()
+  else snapshotSession.leave()
+})
 
 export default router

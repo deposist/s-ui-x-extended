@@ -95,9 +95,12 @@ export default {
       congestionControllers: ['bbr', 'bbr_standard', 'bbr2', 'bbr2_variant', 'cubic', 'reno'],
     }
   },
+  created() {
+    if (!this.$props.data.multiplex) this.$props.data.multiplex = {}
+  },
   computed: {
     mux(): any {
-      return this.$props.data.multiplex ?? {}
+      return this.$props.data.multiplex
     },
   },
 }

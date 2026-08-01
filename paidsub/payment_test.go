@@ -313,32 +313,36 @@ func TestExpireStaleOrders(t *testing.T) {
 	_ = database.GetDB()
 }
 
-func TestExpireStalePolledOrders(t *testing.T) {
+func TestExpireTerminalPolledOrders(t *testing.T) {
 	db := openTestDB(t)
 	if err := EnsureSchema(db); err != nil {
 		t.Fatalf("EnsureSchema: %v", err)
 	}
 	now := time.Now().Unix()
 	grace := int64(3600)
-	// Created well before the grace window -> reaped as abandoned.
-	old := PaymentOrder{ClientId: 1, TariffId: 1, Provider: "cryptobot", Amount: 1, Currency: "RUB", Status: StatusPending, IdempotencyKey: "cb-old", CreatedAt: now - grace - 10}
-	// Recent cryptobot order within grace -> stays pending (poll keeps trying).
-	recent := PaymentOrder{ClientId: 1, TariffId: 1, Provider: "cryptobot", Amount: 1, Currency: "RUB", Status: StatusPending, IdempotencyKey: "cb-recent", CreatedAt: now - 10}
-	db.Create(&old)
-	db.Create(&recent)
+	terminalOld := PaymentOrder{ClientId: 1, TariffId: 1, Provider: "cryptobot", Amount: 1, Currency: "RUB", Status: StatusPending, IdempotencyKey: "cb-terminal-old", CreatedAt: now - grace - 10}
+	uncoveredOld := PaymentOrder{ClientId: 1, TariffId: 1, Provider: "cryptobot", Amount: 1, Currency: "RUB", Status: StatusPending, IdempotencyKey: "cb-uncovered-old", CreatedAt: now - grace - 10}
+	terminalRecent := PaymentOrder{ClientId: 1, TariffId: 1, Provider: "cryptobot", Amount: 1, Currency: "RUB", Status: StatusPending, IdempotencyKey: "cb-terminal-recent", CreatedAt: now - 10}
+	db.Create(&terminalOld)
+	db.Create(&uncoveredOld)
+	db.Create(&terminalRecent)
 
 	ps := NewPaymentService()
-	if err := ps.ExpireStalePolledOrders(grace); err != nil {
-		t.Fatalf("ExpireStalePolledOrders: %v", err)
+	if err := ps.ExpireTerminalPolledOrders([]uint{terminalOld.Id, terminalRecent.Id}, grace); err != nil {
+		t.Fatalf("ExpireTerminalPolledOrders: %v", err)
 	}
-	var o, r PaymentOrder
-	db.Where("idempotency_key = ?", "cb-old").First(&o)
-	db.Where("idempotency_key = ?", "cb-recent").First(&r)
-	if o.Status != StatusExpired {
-		t.Errorf("old polled order not reaped: %s", o.Status)
+	var terminal, uncovered, recent PaymentOrder
+	db.First(&terminal, terminalOld.Id)
+	db.First(&uncovered, uncoveredOld.Id)
+	db.First(&recent, terminalRecent.Id)
+	if terminal.Status != StatusExpired {
+		t.Errorf("old provider-terminal order not expired: %s", terminal.Status)
 	}
-	if r.Status != StatusPending {
-		t.Errorf("recent polled order should stay pending: %s", r.Status)
+	if uncovered.Status != StatusPending {
+		t.Errorf("uncovered old order must remain pending: %s", uncovered.Status)
+	}
+	if recent.Status != StatusPending {
+		t.Errorf("recent terminal order should remain pending during grace: %s", recent.Status)
 	}
 }
 

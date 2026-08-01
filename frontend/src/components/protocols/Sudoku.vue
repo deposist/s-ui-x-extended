@@ -117,9 +117,12 @@ export default {
       maskModes: sudokuHttpMaskMode,
     }
   },
+  created() {
+    if (!this.$props.data.http_mask) this.$props.data.http_mask = {}
+  },
   computed: {
     httpMask(): any {
-      return this.$props.data.http_mask ?? {}
+      return this.$props.data.http_mask
     },
   },
   methods: {

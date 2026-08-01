@@ -241,7 +241,7 @@ func TestResolveCookieSecureMatrix(t *testing.T) {
 			want: true,
 		},
 		{
-			name:   "webDomain https",
+			name:   "webDomain scheme is ignored",
 			remote: "198.51.100.10:1234",
 			setup: func(t *testing.T, _ *service.SettingService) {
 				t.Helper()
@@ -249,7 +249,7 @@ func TestResolveCookieSecureMatrix(t *testing.T) {
 					t.Fatal(err)
 				}
 			},
-			want: true,
+			want: false,
 		},
 	}
 	for _, tt := range tests {

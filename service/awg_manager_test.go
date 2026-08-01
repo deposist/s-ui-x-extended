@@ -124,16 +124,15 @@ func TestAWGManagerCanceledQueuedCommandDoesNotRun(t *testing.T) {
 	}
 }
 
-func TestAWGManagerCallerCancellationDoesNotInterruptInFlightCommand(t *testing.T) {
+func TestAWGManagerCallerCancellationInterruptsInFlightCommand(t *testing.T) {
 	started := make(chan struct{})
-	release := make(chan struct{})
 	completed := make(chan struct{})
 	provisioner := &fakeAWGProvisioner{
-		snapshot: func(context.Context) (AWGPeerSnapshot, error) {
+		snapshot: func(ctx context.Context) (AWGPeerSnapshot, error) {
 			close(started)
-			<-release
+			<-ctx.Done()
 			close(completed)
-			return nil, nil
+			return nil, ctx.Err()
 		},
 		add:    func(context.Context, AWGPeerSpec) error { return nil },
 		remove: func(context.Context, string) error { return nil },
@@ -154,11 +153,9 @@ func TestAWGManagerCallerCancellationDoesNotInterruptInFlightCommand(t *testing.
 	}
 	select {
 	case <-completed:
-		t.Fatal("caller cancellation interrupted command synchronization")
-	default:
+	case <-time.After(time.Second):
+		t.Fatal("caller cancellation did not reach the in-flight command")
 	}
-	close(release)
-	<-completed
 }
 
 func TestAWGManagerBoundedQueueAppliesBackpressure(t *testing.T) {
@@ -207,15 +204,16 @@ func TestAWGManagerBoundedQueueAppliesBackpressure(t *testing.T) {
 	}
 }
 
-func TestAWGManagerStopWaitsForInFlightAndRejectsQueue(t *testing.T) {
+func TestAWGManagerStopCancelsInFlightAndRejectsQueue(t *testing.T) {
 	started := make(chan struct{})
-	release := make(chan struct{})
+	finished := make(chan struct{})
 	var removeCalls atomic.Int32
 	provisioner := &fakeAWGProvisioner{
-		snapshot: func(context.Context) (AWGPeerSnapshot, error) {
+		snapshot: func(ctx context.Context) (AWGPeerSnapshot, error) {
 			close(started)
-			<-release
-			return nil, nil
+			<-ctx.Done()
+			close(finished)
+			return nil, ctx.Err()
 		},
 		add: func(context.Context, AWGPeerSpec) error { return nil },
 		remove: func(context.Context, string) error {
@@ -235,19 +233,18 @@ func TestAWGManagerStopWaitsForInFlightAndRejectsQueue(t *testing.T) {
 	go func() { queuedDone <- manager.Remove(context.Background(), "peer") }()
 	waitAWGManagerQueueLength(t, manager, 1)
 
-	stopDone := make(chan error, 1)
-	go func() { stopDone <- manager.Stop(context.Background()) }()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := manager.Stop(ctx); err != nil {
+		t.Fatal(err)
+	}
 	select {
-	case err := <-stopDone:
-		t.Fatalf("Stop returned before in-flight command completed: %v", err)
-	case <-time.After(20 * time.Millisecond):
+	case <-finished:
+	default:
+		t.Fatal("Stop returned before the in-flight command observed cancellation")
 	}
-	close(release)
-	if err := <-firstDone; err != nil {
-		t.Fatal(err)
-	}
-	if err := <-stopDone; err != nil {
-		t.Fatal(err)
+	if err := <-firstDone; !errors.Is(err, context.Canceled) {
+		t.Fatalf("in-flight command error = %v, want context.Canceled", err)
 	}
 	if err := <-queuedDone; !errors.Is(err, ErrAWGManagerStopped) {
 		t.Fatalf("queued command error = %v, want ErrAWGManagerStopped", err)
@@ -293,14 +290,15 @@ func TestAWGManagerCanRestartAfterStop(t *testing.T) {
 	}
 }
 
-func TestAWGManagerStopTimeoutDoesNotCancelInFlightCommand(t *testing.T) {
+func TestAWGManagerStopTimeoutStillCancelsInFlightCommand(t *testing.T) {
 	started := make(chan struct{})
-	release := make(chan struct{})
+	finished := make(chan struct{})
 	provisioner := &fakeAWGProvisioner{
-		snapshot: func(context.Context) (AWGPeerSnapshot, error) {
+		snapshot: func(ctx context.Context) (AWGPeerSnapshot, error) {
 			close(started)
-			<-release
-			return nil, nil
+			<-ctx.Done()
+			close(finished)
+			return nil, ctx.Err()
 		},
 		add:    func(context.Context, AWGPeerSpec) error { return nil },
 		remove: func(context.Context, string) error { return nil },
@@ -313,16 +311,17 @@ func TestAWGManagerStopTimeoutDoesNotCancelInFlightCommand(t *testing.T) {
 	go func() { _, err := manager.Snapshot(context.Background()); commandDone <- err }()
 	<-started
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	if err := manager.Stop(ctx); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("Stop error = %v, want context.DeadlineExceeded", err)
+	if err := manager.Stop(ctx); err != nil {
+		t.Fatalf("Stop error = %v", err)
 	}
-	close(release)
-	if err := <-commandDone; err != nil {
-		t.Fatal(err)
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("Stop cancellation did not reach in-flight command")
 	}
-	if err := manager.Stop(context.Background()); err != nil {
-		t.Fatalf("later Stop error = %v", err)
+	if err := <-commandDone; !errors.Is(err, context.Canceled) {
+		t.Fatalf("command error = %v, want context.Canceled", err)
 	}
 }

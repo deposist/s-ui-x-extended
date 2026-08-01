@@ -20,6 +20,7 @@ type client struct {
 	scope  Scope
 	sendCh chan<- Event
 	onDrop func(reason string)
+	active bool
 }
 
 type hub struct {
@@ -27,6 +28,7 @@ type hub struct {
 	clients map[*client]struct{}
 	byUser  map[string]int
 	byIP    map[string]int
+	bySend  map[chan<- Event]*client
 }
 
 var defaultHub = newHub()
@@ -36,6 +38,7 @@ func newHub() *hub {
 		clients: map[*client]struct{}{},
 		byUser:  map[string]int{},
 		byIP:    map[string]int{},
+		bySend:  map[chan<- Event]*client{},
 	}
 }
 
@@ -85,16 +88,22 @@ func (h *hub) Register(c *ClientHandle) (unregister func()) {
 		scope:  c.Scope,
 		sendCh: c.SendCh,
 		onDrop: c.OnDrop,
+		active: true,
 	}
 	h.mu.Lock()
+	if existing := h.bySend[c.SendCh]; existing != nil {
+		h.mu.Unlock()
+		return func() {}
+	}
 	h.clients[internal] = struct{}{}
+	h.bySend[c.SendCh] = internal
 	h.mu.Unlock()
 
 	var once sync.Once
 	return func() {
 		once.Do(func() {
 			h.mu.Lock()
-			delete(h.clients, internal)
+			h.removeLocked(internal)
 			h.mu.Unlock()
 		})
 	}
@@ -115,11 +124,17 @@ func (h *hub) Publish(topic Topic, payload interface{}) {
 	if data, err := json.Marshal(event); err == nil {
 		event.frame = data
 	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	for _, c := range clients {
+		if !c.active {
+			continue
+		}
 		select {
 		case c.sendCh <- event:
 		default:
-			h.drop(c, "slow")
+			h.removeLocked(c)
+			go c.callDrop("slow")
 		}
 	}
 }
@@ -131,6 +146,10 @@ func (h *hub) CloseAll(reason string) {
 		clients = append(clients, c)
 	}
 	h.clients = map[*client]struct{}{}
+	h.bySend = map[chan<- Event]*client{}
+	for _, c := range clients {
+		c.active = false
+	}
 	h.mu.Unlock()
 
 	for _, c := range clients {
@@ -170,12 +189,19 @@ func (h *hub) snapshot(topic Topic) []*client {
 	return clients
 }
 
+func (h *hub) removeLocked(c *client) bool {
+	if c == nil || !c.active {
+		return false
+	}
+	delete(h.clients, c)
+	delete(h.bySend, c.sendCh)
+	c.active = false
+	return true
+}
+
 func (h *hub) drop(c *client, reason string) {
 	h.mu.Lock()
-	_, ok := h.clients[c]
-	if ok {
-		delete(h.clients, c)
-	}
+	ok := h.removeLocked(c)
 	h.mu.Unlock()
 	if ok {
 		c.callDrop(reason)

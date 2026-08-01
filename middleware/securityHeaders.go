@@ -1,10 +1,15 @@
 package middleware
 
 import (
+	"os"
+	"strings"
 	"github.com/gin-gonic/gin"
 )
 
-const adminContentSecurityPolicy = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ws: wss:"
+const (
+	adminContentSecurityPolicy       = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ws: wss:"
+	adminIframeContentSecurityPolicy = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors *; img-src 'self' data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ws: wss:"
+)
 
 // AdminSecurityHeaders sets the admin panel's security headers. isSecure reports
 // whether the request arrived over HTTPS and gates the HSTS header; callers
@@ -18,9 +23,13 @@ func AdminSecurityHeaders(isSecure func(*gin.Context) bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		h := c.Writer.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
-		h.Set("X-Frame-Options", "DENY")
+		if strings.EqualFold(strings.TrimSpace(os.Getenv("SUI_COOKIE_SAMESITE")), "none") {
+			h.Set("Content-Security-Policy", adminIframeContentSecurityPolicy)
+		} else {
+			h.Set("X-Frame-Options", "DENY")
+			h.Set("Content-Security-Policy", adminContentSecurityPolicy)
+		}
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		h.Set("Content-Security-Policy", adminContentSecurityPolicy)
 		if isSecure(c) {
 			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}

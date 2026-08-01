@@ -23,6 +23,7 @@ var errRefundNotApplicable = errors.New("order is not refundable")
 var cryptoBotCreateMu sync.Mutex
 
 const paymentOrderSnapshotVersion = 1
+const paymentOrderLegacyResolvedVersion = -1
 
 // isAlreadyRefunded reports whether a refundStarPayment error means the charge
 // was already refunded (e.g. by a concurrent refund via the other path).
@@ -179,19 +180,41 @@ func (p *PaymentService) CreateOrder(ctx context.Context, client *model.Client, 
 		return order, nil, fmt.Errorf("provider returned an incomplete invoice reference")
 	}
 	if len(upd) > 0 {
-		if err := db.Model(&PaymentOrder{}).Where("id = ? AND status = ?", order.Id, order.Status).Updates(upd).Error; err != nil {
+		res := db.Model(&PaymentOrder{}).Where("id = ? AND status = ?", order.Id, order.Status).Updates(upd)
+		if res.Error == nil && res.RowsAffected != 1 {
+			var current PaymentOrder
+			if err := db.Where("id = ?", order.Id).First(&current).Error; err != nil {
+				return order, nil, fmt.Errorf("reload order after concurrent transition: %w", err)
+			}
+			if current.Status == StatusPaid {
+				return &current, inv, nil
+			}
+			res.Error = errAlreadyApplied
+		}
+		if res.Error != nil {
 			failureStatus := StatusRecoverable
-			if deleter, ok := prov.(invoiceDeleter); ok && inv.ProviderRef != "" {
+			refOwnedByOther := false
+			if kind == ProviderCryptoBot && inv.ProviderRef != "" {
+				var ownerCount int64
+				if countErr := db.Model(&PaymentOrder{}).
+					Where("provider = ? AND provider_ref = ? AND id <> ?", string(kind), inv.ProviderRef, order.Id).
+					Count(&ownerCount).Error; countErr != nil {
+					logger.Warning("paidsub: could not check provider invoice owner: ", countErr)
+				} else {
+					refOwnedByOther = ownerCount > 0
+				}
+			}
+			if deleter, ok := prov.(invoiceDeleter); ok && inv.ProviderRef != "" && !refOwnedByOther {
 				if deleteErr := deleter.DeleteInvoice(ctx, inv.ProviderRef); deleteErr != nil {
 					logger.Warning("paidsub: could not cancel invoice after reference persistence failure: ", deleteErr)
 				} else {
 					failureStatus = StatusFailed
 				}
 			}
-			if markErr := p.setOrderStatus(order.Id, order.Status, failureStatus); markErr != nil {
-				return order, nil, errors.Join(fmt.Errorf("persist provider invoice reference: %w", err), fmt.Errorf("mark order failed: %w", markErr))
+			if markErr := p.setOrderStatus(order.Id, order.Status, failureStatus); markErr != nil && !errors.Is(markErr, errAlreadyApplied) {
+				return order, nil, errors.Join(fmt.Errorf("persist provider invoice reference: %w", res.Error), fmt.Errorf("mark order failed: %w", markErr))
 			}
-			return order, nil, fmt.Errorf("persist provider invoice reference: %w", err)
+			return order, nil, fmt.Errorf("persist provider invoice reference: %w", res.Error)
 		}
 	}
 	order.Status = StatusPending
@@ -274,8 +297,15 @@ func (p *PaymentService) markFailed(id uint) {
 }
 
 func (p *PaymentService) setOrderStatus(id uint, from, to string) error {
-	return database.GetDB().Model(&PaymentOrder{}).Where("id = ? AND status = ?", id, from).
-		Update("status", to).Error
+	res := database.GetDB().Model(&PaymentOrder{}).Where("id = ? AND status = ?", id, from).
+		Update("status", to)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected != 1 {
+		return errAlreadyApplied
+	}
+	return nil
 }
 
 // ApplyPaidOrder finalizes a pending order and renews the client exactly once.
@@ -284,35 +314,60 @@ func (p *PaymentService) setOrderStatus(id uint, from, to string) error {
 // redelivered Telegram update or a poll race) are safe no-ops. Returns whether
 // a renewal was applied and the bound Telegram user id (for notification).
 func (p *PaymentService) ApplyPaidOrder(orderID uint, chargeID string, raw []byte) (bool, int64, error) {
+	if chargeID == "" {
+		return false, 0, fmt.Errorf("payment confirmation has no charge id")
+	}
 	db := database.GetDB()
 	var inboundIds []uint
 	var tgUserID int64
 	var renewedClientID uint
+	var applied bool
 	err := db.Transaction(func(tx *gorm.DB) error {
-		res := tx.Model(&PaymentOrder{}).
-			Where("id = ? AND status = ?", orderID, StatusPending).
-			Updates(map[string]any{
-				"status":             StatusPaid,
-				"paid_at":            nowUnix(),
-				"provider_charge_id": chargeID,
-			})
+		var order PaymentOrder
+		if err := tx.Where("id = ?", orderID).First(&order).Error; err != nil {
+			return err
+		}
+		charge := PaymentCharge{
+			Provider: order.Provider, ChargeID: chargeID, OrderID: orderID,
+			Disposition: "refund_pending", RawPayload: raw, ConfirmedAt: nowUnix(),
+		}
+		res := tx.Create(&charge)
+		if res.Error != nil {
+			var existing PaymentCharge
+			if err := tx.Where("provider = ? AND charge_id = ?", order.Provider, chargeID).First(&existing).Error; err != nil {
+				return res.Error
+			}
+			if existing.OrderID != orderID {
+				return fmt.Errorf("provider charge is already bound to another order")
+			}
+			return nil
+		}
+		if order.Status != StatusPending && order.Status != StatusExpired {
+			// The charge is durable and explicitly refund-pending. Returning success
+			// lets provider cursors advance without losing the confirmed debit.
+			return nil
+		}
+		if order.SnapshotVersion != paymentOrderSnapshotVersion || order.Amount <= 0 {
+			return fmt.Errorf("order has no valid purchase snapshot")
+		}
+		res = tx.Model(&PaymentOrder{}).
+			Where("id = ? AND status IN ?", orderID, []string{StatusPending, StatusExpired}).
+			Updates(map[string]any{"status": StatusPaid, "paid_at": nowUnix(), "provider_charge_id": chargeID})
 		if res.Error != nil {
 			return res.Error
 		}
 		if res.RowsAffected != 1 {
-			return errAlreadyApplied
+			return nil
+		}
+		if err := tx.Model(&PaymentCharge{}).
+			Where("provider = ? AND charge_id = ?", order.Provider, chargeID).
+			Update("disposition", "applied").Error; err != nil {
+			return err
 		}
 		if len(raw) > 0 {
 			if err := tx.Model(&PaymentOrder{}).Where("id = ?", orderID).Update("provider_payload", raw).Error; err != nil {
 				return err
 			}
-		}
-		var order PaymentOrder
-		if err := tx.Where("id = ?", orderID).First(&order).Error; err != nil {
-			return err
-		}
-		if order.SnapshotVersion != paymentOrderSnapshotVersion || order.Amount <= 0 {
-			return fmt.Errorf("order has no valid purchase snapshot")
 		}
 		var client model.Client
 		if err := tx.Where("id = ?", order.ClientId).First(&client).Error; err != nil {
@@ -320,7 +375,6 @@ func (p *PaymentService) ApplyPaidOrder(orderID uint, chargeID string, raw []byt
 		}
 		tgUserID = order.TelegramUserId
 		renewedClientID = order.ClientId
-
 		now := nowUnix()
 		updates := map[string]any{"enable": true}
 		if order.GrantedDays > 0 {
@@ -336,9 +390,6 @@ func (p *PaymentService) ApplyPaidOrder(orderID uint, chargeID string, raw []byt
 			updates["total_down"] = client.TotalDown + client.Down
 			updates["up"] = 0
 			updates["down"] = 0
-			// Snapshot the pre-renewal usage counters onto the order so a later
-			// refund can restore the pre-purchase accounting state symmetrically
-			// (the reset above is otherwise irreversible; see finalizeRefund).
 			if err := tx.Model(&PaymentOrder{}).Where("id = ?", orderID).
 				Updates(map[string]any{"granted_up": client.Up, "granted_down": client.Down}).Error; err != nil {
 				return err
@@ -347,41 +398,27 @@ func (p *PaymentService) ApplyPaidOrder(orderID uint, chargeID string, raw []byt
 		if err := tx.Model(&model.Client{}).Where("id = ?", client.Id).Updates(updates).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&model.Changes{
-			DateTime: now,
-			Actor:    "PaidSubBot",
-			Key:      "clients",
-			Action:   "renew",
-			Obj:      jsonString(client.Name),
-		}).Error; err != nil {
+		if err := tx.Create(&model.Changes{DateTime: now, Actor: "PaidSubBot", Key: "clients", Action: "renew", Obj: jsonString(client.Name)}).Error; err != nil {
 			return err
 		}
 		if len(client.Inbounds) > 0 {
 			_ = json.Unmarshal(client.Inbounds, &inboundIds)
 		}
+		applied = true
 		return nil
 	})
-	if errors.Is(err, errAlreadyApplied) {
-		return false, 0, nil
-	}
 	if err != nil {
 		return false, 0, err
 	}
-
-	// Post-commit: re-add the (re-enabled) user to its inbounds in the running
-	// core. A restart failure does not roll back the paid renewal (logged).
+	if !applied {
+		return false, 0, nil
+	}
 	if len(inboundIds) > 0 {
 		if rErr := (&service.InboundService{}).RestartInbounds(database.GetDB(), inboundIds); rErr != nil {
 			logger.Warning("paidsub: restart inbounds after renewal failed: ", rErr)
 		}
 	}
-	_ = (&service.AuditService{}).Record(service.AuditEvent{
-		Actor:    "PaidSubBot",
-		Event:    "paidsub_paid",
-		Resource: "paidsub",
-		Severity: service.AuditSeverityInfo,
-		Details:  map[string]any{"orderId": orderID},
-	})
+	_ = (&service.AuditService{}).Record(service.AuditEvent{Actor: "PaidSubBot", Event: "paidsub_paid", Resource: "paidsub", Severity: service.AuditSeverityInfo, Details: map[string]any{"orderId": orderID}})
 	if hook := service.DefaultRuntime().AWGClientStateHook(); hook != nil {
 		if hookErr := hook.ResumeClient(context.Background(), renewedClientID); hookErr != nil {
 			logger.Warning("paidsub: AWG resume after renewal failed: ", hookErr)
@@ -391,10 +428,9 @@ func (p *PaymentService) ApplyPaidOrder(orderID uint, chargeID string, raw []byt
 }
 
 // ExpireStaleOrders marks pending non-polled orders past their TTL as expired.
-// Polled providers (CryptoBot) are deliberately EXCLUDED: their confirmation is
-// out-of-band, so a payment can land after the short local TTL and must remain
-// pending to be caught by the next poll. They are reaped instead by
-// ExpireStalePolledOrders on a long grace window.
+// Polled providers (CryptoBot) are deliberately excluded: their confirmation is
+// out-of-band, so they are expired only after a successful provider poll reports
+// the invoice terminal (see ExpireTerminalPolledOrders).
 func (p *PaymentService) ExpireStaleOrders() error {
 	db := database.GetDB()
 	return db.Model(&PaymentOrder{}).
@@ -403,16 +439,17 @@ func (p *PaymentService) ExpireStaleOrders() error {
 		Update("status", StatusExpired).Error
 }
 
-// ExpireStalePolledOrders reaps pending polled-provider (CryptoBot) orders whose
-// creation is older than graceSeconds. This hard ceiling is far beyond the local
-// order TTL so a late out-of-band payment is still caught by polling, while
-// genuinely abandoned invoices do not accumulate forever.
-func (p *PaymentService) ExpireStalePolledOrders(graceSeconds int64) error {
-	db := database.GetDB()
+// ExpireTerminalPolledOrders expires only provider-confirmed terminal invoices.
+// The caller supplies IDs from a successful bounded poll, so an outage,
+// malformed response, or canceled context cannot expire a potentially-paid row.
+func (p *PaymentService) ExpireTerminalPolledOrders(orderIDs []uint, graceSeconds int64) error {
+	if len(orderIDs) == 0 {
+		return nil
+	}
 	cutoff := nowUnix() - graceSeconds
-	return db.Model(&PaymentOrder{}).
-		Where("status = ? AND provider = ? AND created_at > 0 AND created_at < ?",
-			StatusPending, string(ProviderCryptoBot), cutoff).
+	return database.GetDB().Model(&PaymentOrder{}).
+		Where("id IN ? AND status = ? AND provider = ? AND created_at > 0 AND created_at < ?",
+			orderIDs, StatusPending, string(ProviderCryptoBot), cutoff).
 		Update("status", StatusExpired).Error
 }
 
@@ -502,40 +539,8 @@ func (p *PaymentService) finalizeRefund(orderID uint, revoke bool) error {
 				newVolume = 0
 			}
 			updates["volume"] = newVolume
-			// Symmetric with ApplyPaidOrder: roll back the volume granted and the
-			// usage counters that the renewal reset, from the snapshot taken at
-			// apply time. Usage accrued between purchase and refund is intentionally
-			// forgiven (the refund restores the pre-purchase accounting state).
-			newTotalUp := client.TotalUp - order.GrantedUp
-			if newTotalUp < 0 {
-				newTotalUp = 0
-			}
-			newTotalDown := client.TotalDown - order.GrantedDown
-			if newTotalDown < 0 {
-				newTotalDown = 0
-			}
-			updates["total_up"] = newTotalUp
-			updates["total_down"] = newTotalDown
-			// Only restore the live up/down baseline when THIS is the most recent
-			// paid traffic order because its apply zeroed the current counters.
-			// For an older (non-latest) order a newer purchase already opened a
-			// fresh window, so the live up/down belong to that window and must not
-			// be clobbered with this order's stale snapshot (which would silently
-			// discard the usage accrued in the current window). Totals stay
-			// relative either way, so the ledger remains consistent.
-			var latestTrafficOrder PaymentOrder
-			err := tx.Model(&PaymentOrder{}).
-				Where("client_id = ? AND status = ?", order.ClientId, StatusPaid).
-				Where("granted_traffic_bytes > 0").
-				Order("id DESC").
-				First(&latestTrafficOrder).Error
-			if err != nil && !database.IsNotFound(err) {
-				return err
-			}
-			if database.IsNotFound(err) || latestTrafficOrder.Id == order.Id {
-				updates["up"] = order.GrantedUp
-				updates["down"] = order.GrantedDown
-			}
+			// Usage counters are independent accounting history. Refunding purchased
+			// capacity must not rewrite cumulative totals or the current usage window.
 		}
 		if len(updates) == 0 {
 			return nil
@@ -575,16 +580,18 @@ func (p *PaymentService) finalizeRefund(orderID uint, revoke bool) error {
 	if refundedClientID != 0 {
 		if hook := service.DefaultRuntime().AWGClientStateHook(); hook != nil {
 			var client model.Client
-			loadErr := db.First(&client, refundedClientID).Error
+			if loadErr := db.First(&client, refundedClientID).Error; loadErr != nil {
+				return fmt.Errorf("load client for AWG reconcile after refund: %w", loadErr)
+			}
 			var hookErr error
-			if loadErr == nil && client.Enable && (client.Expiry <= 0 || client.Expiry > nowUnix()) &&
+			if client.Enable && (client.Expiry <= 0 || client.Expiry > nowUnix()) &&
 				(client.Volume <= 0 || (client.Up >= 0 && client.Down >= 0 && client.Up < client.Volume && client.Down < client.Volume && client.Up < client.Volume-client.Down)) {
 				hookErr = hook.ResumeClient(context.Background(), refundedClientID)
-			} else if loadErr == nil {
+			} else {
 				hookErr = hook.SuspendClients(context.Background(), []uint{refundedClientID})
 			}
 			if hookErr != nil {
-				logger.Warning("paidsub: AWG reconcile after refund failed: ", hookErr)
+				return fmt.Errorf("AWG reconcile after refund: %w", hookErr)
 			}
 		}
 	}
@@ -601,6 +608,9 @@ func (p *PaymentService) RefundOrder(ctx context.Context, orderID uint, revoke b
 	order, err := p.getOrder(orderID)
 	if err != nil {
 		return "", err
+	}
+	if order.Status == StatusRefunded {
+		return "", errRefundNotApplicable
 	}
 	if order.Status != StatusPaid {
 		return "", errRefundNotApplicable
@@ -624,12 +634,18 @@ func (p *PaymentService) RefundOrder(ctx context.Context, orderID uint, revoke b
 		if err := sender.refundStarPayment(ctx, order.TelegramUserId, charge); err != nil && !isAlreadyRefunded(err) {
 			return "", fmt.Errorf("stars refund failed")
 		}
-		if err := p.finalizeRefund(orderID, revoke); err != nil && !errors.Is(err, errAlreadyApplied) {
+		if err := p.finalizeRefund(orderID, revoke); err != nil {
+			if errors.Is(err, errAlreadyApplied) {
+				return "already_refunded", nil
+			}
 			return "", err
 		}
 		return "refunded", nil
 	}
-	if err := p.finalizeRefund(orderID, revoke); err != nil && !errors.Is(err, errAlreadyApplied) {
+	if err := p.finalizeRefund(orderID, revoke); err != nil {
+		if errors.Is(err, errAlreadyApplied) {
+			return "already_refunded", nil
+		}
 		return "", err
 	}
 	return "refunded_manual", nil
@@ -760,7 +776,7 @@ func (b *Bot) handleManualPaid(ctx context.Context, chatID int64, tgID int64, or
 
 // ---- payment confirmation (Telegram-native) ----
 
-func (b *Bot) handlePreCheckout(ctx context.Context, q *tgPreCheckoutQuery) {
+func (b *Bot) handlePreCheckout(ctx context.Context, q *tgPreCheckoutQuery) error {
 	order, err := b.payments.findOrderByPayload(q.InvoicePayload)
 	ok := err == nil &&
 		order.Status == StatusPending &&
@@ -768,40 +784,30 @@ func (b *Bot) handlePreCheckout(ctx context.Context, q *tgPreCheckoutQuery) {
 		strings.EqualFold(q.Currency, order.Currency) &&
 		(order.TelegramUserId == 0 || q.From.ID == order.TelegramUserId)
 	if ok {
-		_ = b.answerPreCheckout(ctx, q.ID, true, "")
-		return
+		return b.answerPreCheckout(ctx, q.ID, true, "")
 	}
-	_ = b.answerPreCheckout(ctx, q.ID, false, "Order is no longer valid")
+	return b.answerPreCheckout(ctx, q.ID, false, "Order is no longer valid")
 }
 
-func (b *Bot) handleSuccessfulPayment(ctx context.Context, m *tgMessage) {
+func (b *Bot) handleSuccessfulPayment(ctx context.Context, m *tgMessage) error {
 	if m.From == nil {
-		return
+		return nil
 	}
 	l := pickLang(m.From.LanguageCode)
 	sp := m.SuccessfulPayment
 	order, err := b.payments.findOrderByPayload(sp.InvoicePayload)
 	if err != nil {
-		logger.Warning("paidsub: successful_payment for unknown order")
-		return
+		return fmt.Errorf("successful_payment for unknown order: %w", err)
 	}
 	if sp.TotalAmount != order.Amount || !strings.EqualFold(sp.Currency, order.Currency) {
-		logger.Warning("paidsub: payment amount/currency mismatch; refusing renewal")
 		b.payments.markFailed(order.Id)
-		(&service.TelegramService{}).NotifyTelegramEvent("paidsub_payment_mismatch", map[string]string{
-			"orderId": fmt.Sprintf("%d", order.Id),
-		})
-		return
+		(&service.TelegramService{}).NotifyTelegramEvent("paidsub_payment_mismatch", map[string]string{"orderId": fmt.Sprintf("%d", order.Id)})
+		return nil
 	}
-	// Defence in depth: the payer must be the Telegram user the order was created
-	// for (the payload + pending status are the primary gate).
 	if order.TelegramUserId != 0 && m.From.ID != order.TelegramUserId {
-		logger.Warning("paidsub: successful_payment from unexpected telegram user; refusing renewal")
 		b.payments.markFailed(order.Id)
-		(&service.TelegramService{}).NotifyTelegramEvent("paidsub_payment_mismatch", map[string]string{
-			"orderId": fmt.Sprintf("%d", order.Id),
-		})
-		return
+		(&service.TelegramService{}).NotifyTelegramEvent("paidsub_payment_mismatch", map[string]string{"orderId": fmt.Sprintf("%d", order.Id)})
+		return nil
 	}
 	charge := sp.TelegramPaymentChargeID
 	if charge == "" {
@@ -809,13 +815,13 @@ func (b *Bot) handleSuccessfulPayment(ctx context.Context, m *tgMessage) {
 	}
 	applied, _, err := b.payments.ApplyPaidOrder(order.Id, "tg:"+charge, nil)
 	if err != nil {
-		logger.Warning("paidsub: apply paid order failed: ", err)
 		_ = b.sendMessage(ctx, m.Chat.ID, tr(l, "error"), nil)
-		return
+		return err
 	}
 	if applied {
 		_ = b.sendMessage(ctx, m.Chat.ID, tr(l, "pay_success"), b.menuKeyboard(l))
 	}
+	return nil
 }
 
 // ---- helpers ----

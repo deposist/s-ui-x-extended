@@ -40,7 +40,6 @@ func (s *LastUpdateStore) Set(value int64) {
 		return
 	}
 	s.value.Store(value)
-	LastUpdate = value
 }
 
 func (s *LastUpdateStore) Get() int64 {
@@ -419,10 +418,3 @@ func writeAuditRuntime(writer *auditWriter, event model.AuditEvent) {
 	}
 	writer.Enqueue(event)
 }
-
-// LastUpdate is kept as a compatibility mirror for older in-package tests and
-// integrations. New code should use the injected Runtime last-update store
-// (Runtime.updates) via the ConfigService setLastUpdate/getLastUpdate methods.
-//
-// Deprecated: use the injected Runtime last-update store.
-var LastUpdate int64

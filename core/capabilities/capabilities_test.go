@@ -278,10 +278,10 @@ func TestReleaseBuildTagsCoverManifestProtocolCapabilities(t *testing.T) {
 	windowsTags := parseTagSet(t, parseQuotedAssignment(t, readRepoFile(t, ".github/workflows/windows.yml"), `(?m)^\s*TAGS:\s*"([^"]+)"\s*$`))
 	assertContainsAllTags(t, "windows.yml TAGS", windowsTags, manifestTags)
 
-	batTags := parseTagSet(t, parseQuotedAssignment(t, readRepoFile(t, "windows/build-windows.bat"), `(?m)^set BUILD_TAGS=([^\r\n]+)`))
+	batTags := parseTagSet(t, parseQuotedAssignment(t, readRepoFile(t, "windows/build-windows.bat"), `(?m)^set "BUILD_TAGS=([^"\r\n]+)"`))
 	assertContainsAllTags(t, "windows/build-windows.bat BUILD_TAGS", batTags, manifestTags)
 
-	psTags := parseTagSet(t, parseQuotedAssignment(t, readRepoFile(t, "windows/build-windows.ps1"), `(?m)^\$buildTags = "([^"]+)"\s*$`))
+	psTags := parseTagSet(t, parseQuotedAssignment(t, readRepoFile(t, "windows/build-windows.ps1"), `(?m)^\s*\$buildTags = "([^"]+)"\s*$`))
 	assertContainsAllTags(t, "windows/build-windows.ps1 buildTags", psTags, manifestTags)
 
 	buildScriptTags := parseTagSet(t, parseQuotedAssignment(t, readRepoFile(t, "build.sh"), `(?m)^BUILD_TAGS="([^"]+)"\s*$`))

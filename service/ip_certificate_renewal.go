@@ -188,3 +188,11 @@ func (s *SettingService) GetIpCertLastIssue() (string, error) {
 func (s *SettingService) setIpCertLastIssue(v string) error {
 	return s.setString("ipCertLastIssue", v)
 }
+
+func (s *SettingService) getIpCertAppliedAt() (string, error) {
+	return s.getString("ipCertAppliedAt")
+}
+
+func (s *SettingService) setIpCertAppliedAt(v string) error {
+	return s.setString("ipCertAppliedAt", v)
+}

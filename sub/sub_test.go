@@ -2,6 +2,7 @@ package sub
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -352,5 +353,32 @@ func TestSubHandlerLinkDisableReturns404ForBaseSubscription(t *testing.T) {
 	router.ServeHTTP(jsonRecorder, httptest.NewRequest(http.MethodGet, "/sub/secret-id?format=json", nil))
 	if jsonRecorder.Code != http.StatusOK {
 		t.Fatalf("json format should use subJsonEnable, got %d", jsonRecorder.Code)
+	}
+}
+
+func TestSubEnumerationCapacityPreservesTrackedAttacker(t *testing.T) {
+	subEnumMu.Lock()
+	subEnumByIP = map[string]subEnumState{}
+	now := time.Now()
+	for i := range subEnumMaxKeys {
+		subEnumByIP[fmt.Sprintf("198.51.100.%d", i)] = subEnumState{count: 1, windowAt: now}
+	}
+	attacker := "198.51.100.0"
+	subEnumByIP[attacker] = subEnumState{count: subEnumThreshold - 1, windowAt: now}
+	subEnumMu.Unlock()
+
+	noteSubNotFound("203.0.113.250")
+	noteSubNotFound(attacker)
+
+	subEnumMu.Lock()
+	defer subEnumMu.Unlock()
+	if len(subEnumByIP) != subEnumMaxKeys {
+		t.Fatalf("enumeration map size = %d, want %d", len(subEnumByIP), subEnumMaxKeys)
+	}
+	if got := subEnumByIP[attacker].count; got != subEnumThreshold {
+		t.Fatalf("attacker counter reset by spraying: got %d", got)
+	}
+	if _, tracked := subEnumByIP["203.0.113.250"]; tracked {
+		t.Fatal("new spraying key should not displace an active tracked key")
 	}
 }

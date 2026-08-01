@@ -52,6 +52,9 @@ type awgDesiredPeer struct {
 }
 
 func (m *AWGManager) reconcileInWorker(ctx context.Context) (AWGReconcileResult, error) {
+	if err := ctx.Err(); err != nil {
+		return AWGReconcileResult{}, err
+	}
 	var result AWGReconcileResult
 	if m.provisioner == nil {
 		return result, ErrAWGProvisionerMissing
@@ -63,12 +66,13 @@ func (m *AWGManager) reconcileInWorker(ctx context.Context) (AWGReconcileResult,
 	if !settings.Enabled {
 		return result, nil
 	}
-	if _, err := m.deps.LoadEndpoint(m.deps.DB, settings); err != nil {
+	db := m.deps.DB.WithContext(ctx)
+	if _, err := m.deps.LoadEndpoint(db, settings); err != nil {
 		return result, ErrAWGReconcileFailed
 	}
 
 	var devices []model.AWGDevice
-	deviceQuery := m.deps.DB.Order("id")
+	deviceQuery := db.Order("id")
 	if m.deps.EndpointID > 0 {
 		deviceQuery = deviceQuery.Where("endpoint_id = ?", m.deps.EndpointID)
 	}
@@ -85,7 +89,7 @@ func (m *AWGManager) reconcileInWorker(ctx context.Context) (AWGReconcileResult,
 	}
 	var clients []model.Client
 	if len(clientIDs) > 0 {
-		if err := m.deps.DB.Where("id IN ?", clientIDs).Find(&clients).Error; err != nil {
+		if err := db.Where("id IN ?", clientIDs).Find(&clients).Error; err != nil {
 			return result, err
 		}
 	}
@@ -97,6 +101,9 @@ func (m *AWGManager) reconcileInWorker(ctx context.Context) (AWGReconcileResult,
 	desired := make(map[string]awgDesiredPeer, len(devices))
 	invalid := make(map[uint]struct{})
 	for _, device := range devices {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
 		client, clientExists := clientsByID[device.ClientId]
 		if !device.DesiredEnabled || !clientExists || !clientIsActiveAt(client, m.deps.Now()) || deviceExpiredAt(device, m.deps.Now()) {
 			continue
@@ -130,6 +137,9 @@ func (m *AWGManager) reconcileInWorker(ctx context.Context) (AWGReconcileResult,
 	sort.Strings(removeKeys)
 	removeKeys = uniqueAWGStrings(removeKeys)
 	for _, publicKey := range removeKeys {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
 		if err := m.provisioner.Remove(ctx, publicKey); err != nil {
 			return result, ErrAWGReconcileFailed
 		}
@@ -142,6 +152,9 @@ func (m *AWGManager) reconcileInWorker(ctx context.Context) (AWGReconcileResult,
 	}
 	sort.Strings(publicKeys)
 	for _, publicKey := range publicKeys {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
 		wanted := desired[publicKey]
 		state, exists := snapshot[publicKey]
 		if exists && len(state.AllowedIPs) == 1 && state.AllowedIPs[0] == wanted.peer.AllowedIP.Masked() {
@@ -156,6 +169,9 @@ func (m *AWGManager) reconcileInWorker(ctx context.Context) (AWGReconcileResult,
 
 	now := m.deps.Now()
 	for _, device := range devices {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
 		if _, failed := invalid[device.Id]; failed {
 			continue
 		}
@@ -174,7 +190,7 @@ func (m *AWGManager) reconcileInWorker(ctx context.Context) (AWGReconcileResult,
 				updates["ip_reusable_after"] = now + awgRevokedIPQuarantineSeconds
 			}
 		}
-		if err := m.deps.DB.Model(&model.AWGDevice{}).Where("id = ?", device.Id).Updates(updates).Error; err != nil {
+		if err := db.Model(&model.AWGDevice{}).Where("id = ?", device.Id).Updates(updates).Error; err != nil {
 			return result, err
 		}
 	}
@@ -188,7 +204,7 @@ func (m *AWGManager) reconcileInWorker(ctx context.Context) (AWGReconcileResult,
 				AllowedIPs: []string{peer.AllowedIP.String()},
 			})
 		}
-		if err := m.deps.SyncEndpointPeers(m.deps.DB, settings, persisted); err != nil {
+		if err := m.deps.SyncEndpointPeers(db, settings, persisted); err != nil {
 			return result, ErrAWGReconcileFailed
 		}
 	}

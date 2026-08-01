@@ -19,7 +19,7 @@ import (
 
 type Core struct {
 	access             sync.RWMutex
-	wireGuardIPCAccess sync.Mutex
+	wireGuardIPCAccess chan struct{}
 	ctx                context.Context
 	isRunning          bool
 	instance           *Box
@@ -44,11 +44,14 @@ type coreRuntime struct {
 func NewCore() *Core {
 	ctx := context.Background()
 	ctx = sb.Context(ctx, InboundRegistry(), OutboundRegistry(), EndpointRegistry(), ProviderRegistry(), DNSTransportRegistry(), ServiceRegistry())
-	return &Core{
-		ctx:       ctx,
-		isRunning: false,
-		instance:  nil,
+	core := &Core{
+		ctx:                ctx,
+		isRunning:          false,
+		instance:           nil,
+		wireGuardIPCAccess: make(chan struct{}, 1),
 	}
+	core.wireGuardIPCAccess <- struct{}{}
+	return core
 }
 
 func (c *Core) GetCtx() context.Context {
@@ -67,8 +70,8 @@ func (c *Core) GetInstance() *Box {
 }
 
 func (c *Core) Start(sbConfig []byte) error {
-	c.wireGuardIPCAccess.Lock()
-	defer c.wireGuardIPCAccess.Unlock()
+	<-c.wireGuardIPCAccess
+	defer func() { c.wireGuardIPCAccess <- struct{}{} }()
 	var opt option.Options
 	ctx := c.GetCtx()
 	err := opt.UnmarshalJSONContext(ctx, sbConfig)
@@ -113,8 +116,8 @@ func (c *Core) Start(sbConfig []byte) error {
 }
 
 func (c *Core) Stop() error {
-	c.wireGuardIPCAccess.Lock()
-	defer c.wireGuardIPCAccess.Unlock()
+	<-c.wireGuardIPCAccess
+	defer func() { c.wireGuardIPCAccess <- struct{}{} }()
 	c.access.Lock()
 	c.isRunning = false
 	if c.instance == nil {

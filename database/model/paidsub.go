@@ -45,6 +45,20 @@ type PaidSubPaymentOrder struct {
 	SnapshotVersion     int    `json:"-" gorm:"column:snapshot_version;not null;default:0"`
 }
 
+// PaidSubPaymentCharge records every provider-confirmed charge. A unique charge
+// can grant service once; subsequent charges remain durably refund-pending.
+type PaidSubPaymentCharge struct {
+	Provider    string `json:"provider" gorm:"primaryKey;not null"`
+	ChargeID    string `json:"chargeId" gorm:"column:charge_id;primaryKey;not null"`
+	OrderID     uint   `json:"orderId" gorm:"column:order_id;index;not null"`
+	Disposition string `json:"disposition" gorm:"not null"`
+	RawPayload  []byte `json:"-" gorm:"column:raw_payload"`
+	ConfirmedAt int64  `json:"confirmedAt" gorm:"column:confirmed_at;not null"`
+	RefundedAt  int64  `json:"refundedAt" gorm:"column:refunded_at;not null;default:0"`
+}
+
+func (PaidSubPaymentCharge) TableName() string { return "paidsub_payment_charges" }
+
 func (PaidSubPaymentOrder) TableName() string { return "payment_orders" }
 
 // PaidSubBinding maps one Telegram user to one client.
@@ -57,3 +71,21 @@ type PaidSubBinding struct {
 }
 
 func (PaidSubBinding) TableName() string { return "paidsub_bindings" }
+
+// PaidSubPollCursor gives bounded provider scans a restart-safe fair position.
+type PaidSubPollCursor struct {
+	Provider    string `json:"provider" gorm:"primaryKey"`
+	LastOrderID uint   `json:"lastOrderId" gorm:"column:last_order_id;not null;default:0"`
+}
+
+func (PaidSubPollCursor) TableName() string { return "paidsub_poll_cursors" }
+
+// PaidSubInvoiceCancellation is a durable outbox for active sibling invoices
+// that must be canceled after one duplicate has already been paid.
+type PaidSubInvoiceCancellation struct {
+	OrderID     uint   `json:"orderId" gorm:"column:order_id;not null"`
+	Provider    string `json:"provider" gorm:"primaryKey;not null"`
+	ProviderRef string `json:"providerRef" gorm:"column:provider_ref;primaryKey;not null"`
+}
+
+func (PaidSubInvoiceCancellation) TableName() string { return "paidsub_invoice_cancellations" }

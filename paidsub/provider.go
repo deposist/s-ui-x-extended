@@ -47,11 +47,21 @@ type Invoice struct {
 	ProviderRef   string // provider-side id to persist (e.g. cryptobot invoice_id)
 }
 
-// PollResult reports an out-of-band confirmed payment.
+// PollResult reports an out-of-band confirmed payment that passed the
+// provider-specific authenticity and financial-metadata checks.
 type PollResult struct {
 	OrderID          uint
 	ProviderChargeID string
 	RawPayload       []byte
+}
+
+// PollOutcome separates confirmed payments from provider-terminal invoices.
+// TerminalOrderIDs may be expired locally only after the whole bounded request
+// completed successfully and while its context is still live.
+type PollOutcome struct {
+	Paid             []PollResult
+	TerminalOrderIDs []uint
+	MissingOrderIDs  []uint
 }
 
 type ReconciledInvoice struct {
@@ -59,6 +69,8 @@ type ReconciledInvoice struct {
 	ProviderRef      string
 	PayURL           string
 	Paid             bool
+	ProviderStatus   string
+	MetadataMismatch bool
 	ProviderChargeID string
 }
 
@@ -69,6 +81,8 @@ type PaymentProvider interface {
 	CreateInvoice(ctx context.Context, order *PaymentOrder, tariff *Tariff, client *model.Client) (*Invoice, error)
 }
 
+// invoiceDeleter must make deletion idempotent: a missing or already-deleted
+// provider invoice is a terminal success.
 type invoiceDeleter interface {
 	DeleteInvoice(ctx context.Context, providerRef string) error
 }
@@ -77,9 +91,10 @@ type invoiceReconciler interface {
 	ReconcileInvoices(ctx context.Context, unresolved []PaymentOrder) ([]ReconciledInvoice, error)
 }
 
-// pollingProvider is implemented by providers confirmed via polling (CryptoBot).
+// pollingProvider is implemented by providers confirmed via bounded polling
+// batches (CryptoBot).
 type pollingProvider interface {
-	Poll(ctx context.Context, pending []PaymentOrder) ([]PollResult, error)
+	Poll(ctx context.Context, pending []PaymentOrder) (PollOutcome, error)
 }
 
 func providerTitle(kind ProviderKind, l lang) string {

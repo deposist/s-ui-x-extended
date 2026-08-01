@@ -3,9 +3,10 @@ package network
 import (
 	"bufio"
 	"bytes"
-	"fmt"
+	"net/url"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 )
 
@@ -41,7 +42,15 @@ func (c *AutoHttpsConn) readRequest() bool {
 		Header: http.Header{},
 	}
 	resp.StatusCode = http.StatusTemporaryRedirect
-	location := fmt.Sprintf("https://%v%v", request.Host, request.RequestURI)
+	host := request.Host
+	if _, _, err := net.SplitHostPort(host); err != nil {
+		if local := c.LocalAddr(); local != nil {
+			if _, port, splitErr := net.SplitHostPort(local.String()); splitErr == nil && port != "443" {
+				host = net.JoinHostPort(strings.Trim(host, "[]"), port)
+			}
+		}
+	}
+	location := (&url.URL{Scheme: "https", Host: host, Path: request.URL.Path, RawQuery: request.URL.RawQuery}).String()
 	resp.Header.Set("Location", location)
 	_ = resp.Write(c.Conn)
 	_ = c.Close()

@@ -18,21 +18,50 @@ permissions:
   id-token: write
   attestations: write
 
+concurrency:
+  group: docker-release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}
 
 jobs:
-  build:
+  release-ref:
     runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.checkout.outputs.tag }}
+      commit: ${{ steps.checkout.outputs.commit }}
+      prerelease: ${{ steps.checkout.outputs.prerelease }}
     steps:
       - name: Check out release tooling
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Check out exact release tag
-        id: release-ref
+        id: checkout
         uses: ./.github/actions/checkout-release-tag
         with:
           tag: ${{ inputs.tag || github.ref_name }}
+          event_commit: ${{ github.event_name == 'push' && github.sha || '' }}
+
+  build-and-gate-platform:
+    name: Build and gate ${{ matrix.arch }}
+    needs: release-ref
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: linux/amd64, arch: amd64 }
+          - { platform: linux/arm64, arch: arm64 }
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Check out exact release tag
+        uses: ./.github/actions/checkout-release-tag
+        with:
+          tag: ${{ needs.release-ref.outputs.tag }}
+          expected_commit: ${{ needs.release-ref.outputs.commit }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4
@@ -47,45 +76,43 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set image tags
-        id: vars
-        run: |
-          TAG="${{ steps.release-ref.outputs.tag }}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          case "$TAG" in
-            *-alpha*|*-beta*|*-rc*|*-pre*)
-              {
-                echo "tags<<EOF"
-                echo "${{ env.IMAGE_NAME }}:$TAG"
-                echo "EOF"
-              } >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              {
-                echo "tags<<EOF"
-                echo "${{ env.IMAGE_NAME }}:$TAG"
-                echo "${{ env.IMAGE_NAME }}:latest"
-                echo "EOF"
-              } >> "$GITHUB_OUTPUT"
-              ;;
-          esac
-
-      - name: Build and push Docker image
+      - name: Build and push untagged platform image by digest
         id: push
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
           context: .
           file: Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: true
-          tags: ${{ steps.vars.outputs.tags }}
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true
           provenance: true
           sbom: true
 
-      - name: Scan pushed image for high and critical vulnerabilities
+      - name: Resolve and verify immutable platform digest
+        id: platform
+        env:
+          OUTPUT_DIGEST: ${{ steps.push.outputs.digest }}
+          PLATFORM_OS: linux
+          PLATFORM_ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          [[ "$OUTPUT_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          descriptor=$(docker buildx imagetools inspect --raw "$IMAGE_NAME@$OUTPUT_DIGEST")
+          if jq -e '.manifests' <<<"$descriptor" >/dev/null; then
+            mapfile -t digests < <(jq -r --arg os "$PLATFORM_OS" --arg arch "$PLATFORM_ARCH" '.manifests[] | select(.platform.os == $os and .platform.architecture == $arch) | .digest' <<<"$descriptor")
+            ((${#digests[@]} == 1)) || { echo "expected exactly one $PLATFORM_OS/$PLATFORM_ARCH manifest" >&2; exit 1; }
+            digest=${digests[0]}
+          else
+            digest=$OUTPUT_DIGEST
+            image=$(docker buildx imagetools inspect "$IMAGE_NAME@$digest" --format '{{json .Image}}')
+            test "$(jq -r .os <<<"$image")/$(jq -r .architecture <<<"$image")" = "$PLATFORM_OS/$PLATFORM_ARCH"
+          fi
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Scan immutable platform image
         uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8 # master 2026-07-21
         with:
-          image-ref: ${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}
+          image-ref: ${{ env.IMAGE_NAME }}@${{ steps.platform.outputs.digest }}
           scanners: vuln,secret
           format: table
           exit-code: "1"
@@ -93,9 +120,149 @@ jobs:
           severity: HIGH,CRITICAL
           version: v0.72.0
 
-      - name: Attest container provenance
+      - name: Runtime smoke immutable platform image
+        env:
+          DIGEST: ${{ steps.platform.outputs.digest }}
+          PLATFORM: ${{ matrix.platform }}
+          EXPECTED_VERSION: ${{ needs.release-ref.outputs.tag }}
+        run: |
+          set -euo pipefail
+          actual=$(docker run --rm --platform "$PLATFORM" --entrypoint ./sui "$IMAGE_NAME@$DIGEST" -v | awk 'NR == 1 { print $NF }')
+          test "$actual" = "${EXPECTED_VERSION#v}"
+
+      - name: Attest platform image provenance
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # main 2026-07-21
         with:
           subject-name: ${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.push.outputs.digest }}
+          subject-digest: ${{ steps.platform.outputs.digest }}
           push-to-registry: true
+
+      - name: Persist gated platform digest
+        env:
+          DIGEST: ${{ steps.platform.outputs.digest }}
+        run: |
+          mkdir -p digests
+          printf '%s\n' "$DIGEST" > "digests/${{ matrix.arch }}"
+
+      - name: Upload gated platform digest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: docker-digest-${{ matrix.arch }}
+          path: digests/${{ matrix.arch }}
+          retention-days: 1
+
+  assemble-and-gate-index:
+    name: Assemble and gate candidate index
+    needs: [release-ref, build-and-gate-platform]
+    runs-on: ubuntu-24.04
+    outputs:
+      digest: ${{ steps.candidate.outputs.digest }}
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Check out exact release tag
+        uses: ./.github/actions/checkout-release-tag
+        with:
+          tag: ${{ needs.release-ref.outputs.tag }}
+          expected_commit: ${{ needs.release-ref.outputs.commit }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download gated platform digests
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: docker-digest-*
+          path: digests
+          merge-multiple: true
+
+      - name: Assemble run-scoped candidate manifest
+        id: candidate
+        env:
+          CANDIDATE_TAG: candidate-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          AMD64_DIGEST=$(cat digests/amd64)
+          ARM64_DIGEST=$(cat digests/arm64)
+          for digest in "$AMD64_DIGEST" "$ARM64_DIGEST"; do [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; done
+          docker buildx imagetools create \
+            --tag "$IMAGE_NAME:$CANDIDATE_TAG" \
+            "$IMAGE_NAME@$AMD64_DIGEST" \
+            "$IMAGE_NAME@$ARM64_DIGEST"
+          digest=$(docker buildx imagetools inspect "$IMAGE_NAME:$CANDIDATE_TAG" --format '{{json .Manifest}}' | jq -r .digest)
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Final runtime smoke for every candidate platform
+        env:
+          CANDIDATE_DIGEST: ${{ steps.candidate.outputs.digest }}
+          EXPECTED_VERSION: ${{ needs.release-ref.outputs.tag }}
+        run: |
+          set -euo pipefail
+          for platform in linux/amd64 linux/arm64; do
+            actual=$(docker run --rm --platform "$platform" --entrypoint ./sui "$IMAGE_NAME@$CANDIDATE_DIGEST" -v | awk 'NR == 1 { print $NF }')
+            test "$actual" = "${EXPECTED_VERSION#v}"
+          done
+
+      - name: Attest gated candidate index
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # main 2026-07-21
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.candidate.outputs.digest }}
+          push-to-registry: true
+
+  promote:
+    name: Promote final Docker tags
+    needs: [release-ref, assemble-and-gate-index]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Check out exact release tag
+        uses: ./.github/actions/checkout-release-tag
+        with:
+          tag: ${{ needs.release-ref.outputs.tag }}
+          expected_commit: ${{ needs.release-ref.outputs.commit }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote gated candidate atomically
+        env:
+          TAG: ${{ needs.release-ref.outputs.tag }}
+          PRERELEASE: ${{ needs.release-ref.outputs.prerelease }}
+          DIGEST: ${{ needs.assemble-and-gate-index.outputs.digest }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          args=(buildx imagetools create --tag "$IMAGE_NAME:$TAG")
+          if [[ "$PRERELEASE" == false ]]; then
+            args+=(--tag "$IMAGE_NAME:latest")
+          fi
+          docker "${args[@]}" "$IMAGE_NAME@$DIGEST"
+
+          public_tags=("$TAG")
+          [[ "$PRERELEASE" == false ]] && public_tags+=(latest)
+          for public_tag in "${public_tags[@]}"; do
+            published=$(docker buildx imagetools inspect "$IMAGE_NAME:$public_tag" --format '{{json .Manifest}}' | jq -r .digest)
+            test "$published" = "$DIGEST"
+          done

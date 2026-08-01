@@ -138,9 +138,10 @@ export default {
       }
     },
     renameFallbackAlpn(oldKey:string, newKey:string) {
-      if (!this.$props.data.fallback_for_alpn || newKey.length == 0 || oldKey == newKey) return
-      this.$props.data.fallback_for_alpn[newKey] = this.$props.data.fallback_for_alpn[oldKey]
-      delete this.$props.data.fallback_for_alpn[oldKey]
+      const fallbacks = this.$props.data.fallback_for_alpn
+      if (!fallbacks || newKey.length == 0 || oldKey == newKey || Object.prototype.hasOwnProperty.call(fallbacks, newKey)) return
+      fallbacks[newKey] = fallbacks[oldKey]
+      delete fallbacks[oldKey]
     }
   },
   components: {Network, InboundAdvanced}

@@ -502,9 +502,15 @@ export default {
   },
   methods: {
     loadData() {
-      if (this.$props.settings?.subJsonExt?.length>0){
-        this.subJsonExt = JSON.parse(this.$props.settings.subJsonExt)
-      } else {
+      const stored = this.$props.settings?.subJsonExt
+      if (typeof stored !== 'string' || stored.length === 0) {
+        this.subJsonExt = <any>{}
+        return
+      }
+      try {
+        const parsed = JSON.parse(stored)
+        this.subJsonExt = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : <any>{}
+      } catch {
         this.subJsonExt = <any>{}
       }
     },
@@ -524,7 +530,9 @@ export default {
     },
     saveEditor(data:string) {
       try {
-        this.subJsonExt = JSON.parse(data)
+        const parsed = JSON.parse(data)
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('invalid data')
+        this.subJsonExt = parsed
       } catch (e) {
         push.error({
           message: i18n.global.t('failed') + ": " + i18n.global.t('error.invalidData'),

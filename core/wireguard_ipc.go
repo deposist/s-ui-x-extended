@@ -1,6 +1,9 @@
 package core
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 // WireGuardIPC exposes the live WireGuard userspace configuration interface.
 type WireGuardIPC interface {
@@ -12,11 +15,29 @@ type WireGuardIPC interface {
 // core runtime read lock. This prevents the endpoint from being stopped during
 // the IPC operation.
 func (c *Core) WithWireGuardIPC(tag string, fn func(WireGuardIPC) error) error {
+	return c.WithWireGuardIPCContext(context.Background(), tag, fn)
+}
+
+// WithWireGuardIPCContext is cancellation-aware while waiting to enter the IPC
+// critical section. The third-party UAPI itself has no context API, so once fn
+// begins it remains atomic with respect to Core Start/Stop and must return from
+// the underlying finite transport operation before the lock can be released.
+func (c *Core) WithWireGuardIPCContext(ctx context.Context, tag string, fn func(WireGuardIPC) error) error {
 	if fn == nil {
 		return fmt.Errorf("wireguard IPC callback is nil")
 	}
-	c.wireGuardIPCAccess.Lock()
-	defer c.wireGuardIPCAccess.Unlock()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-c.wireGuardIPCAccess:
+	}
+	defer func() { c.wireGuardIPCAccess <- struct{}{} }()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return c.withRuntime(func(rt coreRuntime) error {
 		endpoint, ok := rt.endpointManager.Get(tag)
 		if !ok {

@@ -24,7 +24,12 @@ env:
   NODE_VERSION: "25"
   CRONET_GO_VERSION: "2faf34666c2cc8234f10f2ab6d4c4d6104d34ae2"
   CRONET_GO_REPO: https://github.com/sagernet/cronet-go.git
-  BOOTLIN_BASE_URL: https://toolchains.bootlin.com/downloads/releases/toolchains
+  # Exact Bootlin releases; archive URLs and SHA-256 values are published by
+  # Bootlin beside each archive. Never replace these with directory scraping.
+  BOOTLIN_ARMV5_URL: https://toolchains.bootlin.com/downloads/releases/toolchains/armv5-eabi/tarballs/armv5-eabi--musl--stable-2025.08-1.tar.xz
+  BOOTLIN_ARMV5_SHA256: 8cdb4ad70c6b5a66427fa3315fe3ddde1c19c90232674dec59045e04d2a36cf1
+  BOOTLIN_S390X_URL: https://toolchains.bootlin.com/downloads/releases/toolchains/s390x-z13/tarballs/s390x-z13--musl--stable-2025.08-1.tar.xz
+  BOOTLIN_S390X_SHA256: 23f536ff2bf1a9d3b93210465471996bc7c918fbb5702a277d8e1e42ffab8559
   # Full extended tags that do not need the cronet/naive toolchain. The build
   # step appends with_naive_outbound only for matrix.naive platforms.
   RELEASE_BUILD_TAGS: "with_quic,with_grpc,with_utls,with_acme,with_gvisor,badlinkname,tfogo_checklinkname0,with_tailscale,with_dhcp,with_wireguard,with_masque,with_mtproxy,with_openvpn,with_sudoku,with_trusttunnel,with_ccm,with_ocm,with_oomkiller"
@@ -36,6 +41,7 @@ jobs:
       tag: ${{ steps.checkout.outputs.tag }}
       version: ${{ steps.checkout.outputs.version }}
       commit: ${{ steps.checkout.outputs.commit }}
+      prerelease: ${{ steps.checkout.outputs.prerelease }}
     steps:
       - name: Check out release tooling
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -45,6 +51,14 @@ jobs:
         uses: ./.github/actions/checkout-release-tag
         with:
           tag: ${{ inputs.tag || github.ref_name }}
+          event_commit: ${{ github.event_name == 'push' && github.sha || '' }}
+
+  build-windows:
+    needs: release-ref
+    uses: ./.github/workflows/windows.yml
+    with:
+      tag: ${{ needs.release-ref.outputs.tag }}
+      expected_commit: ${{ needs.release-ref.outputs.commit }}
 
   awg-integration:
     needs: release-ref
@@ -106,6 +120,10 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Verify production frontend dist
+        working-directory: frontend
+        run: npm run verify:dist
+
       - name: Upload frontend build artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -156,13 +174,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { platform: amd64, arch: amd64, bootlin: x86-64, naive: true }
-          - { platform: arm64, arch: arm64, bootlin: aarch64, naive: true }
-          - { platform: armv7, arch: arm, goarm: "7", bootlin: armv7-eabihf, naive: true }
-          - { platform: armv6, arch: arm, goarm: "6", bootlin: armv6-eabihf, naive: true }
-          - { platform: armv5, arch: arm, goarm: "5", bootlin: armv5-eabi, naive: false }
-          - { platform: "386", arch: "386", bootlin: x86-i686, naive: true }
-          - { platform: s390x, arch: s390x, bootlin: s390x-z13, naive: false }
+          - { platform: amd64, arch: amd64, naive: true }
+          - { platform: arm64, arch: arm64, naive: true }
+          - { platform: armv7, arch: arm, goarm: "7", naive: true }
+          - { platform: armv6, arch: arm, goarm: "6", naive: true }
+          - { platform: armv5, arch: arm, goarm: "5", naive: false, bootlin_url: "BOOTLIN_ARMV5_URL", bootlin_sha256: "BOOTLIN_ARMV5_SHA256", bootlin_dir: "armv5-eabi--musl--stable-2025.08-1" }
+          - { platform: "386", arch: "386", naive: true }
+          - { platform: s390x, arch: s390x, naive: false, bootlin_url: "BOOTLIN_S390X_URL", bootlin_sha256: "BOOTLIN_S390X_SHA256", bootlin_dir: "s390x-z13--musl--stable-2025.08-1" }
     runs-on: ubuntu-latest
     steps:
       - name: Check out release tooling
@@ -227,28 +245,38 @@ jobs:
 
       - name: Set up Bootlin musl (non-naive platforms)
         if: ${{ matrix.naive != true }}
+        env:
+          BOOTLIN_URL_KEY: ${{ matrix.bootlin_url }}
+          BOOTLIN_SHA256_KEY: ${{ matrix.bootlin_sha256 }}
+          BOOTLIN_DIR: ${{ matrix.bootlin_dir }}
         run: |
-          set -e
-          BOOTLIN_ARCH="${{ matrix.bootlin }}"
-          echo "Resolving Bootlin musl toolchain for arch=$BOOTLIN_ARCH (platform=${{ matrix.platform }})"
-          TARBALL_BASE="${{ env.BOOTLIN_BASE_URL }}/$BOOTLIN_ARCH/tarballs/"
-          TARBALL_URL=$(curl -fsSL "$TARBALL_BASE" | grep -oE "${BOOTLIN_ARCH}--musl--stable-[^\"]+\\.tar\\.xz" | sort -r | head -n1)
-          [ -z "$TARBALL_URL" ] && { echo "Bootlin musl toolchain not found for arch=$BOOTLIN_ARCH" >&2; exit 1; }
-          echo "Downloading: $TARBALL_URL"
-          cd /tmp
-          curl -fL -sS -o "$(basename "$TARBALL_URL")" "$TARBALL_BASE/$TARBALL_URL"
-          tar -xf "$(basename "$TARBALL_URL")"
-          TOOLCHAIN_DIR=$(find . -maxdepth 1 -type d -name "${BOOTLIN_ARCH}--musl--stable-*" | head -n1)
-          TOOLCHAIN_DIR="$(realpath "$TOOLCHAIN_DIR")"
+          set -euo pipefail
+          BOOTLIN_URL=${!BOOTLIN_URL_KEY-}
+          BOOTLIN_SHA256=${!BOOTLIN_SHA256_KEY-}
+          [[ "$BOOTLIN_URL" == https://toolchains.bootlin.com/downloads/releases/toolchains/*/tarballs/*.tar.xz ]] || {
+            echo "missing or non-authoritative exact Bootlin URL for ${{ matrix.platform }}" >&2
+            exit 1
+          }
+          [[ "$BOOTLIN_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
+            echo "missing pinned Bootlin SHA-256 for ${{ matrix.platform }}" >&2
+            exit 1
+          }
+          [[ "$BOOTLIN_DIR" != "" ]] || { echo "missing exact Bootlin directory" >&2; exit 1; }
+          archive="/tmp/${BOOTLIN_URL##*/}"
+          curl --fail --location --silent --show-error --output "$archive" "$BOOTLIN_URL"
+          printf '%s  %s\n' "$BOOTLIN_SHA256" "$archive" | sha256sum --check --strict -
+          tar -xf "$archive" -C /tmp
+          TOOLCHAIN_DIR="/tmp/$BOOTLIN_DIR"
+          [[ -d "$TOOLCHAIN_DIR" ]] || { echo "expected toolchain directory not found: $TOOLCHAIN_DIR" >&2; exit 1; }
           BIN_DIR="$TOOLCHAIN_DIR/bin"
           echo "PATH=$BIN_DIR:$PATH" >> "$GITHUB_ENV"
           CC=$(find "$BIN_DIR" -maxdepth 1 \( -name '*-gcc.br_real' -o -name '*-gcc' \) -type f -executable 2>/dev/null | grep -v g++ | head -n1)
-          [ -z "$CC" ] && { echo "gcc not found in $BIN_DIR" >&2; exit 1; }
+          [[ -n "$CC" ]] || { echo "gcc not found in $BIN_DIR" >&2; exit 1; }
           echo "CC=$(realpath "$CC")" >> "$GITHUB_ENV"
           SYSROOT=""
           F=$(find "$TOOLCHAIN_DIR" -name "libc-header-start.h" 2>/dev/null | head -1)
-          if [ -n "$F" ]; then SYSROOT=$(dirname "$(dirname "$(dirname "$(dirname "$F")")")"); fi
-          if [ -n "$SYSROOT" ] && [ -d "$SYSROOT" ]; then
+          if [[ -n "$F" ]]; then SYSROOT=$(dirname "$(dirname "$(dirname "$(dirname "$F")")")"); fi
+          if [[ -n "$SYSROOT" && -d "$SYSROOT" ]]; then
             echo "CGO_CFLAGS=--sysroot=$SYSROOT" >> "$GITHUB_ENV"
             echo "CGO_LDFLAGS=--sysroot=$SYSROOT -static" >> "$GITHUB_ENV"
           fi
@@ -293,7 +321,7 @@ jobs:
           tag="${{ needs.release-ref.outputs.tag }}"
           tag="${tag#v}"
           channel=main
-          case "$tag" in *-alpha*|*-beta*|*-rc*|*-pre*) channel=beta ;; esac
+          [[ "$tag" == *-* ]] && channel=beta
           archive="s-ui-linux-${{ matrix.platform }}.tar.gz"
           manifest="$archive.manifest.json"
           python3 - <<PY
@@ -315,14 +343,13 @@ jobs:
             ./s-ui-linux-${{ matrix.platform }}.tar.gz
             ./s-ui-linux-${{ matrix.platform }}.tar.gz.sha256
             ./s-ui-linux-${{ matrix.platform }}.tar.gz.manifest.json
-
           retention-days: 1
 
-  publish-linux:
+  publish-release:
     permissions:
       contents: write
-    name: Publish Linux artifacts
-    needs: [release-ref, build-linux, release-security]
+    name: Reconcile and publish verified release
+    needs: [release-ref, build-linux, build-windows, release-security]
     runs-on: ubuntu-latest
     steps:
       - name: Check out release tooling
@@ -336,24 +363,24 @@ jobs:
 
       - name: Set release properties
         id: vars
+        env:
+          TAG: ${{ needs.release-ref.outputs.tag }}
+          PRERELEASE: ${{ needs.release-ref.outputs.prerelease }}
         run: |
-          TAG="${{ needs.release-ref.outputs.tag }}"
+          set -euo pipefail
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          case "$TAG" in
-            *-alpha*|*-beta*|*-rc*|*-pre*)
-              echo "prerelease=true" >> "$GITHUB_OUTPUT"
-              echo "make_latest=false" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              echo "prerelease=false" >> "$GITHUB_OUTPUT"
-              echo "make_latest=true" >> "$GITHUB_OUTPUT"
-              ;;
-          esac
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          if [[ "$PRERELEASE" == true ]]; then
+            echo "make_latest=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "make_latest=true" >> "$GITHUB_OUTPUT"
+          fi
           NOTES_FILE=".github/RELEASE_NOTES_${TAG}.md"
-          if [ -f "$NOTES_FILE" ]; then
+          if [[ -f "$NOTES_FILE" ]]; then
             echo "notes_path=$NOTES_FILE" >> "$GITHUB_OUTPUT"
           else
-            echo "notes_path=" >> "$GITHUB_OUTPUT"
+            : > "$RUNNER_TEMP/empty-release-notes.md"
+            echo "notes_path=$RUNNER_TEMP/empty-release-notes.md" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Download Linux build artifacts
@@ -363,30 +390,108 @@ jobs:
           path: release-assets
           merge-multiple: true
 
+      - name: Download Windows build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: s-ui-windows-*
+          path: release-assets
+          merge-multiple: true
+
       - name: Download release security assets
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: release-security-assets
           path: release-assets
+      - name: Verify exact local release asset inventory
+        run: |
+          set -euo pipefail
+          test "$(find release-assets -maxdepth 1 -type f | wc -l)" -eq 27
+          test "$(find release-assets -maxdepth 1 -type f -name 's-ui-linux-*.tar.gz' | wc -l)" -eq 7
+          test "$(find release-assets -maxdepth 1 -type f -name 's-ui-linux-*.tar.gz.sha256' | wc -l)" -eq 7
+          test "$(find release-assets -maxdepth 1 -type f -name 's-ui-linux-*.tar.gz.manifest.json' | wc -l)" -eq 7
+          test "$(find release-assets -maxdepth 1 -type f -name 's-ui-windows-*.zip' | wc -l)" -eq 2
+          test "$(find release-assets -maxdepth 1 -type f -name 's-ui-windows-*.zip.sha256' | wc -l)" -eq 2
+          test -f release-assets/s-ui-release.spdx.json
+          test -f release-assets/s-ui-release-attestation.json
 
-      - name: Reject existing release assets
+
+      - name: Verify local checksums
+        working-directory: release-assets
+        run: sha256sum --check --strict s-ui-linux-*.sha256 s-ui-windows-*.sha256
+
+      - name: Recheck authoritative remote tag
+        env:
+          TAG: ${{ needs.release-ref.outputs.tag }}
+          EXPECTED_COMMIT: ${{ needs.release-ref.outputs.commit }}
+        run: |
+          set -euo pipefail
+          git fetch --force --tags origin "refs/tags/$TAG:refs/tags/$TAG"
+          test "$(git rev-list -n 1 "refs/tags/$TAG")" = "$EXPECTED_COMMIT"
+
+      - name: Create or validate Release
+        id: create-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-ref.outputs.tag }}
+          COMMIT: ${{ needs.release-ref.outputs.commit }}
+          PRERELEASE: ${{ needs.release-ref.outputs.prerelease }}
+          NOTES_PATH: ${{ steps.vars.outputs.notes_path }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease >/tmp/release.json 2>/dev/null; then
+            test "$(jq -r .isPrerelease /tmp/release.json)" = "$PRERELEASE"
+          else
+            args=(release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --target "$COMMIT" --title "s-ui $TAG" --notes-file "$NOTES_PATH" --draft --latest=false)
+            [[ "$PRERELEASE" == true ]] && args+=(--prerelease)
+            gh "${args[@]}"
+          fi
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease > /tmp/release.json
+          echo "is_draft=$(jq -r .isDraft /tmp/release.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Reconcile release assets by authoritative digest
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.release-ref.outputs.tag }}
         run: scripts/check-release-assets.sh "$GITHUB_REPOSITORY" "$TAG" release-assets
 
-      - name: Publish to current repository Release
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
-        with:
-          tag_name: ${{ steps.vars.outputs.tag }}
-          name: s-ui ${{ steps.vars.outputs.tag }}
-          target_commitish: ${{ needs.release-ref.outputs.commit }}
-          prerelease: ${{ steps.vars.outputs.prerelease == 'true' }}
-          make_latest: ${{ steps.vars.outputs.make_latest }}
-          body_path: ${{ steps.vars.outputs.notes_path }}
-          fail_on_unmatched_files: true
-          overwrite_files: false
-          files: release-assets/*
+      - name: Verify exact remote inventory and digests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-ref.outputs.tag }}
+        run: scripts/check-release-assets.sh --verify "$GITHUB_REPOSITORY" "$TAG" release-assets
+
+      - name: Recheck tag and publish Release
+        if: steps.create-release.outputs.is_draft != 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-ref.outputs.tag }}
+          EXPECTED_COMMIT: ${{ needs.release-ref.outputs.commit }}
+          PRERELEASE: ${{ needs.release-ref.outputs.prerelease }}
+          MAKE_LATEST: ${{ steps.vars.outputs.make_latest }}
+          NOTES_PATH: ${{ steps.vars.outputs.notes_path }}
+        run: |
+          set -euo pipefail
+          git fetch --force --tags origin "refs/tags/$TAG:refs/tags/$TAG"
+          test "$(git rev-list -n 1 "refs/tags/$TAG")" = "$EXPECTED_COMMIT"
+          args=(release edit "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "s-ui $TAG" --notes-file "$NOTES_PATH" --draft=false)
+          if [[ "$PRERELEASE" == true ]]; then
+            args+=(--prerelease --latest=false)
+          elif [[ "$MAKE_LATEST" == true ]]; then
+            args+=(--prerelease=false --latest)
+          fi
+          gh "${args[@]}"
+
+      - name: Verify published release inventory and classification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-ref.outputs.tag }}
+          PRERELEASE: ${{ needs.release-ref.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          scripts/check-release-assets.sh --verify "$GITHUB_REPOSITORY" "$TAG" release-assets
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease > /tmp/published-release.json
+          test "$(jq -r .isDraft /tmp/published-release.json)" = false
+          test "$(jq -r .isPrerelease /tmp/published-release.json)" = "$PRERELEASE"
 
   release-security:
     permissions:

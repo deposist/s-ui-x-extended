@@ -8,12 +8,17 @@
     <v-card-text>
       <v-row justify="center" class="mb-2">
         <v-col cols="12" md="8" lg="6">
-          <v-img
-            src="@/assets/support-s-ui-x.png"
-            :alt="$t('donations.imageAlt')"
-            class="donations-hero mx-auto"
-            max-width="520"
-          />
+          <picture>
+            <source srcset="@/assets/support-s-ui-x.avif" type="image/avif">
+            <source srcset="@/assets/support-s-ui-x.webp" type="image/webp">
+            <img
+              src="@/assets/support-s-ui-x.png"
+              :alt="$t('donations.imageAlt')"
+              class="donations-hero mx-auto"
+              width="2172"
+              height="724"
+            >
+          </picture>
         </v-col>
       </v-row>
 
@@ -136,19 +141,19 @@ const writeClipboard = async (text: string): Promise<boolean> => {
   } catch {
     // fall through to the legacy path
   }
+  const textarea = document.createElement('textarea')
   try {
-    const textarea = document.createElement('textarea')
     textarea.value = text
     textarea.style.position = 'fixed'
     textarea.style.opacity = '0'
     document.body.appendChild(textarea)
     textarea.focus()
     textarea.select()
-    const ok = document.execCommand('copy')
-    document.body.removeChild(textarea)
-    return ok
+    return document.execCommand('copy')
   } catch {
     return false
+  } finally {
+    textarea.remove()
   }
 }
 </script>
@@ -156,6 +161,10 @@ const writeClipboard = async (text: string): Promise<boolean> => {
 <style scoped>
 .donations-hero {
   border-radius: 12px;
+  display: block;
+  height: auto;
+  max-width: 520px;
+  width: 100%;
 }
 
 .donations-intro {

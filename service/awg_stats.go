@@ -46,6 +46,9 @@ func (m *AWGManager) CollectStats(ctx context.Context) (AWGStatsResult, error) {
 }
 
 func (m *AWGManager) collectStatsInWorker(ctx context.Context) (AWGStatsResult, error) {
+	if err := ctx.Err(); err != nil {
+		return AWGStatsResult{}, err
+	}
 	var result AWGStatsResult
 	if m.provisioner == nil {
 		return result, ErrAWGProvisionerMissing
@@ -55,17 +58,21 @@ func (m *AWGManager) collectStatsInWorker(ctx context.Context) (AWGStatsResult, 
 		return result, ErrAWGStatsFailed
 	}
 	var devices []model.AWGDevice
-	statsQuery := m.deps.DB.Where("public_key IN ?", awgSnapshotKeys(snapshot))
+	db := m.deps.DB.WithContext(ctx)
+	statsQuery := db.Where("public_key IN ?", awgSnapshotKeys(snapshot))
 	if m.deps.EndpointID > 0 {
 		statsQuery = statsQuery.Where("endpoint_id = ?", m.deps.EndpointID)
 	}
 	if err := statsQuery.Find(&devices).Error; err != nil {
 		return result, err
 	}
-	err = m.deps.DB.Transaction(func(tx *gorm.DB) error {
+	err = db.Transaction(func(tx *gorm.DB) error {
 		clientDeltas := make(map[string]clientTrafficDelta)
 		clientNames := make(map[uint]string)
 		for _, device := range devices {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			state, exists := snapshot[device.PublicKey]
 			if !exists {
 				continue

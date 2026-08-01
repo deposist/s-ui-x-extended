@@ -45,6 +45,7 @@ func rateLimitMiddleware() gin.HandlerFunc {
 			ip = c.ClientIP()
 		}
 		now := time.Now()
+		limit := currentRateLimitRequests(now)
 		rateLimitMu.Lock()
 		gcRateLimitBucketsLocked(now)
 		bucket := rateLimitBuckets[ip]
@@ -56,7 +57,6 @@ func rateLimitMiddleware() gin.HandlerFunc {
 		if len(rateLimitBuckets) > rateLimitMaxKeys {
 			enforceRateLimitBucketCapLocked()
 		}
-		limit := currentRateLimitRequests(now)
 		allowed := bucket.count <= limit
 		retryAfter := int(bucket.windowStart.Add(rateLimitWindow).Sub(now).Seconds())
 		if retryAfter <= 0 {

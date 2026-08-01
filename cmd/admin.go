@@ -59,6 +59,7 @@ func showAdmin() {
 	userModel, err := userService.GetFirstUser()
 	if err != nil {
 		fmt.Println("get current user info failed,error info:", err)
+		return
 	}
 	username := userModel.Username
 	if username == "" || userModel.Password == "" {

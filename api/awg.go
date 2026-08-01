@@ -75,9 +75,10 @@ func (a *ApiService) ListAWGEndpoints(c *gin.Context) {
 	}
 	rows := make([]endpointRow, 0, len(endpointIDs))
 	for _, endpointID := range endpointIDs {
-		endpoint, settings, loadErr := service.LoadAWGEndpointByID(db, endpointID)
-		if loadErr != nil {
-			continue
+		endpoint, settings, err := service.LoadAWGEndpointByID(db, endpointID)
+		if err != nil {
+			jsonMsg(c, "awg", err)
+			return
 		}
 		dns := make([]string, len(settings.DNS))
 		for i := range settings.DNS {

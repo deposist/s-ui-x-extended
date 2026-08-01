@@ -16,7 +16,6 @@ import (
 )
 
 type SQLiteSessionStore struct {
-	db        *gorm.DB
 	codecs    []securecookie.Codec
 	optionsMu sync.RWMutex
 	options   *gsessions.Options
@@ -40,7 +39,6 @@ func NewSQLiteSessionStore(db *gorm.DB, keyPairs ...[]byte) (*SQLiteSessionStore
 		return nil, errors.New("sqlite session store requires at least one non-empty cookie key")
 	}
 	store := &SQLiteSessionStore{
-		db:     db,
 		codecs: codecs,
 		options: &gsessions.Options{
 			Path:     "/",
@@ -134,7 +132,11 @@ func (s *SQLiteSessionStore) Save(_ *http.Request, w http.ResponseWriter, sessio
 }
 
 func (s *SQLiteSessionStore) ensureSchema() error {
-	if err := s.liveDB().Exec(`
+	db, err := s.liveDB()
+	if err != nil {
+		return err
+	}
+	if err := db.Exec(`
 CREATE TABLE IF NOT EXISTS sessions (
 	id TEXT PRIMARY KEY,
 	data BLOB NOT NULL,
@@ -142,7 +144,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 )`).Error; err != nil {
 		return err
 	}
-	return s.liveDB().Exec("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)").Error
+	return db.Exec("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)").Error
 }
 
 func (s *SQLiteSessionStore) save(session *gsessions.Session) error {
@@ -154,7 +156,11 @@ func (s *SQLiteSessionStore) save(session *gsessions.Session) error {
 	if session.Options.MaxAge > 0 {
 		expiresAt = s.now().Add(time.Duration(session.Options.MaxAge) * time.Second).Unix()
 	}
-	return s.liveDB().Exec(`
+	db, err := s.liveDB()
+	if err != nil {
+		return err
+	}
+	return db.Exec(`
 INSERT INTO sessions(id, data, expires_at)
 VALUES(?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET data = excluded.data, expires_at = excluded.expires_at
@@ -162,8 +168,12 @@ ON CONFLICT(id) DO UPDATE SET data = excluded.data, expires_at = excluded.expire
 }
 
 func (s *SQLiteSessionStore) load(session *gsessions.Session) (bool, error) {
+	db, err := s.liveDB()
+	if err != nil {
+		return false, err
+	}
 	var row sqliteSessionRow
-	err := s.liveDB().Table("sessions").Where("id = ?", session.ID).First(&row).Error
+	err = db.Table("sessions").Where("id = ?", session.ID).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, nil
 	}
@@ -183,14 +193,19 @@ func (s *SQLiteSessionStore) load(session *gsessions.Session) (bool, error) {
 }
 
 func (s *SQLiteSessionStore) erase(id string) error {
-	return s.liveDB().Exec("DELETE FROM sessions WHERE id = ?", id).Error
+	db, err := s.liveDB()
+	if err != nil {
+		return err
+	}
+	return db.Exec("DELETE FROM sessions WHERE id = ?", id).Error
 }
 
-func (s *SQLiteSessionStore) liveDB() *gorm.DB {
-	if live := database.GetDB(); live != nil {
-		return live
+func (s *SQLiteSessionStore) liveDB() (*gorm.DB, error) {
+	db := database.GetDB()
+	if db == nil {
+		return nil, errors.New("sqlite session store database is not initialized")
 	}
-	return s.db
+	return db, nil
 }
 
 func (s *SQLiteSessionStore) currentOptions() *gsessions.Options {

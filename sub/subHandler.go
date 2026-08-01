@@ -50,10 +50,16 @@ func noteSubNotFound(ip string) {
 	if alert {
 		st.alertedAt = now
 	}
-	// Crude bound on map growth (a flood of distinct spoofed IPs): reset wholesale
-	// rather than track LRU - the counter is best-effort detection, not security.
-	if len(subEnumByIP) > subEnumMaxKeys {
-		subEnumByIP = map[string]subEnumState{}
+	if _, exists := subEnumByIP[ip]; !exists && len(subEnumByIP) >= subEnumMaxKeys {
+		for candidate, state := range subEnumByIP {
+			if now.Sub(state.windowAt) > subEnumWindow {
+				delete(subEnumByIP, candidate)
+			}
+		}
+		if len(subEnumByIP) >= subEnumMaxKeys {
+			subEnumMu.Unlock()
+			return
+		}
 	}
 	subEnumByIP[ip] = st
 	count := st.count

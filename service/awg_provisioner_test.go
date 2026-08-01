@@ -55,7 +55,7 @@ func bytesOf(fill byte, size int) []byte {
 }
 
 func newTestAWGProvisioner(ipc core.WireGuardIPC, calls *int) AWGProvisioner {
-	return newAWGProvisioner("managed-awg", func(tag string, fn func(core.WireGuardIPC) error) error {
+	return newAWGProvisioner("managed-awg", func(_ context.Context, tag string, fn func(core.WireGuardIPC) error) error {
 		*calls++
 		if tag != "managed-awg" {
 			return errors.New("unexpected endpoint tag")

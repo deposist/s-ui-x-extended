@@ -129,11 +129,16 @@ func (a *ApiService) getData(c *gin.Context) (interface{}, error) {
 	a.ClientService.RegenerateMissingLocalLinksOnce(getHostname(c))
 
 	data := make(map[string]interface{}, 0)
+	// Capture the acknowledgement cursor before checking and reading the
+	// snapshot. A concurrent commit will then remain newer than this response and
+	// be fetched next time rather than being acknowledged before it was read.
+	revision := a.ConfigService.CurrentRevision()
 	lu := c.Query("lu")
 	isUpdated, err := a.ConfigService.CheckChanges(lu)
 	if err != nil {
 		return "", err
 	}
+	data["revision"] = revision
 	onlines, err := a.StatsService.GetOnlines()
 
 	sysInfo := a.ServerService.GetSingboxInfo()

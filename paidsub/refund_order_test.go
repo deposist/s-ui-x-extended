@@ -160,11 +160,10 @@ func TestRefundOrderStarsRequiresBotToken(t *testing.T) {
 	}
 }
 
-// TestRefundRestoresUsageCounters pins M-2: a traffic-refilling renewal resets
-// up/down and folds them into total_up/total_down; a refund with revoke must
-// restore the pre-purchase accounting state symmetrically (volume AND the usage
-// counters), using the granted_up/granted_down snapshot taken at apply time.
-func TestRefundRestoresUsageCounters(t *testing.T) {
+// TestRefundKeepsUsageAccounting pins M-08: refunding purchased capacity must
+// not rewrite cumulative accounting or the current usage window. Those counters
+// reflect real traffic independently of the refunded capacity grant.
+func TestRefundKeepsUsageAccounting(t *testing.T) {
 	db := openTestDB(t)
 	if err := EnsureSchema(db); err != nil {
 		t.Fatalf("EnsureSchema: %v", err)
@@ -203,11 +202,11 @@ func TestRefundRestoresUsageCounters(t *testing.T) {
 	}
 	var afterRefund model.Client
 	db.Where("id = ?", client.Id).First(&afterRefund)
-	if afterRefund.Up != 100 || afterRefund.Down != 200 {
-		t.Errorf("refund must restore up/down, got up=%d down=%d", afterRefund.Up, afterRefund.Down)
+	if afterRefund.Up != afterApply.Up || afterRefund.Down != afterApply.Down {
+		t.Errorf("refund changed current usage: got %d/%d, want %d/%d", afterRefund.Up, afterRefund.Down, afterApply.Up, afterApply.Down)
 	}
-	if afterRefund.TotalUp != 1000 || afterRefund.TotalDown != 2000 {
-		t.Errorf("refund must restore totals, got total_up=%d total_down=%d", afterRefund.TotalUp, afterRefund.TotalDown)
+	if afterRefund.TotalUp != afterApply.TotalUp || afterRefund.TotalDown != afterApply.TotalDown {
+		t.Errorf("refund changed cumulative totals: got %d/%d, want %d/%d", afterRefund.TotalUp, afterRefund.TotalDown, afterApply.TotalUp, afterApply.TotalDown)
 	}
 	if afterRefund.Volume != 5<<30 {
 		t.Errorf("refund must roll back volume, got %d", afterRefund.Volume)

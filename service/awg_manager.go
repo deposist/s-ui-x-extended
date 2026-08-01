@@ -29,6 +29,8 @@ type awgCommand struct {
 
 type awgManagerRun struct {
 	commands chan awgCommand
+	ctx      context.Context
+	cancel   context.CancelFunc
 	stopCh   chan struct{}
 	done     chan struct{}
 	stopOnce sync.Once
@@ -81,10 +83,13 @@ func (m *AWGManager) Start() error {
 			return ErrAWGManagerStopping
 		}
 	}
+	runCtx, cancel := context.WithCancel(context.Background())
 	run := &awgManagerRun{
 		commands: make(chan awgCommand, m.capacity),
 		stopCh:   make(chan struct{}),
 		done:     make(chan struct{}),
+		ctx:      runCtx,
+		cancel:   cancel,
 	}
 	m.run = run
 	m.accepting = true
@@ -106,6 +111,7 @@ func (m *AWGManager) Stop(ctx context.Context) error {
 		return nil
 	}
 	m.accepting = false
+	run.cancel()
 	run.stopOnce.Do(func() { close(run.stopCh) })
 	m.mu.Unlock()
 
@@ -216,7 +222,14 @@ func (m *AWGManager) worker(run *awgManagerRun) {
 				command.result <- awgCommandResult{err: err}
 				continue
 			}
-			command.result <- command.run(context.Background())
+			operationCtx, cancel := context.WithCancelCause(command.ctx)
+			stopRunCancellation := context.AfterFunc(run.ctx, func() {
+				cancel(context.Cause(run.ctx))
+			})
+			result := command.run(operationCtx)
+			stopRunCancellation()
+			cancel(nil)
+			command.result <- result
 		}
 	}
 }

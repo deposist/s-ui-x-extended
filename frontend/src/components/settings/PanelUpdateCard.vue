@@ -213,6 +213,7 @@ const confirm = ref(false)
 const password = ref('')
 let suppressChannelCheck = false
 let pollTimer: ReturnType<typeof setInterval> | undefined
+let pollPending = false
 
 const jobActive = computed(() => RUNNING_STAGES.includes(status.value?.job?.stage || ''))
 const canUpdate = computed(() =>
@@ -276,11 +277,15 @@ const runUpdate = async () => {
 
 const startPolling = () => {
   stopPolling()
-  pollTimer = setInterval(async () => {
+  pollTimer = setInterval(() => {
+    if (pollPending) return
+    pollPending = true
     // While the panel restarts into the new binary, requests fail. That is the
     // expected end state; keep polling so the UI recovers once it returns.
-    await loadStatus()
-    if (!jobActive.value) stopPolling()
+    void loadStatus().finally(() => {
+      pollPending = false
+      if (!jobActive.value) stopPolling()
+    })
   }, 2000)
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/deposist/s-ui-x-extended/util/common"
@@ -54,6 +55,8 @@ type Box struct {
 	statsTracker    *StatsTracker
 	connTracker     *ConnTracker
 	done            chan struct{}
+	closeOnce       sync.Once
+	closeErr        error
 }
 
 type Options struct {
@@ -442,7 +445,7 @@ func (s *Box) PreStart() error {
 func (s *Box) Start() error {
 	err := s.start()
 	if err != nil {
-		return err
+		return errors.Join(err, s.Close())
 	}
 	s.logger.Info("sing-box started (", F.Seconds(time.Since(s.createdAt).Seconds()), "s)")
 	return nil
@@ -504,28 +507,54 @@ func (s *Box) start() error {
 }
 
 func (s *Box) Close() error {
-	select {
-	case <-s.done:
-		return nil
-	default:
-		close(s.done)
-	}
+	s.closeOnce.Do(func() {
+		s.closeErr = s.close()
+	})
+	return s.closeErr
+}
+
+func (s *Box) close() error {
+	close(s.done)
 	var err error
 	s.logger.Info("closing sing-box")
-	for _, closeItem := range []struct {
+	closeItems := make([]struct {
 		name    string
 		service adapter.Lifecycle
-	}{
-		{"service", s.service},
-		{"endpoint", s.endpoint},
-		{"inbound", s.inbound},
-		{"outbound", s.outbound},
-		{"router", s.router},
-		{"connection", s.connection},
-		{"dns-router", s.dnsRouter},
-		{"dns-transport", s.dnsTransport},
-		{"network", s.network},
-	} {
+	}, 0, 9)
+	addCloseItem := func(name string, service adapter.Lifecycle) {
+		closeItems = append(closeItems, struct {
+			name    string
+			service adapter.Lifecycle
+		}{name, service})
+	}
+	if s.service != nil {
+		addCloseItem("service", s.service)
+	}
+	if s.endpoint != nil {
+		addCloseItem("endpoint", s.endpoint)
+	}
+	if s.inbound != nil {
+		addCloseItem("inbound", s.inbound)
+	}
+	if s.outbound != nil {
+		addCloseItem("outbound", s.outbound)
+	}
+	if s.router != nil {
+		addCloseItem("router", s.router)
+	}
+	if s.connection != nil {
+		addCloseItem("connection", s.connection)
+	}
+	if s.dnsRouter != nil {
+		addCloseItem("dns-router", s.dnsRouter)
+	}
+	if s.dnsTransport != nil {
+		addCloseItem("dns-transport", s.dnsTransport)
+	}
+	if s.network != nil {
+		addCloseItem("network", s.network)
+	}
+	for _, closeItem := range closeItems {
 		if closeItem.service == nil {
 			continue
 		}

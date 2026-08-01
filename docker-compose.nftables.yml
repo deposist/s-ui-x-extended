@@ -1,4 +1,6 @@
-# Opt-in only: grants the capability needed for Linux nftables/transparent-proxy rules.
+# Opt-in only, on a Linux Docker host: grants the single capability needed for
+# nftables/transparent-proxy rules. It does not select an emulated architecture,
+# run as root/privileged, or add host devices.
 # Usage: docker compose -f docker-compose.yml -f docker-compose.nftables.yml --profile nftables up -d
 services:
   s-ui:

@@ -145,7 +145,7 @@ func TestTelegramBackupRunOnceConcurrentGuard(t *testing.T) {
 	})
 	started := make(chan struct{})
 	release := make(chan struct{})
-	restoreSend := replaceTelegramBackupSendDocumentForTest(t, func(_ *TelegramService, _ string, _ []byte, _ string) TelegramResult {
+	restoreSend := replaceTelegramBackupSendDocumentForTest(t, func(_ context.Context, _ *TelegramService, _ string, _ []byte, _ string) TelegramResult {
 		close(started)
 		<-release
 		return TelegramResult{Success: true}
@@ -180,7 +180,7 @@ func TestTelegramBackupRunOncePassesThroughTelegramErrorClassAndFallback(t *test
 		Passphrase:      passphrase,
 	})
 
-	restoreSend := replaceTelegramBackupSendDocumentForTest(t, func(_ *TelegramService, _ string, _ []byte, _ string) TelegramResult {
+	restoreSend := replaceTelegramBackupSendDocumentForTest(t, func(_ context.Context, _ *TelegramService, _ string, _ []byte, _ string) TelegramResult {
 		return TelegramResult{ErrorClass: "proxy"}
 	})
 	result := (&TelegramBackupService{}).RunOnce(context.Background(), TelegramBackupTriggerManual)
@@ -189,7 +189,7 @@ func TestTelegramBackupRunOncePassesThroughTelegramErrorClassAndFallback(t *test
 	}
 	restoreSend()
 
-	restoreSend = replaceTelegramBackupSendDocumentForTest(t, func(_ *TelegramService, _ string, _ []byte, _ string) TelegramResult {
+	restoreSend = replaceTelegramBackupSendDocumentForTest(t, func(_ context.Context, _ *TelegramService, _ string, _ []byte, _ string) TelegramResult {
 		return TelegramResult{}
 	})
 	defer restoreSend()
@@ -241,7 +241,7 @@ func boolString(value bool) string {
 	return "false"
 }
 
-func replaceTelegramBackupSendDocumentForTest(t *testing.T, send func(*TelegramService, string, []byte, string) TelegramResult) func() {
+func replaceTelegramBackupSendDocumentForTest(t *testing.T, send func(context.Context, *TelegramService, string, []byte, string) TelegramResult) func() {
 	t.Helper()
 	old := telegramBackupSendDocument
 	telegramBackupSendDocument = send

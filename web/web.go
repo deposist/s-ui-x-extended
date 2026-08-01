@@ -9,6 +9,8 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -43,6 +45,12 @@ type Server struct {
 	settingService service.SettingService
 	runtime        *service.Runtime
 	assetsFS       fs.FS
+}
+
+var hashedAssetPattern = regexp.MustCompile(`-[A-Za-z0-9_-]{8,}\.[A-Za-z0-9]+$`)
+
+func isHashedAsset(name string) bool {
+	return hashedAssetPattern.MatchString(name)
 }
 
 type Option func(*Server)
@@ -133,10 +141,8 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	engine.Use(sessions.Sessions("s-ui", store))
 
 	engine.Use(func(c *gin.Context) {
-		uri := c.Request.RequestURI
-		if strings.HasPrefix(uri, assetsBasePath) {
-			// Hashed assets are immutable: file name changes whenever
-			// content changes.
+		assetName := path.Base(c.Request.URL.Path)
+		if strings.HasPrefix(c.Request.URL.Path, assetsBasePath) && isHashedAsset(assetName) {
 			c.Header("Cache-Control", "public, max-age=31536000, immutable")
 		}
 	})
@@ -210,6 +216,9 @@ func (s *Server) Start() (err error) {
 		}
 	}()
 
+	if s.ctx == nil || s.ctx.Err() != nil {
+		s.ctx, s.cancel = context.WithCancel(context.Background())
+	}
 	engine, err := s.initRouter()
 	if err != nil {
 		return err
@@ -271,6 +280,7 @@ func (s *Server) Start() (err error) {
 		// can lift the 30s Read/Write timeouts. The gzip middleware wraps
 		// c.Writer such that http.NewResponseController can no longer reach the
 		// connection, so the deadline must be set on the conn directly.
+		BaseContext: func(net.Listener) context.Context { return s.ctx },
 		ConnContext: api.SaveConnContext,
 	}
 
@@ -284,13 +294,15 @@ func (s *Server) Start() (err error) {
 }
 
 func (s *Server) Stop() error {
+	if s.cancel != nil {
+		s.cancel()
+	}
 	var err error
 	if s.httpServer != nil {
 		shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 30*time.Second)
 		err = s.httpServer.Shutdown(shutdownCtx)
 		cancelShutdown()
 		if err != nil {
-			s.cancel()
 			if s.listener != nil {
 				_ = s.listener.Close()
 			}
@@ -299,10 +311,8 @@ func (s *Server) Stop() error {
 	} else if s.listener != nil {
 		err = s.listener.Close()
 		if err != nil {
-			s.cancel()
 			return err
 		}
 	}
-	s.cancel()
 	return nil
 }

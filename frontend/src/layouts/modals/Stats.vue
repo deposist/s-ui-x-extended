@@ -39,6 +39,7 @@
 import { i18n } from '@/locales'
 import HttpUtils from '@/plugins/httputil'
 import { HumanReadable } from '@/plugins/utils'
+import { buildStatsBucketSeries } from './statsBuckets'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -144,26 +145,12 @@ export default {
       if (data.success && data.obj) {
         const obj = <any[]>data.obj
         const l = String(i18n.global.locale) == 'fa' ? "fa-IR" : "en-US"
-        const oneStep = this.limit * 3600 * 1000 / 360 // Each 10 sec
-        const now = new Date().getTime()
-        const steps = <number[]>[]
-        for (let i = 360; i >= 0; i--) {
-          steps.push(now - (oneStep * i))
-        }
-        const labels = <string[]>[]
-        const uplinkData = <number[]>[]
-        const downlinkData = <number[]>[]
-        for (let i = 1; i<360; i++) {
-          labels.push(this.genLable(steps[i],l))
-          let upSum:number
-          let downSum:number
-          const upTraffics = obj.filter(o => o.direction && o.dateTime*1000 < steps[i] && o.dateTime*1000 > steps[i-1]).map((o:any) => o.traffic)
-          upSum = upTraffics.length>0 ? upTraffics.reduce((acc:number, v:number) => acc + v, 0) : null
-          const downTraffics = obj.filter(o => !o.direction && o.dateTime*1000 < steps[i] && o.dateTime*1000 > steps[i-1]).map((o:any) => o.traffic)
-          downSum = downTraffics.length>0 ? downTraffics.reduce((acc:number, v:number) => acc + v, 0) : null
-          uplinkData.push(upSum)
-          downlinkData.push(downSum)
-        }
+        const { labelSteps, uplinkData, downlinkData } = buildStatsBucketSeries(
+          obj,
+          this.limit,
+          new Date().getTime(),
+        )
+        const labels = labelSteps.map(step => this.genLable(step, l))
         this.usage = {
           labels: labels,
           datasets: [

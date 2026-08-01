@@ -11,7 +11,7 @@ export const getCSRFToken = async () => {
   }
   if (!csrfTokenPromise) {
     const generation = csrfTokenGeneration
-    csrfTokenPromise = axios.get('api/csrf', {
+    const request: Promise<string> = axios.get('api/csrf', {
       baseURL: getBaseUrl(),
       headers: {
         'X-Requested-With': 'XMLHttpRequest',
@@ -24,15 +24,12 @@ export const getCSRFToken = async () => {
       if (typeof token !== 'string' || token.length === 0) {
         throw new Error('CSRF token was not returned')
       }
-      if (generation === csrfTokenGeneration) {
-        csrfToken = token
-      }
+      if (generation === csrfTokenGeneration) csrfToken = token
       return token
     }).finally(() => {
-      if (generation === csrfTokenGeneration) {
-        csrfTokenPromise = null
-      }
+      if (csrfTokenPromise === request) csrfTokenPromise = null
     })
+    csrfTokenPromise = request
   }
   return csrfTokenPromise
 }

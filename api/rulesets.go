@@ -22,7 +22,7 @@ const maxRuleSetSourcesPerRequest = 32
 // paths only after this succeeds, which is what keeps a missing local file (a
 // fatal startup error for the core) out of the saved config.
 func (a *ApiService) MaterializeRuleSets(c *gin.Context) {
-	if !a.requireTokenScopeAny(c, "admin", "write") {
+	if !a.requireTokenScopeAny(c, "rulesets", "admin", "write") {
 		return
 	}
 	var req ruleSetMaterializeRequest

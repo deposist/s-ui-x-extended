@@ -506,6 +506,10 @@ func EncryptTelegramBackup(plain []byte) ([]byte, []byte, error) {
 }
 
 func (s *TelegramService) SendTelegramDocument(filename string, data []byte, caption string) TelegramResult {
+	return s.SendTelegramDocumentContext(context.Background(), filename, data, caption)
+}
+
+func (s *TelegramService) SendTelegramDocumentContext(ctx context.Context, filename string, data []byte, caption string) TelegramResult {
 	enabled, err := s.telegramEnabled()
 	if err != nil {
 		return TelegramResult{ErrorClass: "settings"}
@@ -538,7 +542,7 @@ func (s *TelegramService) SendTelegramDocument(filename string, data []byte, cap
 		writeErr <- bodyWriter.Close()
 	}()
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://api.telegram.org/bot"+token+"/sendDocument", bodyReader)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.telegram.org/bot"+token+"/sendDocument", bodyReader)
 	if err != nil {
 		_ = bodyReader.CloseWithError(err)
 		<-writeErr

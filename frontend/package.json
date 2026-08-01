@@ -1,10 +1,11 @@
 {
   "name": "s-ui-frontend",
-  "version": "1.0.8-beta8",
+  "version": "1.0.8-beta9",
   "private": true,
   "scripts": {
     "dev": "vite --host",
     "build": "vue-tsc --noEmit && vite build",
+    "verify:dist": "node scripts/verify-dist-assets.mjs",
     "preview": "vite preview",
     "test": "node scripts/run-vitest.mjs",
     "test:unit": "node scripts/run-vitest.mjs",

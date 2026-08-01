@@ -42,7 +42,7 @@
 </template>
 
 <script lang="ts" setup>
-import { useLocale, useTheme } from 'vuetify'
+import { useTheme } from 'vuetify'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { languages, setI18nLocale } from '@/locales'
@@ -51,13 +51,10 @@ defineProps(['isMobile'])
 
 const route = useRoute()
 const { locale: i18nLocale } = useI18n()
-const vuetifyLocale = useLocale()
 const theme = useTheme()
 
 const changeLocale = async (l: string) => {
-  const selectedLocale = await setI18nLocale(l)
-  i18nLocale.value = selectedLocale
-  vuetifyLocale.current.value = selectedLocale
+  await setI18nLocale(l)
   window.location.reload()
 }
 const isActiveLocale = (l: string) => i18nLocale.value === l

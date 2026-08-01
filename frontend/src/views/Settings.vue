@@ -32,7 +32,7 @@
           prepend-icon="lucide:save"
           @click="save"
           :loading="loading"
-          :disabled="!stateChange"
+          :disabled="!hasUnsavedChanges"
         >
           {{ $t('actions.save') }}
         </v-btn>
@@ -44,18 +44,18 @@
           prepend-icon="lucide:save"
           @click="saveBasicsConfig"
           :loading="loading"
-          :disabled="!basicsStateChange"
+          :disabled="!basicsHasUnsavedChanges"
         >
           {{ $t('actions.save') }}
         </v-btn>
       </v-col>
       <v-col cols="auto">
-        <v-btn variant="text" color="warning" @click="restartApp" :loading="loading" :disabled="tab !== 't6' ? stateChange : basicsStateChange">
+        <v-btn variant="text" color="warning" @click="restartApp" :loading="loading" :disabled="tab !== 't6' ? hasUnsavedChanges : basicsHasUnsavedChanges">
           {{ $t('actions.restartApp') }}
         </v-btn>
       </v-col>
       <!-- Tells the user *why* Save is enabled and that leaving now loses work. -->
-      <v-col cols="auto" v-if="tab !== 't6' ? stateChange : basicsStateChange">
+      <v-col cols="auto" v-if="tab !== 't6' ? hasUnsavedChanges : basicsHasUnsavedChanges">
         <span class="settings-dirty">
           <v-icon icon="lucide:alert-circle" size="14" />
           {{ $t('form.unsavedChanges') }}
@@ -1441,7 +1441,7 @@ const resyncBasicsFromStore = () => {
   oldConfig.value = cloneStoreConfig()
 }
 
-const basicsStateChange = computed(() => {
+const basicsHasUnsavedChanges = computed(() => {
   return !FindDiff.deepCompare(appConfig.value, oldConfig.value)
 })
 
@@ -1813,7 +1813,7 @@ const subscriptionPathChanged = () => {
   return subscriptionPathKeys.some((key) => settings.value[key] !== (oldSettings.value as any)[key])
 }
 
-const stateChange = computed(() => {
+const hasUnsavedChanges = computed(() => {
   return !FindDiff.deepCompare(settings.value,oldSettings.value)
 })
 </script>

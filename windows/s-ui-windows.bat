@@ -144,36 +144,19 @@ if "%service_choice%"=="3" goto menu
 goto invalid_choice
 
 :install_service
-echo Installing Windows Service...
-if exist "%INSTALL_DIR%\s-ui-service.exe" (
-    cd /d "%INSTALL_DIR%"
-    s-ui-service.exe install
-    if %errorLevel% equ 0 (
-        echo Service installed successfully!
-        echo Starting service...
-        net start %SERVICE_NAME%
-    ) else (
-        echo Failed to install service. Error code: %errorLevel%
-    )
-) else (
-    echo Service wrapper not found. Please run the installer first.
-)
+echo Service installation requires the architecture, SHA-256, and Authenticode checks in install-windows.bat.
+echo Re-run install-windows.bat as Administrator; this control script will not execute an unverified wrapper.
 pause
 goto service_management
 
 :uninstall_service
 echo Uninstalling Windows Service...
-if exist "%INSTALL_DIR%\s-ui-service.exe" (
-    cd /d "%INSTALL_DIR%"
-    net stop %SERVICE_NAME% >nul 2>&1
-    s-ui-service.exe uninstall
-    if %errorLevel% equ 0 (
-        echo Service uninstalled successfully!
-    ) else (
-        echo Failed to uninstall service. Error code: %errorLevel%
-    )
+net stop %SERVICE_NAME% >nul 2>&1
+sc.exe delete %SERVICE_NAME%
+if %errorLevel% equ 0 (
+    echo Service deletion requested successfully!
 ) else (
-    echo Service wrapper not found.
+    echo Failed to delete service or service was not installed. Error code: %errorLevel%
 )
 pause
 goto service_management

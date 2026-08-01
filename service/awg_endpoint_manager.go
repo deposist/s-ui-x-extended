@@ -16,6 +16,7 @@ import (
 type AWGEndpointManager struct {
 	runtime  *Runtime
 	mu       sync.Mutex
+	accepting bool
 	managers map[uint]*AWGManager
 }
 
@@ -23,31 +24,66 @@ func NewAWGEndpointManager(runtime *Runtime) *AWGEndpointManager {
 	return &AWGEndpointManager{runtime: runtimeOrDefault(runtime), managers: make(map[uint]*AWGManager)}
 }
 
-func (s *AWGEndpointManager) manager(endpointID uint) (*AWGManager, error) {
-	if endpointID == 0 {
+// Start admits device and maintenance work for this application generation.
+func (s *AWGEndpointManager) Start() error {
+	if s == nil {
+		return ErrAWGManagerStopped
+	}
+	s.mu.Lock()
+	s.accepting = true
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *AWGEndpointManager) manager(ctx context.Context, endpointID uint) (*AWGManager, error) {
+	if s == nil || endpointID == 0 {
 		return nil, ErrAWGEndpointAccessDenied
 	}
-	db := database.GetDB()
-	endpoint, _, err := LoadAWGEndpointByID(db, endpointID)
-	if err != nil {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	manager := s.managers[endpointID]
-	if manager == nil {
-		deps := defaultAWGManagerDeps()
-		deps.EndpointID = endpointID
-		deps.LoadSettings = func() (AWGSettings, error) {
-			_, current, err := LoadAWGEndpointByID(database.GetDB(), endpointID)
-			return current, err
-		}
-		manager = NewAWGManagerWithDeps(s.runtime, NewAWGProvisioner(s.runtime, endpoint.Tag), 64, deps)
-		if err := manager.Start(); err != nil {
-			return nil, err
-		}
-		s.managers[endpointID] = manager
+	if !s.accepting {
+		s.mu.Unlock()
+		return nil, ErrAWGManagerStopped
 	}
+	if manager := s.managers[endpointID]; manager != nil {
+		s.mu.Unlock()
+		return manager, nil
+	}
+	s.mu.Unlock()
+
+	db := database.GetDB()
+	if db == nil {
+		return nil, errors.New("AWG database is unavailable")
+	}
+	endpoint, _, err := LoadAWGEndpointByID(db.WithContext(ctx), endpointID)
+	if err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.accepting {
+		return nil, ErrAWGManagerStopped
+	}
+	if manager := s.managers[endpointID]; manager != nil {
+		return manager, nil
+	}
+	deps := defaultAWGManagerDeps()
+	deps.EndpointID = endpointID
+	deps.LoadSettings = func() (AWGSettings, error) {
+		_, current, loadErr := LoadAWGEndpointByID(database.GetDB(), endpointID)
+		return current, loadErr
+	}
+	manager := NewAWGManagerWithDeps(s.runtime, NewAWGProvisioner(s.runtime, endpoint.Tag), 64, deps)
+	if err := manager.Start(); err != nil {
+		return nil, err
+	}
+	s.managers[endpointID] = manager
 	return manager, nil
 }
 
@@ -56,7 +92,7 @@ func (s *AWGEndpointManager) CreateDevice(ctx context.Context, clientID, endpoin
 	if err != nil {
 		return AWGDeviceInfo{}, err
 	}
-	manager, err := s.manager(endpointID)
+	manager, err := s.manager(ctx, endpointID)
 	if err != nil {
 		return AWGDeviceInfo{}, err
 	}
@@ -67,7 +103,7 @@ func (s *AWGEndpointManager) ListDevices(clientID, endpointID uint) ([]AWGDevice
 	if _, _, _, err := EffectiveAWGEndpointAccess(database.GetDB(), clientID, endpointID); err != nil {
 		return nil, err
 	}
-	manager, err := s.manager(endpointID)
+	manager, err := s.manager(context.Background(), endpointID)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +111,7 @@ func (s *AWGEndpointManager) ListDevices(clientID, endpointID uint) ([]AWGDevice
 }
 
 func (s *AWGEndpointManager) GetOwnedDevice(clientID, endpointID, deviceID uint) (AWGDeviceInfo, error) {
-	manager, err := s.manager(endpointID)
+	manager, err := s.manager(context.Background(), endpointID)
 	if err != nil {
 		return AWGDeviceInfo{}, err
 	}
@@ -86,7 +122,7 @@ func (s *AWGEndpointManager) RenderOwnedConfig(ctx context.Context, clientID, en
 	if _, _, _, err := EffectiveAWGEndpointAccess(database.GetDB(), clientID, endpointID); err != nil {
 		return nil, err
 	}
-	manager, err := s.manager(endpointID)
+	manager, err := s.manager(ctx, endpointID)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +133,7 @@ func (s *AWGEndpointManager) RotateOwnedDevice(ctx context.Context, clientID, en
 	if _, _, _, err := EffectiveAWGEndpointAccess(database.GetDB(), clientID, endpointID); err != nil {
 		return AWGDeviceInfo{}, err
 	}
-	manager, err := s.manager(endpointID)
+	manager, err := s.manager(ctx, endpointID)
 	if err != nil {
 		return AWGDeviceInfo{}, err
 	}
@@ -105,7 +141,7 @@ func (s *AWGEndpointManager) RotateOwnedDevice(ctx context.Context, clientID, en
 }
 
 func (s *AWGEndpointManager) RevokeOwnedDevice(ctx context.Context, clientID, endpointID, deviceID uint) error {
-	manager, err := s.manager(endpointID)
+	manager, err := s.manager(ctx, endpointID)
 	if err != nil {
 		return err
 	}
@@ -113,13 +149,26 @@ func (s *AWGEndpointManager) RevokeOwnedDevice(ctx context.Context, clientID, en
 }
 
 func (s *AWGEndpointManager) ReconcileAll(ctx context.Context) error {
-	endpointIDs, err := ListManagedAWGEndpoints(database.GetDB())
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	db := database.GetDB()
+	if db == nil {
+		return errors.New("AWG database is unavailable")
+	}
+	endpointIDs, err := ListManagedAWGEndpoints(db.WithContext(ctx))
 	if err != nil {
 		return err
 	}
 	var result error
 	for _, endpointID := range endpointIDs {
-		manager, managerErr := s.manager(endpointID)
+		if err := ctx.Err(); err != nil {
+			return errors.Join(result, err)
+		}
+		manager, managerErr := s.manager(ctx, endpointID)
 		if managerErr != nil {
 			result = errors.Join(result, managerErr)
 			continue
@@ -132,13 +181,26 @@ func (s *AWGEndpointManager) ReconcileAll(ctx context.Context) error {
 
 // CollectStatsAll aggregates traffic counters for every managed endpoint.
 func (s *AWGEndpointManager) CollectStatsAll(ctx context.Context) error {
-	endpointIDs, err := ListManagedAWGEndpoints(database.GetDB())
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	db := database.GetDB()
+	if db == nil {
+		return errors.New("AWG database is unavailable")
+	}
+	endpointIDs, err := ListManagedAWGEndpoints(db.WithContext(ctx))
 	if err != nil {
 		return err
 	}
 	var result error
 	for _, endpointID := range endpointIDs {
-		manager, managerErr := s.manager(endpointID)
+		if err := ctx.Err(); err != nil {
+			return errors.Join(result, err)
+		}
+		manager, managerErr := s.manager(ctx, endpointID)
 		if managerErr != nil {
 			result = errors.Join(result, managerErr)
 			continue
@@ -149,20 +211,28 @@ func (s *AWGEndpointManager) CollectStatsAll(ctx context.Context) error {
 	return result
 }
 
-// StopAll stops every per-endpoint manager. New commands after StopAll fail
-// until a manager is recreated lazily by the next device operation.
+// StopAll closes admission before canceling every worker. Holding mu while the
+// snapshot is stopped prevents Start or a racing lazy manager creation from
+// publishing a worker after shutdown has begun.
 func (s *AWGEndpointManager) StopAll(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	s.mu.Lock()
+	s.accepting = false
 	managers := make([]*AWGManager, 0, len(s.managers))
 	for _, manager := range s.managers {
 		managers = append(managers, manager)
 	}
 	s.managers = make(map[uint]*AWGManager)
-	s.mu.Unlock()
 	var result error
 	for _, manager := range managers {
 		result = errors.Join(result, manager.Stop(ctx))
 	}
+	s.mu.Unlock()
 	return result
 }
 

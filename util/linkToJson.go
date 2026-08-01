@@ -3,7 +3,6 @@ package util
 import (
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -13,29 +12,34 @@ import (
 
 func GetOutbound(uri string, i int) (*map[string]interface{}, string, error) {
 	u, err := url.Parse(uri)
-	if err == nil {
-		switch u.Scheme {
-		case "vmess":
-			return vmess(u.Host, i)
-		case "vless":
-			return vless(u, i)
-		case "trojan":
-			return trojan(u, i)
-		case "hy", "hysteria":
-			return hy(u, i)
-		case "hy2", "hysteria2":
-			return hy2(u, i)
-		case "anytls":
-			return anytls(u, i)
-		case "tuic":
-			return tuic(u, i)
-		case "ss", "shadowsocks":
-			return ss(u, i)
-		case "naive+https", "naive+quic", "http2":
-			return parseNaiveLink(u, i)
-		}
+	if err != nil || u == nil {
+		return nil, "", common.NewError("Invalid link URL")
 	}
-	return nil, "", common.NewError("Unsupported link format")
+	if _, err := url.ParseQuery(u.RawQuery); err != nil {
+		return nil, "", err
+	}
+	switch u.Scheme {
+	case "vmess":
+		return vmess(u.Host, i)
+	case "vless":
+		return vless(u, i)
+	case "trojan":
+		return trojan(u, i)
+	case "hy", "hysteria":
+		return hy(u, i)
+	case "hy2", "hysteria2":
+		return hy2(u, i)
+	case "anytls":
+		return anytls(u, i)
+	case "tuic":
+		return tuic(u, i)
+	case "ss", "shadowsocks":
+		return ss(u, i)
+	case "naive+https", "naive+quic", "http2":
+		return parseNaiveLink(u, i)
+	default:
+		return nil, "", common.NewError("Unsupported link format")
+	}
 }
 
 func vmess(data string, i int) (*map[string]interface{}, string, error) {
@@ -45,7 +49,10 @@ func vmess(data string, i int) (*map[string]interface{}, string, error) {
 	}
 	var dataJson map[string]interface{}
 	err = json.Unmarshal(dataByte, &dataJson)
-	if err != nil {
+	if err != nil || dataJson == nil {
+		if err == nil {
+			err = common.NewError("Invalid vmess JSON map")
+		}
 		return nil, "", err
 	}
 	transport := map[string]interface{}{}
@@ -135,17 +142,47 @@ func vmess(data string, i int) (*map[string]interface{}, string, error) {
 	return &vmess, tag, err
 }
 
+func parseURLServer(u *url.URL, defaultPort int) (string, int, error) {
+	host := u.Hostname()
+	if host == "" {
+		return "", 0, common.NewError("Invalid link host")
+	}
+	port := defaultPort
+	portStr := u.Port()
+	if portStr == "" {
+		if strings.HasSuffix(u.Host, ":") {
+			return "", 0, common.NewError("Invalid link port")
+		}
+		return host, port, nil
+	}
+	n, err := strconv.ParseUint(portStr, 10, 16)
+	if err != nil || n == 0 {
+		return "", 0, common.NewError("Invalid link port")
+	}
+	return host, int(n), nil
+}
+
+func requireURLUser(u *url.URL) (*url.Userinfo, error) {
+	if u.User == nil || u.User.Username() == "" {
+		return nil, common.NewError("Invalid link userinfo")
+	}
+	return u.User, nil
+}
+
 func vless(u *url.URL, i int) (*map[string]interface{}, string, error) {
 	query, _ := url.ParseQuery(u.RawQuery)
 	security := query.Get("security")
-	host, portStr, _ := net.SplitHostPort(u.Host)
-	port := 80
-	if len(portStr) > 0 {
-		port, _ = strconv.Atoi(portStr)
-	} else {
-		if security == "tls" || security == "reality" {
-			port = 443
-		}
+	defaultPort := 80
+	if security == "tls" || security == "reality" {
+		defaultPort = 443
+	}
+	host, port, err := parseURLServer(u, defaultPort)
+	if err != nil {
+		return nil, "", err
+	}
+	userinfo, err := requireURLUser(u)
+	if err != nil {
+		return nil, "", err
 	}
 	tp_type := query.Get("type")
 	tag := u.Fragment
@@ -157,7 +194,7 @@ func vless(u *url.URL, i int) (*map[string]interface{}, string, error) {
 		"tag":         tag,
 		"server":      host,
 		"server_port": port,
-		"uuid":        u.User.Username(),
+		"uuid":        userinfo.Username(),
 		"flow":        query.Get("flow"),
 		"tls":         getTls(security, &query),
 		"transport":   getTransport(tp_type, &query),
@@ -168,14 +205,17 @@ func vless(u *url.URL, i int) (*map[string]interface{}, string, error) {
 func trojan(u *url.URL, i int) (*map[string]interface{}, string, error) {
 	query, _ := url.ParseQuery(u.RawQuery)
 	security := query.Get("security")
-	host, portStr, _ := net.SplitHostPort(u.Host)
-	port := 80
-	if len(portStr) > 0 {
-		port, _ = strconv.Atoi(portStr)
-	} else {
-		if security == "tls" || security == "reality" {
-			port = 443
-		}
+	defaultPort := 80
+	if security == "tls" || security == "reality" {
+		defaultPort = 443
+	}
+	host, port, err := parseURLServer(u, defaultPort)
+	if err != nil {
+		return nil, "", err
+	}
+	userinfo, err := requireURLUser(u)
+	if err != nil {
+		return nil, "", err
 	}
 	tp_type := query.Get("type")
 	tag := u.Fragment
@@ -187,7 +227,7 @@ func trojan(u *url.URL, i int) (*map[string]interface{}, string, error) {
 		"tag":         tag,
 		"server":      host,
 		"server_port": port,
-		"password":    u.User.Username(),
+		"password":    userinfo.Username(),
 		"tls":         getTls(security, &query),
 		"transport":   getTransport(tp_type, &query),
 	}
@@ -196,10 +236,9 @@ func trojan(u *url.URL, i int) (*map[string]interface{}, string, error) {
 
 func hy(u *url.URL, i int) (*map[string]interface{}, string, error) {
 	query, _ := url.ParseQuery(u.RawQuery)
-	host, portStr, _ := net.SplitHostPort(u.Host)
-	port := 443
-	if len(portStr) > 0 {
-		port, _ = strconv.Atoi(portStr)
+	host, port, err := parseURLServer(u, 443)
+	if err != nil {
+		return nil, "", err
 	}
 
 	security := query.Get("security")
@@ -241,10 +280,13 @@ func hy(u *url.URL, i int) (*map[string]interface{}, string, error) {
 
 func hy2(u *url.URL, i int) (*map[string]interface{}, string, error) {
 	query, _ := url.ParseQuery(u.RawQuery)
-	host, portStr, _ := net.SplitHostPort(u.Host)
-	port := 443
-	if len(portStr) > 0 {
-		port, _ = strconv.Atoi(portStr)
+	host, port, err := parseURLServer(u, 443)
+	if err != nil {
+		return nil, "", err
+	}
+	userinfo, err := requireURLUser(u)
+	if err != nil {
+		return nil, "", err
 	}
 
 	security := query.Get("security")
@@ -261,7 +303,7 @@ func hy2(u *url.URL, i int) (*map[string]interface{}, string, error) {
 		"tag":         tag,
 		"server":      host,
 		"server_port": port,
-		"password":    u.User.Username(),
+		"password":    userinfo.Username(),
 		"tls":         getTls(security, &query),
 	}
 	down, _ := strconv.Atoi(query.Get("downmbps"))
@@ -292,10 +334,13 @@ func hy2(u *url.URL, i int) (*map[string]interface{}, string, error) {
 
 func anytls(u *url.URL, i int) (*map[string]interface{}, string, error) {
 	query, _ := url.ParseQuery(u.RawQuery)
-	host, portStr, _ := net.SplitHostPort(u.Host)
-	port := 443
-	if len(portStr) > 0 {
-		port, _ = strconv.Atoi(portStr)
+	host, port, err := parseURLServer(u, 443)
+	if err != nil {
+		return nil, "", err
+	}
+	userinfo, err := requireURLUser(u)
+	if err != nil {
+		return nil, "", err
 	}
 
 	security := query.Get("security")
@@ -312,7 +357,7 @@ func anytls(u *url.URL, i int) (*map[string]interface{}, string, error) {
 		"tag":         tag,
 		"server":      host,
 		"server_port": port,
-		"password":    u.User.Username(),
+		"password":    userinfo.Username(),
 		"tls":         getTls(security, &query),
 	}
 	return &anytls, tag, nil
@@ -320,10 +365,13 @@ func anytls(u *url.URL, i int) (*map[string]interface{}, string, error) {
 
 func tuic(u *url.URL, i int) (*map[string]interface{}, string, error) {
 	query, _ := url.ParseQuery(u.RawQuery)
-	host, portStr, _ := net.SplitHostPort(u.Host)
-	port := 443
-	if len(portStr) > 0 {
-		port, _ = strconv.Atoi(portStr)
+	host, port, err := parseURLServer(u, 443)
+	if err != nil {
+		return nil, "", err
+	}
+	userinfo, err := requireURLUser(u)
+	if err != nil {
+		return nil, "", err
 	}
 
 	security := query.Get("security")
@@ -335,13 +383,13 @@ func tuic(u *url.URL, i int) (*map[string]interface{}, string, error) {
 	if i > 0 {
 		tag = fmt.Sprintf("%d.%s", i, u.Fragment)
 	}
-	password, _ := u.User.Password()
+	password, _ := userinfo.Password()
 	tuic := map[string]interface{}{
 		"type":               "tuic",
 		"tag":                tag,
 		"server":             host,
 		"server_port":        port,
-		"uuid":               u.User.Username(),
+		"uuid":               userinfo.Username(),
 		"password":           password,
 		"congestion_control": query.Get("congestion_control"),
 		"udp_relay_mode":     query.Get("udp_relay_mode"),
@@ -352,13 +400,16 @@ func tuic(u *url.URL, i int) (*map[string]interface{}, string, error) {
 
 func ss(u *url.URL, i int) (*map[string]interface{}, string, error) {
 	query, _ := url.ParseQuery(u.RawQuery)
-	host, portStr, _ := net.SplitHostPort(u.Host)
-	port := 443
-	if len(portStr) > 0 {
-		port, _ = strconv.Atoi(portStr)
+	host, port, err := parseURLServer(u, 443)
+	if err != nil {
+		return nil, "", err
 	}
-	method := u.User.Username()
-	password, ok := u.User.Password()
+	userinfo, err := requireURLUser(u)
+	if err != nil {
+		return nil, "", err
+	}
+	method := userinfo.Username()
+	password, ok := userinfo.Password()
 	if !ok {
 		decrypted := StrOrBase64Encoded(method)
 		decrypted_arr := strings.Split(decrypted, ":")
@@ -411,41 +462,44 @@ func ss(u *url.URL, i int) (*map[string]interface{}, string, error) {
 }
 
 func parseNaiveLink(u *url.URL, i int) (*map[string]interface{}, string, error) {
-	var host, portStr, username, password string
+	var host, username, password string
 	var port int
 
 	switch u.Scheme {
 	case "http2":
 		decoded := StrOrBase64Encoded(u.Hostname())
-		if idx := strings.Index(decoded, "@"); idx != -1 {
-			userInfo := decoded[:idx]
-			hostPort := decoded[idx+1:]
-			if idx2 := strings.Index(userInfo, ":"); idx2 != -1 {
-				username = userInfo[:idx2]
-				password = userInfo[idx2+1:]
-			} else {
-				username = userInfo
-			}
-			host, portStr, _ = net.SplitHostPort(hostPort)
-			if portStr != "" {
-				port, _ = strconv.Atoi(portStr)
-			} else {
-				port = 443
-			}
-		} else {
+		idx := strings.Index(decoded, "@")
+		if idx == -1 {
 			return nil, "", common.NewError("Invalid naive link (http2)")
 		}
-	case "naive+https", "naive+quic":
-		host, portStr, _ = net.SplitHostPort(u.Host)
-		if portStr != "" {
-			port, _ = strconv.Atoi(portStr)
+		userInfo := decoded[:idx]
+		hostPort := decoded[idx+1:]
+		if idx2 := strings.Index(userInfo, ":"); idx2 != -1 {
+			username = userInfo[:idx2]
+			password = userInfo[idx2+1:]
 		} else {
-			port = 443
+			username = userInfo
 		}
-		if u.User != nil {
-			username = u.User.Username()
-			password, _ = u.User.Password()
+		if username == "" {
+			return nil, "", common.NewError("Invalid naive link userinfo")
 		}
+		hostURL := &url.URL{Host: hostPort}
+		var err error
+		host, port, err = parseURLServer(hostURL, 443)
+		if err != nil {
+			return nil, "", err
+		}
+	case "naive+https", "naive+quic":
+		userinfo, err := requireURLUser(u)
+		if err != nil {
+			return nil, "", err
+		}
+		host, port, err = parseURLServer(u, 443)
+		if err != nil {
+			return nil, "", err
+		}
+		username = userinfo.Username()
+		password, _ = userinfo.Password()
 	default:
 		return nil, "", common.NewError("Unsupported naive scheme")
 	}

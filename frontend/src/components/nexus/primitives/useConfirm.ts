@@ -1,4 +1,4 @@
-import { readonly, ref } from 'vue'
+import { getCurrentScope, onScopeDispose, readonly, ref } from 'vue'
 
 export type ConfirmTone = 'error' | 'primary'
 
@@ -36,4 +36,22 @@ export const resolveActiveConfirm = (confirmed: boolean): void => {
   request.resolve(confirmed)
 }
 
-export const useConfirm = () => ({ confirm })
+export const useConfirm = () => {
+  let ownedRequest: ConfirmRequest | null = null
+  const scopedConfirm = (options: ConfirmOptions): Promise<boolean> => {
+    const promise = confirm(options)
+    const request = activeRequest.value
+    ownedRequest = request
+    return promise.finally(() => {
+      if (ownedRequest === request) ownedRequest = null
+    })
+  }
+
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      if (ownedRequest && activeRequest.value === ownedRequest) resolveActiveConfirm(false)
+    })
+  }
+
+  return { confirm: scopedConfirm }
+}

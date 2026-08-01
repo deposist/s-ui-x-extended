@@ -251,6 +251,11 @@ func expireVersionCheckCacheForTest(t *testing.T) {
 func setArtifactPlatformForTest(t *testing.T) {
 	t.Helper()
 	old := config.ArtifactPlatform
+	oldGOOS := config.ArtifactGOOS
 	config.ArtifactPlatform = "amd64"
-	t.Cleanup(func() { config.ArtifactPlatform = old })
+	config.ArtifactGOOS = "linux"
+	t.Cleanup(func() {
+		config.ArtifactPlatform = old
+		config.ArtifactGOOS = oldGOOS
+	})
 }

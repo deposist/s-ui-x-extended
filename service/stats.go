@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -112,6 +113,58 @@ func (s *StatsService) SaveStats(enableTraffic bool) (err error) {
 	}
 	statsSnapshot := st.SnapshotStats()
 	stats := statsSnapshot.Stats()
+	var tx *gorm.DB
+	var ipSnapshot *ipmonitor.PendingSnapshot
+	transactionStarted := false
+	publishOnCommit := false
+	publishOnlines := onlines{}
+	var publishStats []model.Stats
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			if transactionStarted {
+				_ = tx.Rollback().Error
+			}
+			statsSnapshot.Requeue()
+			if ipSnapshot != nil {
+				ipSnapshot.Requeue()
+			}
+			panic(recovered)
+		}
+		if !transactionStarted {
+			return
+		}
+		if err != nil {
+			_ = tx.Rollback().Error
+			statsSnapshot.Requeue()
+			ipSnapshot.Requeue()
+			return
+		}
+		if commitErr := commitStatsTransaction(tx); commitErr != nil {
+			err = commitErr
+			statsSnapshot.Requeue()
+			ipSnapshot.Requeue()
+			if auditErr := (&AuditService{Runtime: s.runtime()}).Record(AuditEvent{
+				Actor:    "system",
+				Event:    "stats_commit_failed",
+				Resource: "stats",
+				Severity: AuditSeverityWarn,
+				Details: map[string]any{
+					"error": commitErr.Error(),
+				},
+			}); auditErr != nil {
+				logger.Warning("stats commit failure audit failed:", auditErr)
+			}
+			realtime.Publish(realtime.TopicCoreState, map[string]any{
+				"warning": "stats_commit_failed",
+			})
+			return
+		}
+		statsSnapshot.Ack()
+		ipSnapshot.Ack()
+		if publishOnCommit {
+			publishStatsRealtime(publishOnlines, publishStats)
+		}
+	}()
 
 	currentOnlines := onlines{}
 	// Failover groups have their own liveness, independent of traffic stats, so
@@ -132,45 +185,18 @@ func (s *StatsService) SaveStats(enableTraffic bool) (err error) {
 	}
 
 	db := database.GetDB()
-	tx := db.Begin()
-	ipSnapshot := ipmonitor.SnapshotPending()
-	publishOnCommit := false
-	publishOnlines := onlines{}
-	var publishStats []model.Stats
+	if db == nil {
+		statsSnapshot.Requeue()
+		return fmt.Errorf("database is not initialized")
+	}
+	tx = db.Begin()
+	if tx.Error != nil {
+		statsSnapshot.Requeue()
+		return tx.Error
+	}
+	ipSnapshot = ipmonitor.SnapshotPending()
+	transactionStarted = true
 	clientDeltas := map[string]clientTrafficDelta{}
-	defer func() {
-		if err == nil {
-			if commitErr := commitStatsTransaction(tx); commitErr != nil {
-				err = commitErr
-				statsSnapshot.Requeue()
-				ipSnapshot.Requeue()
-				if auditErr := (&AuditService{Runtime: s.runtime()}).Record(AuditEvent{
-					Actor:    "system",
-					Event:    "stats_commit_failed",
-					Resource: "stats",
-					Severity: AuditSeverityWarn,
-					Details: map[string]any{
-						"error": commitErr.Error(),
-					},
-				}); auditErr != nil {
-					logger.Warning("stats commit failure audit failed:", auditErr)
-				}
-				realtime.Publish(realtime.TopicCoreState, map[string]any{
-					"warning": "stats_commit_failed",
-				})
-				return
-			}
-			statsSnapshot.Ack()
-			ipSnapshot.Ack()
-			if publishOnCommit {
-				publishStatsRealtime(publishOnlines, publishStats)
-			}
-		} else {
-			tx.Rollback()
-			statsSnapshot.Requeue()
-			ipSnapshot.Requeue()
-		}
-	}()
 
 	for _, stat := range *stats {
 		if stat.Resource == "user" {
@@ -432,8 +458,17 @@ func (s *StatsService) downsampleStats(stats []model.Stats, maxRows int) []model
 		return stats
 	}
 	numBuckets := int(maxRows / 2)
-	sort.Slice(stats, func(i, j int) bool { return stats[i].DateTime < stats[j].DateTime })
-	timeMin, timeMax := stats[0].DateTime, stats[len(stats)-1].DateTime
+	timeMin, timeMax := stats[0].DateTime, stats[0].DateTime
+	identity := stats[0]
+	for _, stat := range stats[1:] {
+		if stat.DateTime < timeMin {
+			timeMin = stat.DateTime
+			identity = stat
+		}
+		if stat.DateTime > timeMax {
+			timeMax = stat.DateTime
+		}
+	}
 	bucketSpan := (timeMax - timeMin) / int64(numBuckets)
 	if bucketSpan == 0 {
 		bucketSpan = 1
@@ -468,8 +503,8 @@ func (s *StatsService) downsampleStats(stats []model.Stats, maxRows int) []model
 			}
 			downsampled = append(downsampled, model.Stats{
 				DateTime:  bucketStart,
-				Resource:  stats[0].Resource,
-				Tag:       stats[0].Tag,
+				Resource:  identity.Resource,
+				Tag:       identity.Tag,
 				Direction: dir,
 				Traffic:   avg,
 			})

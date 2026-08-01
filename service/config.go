@@ -763,6 +763,18 @@ func (s *ConfigService) GetChanges(actor string, chngKey string, count string) [
 	return chngs
 }
 
+// CurrentRevision returns the server-owned cursor used by CheckChanges. The
+// first read initializes the process cursor so an initial snapshot can carry an
+// authoritative acknowledgement value instead of relying on a client clock.
+func (s *ConfigService) CurrentRevision() int64 {
+	revision := s.getLastUpdate()
+	if revision > 0 {
+		return revision
+	}
+	s.setLastUpdate(time.Now().Unix())
+	return s.getLastUpdate()
+}
+
 func (s *ConfigService) setLastUpdate(value int64) {
 	s.runtime().updates().Set(value)
 }

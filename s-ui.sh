@@ -511,8 +511,55 @@ before_show_menu() {
     show_menu
 }
 
+download_remote_script() {
+    local url="$1"
+    local destination="$2"
+    local temporary="${destination}.part"
+
+    case "${url}" in
+        https://*) ;;
+        *) return 1 ;;
+    esac
+    rm -f -- "${temporary}" "${destination}"
+    if ! curl --proto '=https' --proto-redir '=https' --tlsv1.2 \
+        --fail --location --silent --show-error --connect-timeout 20 \
+        --speed-limit 1024 --speed-time 60 --output "${temporary}" "${url}"; then
+        rm -f -- "${temporary}" "${destination}"
+        return 1
+    fi
+    [[ -s "${temporary}" ]] || {
+        rm -f -- "${temporary}" "${destination}"
+        return 1
+    }
+    mv -f -- "${temporary}" "${destination}"
+}
+
+run_remote_installer() {
+    local version="${1:-}"
+    local stage installer status
+
+    stage=$(mktemp -d "${TMPDIR:-/tmp}/s-ui-installer.XXXXXXXXXX") || return 1
+    chmod 700 "${stage}"
+    installer="${stage}/install.sh"
+    if ! download_remote_script \
+        'https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh' \
+        "${installer}"; then
+        rm -rf -- "${stage}"
+        LOGE "$(t download_fail)"
+        return 1
+    fi
+    chmod 700 "${installer}"
+    if [[ -n "${version}" ]]; then
+        if bash "${installer}" "${version}"; then status=0; else status=$?; fi
+    else
+        if bash "${installer}"; then status=0; else status=$?; fi
+    fi
+    rm -rf -- "${stage}"
+    return "${status}"
+}
+
 install() {
-    if bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh); then
+    if run_remote_installer; then
         if [[ $# == 0 ]]; then
             start
         else
@@ -529,7 +576,7 @@ update() {
         fi
         return 0
     fi
-    if bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh); then
+    if run_remote_installer; then
         LOGI "$(t update_done)"
         exit 0
     fi
@@ -550,11 +597,8 @@ custom_version() {
         t invalid_panel_version "${panel_version}"
         exit 1
     fi
-
-    download_link="https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/install.sh"
-
     t downloading_version "${panel_version}"
-    bash <(curl -Ls "${download_link}") "${panel_version}"
+    run_remote_installer "${panel_version}"
 }
 
 uninstall() {
@@ -914,24 +958,33 @@ show_log() {
 }
 
 update_shell() {
-    local tmp_script
-    tmp_script="$(mktemp)"
-    # Keep TLS validation ON (github.com presents a valid certificate, so the
-    # transport is the integrity anchor) and download to a temp file first, then
-    # swap it into the root-executed path atomically only after a fully successful
-    # fetch. A failed/partial transfer must never leave a broken root script in
-    # /usr/bin/s-ui.
-    wget --timeout=20 --tries=5 --retry-connrefused -O "${tmp_script}" https://github.com/deposist/s-ui-x-extended/raw/main/s-ui.sh
-    if [[ $? != 0 || ! -s "${tmp_script}" ]]; then
-        rm -f "${tmp_script}"
+    local stage tmp_script backup had_old=0
+    stage=$(mktemp -d "/usr/bin/.s-ui-update.XXXXXXXXXX") || return 1
+    chmod 700 "${stage}"
+    tmp_script="${stage}/s-ui"
+    backup="${stage}/previous"
+    if ! download_remote_script \
+        'https://raw.githubusercontent.com/deposist/s-ui-x-extended/main/s-ui.sh' \
+        "${tmp_script}" || ! bash -n "${tmp_script}"; then
+        rm -rf -- "${stage}"
         echo ""
         LOGE "$(t download_fail)"
         before_show_menu
-    else
-        chmod +x "${tmp_script}"
-        mv -f "${tmp_script}" /usr/bin/s-ui
-        LOGI "$(t script_updated)" && exit 0
+        return 1
     fi
+    chmod 755 "${tmp_script}"
+    if [[ -e /usr/bin/s-ui || -L /usr/bin/s-ui ]]; then
+        mv -- /usr/bin/s-ui "${backup}"
+        had_old=1
+    fi
+    if ! mv -- "${tmp_script}" /usr/bin/s-ui; then
+        [[ ${had_old} == 0 ]] || mv -- "${backup}" /usr/bin/s-ui
+        rm -rf -- "${stage}"
+        LOGE "$(t download_fail)"
+        return 1
+    fi
+    rm -rf -- "${stage}"
+    LOGI "$(t script_updated)" && exit 0
 }
 
 check_status() {
@@ -1068,19 +1121,24 @@ enable_bbr() {
 }
 
 install_acme() {
-    cd ~ || return 1
+    local stage installer status
     LOGI "$(t installing_acme)"
-    # Fail closed: -f rejects HTTP error bodies (a 404/partial page must never be
-    # piped into a root shell), --proto '=https' forbids a downgrade/redirect to
-    # plain http, and --tlsv1.2 sets a TLS floor. get.acme.sh is the vendor's
-    # canonical installer; this only hardens how it is fetched.
-    if ! curl -fsS --proto '=https' --tlsv1.2 https://get.acme.sh | sh; then
+    stage=$(mktemp -d "${TMPDIR:-/tmp}/s-ui-acme-installer.XXXXXXXXXX") || return 1
+    chmod 700 "${stage}"
+    installer="${stage}/install.sh"
+    if ! download_remote_script 'https://get.acme.sh' "${installer}"; then
+        rm -rf -- "${stage}"
         LOGE "$(t acme_install_fail)"
         return 1
-    else
-        LOGI "$(t acme_install_ok)"
     fi
-    return 0
+    chmod 700 "${installer}"
+    if sh "${installer}"; then status=0; else status=$?; fi
+    rm -rf -- "${stage}"
+    if [[ ${status} -ne 0 ]]; then
+        LOGE "$(t acme_install_fail)"
+        return "${status}"
+    fi
+    LOGI "$(t acme_install_ok)"
 }
 
 ssl_cert_issue_main() {

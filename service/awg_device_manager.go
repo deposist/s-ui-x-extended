@@ -190,7 +190,7 @@ func (m *AWGManager) createDeviceInWorker(ctx context.Context, clientID uint, re
 	device := replay
 	created := false
 	err = m.deps.DB.Transaction(func(tx *gorm.DB) error {
-		lookupErr := tx.Where("client_id = ? AND create_request_key = ?", clientID, requestKey).First(&device).Error
+		lookupErr := tx.Where("client_id = ? AND endpoint_id = ? AND create_request_key = ?", clientID, m.deps.EndpointID, requestKey).First(&device).Error
 		if lookupErr == nil {
 			if device.Name != name || !device.DesiredEnabled || (device.SyncState != "pending_add" && device.SyncState != "in_sync") {
 				return ErrAWGIdempotencyConflict

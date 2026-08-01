@@ -249,6 +249,7 @@ import EntityDrawer from './EntityDrawer.vue'
 import SettingInfo from '@/components/SettingInfo.vue'
 import { applyTlsRecommendedValues, hasTlsRecommendedPreset, tlsFieldHintsForType } from '@/utils/defaultRecommendations'
 import { isBlankIdentity } from '@/utils/entityIdentity'
+import Data from '@/store/modules/data'
 export default {
   inheritAttrs: false,
   props: ['visible', 'data', 'id'],
@@ -367,6 +368,7 @@ export default {
       this.$emit('close')
     },
     saveChanges() {
+      if (Data().checkTag('tls', this.$props.id, this.tls.name)) return
       this.loading = true
       const saveData = JSON.parse(JSON.stringify(this.tls))
       if (this.$props.id > 0 && !this.editHadServer && saveData.server && Object.keys(saveData.server).length === 0) delete saveData.server

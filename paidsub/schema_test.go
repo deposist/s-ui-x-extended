@@ -136,23 +136,65 @@ func TestEnsureSchemaCancelsLegacyPendingOrdersWithoutSnapshot(t *testing.T) {
 	)`).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec(`INSERT INTO payment_orders(client_id, tariff_id, provider, amount, currency, status, idempotency_key)
-		VALUES (1, 1, 'cryptobot', 100, 'USDT', 'pending', 'legacy-pending')`).Error; err != nil {
+	if err := db.Exec(`INSERT INTO payment_orders(client_id, tariff_id, provider, amount, currency, status, idempotency_key, provider_payload)
+		VALUES (1, 1, 'cryptobot', 100, 'RUB', 'pending', 'legacy-cryptobot', '{"ref":"123"}'),
+			(1, 1, 'stripe', 100, 'RUB', 'pending', 'legacy-stripe', NULL)`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := EnsureSchema(db); err != nil {
 		t.Fatalf("EnsureSchema legacy payment migration: %v", err)
 	}
-	var order PaymentOrder
-	if err := db.Where("idempotency_key = ?", "legacy-pending").First(&order).Error; err != nil {
-		t.Fatalf("legacy order was lost: %v", err)
+	var cryptoOrder PaymentOrder
+	if err := db.Where("idempotency_key = ?", "legacy-cryptobot").First(&cryptoOrder).Error; err != nil {
+		t.Fatalf("legacy CryptoBot order was lost: %v", err)
 	}
-	if order.Status != StatusFailed || order.SnapshotVersion != 0 {
-		t.Fatalf("legacy pending order = status %q snapshot %d; want failed/0", order.Status, order.SnapshotVersion)
+	if cryptoOrder.Status != StatusRecoverable || cryptoOrder.ProviderRef != "123" || cryptoOrder.SnapshotVersion != 0 {
+		t.Fatalf("legacy CryptoBot order = %+v; want recoverable with provider reference", cryptoOrder)
+	}
+	var stripeOrder PaymentOrder
+	if err := db.Where("idempotency_key = ?", "legacy-stripe").First(&stripeOrder).Error; err != nil {
+		t.Fatalf("legacy Stripe order was lost: %v", err)
+	}
+	if stripeOrder.Status != StatusFailed || stripeOrder.SnapshotVersion != 0 {
+		t.Fatalf("legacy non-polled order = status %q snapshot %d; want failed/0", stripeOrder.Status, stripeOrder.SnapshotVersion)
 	}
 	for _, column := range []string{"granted_days", "granted_traffic_bytes", "snapshot_version"} {
 		if !db.Migrator().HasColumn(&PaymentOrder{}, column) {
 			t.Fatalf("legacy migration did not add %q", column)
+		}
+	}
+}
+
+func TestEnsureSchemaRecoversPreviouslyFinalizedLegacyCryptoBotOrders(t *testing.T) {
+	db := openTestDB(t)
+	if err := EnsureSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	orders := []PaymentOrder{
+		{
+			ClientId: 1, TariffId: 1, Provider: string(ProviderCryptoBot), Amount: 100, Currency: "RUB",
+			Status: StatusFailed, IdempotencyKey: "legacy-previously-failed", ProviderRef: "123",
+		},
+		{
+			ClientId: 1, TariffId: 1, Provider: string(ProviderCryptoBot), Amount: 200, Currency: "RUB",
+			Status: StatusExpired, IdempotencyKey: "legacy-previously-expired",
+		},
+	}
+	if err := db.Create(&orders).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	if err := EnsureSchema(db); err != nil {
+		t.Fatal(err)
+	}
+
+	var stored []PaymentOrder
+	if err := db.Where("id IN ?", []uint{orders[0].Id, orders[1].Id}).Order("id ASC").Find(&stored).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, order := range stored {
+		if order.Status != StatusRecoverable || order.SnapshotVersion != 0 {
+			t.Fatalf("legacy CryptoBot order remained final while its invoice may be payable: %+v", order)
 		}
 	}
 }
@@ -235,6 +277,69 @@ func TestEnsureSchemaMigratesLegacyCryptoBotProviderReference(t *testing.T) {
 	if len(got) != 2 || got[0].ProviderRef != "123" || got[1].ProviderRef != "456" {
 		t.Fatalf("legacy provider references were not migrated: %+v", got)
 	}
+}
+
+func TestEnsureSchemaResolvesLegacyPaymentDuplicatesBeforeUniqueIndexes(t *testing.T) {
+	db := openTestDB(t)
+	if err := EnsureSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`DROP INDEX idx_payment_orders_ref`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`DROP INDEX idx_payment_orders_charge`).Error; err != nil {
+		t.Fatal(err)
+	}
+	orders := []PaymentOrder{
+		{ClientId: 1, TariffId: 1, Provider: "cryptobot", Amount: 100, Currency: "RUB", Status: StatusPending, IdempotencyKey: "duplicate-ref-a", ProviderRef: "123", ProviderChargeID: "cryptobot:123", SnapshotVersion: paymentOrderSnapshotVersion},
+		{ClientId: 1, TariffId: 1, Provider: "cryptobot", Amount: 100, Currency: "RUB", Status: StatusPaid, IdempotencyKey: "duplicate-ref-b", ProviderRef: "123", ProviderChargeID: "cryptobot:123", SnapshotVersion: paymentOrderSnapshotVersion},
+	}
+	if err := db.Create(&orders).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureSchema(db); err != nil {
+		t.Fatalf("EnsureSchema did not resolve legacy duplicate references: %v", err)
+	}
+	var stored []PaymentOrder
+	if err := db.Where("id IN ?", []uint{orders[0].Id, orders[1].Id}).Order("id ASC").Find(&stored).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored[0].ProviderRef != "" || stored[0].ProviderChargeID != "" || stored[1].ProviderRef != "123" || stored[1].ProviderChargeID != "cryptobot:123" {
+		t.Fatalf("paid duplicate was not preserved as unambiguous owner: %+v", stored)
+	}
+	duplicate := PaymentOrder{ClientId: 1, TariffId: 1, Provider: "cryptobot", Currency: "RUB", Status: StatusPending, IdempotencyKey: "duplicate-ref-c", ProviderRef: "123"}
+	if err := db.Create(&duplicate).Error; err == nil {
+		t.Fatal("verified unique provider-reference index accepted a duplicate")
+	}
+}
+
+func TestEnsureSchemaReplacesWrongNamedIndex(t *testing.T) {
+	db := openTestDB(t)
+	if err := EnsureSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`DROP INDEX idx_payment_orders_ref`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`CREATE INDEX idx_payment_orders_ref ON payment_orders(provider_ref)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureSchema(db); err != nil {
+		t.Fatalf("EnsureSchema did not repair wrong same-named index: %v", err)
+	}
+	var indexes []struct {
+		Name   string `gorm:"column:name"`
+		Unique int    `gorm:"column:unique"`
+	}
+	if err := db.Raw(`PRAGMA index_list(payment_orders)`).Scan(&indexes).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, index := range indexes {
+		if index.Name == "idx_payment_orders_ref" && index.Unique == 1 {
+			return
+		}
+	}
+	t.Fatal("idx_payment_orders_ref was not repaired as unique")
 }
 
 func TestAWGSchemaConstraints(t *testing.T) {

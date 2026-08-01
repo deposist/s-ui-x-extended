@@ -1,9 +1,11 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestStartLifecycleRollsBackStartedComponentsInReverseOrder(t *testing.T) {
@@ -37,5 +39,39 @@ func TestStartLifecycleDoesNotStopComponentsThatDidNotStart(t *testing.T) {
 	}
 	if stopped {
 		t.Fatal("failed component was rolled back although it never started")
+	}
+}
+
+func TestAWGLoopRepeatedStartStopOwnsOneGeneration(t *testing.T) {
+	previousIntervals := awgLoopIntervals
+	awgLoopIntervals = func() (time.Duration, time.Duration) { return time.Hour, time.Hour }
+	t.Cleanup(func() { awgLoopIntervals = previousIntervals })
+
+	a := NewApp()
+	for generation := range 3 {
+		a.startAWGLoops()
+		a.awgMu.Lock()
+		run := a.awgRun
+		a.awgMu.Unlock()
+		if run == nil {
+			t.Fatalf("generation %d did not publish a loop", generation)
+		}
+		a.startAWGLoops()
+		a.awgMu.Lock()
+		if a.awgRun != run {
+			t.Fatalf("generation %d duplicate Start replaced a live loop", generation)
+		}
+		a.awgMu.Unlock()
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		if err := a.stopAWGLoops(ctx); err != nil {
+			cancel()
+			t.Fatalf("generation %d stop: %v", generation, err)
+		}
+		cancel()
+		select {
+		case <-run.done:
+		default:
+			t.Fatalf("generation %d loop survived Stop", generation)
+		}
 	}
 }

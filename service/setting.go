@@ -177,6 +177,7 @@ var defaultValueMap = map[string]string{
 	"ipCertKeyPath":             "",
 	"ipCertNotAfter":            "",
 	"ipCertLastIssue":           "",
+	"ipCertAppliedAt":           "",
 	"config":                    defaultConfig,
 	"version":                   "",
 }
@@ -192,6 +193,7 @@ var ipCertInternalSettingKeys = []string{
 	"ipCertKeyPath",
 	"ipCertNotAfter",
 	"ipCertLastIssue",
+	"ipCertAppliedAt",
 }
 
 type SettingService struct {

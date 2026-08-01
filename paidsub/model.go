@@ -10,6 +10,9 @@ import "github.com/deposist/s-ui-x-extended/database/model"
 type Tariff = model.PaidSubTariff
 type PaymentOrder = model.PaidSubPaymentOrder
 type Binding = model.PaidSubBinding
+type PaymentCharge = model.PaidSubPaymentCharge
+type PollCursor = model.PaidSubPollCursor
+type InvoiceCancellation = model.PaidSubInvoiceCancellation
 
 // Order status constants.
 const (

@@ -70,6 +70,9 @@ func (s *IpCertificateService) IssueNow(ctx context.Context, ip, email string, p
 		status, _ := s.GetStatus()
 		return status, common.NewError("ip cert: issued but apply failed: ", err.Error())
 	}
+	if err := s.markApplied(); err != nil {
+		return IpCertStatus{}, err
+	}
 
 	return s.GetStatus()
 }
@@ -86,10 +89,11 @@ func (s *IpCertificateService) IssueForCLI(ctx context.Context, ip, email string
 	}
 
 	if err := s.setPanelCertSettings(certPath, keyPath); err != nil {
-		// Certificate is issued and persisted; report the apply failure but keep
-		// the stored state so the cron/CLI can re-apply later.
 		status, _ := s.GetStatus()
 		return status, common.NewError("ip cert: issued but apply failed: ", err.Error())
+	}
+	if err := s.markApplied(); err != nil {
+		return IpCertStatus{}, err
 	}
 
 	return s.GetStatus()
@@ -192,6 +196,7 @@ func (s *IpCertificateService) persistIssued(d ipCertIssued) error {
 		func() error { return set.setIpCertCertPath(d.certPath) },
 		func() error { return set.setIpCertKeyPath(d.keyPath) },
 		func() error { return set.setIpCertNotAfter(d.notAfter.UTC().Format(time.RFC3339)) },
+		func() error { return set.setIpCertAppliedAt("") },
 		func() error { return set.setIpCertLastIssue(s.clock().UTC().Format(time.RFC3339)) },
 	}
 	for _, w := range writes {
@@ -200,6 +205,14 @@ func (s *IpCertificateService) persistIssued(d ipCertIssued) error {
 		}
 	}
 	return nil
+}
+
+func (s *IpCertificateService) markApplied() error {
+	lastIssue, err := s.settings().GetIpCertLastIssue()
+	if err != nil {
+		return err
+	}
+	return s.settings().setIpCertAppliedAt(lastIssue)
 }
 
 // RenewIfNeeded re-issues the managed certificate when auto-renew is enabled
@@ -232,6 +245,37 @@ func (s *IpCertificateService) RenewIfNeeded(ctx context.Context) (bool, error) 
 		return false, err
 	}
 	ipChanged := lastIP != "" && lastIP != ip
+	lastIssue, err := set.GetIpCertLastIssue()
+	if err != nil {
+		return false, err
+	}
+	appliedAt, err := set.getIpCertAppliedAt()
+	if err != nil {
+		return false, err
+	}
+	if lastIssue != "" && appliedAt != lastIssue {
+		certPath, certErr := set.GetIpCertCertPath()
+		if certErr != nil {
+			return false, certErr
+		}
+		keyPath, keyErr := set.GetIpCertKeyPath()
+		if keyErr != nil {
+			return false, keyErr
+		}
+		applyTarget, targetErr := set.GetIpCertApplyTarget()
+		if targetErr != nil {
+			return false, targetErr
+		}
+		if certPath != "" && keyPath != "" {
+			if applyErr := s.applyToTarget(applyTarget, certPath, keyPath, ""); applyErr != nil {
+				return false, applyErr
+			}
+			if markErr := s.markApplied(); markErr != nil {
+				return false, markErr
+			}
+			return true, nil
+		}
+	}
 
 	notAfter := s.storedNotAfter()
 	if !ipChanged && !shouldRenew(notAfter, s.clock()) {

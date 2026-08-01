@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -42,12 +43,23 @@ type PanelUpdateService struct {
 }
 
 var errUpdateInProgress = errors.New("an update is already in progress")
+var errUpdateRecoveryRequired = errors.New("a previous update requires recovery")
+
+// ErrPanelUpdateRolledBack tells the process entrypoint to exit non-zero so the
+// service manager restarts into the restored known-good executable.
+var ErrPanelUpdateRolledBack = errors.New("self-update rolled back; restart required")
+
+type panelUpdateProcessLock interface {
+	release() error
+}
 
 // panelUpdateState holds the single allowed update job (FR-012, SR-009).
 var panelUpdateState = struct {
 	sync.Mutex
 	job    *UpdateJob
 	active bool
+	cancel context.CancelFunc
+	done   chan struct{}
 }{}
 
 // panelUpdateExit terminates the process with a non-zero status so systemd
@@ -57,8 +69,9 @@ var panelUpdateExit = func() { os.Exit(1) }
 
 // newPanelUpdateDeps / panelUpdateAuditSink are injection seams for tests.
 var (
-	newPanelUpdateDeps   = defaultPanelUpdateDeps
-	panelUpdateAuditSink = writePanelUpdateAudit
+	newPanelUpdateDeps      = defaultPanelUpdateDeps
+	panelUpdateAuditSink    = writePanelUpdateAudit
+	panelUpdateMarkerWriter = writePendingMarkerForCandidate
 )
 
 // Status returns a snapshot of the current/last update job (idle if none).
@@ -88,6 +101,23 @@ func (s *PanelUpdateService) Apply(target ReleaseTarget, initiator string) error
 		panelUpdateState.Unlock()
 		return errUpdateInProgress
 	}
+	deps := newPanelUpdateDeps()
+	if deps.execPath != "" {
+		if _, err := os.Stat(deps.execPath + pendingSuffix); err == nil {
+			panelUpdateState.Unlock()
+			return errUpdateRecoveryRequired
+		} else if !errors.Is(err, os.ErrNotExist) {
+			panelUpdateState.Unlock()
+			return fmt.Errorf("inspect previous update state: %w", err)
+		}
+	}
+	processLock, err := acquirePanelUpdateProcessLock(deps.execPath)
+	if err != nil {
+		panelUpdateState.Unlock()
+		return err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
 	startedAt := time.Now().Unix()
 	panelUpdateState.active = true
 	panelUpdateState.job = &UpdateJob{
@@ -99,33 +129,57 @@ func (s *PanelUpdateService) Apply(target ReleaseTarget, initiator string) error
 		StartedAt:   startedAt,
 		Initiator:   initiator,
 	}
+	panelUpdateState.cancel = cancel
+	panelUpdateState.done = done
 	panelUpdateState.Unlock()
 
-	go s.run(target)
+	go s.run(ctx, target, deps, processLock, done)
 	return nil
 }
 
-func (s *PanelUpdateService) run(target ReleaseTarget) {
-	deps := newPanelUpdateDeps()
-	swapped, err := applyPipeline(target, deps, s.setStage)
+func (s *PanelUpdateService) run(ctx context.Context, target ReleaseTarget, deps panelUpdateDeps, processLock panelUpdateProcessLock, done chan struct{}) {
+	defer close(done)
+	defer func() {
+		if processLock != nil {
+			if err := processLock.release(); err != nil {
+				logger.Warning("panel update: release process lock: ", err)
+			}
+		}
+	}()
+	swapped, err := applyPipeline(ctx, target, deps, s.setStage)
 	if err != nil {
 		s.fail(err, deps.execPath, swapped)
 		return
 	}
 	s.setStage(UpdateStageRestarting)
-	// Mark the swap pending so the next boot can roll back a non-starting new
-	// binary (SR-012). If the marker cannot be written, the boot-time rollback
-	// safety net would be gone - restore the previous binary and abort the
-	// restart rather than boot unprotected, instead of swallowing the error.
-	if err := writePendingMarker(deps.execPath); err != nil {
-		s.fail(fmt.Errorf("rollback marker could not be written after apply: %w", err), deps.execPath, swapped)
-		return
-	}
 	// Durably record the successful outcome (SR-006/SC-008) BEFORE exiting, since
 	// os.Exit bypasses the async audit writer's flush.
 	panelUpdateAuditSink(s.Status(), "applied", "")
 	logger.Info("panel update: applied", target.Version, "- restarting into new binary")
 	panelUpdateExit()
+}
+
+// StopPanelUpdate cancels an active pre-swap operation and waits for its
+// goroutine to finish. Cancellation cannot interrupt the atomic binary swap;
+// once the applying stage begins the process proceeds to restart or rollback.
+func StopPanelUpdate(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	panelUpdateState.Lock()
+	cancel := panelUpdateState.cancel
+	done := panelUpdateState.done
+	panelUpdateState.Unlock()
+	if cancel == nil || done == nil {
+		return nil
+	}
+	cancel()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (s *PanelUpdateService) setStage(stage UpdateStage) {
@@ -137,13 +191,12 @@ func (s *PanelUpdateService) setStage(stage UpdateStage) {
 }
 
 // fail marks the job failed, releases the guard, and restores only a binary
-// replaced by this update transaction. Pre-swap failures must not consume a
-// stale backup left by an earlier update.
 func (s *PanelUpdateService) fail(err error, execPath string, swapped bool) {
 	logger.Warning("panel update failed:", err)
 	if swapped && execPath != "" {
-		if restoreErr := RestoreBackup(execPath); restoreErr != nil && !os.IsNotExist(restoreErr) {
-			logger.Warning("panel update: backup restore failed:", restoreErr)
+		if restoreErr := rollbackCurrentUpdate(execPath); restoreErr != nil {
+			err = errors.Join(err, fmt.Errorf("automatic rollback failed: %w", restoreErr))
+			logger.Error("panel update: automatic rollback remains unresolved: ", restoreErr)
 		}
 	}
 	panelUpdateState.Lock()
@@ -153,6 +206,8 @@ func (s *PanelUpdateService) fail(err error, execPath string, swapped bool) {
 		panelUpdateState.job.Error = redact.String(err.Error())
 		job = *panelUpdateState.job
 	}
+	panelUpdateState.cancel = nil
+	panelUpdateState.done = nil
 	panelUpdateState.active = false
 	panelUpdateState.Unlock()
 	// Record the failed outcome durably (SR-006/SC-008).
@@ -199,7 +254,12 @@ func writePanelUpdateAudit(job UpdateJob, result string, errMsg string) {
 // resetPanelUpdateStateForTest clears the singleton between tests.
 func resetPanelUpdateStateForTest() {
 	panelUpdateState.Lock()
+	if panelUpdateState.cancel != nil {
+		panelUpdateState.cancel()
+	}
 	panelUpdateState.job = nil
 	panelUpdateState.active = false
+	panelUpdateState.cancel = nil
+	panelUpdateState.done = nil
 	panelUpdateState.Unlock()
 }

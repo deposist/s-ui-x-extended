@@ -43,6 +43,9 @@ func BuildWireGuardAddPeerUAPI(publicKey, presharedKey string, allowedIP netip.P
 	if !allowedIP.IsValid() {
 		return "", fmt.Errorf("invalid WireGuard allowed IP")
 	}
+	if allowedIP != allowedIP.Masked() {
+		return "", fmt.Errorf("WireGuard allowed IP has host bits set")
+	}
 	publicKeyHex, err := WireGuardKeyBase64ToHex(publicKey)
 	if err != nil {
 		return "", fmt.Errorf("public key: %w", err)
@@ -54,7 +57,7 @@ func BuildWireGuardAddPeerUAPI(publicKey, presharedKey string, allowedIP netip.P
 	return "public_key=" + publicKeyHex +
 		"\npreshared_key=" + presharedKeyHex +
 		"\nreplace_allowed_ips=true" +
-		"\nallowed_ip=" + allowedIP.Masked().String() + "\n\n", nil
+		"\nallowed_ip=" + allowedIP.String() + "\n\n", nil
 }
 
 // BuildWireGuardRemovePeerUAPI builds an idempotent removal request for one peer.
@@ -131,7 +134,10 @@ func ParseWireGuardPeerSnapshot(input string) ([]WireGuardPeerSnapshot, error) {
 			if err != nil {
 				return nil, fmt.Errorf("invalid WireGuard peer field %q", key)
 			}
-			current.AllowedIPs = append(current.AllowedIPs, prefix.Masked())
+			if prefix != prefix.Masked() {
+				return nil, fmt.Errorf("invalid WireGuard peer field %q: host bits set", key)
+			}
+			current.AllowedIPs = append(current.AllowedIPs, prefix)
 		default:
 			return nil, fmt.Errorf("unknown WireGuard peer field %q", key)
 		}

@@ -3,7 +3,7 @@
 # Language choice can be supplied non-interactively via env:
 #   SUI_LANG=en|ru|zh  bash install.sh ...
 # A version tag (e.g. "v1.4.2-beta") may be provided as the only positional
-set -eo pipefail
+set -Eeo pipefail
 # argument to install a specific release.
 
 red='\033[0;31m'
@@ -199,9 +199,6 @@ ask_language
 
 [[ $EUID -ne 0 ]] && echo -e "${red}$(t run_as_root)${plain}\n" && exit 1
 
-# Persist selected language so the management menu picks it up.
-mkdir -p "$(dirname "${LANG_FILE}")"
-printf '%s\n' "${lang}" >"${LANG_FILE}" 2>/dev/null || true
 
 if [[ -f /etc/os-release ]]; then
     # Standard system file, present only on target Linux hosts.
@@ -465,17 +462,14 @@ config_after_install() {
 }
 
 prepare_services() {
-    if [[ -f "/etc/systemd/system/sing-box.service" ]]; then
-        echo -e "${yellow}$(t stop_singbox)${plain}"
-        systemctl stop sing-box
-        rm -f /usr/local/s-ui/bin/sing-box /usr/local/s-ui/bin/runSingbox.sh /usr/local/s-ui/bin/signal
-    fi
+    # Legacy runtime assets are preserved with the live tree.  Do not remove
+    # them here: any cleanup which is not part of the transaction would make a
+    # later rollback incomplete.
     if [[ -e "/usr/local/s-ui/bin" ]]; then
         echo -e "###############################################################"
         echo -e "${red}$(t bin_dir_exists)${plain}"
         echo -e "###############################################################"
     fi
-    systemctl daemon-reload
 }
 
 download_file() {
@@ -484,91 +478,419 @@ download_file() {
     local temporary="${destination}.part"
     local attempt
 
-    rm -f "${temporary}"
+    case "${url}" in
+        https://*) ;;
+        *) return 1 ;;
+    esac
+
+    rm -f -- "${temporary}" "${destination}"
     for attempt in 1 2 3 4 5; do
         if curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --location \
-            --connect-timeout 20 --speed-limit 1024 --speed-time 60 \
+            --silent --show-error --connect-timeout 20 \
+            --speed-limit 1024 --speed-time 60 \
             --output "${temporary}" "${url}"; then
-            mv -f "${temporary}" "${destination}"
+            mv -f -- "${temporary}" "${destination}"
             return 0
         fi
-        rm -f "${temporary}"
+        rm -f -- "${temporary}" "${destination}"
         [[ ${attempt} -eq 5 ]] || sleep 2
     done
     return 1
 }
 
 verify_download_checksum() {
-    local artifact_name="$1"
-    local checksum_url="$2"
-    local checksum_name="${artifact_name}.sha256"
+    local artifact_path="$1"
+    local checksum_path="$2"
+    local artifact_name="$3"
+    local line digest suffix actual
 
-    if ! download_file "${checksum_url}" "/tmp/${checksum_name}"; then
-        echo -e "${red}$(t checksum_failed)${plain}"
-        exit 1
+    [[ -f "${artifact_path}" && ! -L "${artifact_path}" && -s "${artifact_path}" ]] || return 1
+    [[ -f "${checksum_path}" && ! -L "${checksum_path}" && -s "${checksum_path}" ]] || return 1
+    # Release checksums are one newline-terminated sha256sum record.  Requiring
+    # the exact basename prevents a valid digest from authorizing another file.
+    [[ $(wc -l <"${checksum_path}") -eq 1 ]] || return 1
+    IFS= read -r line <"${checksum_path}" || return 1
+    [[ ${#line} -eq $((66 + ${#artifact_name})) ]] || return 1
+    digest=${line:0:64}
+    suffix=${line:64}
+    [[ "${digest}" =~ ^[[:xdigit:]]{64}$ ]] || return 1
+    [[ "${suffix}" == "  ${artifact_name}" || "${suffix}" == " *${artifact_name}" ]] || return 1
+
+    actual=$(sha256sum -- "${artifact_path}") || return 1
+    actual=${actual%% *}
+    [[ "${actual,,}" == "${digest,,}" ]]
+}
+
+validate_archive_paths() {
+    local archive_path="$1"
+    local list_path="$2"
+    local verbose_path="$3"
+    local member line type duplicates
+
+    TAR_OPTIONS= LC_ALL=C tar --quoting-style=escape --list --gzip \
+        --file "${archive_path}" >"${list_path}" || return 1
+    [[ -s "${list_path}" ]] || return 1
+
+    while IFS= read -r member; do
+        [[ -n "${member}" ]] || return 1
+        # This deliberately accepts a small, portable path alphabet.  In
+        # particular, escaped controls/backslashes, absolute paths, dot
+        # components and paths outside the single s-ui root are rejected.
+        [[ "${member}" != *'\\'* ]] || return 1
+        [[ "${member}" == "s-ui" || "${member}" == "s-ui/" || "${member}" == s-ui/* ]] || return 1
+        [[ "${member}" =~ ^s-ui(/[-+._A-Za-z0-9]+)*/?$ ]] || return 1
+        [[ "${member}" != */. && "${member}" != */.. ]] || return 1
+        [[ "/${member}/" != *'/../'* && "/${member}/" != *'/./'* && "${member}" != *'//'* ]] || return 1
+    done <"${list_path}"
+
+    duplicates=$(LC_ALL=C sort "${list_path}" | uniq -d) || return 1
+    [[ -z "${duplicates}" ]] || return 1
+    [[ $(grep -Fxc 's-ui/sui' "${list_path}") -eq 1 ]] || return 1
+    [[ $(grep -Fxc 's-ui/s-ui.sh' "${list_path}") -eq 1 ]] || return 1
+    [[ $(grep -Fxc 's-ui/s-ui.service' "${list_path}") -eq 1 ]] || return 1
+
+    TAR_OPTIONS= LC_ALL=C tar --quoting-style=escape --list --verbose --gzip \
+        --file "${archive_path}" >"${verbose_path}" || return 1
+    while IFS= read -r line; do
+        [[ -n "${line}" ]] || return 1
+        type=${line:0:1}
+        [[ "${type}" == '-' || "${type}" == 'd' ]] || return 1
+    done <"${verbose_path}"
+}
+
+verify_staged_tree() {
+    local tree="$1"
+
+    [[ -d "${tree}" && ! -L "${tree}" ]] || return 1
+    [[ -f "${tree}/sui" && ! -L "${tree}/sui" && -s "${tree}/sui" ]] || return 1
+    [[ -f "${tree}/s-ui.sh" && ! -L "${tree}/s-ui.sh" && -s "${tree}/s-ui.sh" ]] || return 1
+    [[ -f "${tree}/s-ui.service" && ! -L "${tree}/s-ui.service" && -s "${tree}/s-ui.service" ]] || return 1
+    chmod 755 "${tree}/sui" "${tree}/s-ui.sh" || return 1
+    bash -n "${tree}/s-ui.sh" || return 1
+    grep -Fqx 'WorkingDirectory=/usr/local/s-ui/' "${tree}/s-ui.service" || return 1
+    grep -Fqx 'ExecStart=/usr/local/s-ui/sui' "${tree}/s-ui.service" || return 1
+    "${tree}/sui" -v >/dev/null 2>&1
+}
+
+copy_preserved_tree() {
+    local live="$1" candidate="$2" entry
+
+    [[ -d "${live}" && ! -L "${live}" ]] || return 1
+    for entry in "${live}"/* "${live}"/.[!.]* "${live}"/..?*; do
+        path_exists "${entry}" || continue
+        case "${entry##*/}" in
+            sui|s-ui.sh|s-ui.service) continue ;;
+        esac
+        cp -a -- "${entry}" "${candidate}/"
+    done
+}
+path_exists() {
+    [[ -e "$1" || -L "$1" ]]
+}
+
+install_transaction_cleanup() {
+    local path
+    set +e
+    for path in "${MENU_NEW:-}" "${UNIT_NEW:-}" "${CONFIG_NEW:-}" "${DROPIN_NEW:-}"; do
+        [[ -n "${path}" ]] && rm -rf -- "${path}"
+    done
+    [[ -n "${INSTALL_STAGE:-}" ]] && rm -rf -- "${INSTALL_STAGE}"
+}
+
+restore_promoted_path() {
+    local live="$1" backup="$2" failed="$3" source="$4" had_old="$5" state="$6"
+
+    if path_exists "${backup}"; then
+        if path_exists "${live}"; then
+            rm -rf -- "${failed}"
+            mv -- "${live}" "${failed}" || return 1
+        fi
+        mv -- "${backup}" "${live}" || return 1
+        rm -rf -- "${failed}"
+        return 0
     fi
-    if ! (cd /tmp/ && sha256sum -c "${checksum_name}"); then
-        echo -e "${red}$(t checksum_failed)${plain}"
-        exit 1
+
+    # No backup means either this was a fresh path or the old rename never
+    # happened.  Only remove a fresh promoted object when its source vanished.
+    if [[ "${had_old}" == 0 && "${state}" != untouched ]] && \
+        ! path_exists "${source}" && path_exists "${live}"; then
+        rm -rf -- "${failed}"
+        mv -- "${live}" "${failed}" || return 1
+        rm -rf -- "${failed}"
+    fi
+}
+
+restore_service_state() {
+    local failed=0
+
+    systemctl daemon-reload || failed=1
+    systemctl disable s-ui >/dev/null 2>&1 || failed=1
+    if [[ "${SERVICE_WAS_ENABLED:-0}" == 1 ]]; then
+        systemctl enable "${SERVICE_ENABLED_UNIT:-s-ui.service}" || failed=1
+    fi
+    if [[ "${SERVICE_WAS_ACTIVE:-0}" == 1 ]]; then
+        systemctl start s-ui || failed=1
+        systemctl is-active --quiet s-ui || failed=1
+    else
+        systemctl stop s-ui >/dev/null 2>&1 || failed=1
+    fi
+    return "${failed}"
+}
+
+rollback_install_transaction() {
+    local failed=0
+    set +e
+
+    systemctl stop s-ui >/dev/null 2>&1 || true
+    restore_promoted_path "${DROPIN_PATH}" "${DROPIN_BACKUP}" "${DROPIN_FAILED}" \
+        "${DROPIN_NEW}" "${DROPIN_HAD_OLD}" "${DROPIN_STATE}" || failed=1
+    restore_promoted_path "${UNIT_PATH}" "${UNIT_BACKUP}" "${UNIT_FAILED}" \
+        "${UNIT_NEW}" "${UNIT_HAD_OLD}" "${UNIT_STATE}" || failed=1
+    restore_promoted_path "${CONFIG_PATH}" "${CONFIG_BACKUP}" "${CONFIG_FAILED}" \
+        "${CONFIG_NEW}" "${CONFIG_HAD_OLD}" "${CONFIG_STATE}" || failed=1
+    restore_promoted_path "${MENU_PATH}" "${MENU_BACKUP}" "${MENU_FAILED}" \
+        "${MENU_NEW}" "${MENU_HAD_OLD}" "${MENU_STATE}" || failed=1
+    restore_promoted_path "${LIVE_PATH}" "${LIVE_BACKUP}" "${LIVE_FAILED}" \
+        "${TREE_NEW}" "${LIVE_HAD_OLD}" "${LIVE_STATE}" || failed=1
+    restore_service_state || failed=1
+    if [[ ${failed} -ne 0 ]]; then
+        echo "s-ui rollback encountered an error; backups were left in place" >&2
+    fi
+    return "${failed}"
+}
+
+abort_install_transaction() {
+    local status="$1"
+    trap - ERR INT TERM
+    set +e
+    if [[ "${TRANSACTION_ACTIVE:-0}" == 1 ]]; then
+        rollback_install_transaction
+    fi
+    install_transaction_cleanup
+    exit "${status}"
+}
+
+promote_path() {
+    local source="$1" live="$2" backup="$3" had_var="$4" state_var="$5"
+
+    printf -v "${state_var}" '%s' pending
+    if path_exists "${live}"; then
+        printf -v "${had_var}" '%s' 1
+        mv -- "${live}" "${backup}"
+    fi
+    mv -- "${source}" "${live}"
+    printf -v "${state_var}" '%s' promoted
+}
+
+stage_config_and_service_files() {
+    local extracted_tree="$1"
+
+    MENU_NEW=$(mktemp '/usr/bin/.s-ui.install.XXXXXXXXXX')
+    UNIT_NEW=$(mktemp '/etc/systemd/system/.s-ui.service.install.XXXXXXXXXX')
+    CONFIG_NEW=$(mktemp -d '/etc/.s-ui.install.XXXXXXXXXX')
+    DROPIN_NEW=$(mktemp -d '/etc/systemd/system/.s-ui.service.d.install.XXXXXXXXXX')
+
+    cp -a -- "${extracted_tree}/s-ui.sh" "${MENU_NEW}"
+    cp -a -- "${extracted_tree}/s-ui.service" "${UNIT_NEW}"
+    chmod 755 "${MENU_NEW}"
+    chmod 644 "${UNIT_NEW}"
+    if path_exists "${CONFIG_PATH}"; then
+        [[ -d "${CONFIG_PATH}" && ! -L "${CONFIG_PATH}" ]] || return 1
+        cp -a -- "${CONFIG_PATH}/." "${CONFIG_NEW}/"
+        chown --reference="${CONFIG_PATH}" "${CONFIG_NEW}"
+        chmod --reference="${CONFIG_PATH}" "${CONFIG_NEW}"
+    fi
+    if path_exists "${DROPIN_PATH}"; then
+        [[ -d "${DROPIN_PATH}" && ! -L "${DROPIN_PATH}" ]] || return 1
+        cp -a -- "${DROPIN_PATH}/." "${DROPIN_NEW}/"
+        chown --reference="${DROPIN_PATH}" "${DROPIN_NEW}"
+        chmod --reference="${DROPIN_PATH}" "${DROPIN_NEW}"
+    fi
+    [[ ! -L "${CONFIG_NEW}/secretbox.env" && ! -L "${CONFIG_NEW}/lang" ]] || return 1
+
+    # Point the existing key preparation helpers at private candidates.  The
+    # live /etc tree is not changed until all release files have been verified.
+    LANG_FILE="${CONFIG_NEW}/lang"
+    SECRETBOX_ENV_DIR="${CONFIG_NEW}"
+    SECRETBOX_ENV_FILE="${CONFIG_NEW}/secretbox.env"
+    SECRETBOX_DROPIN_DIR="${DROPIN_NEW}"
+    SECRETBOX_DROPIN_FILE="${DROPIN_NEW}/10-secretbox-env.conf"
+    printf '%s\n' "${lang}" >"${LANG_FILE}"
+    prepare_secretbox_key
+    prepare_cookie_key
+    prepare_awg_key
+
+    LANG_FILE="/etc/s-ui/lang"
+    SECRETBOX_ENV_DIR="/etc/s-ui"
+    SECRETBOX_ENV_FILE="/etc/s-ui/secretbox.env"
+    SECRETBOX_DROPIN_DIR="/etc/systemd/system/s-ui.service.d"
+    SECRETBOX_DROPIN_FILE="${SECRETBOX_DROPIN_DIR}/10-secretbox-env.conf"
+
+    [[ -s "${MENU_NEW}" && -s "${UNIT_NEW}" ]] || return 1
+    [[ -f "${CONFIG_NEW}/secretbox.env" && ! -L "${CONFIG_NEW}/secretbox.env" ]] || return 1
+    [[ -f "${DROPIN_NEW}/10-secretbox-env.conf" && ! -L "${DROPIN_NEW}/10-secretbox-env.conf" ]] || return 1
+    bash -n "${MENU_NEW}"
+}
+
+record_service_state() {
+    SERVICE_WAS_ACTIVE=0
+    SERVICE_WAS_ENABLED=0
+    SERVICE_ENABLED_UNIT='s-ui.service'
+    systemctl is-active --quiet s-ui 2>/dev/null && SERVICE_WAS_ACTIVE=1 || true
+    if SERVICE_ENABLED_UNIT=$(systemctl is-enabled s-ui 2>/dev/null); then
+        SERVICE_WAS_ENABLED=1
+        case "${SERVICE_ENABLED_UNIT}" in
+            *.service) ;;
+            *) SERVICE_ENABLED_UNIT='s-ui.service' ;;
+        esac
+    else
+        SERVICE_ENABLED_UNIT='s-ui.service'
     fi
 }
 
 install_s-ui() {
-    cd /tmp/ || exit 1
-    artifact_name="s-ui-linux-$(arch).tar.gz"
+    local artifact_name version url latest_file archive_path checksum_path
+    local archive_list archive_verbose extracted_tree token desired_active desired_enabled
 
+    umask 077
+    mkdir -p /usr/local /usr/bin /etc/systemd/system
+    tar --version 2>/dev/null | grep -q 'GNU tar' || {
+        echo 'GNU tar is required for secure archive validation' >&2
+        return 1
+    }
+    INSTALL_STAGE=$(mktemp -d '/usr/local/.s-ui-install.XXXXXXXXXX')
+    chmod 700 "${INSTALL_STAGE}"
+    trap install_transaction_cleanup EXIT
+    trap 'abort_install_transaction $?' ERR
+    trap 'abort_install_transaction 130' INT
+    trap 'abort_install_transaction 143' TERM
+
+    LIVE_PATH='/usr/local/s-ui'
+    MENU_PATH='/usr/bin/s-ui'
+    UNIT_PATH='/etc/systemd/system/s-ui.service'
+    CONFIG_PATH='/etc/s-ui'
+    DROPIN_PATH='/etc/systemd/system/s-ui.service.d'
+    token=${INSTALL_STAGE##*/}
+    LIVE_BACKUP="/usr/local/.s-ui.backup.${token}"
+    MENU_BACKUP="/usr/bin/.s-ui.backup.${token}"
+    UNIT_BACKUP="/etc/systemd/system/.s-ui.service.backup.${token}"
+    CONFIG_BACKUP="/etc/.s-ui.backup.${token}"
+    DROPIN_BACKUP="/etc/systemd/system/.s-ui.service.d.backup.${token}"
+    LIVE_FAILED="/usr/local/.s-ui.failed.${token}"
+    MENU_FAILED="/usr/bin/.s-ui.failed.${token}"
+    UNIT_FAILED="/etc/systemd/system/.s-ui.service.failed.${token}"
+    CONFIG_FAILED="/etc/.s-ui.failed.${token}"
+    DROPIN_FAILED="/etc/systemd/system/.s-ui.service.d.failed.${token}"
+    LIVE_HAD_OLD=0 MENU_HAD_OLD=0 UNIT_HAD_OLD=0 CONFIG_HAD_OLD=0 DROPIN_HAD_OLD=0
+    LIVE_STATE=untouched MENU_STATE=untouched UNIT_STATE=untouched CONFIG_STATE=untouched DROPIN_STATE=untouched
+    TRANSACTION_ACTIVE=0
+
+    artifact_name="s-ui-linux-$(arch).tar.gz"
+    latest_file="${INSTALL_STAGE}/latest.json"
     if [[ $# -eq 0 || -z "${1:-}" ]]; then
-        last_version=$(curl --proto '=https' -Ls "https://api.github.com/repos/deposist/s-ui-x-extended/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-        if [[ ! -n "$last_version" ]]; then
+        download_file 'https://api.github.com/repos/deposist/s-ui-x-extended/releases/latest' "${latest_file}" || {
             echo -e "${red}$(t rate_limited)${plain}"
-            exit 1
-        fi
-        echo -e "$(t fetching_latest "${last_version}")"
-        url="https://github.com/deposist/s-ui-x-extended/releases/download/${last_version}/${artifact_name}"
-        if ! download_file "${url}" "/tmp/${artifact_name}"; then
-            echo -e "${red}$(t download_failed)${plain}"
-            exit 1
-        fi
-        verify_download_checksum "${artifact_name}" "${url}.sha256"
+            return 1
+        }
+        version=$(sed -n -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "${latest_file}" | sed -n '1p')
+        [[ -n "${version}" ]] || return 1
+        echo -e "$(t fetching_latest "${version}")"
     else
-        last_version=$1
-        [[ "${last_version}" != v* ]] && last_version="v${last_version}"
-        url="https://github.com/deposist/s-ui-x-extended/releases/download/${last_version}/${artifact_name}"
-        echo -e "$(t installing_specific "${last_version}")"
-        if ! download_file "${url}" "/tmp/${artifact_name}"; then
-            echo -e "${red}$(t download_failed_specific "${last_version}")${plain}"
-            exit 1
-        fi
-        verify_download_checksum "${artifact_name}" "${url}.sha256"
+        version=$1
+        [[ "${version}" == v* ]] || version="v${version}"
+        echo -e "$(t installing_specific "${version}")"
+    fi
+    [[ "${version}" =~ ^v[0-9]+[.][0-9]+[.][0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]] || return 1
+
+    url="https://github.com/deposist/s-ui-x-extended/releases/download/${version}/${artifact_name}"
+    archive_path="${INSTALL_STAGE}/${artifact_name}"
+    checksum_path="${INSTALL_STAGE}/${artifact_name}.sha256"
+    if ! download_file "${url}" "${archive_path}"; then
+        echo -e "${red}$(t download_failed_specific "${version}")${plain}"
+        return 1
+    fi
+    if ! download_file "${url}.sha256" "${checksum_path}" || \
+        ! verify_download_checksum "${archive_path}" "${checksum_path}" "${artifact_name}"; then
+        echo -e "${red}$(t checksum_failed)${plain}"
+        return 1
     fi
 
-    if [[ -e /usr/local/s-ui/ ]]; then
+    archive_list="${INSTALL_STAGE}/archive.list"
+    archive_verbose="${INSTALL_STAGE}/archive.verbose"
+    validate_archive_paths "${archive_path}" "${archive_list}" "${archive_verbose}" || {
+        echo -e "${red}$(t checksum_failed)${plain}"
+        return 1
+    }
+    mkdir "${INSTALL_STAGE}/extract"
+    TAR_OPTIONS= tar --extract --gzip --file "${archive_path}" \
+        --directory "${INSTALL_STAGE}/extract" --no-same-owner --no-same-permissions
+    extracted_tree="${INSTALL_STAGE}/extract/s-ui"
+    verify_staged_tree "${extracted_tree}"
+
+    # Only after the complete release is runnable and structurally verified do
+    # we inspect/stop the service or prepare any live-path promotion.
+    record_service_state
+    if path_exists "${LIVE_PATH}"; then
+        [[ -d "${LIVE_PATH}" && ! -L "${LIVE_PATH}" ]] || return 1
+        desired_active=${SERVICE_WAS_ACTIVE}
+        desired_enabled=${SERVICE_WAS_ENABLED}
+    else
+        # A fresh install starts/enables on commit, but rollback must restore
+        # the pre-install (absent, stopped, disabled) service state.
+        desired_active=1
+        desired_enabled=1
+        SERVICE_WAS_ACTIVE=0
+        SERVICE_WAS_ENABLED=0
+        SERVICE_ENABLED_UNIT='s-ui.service'
+    fi
+    stage_config_and_service_files "${extracted_tree}"
+
+    TREE_NEW="${INSTALL_STAGE}/live-tree"
+    mkdir "${TREE_NEW}"
+    if path_exists "${LIVE_PATH}"; then
+        copy_preserved_tree "${LIVE_PATH}" "${TREE_NEW}"
+    fi
+    cp -a -- "${extracted_tree}/." "${TREE_NEW}/"
+    verify_staged_tree "${TREE_NEW}"
+
+    TRANSACTION_ACTIVE=1
+    if [[ "${SERVICE_WAS_ACTIVE}" == 1 ]]; then
         systemctl stop s-ui
     fi
-
-    tar --no-same-owner -zxvf "${artifact_name}"
-    rm "${artifact_name}" "${artifact_name}.sha256" -f
-
-    chmod +x s-ui/sui s-ui/s-ui.sh
-    cp s-ui/s-ui.sh /usr/bin/s-ui
-    cp -rf s-ui /usr/local/
-    cp -f s-ui/*.service /etc/systemd/system/
-    rm -rf s-ui
-
-    prepare_secretbox_key
-    prepare_cookie_key
-    prepare_awg_key
-    config_after_install
     prepare_services
 
-    systemctl enable s-ui --now
+    promote_path "${TREE_NEW}" "${LIVE_PATH}" "${LIVE_BACKUP}" LIVE_HAD_OLD LIVE_STATE
+    promote_path "${MENU_NEW}" "${MENU_PATH}" "${MENU_BACKUP}" MENU_HAD_OLD MENU_STATE
+    promote_path "${CONFIG_NEW}" "${CONFIG_PATH}" "${CONFIG_BACKUP}" CONFIG_HAD_OLD CONFIG_STATE
+    promote_path "${UNIT_NEW}" "${UNIT_PATH}" "${UNIT_BACKUP}" UNIT_HAD_OLD UNIT_STATE
+    promote_path "${DROPIN_NEW}" "${DROPIN_PATH}" "${DROPIN_BACKUP}" DROPIN_HAD_OLD DROPIN_STATE
 
-    echo -e "${green}$(t installed_running "${last_version}")${plain}"
-    echo -e "$(t panel_url)${green}"
-    /usr/local/s-ui/sui uri
-    echo -e "${plain}"
-    echo -e ""
-    s-ui help
+    systemctl daemon-reload
+    config_after_install
+
+    systemctl disable s-ui >/dev/null 2>&1 || true
+    if [[ "${desired_enabled}" == 1 ]]; then
+        systemctl enable "${SERVICE_ENABLED_UNIT:-s-ui.service}"
+    fi
+    if [[ "${desired_active}" == 1 ]]; then
+        systemctl start s-ui
+        systemctl is-active --quiet s-ui
+    fi
+
+    # Backups are retained until after the transaction is marked committed.
+    # Cleanup is best effort and must never re-enter rollback after success.
+    rm -rf -- "${LIVE_BACKUP}" "${MENU_BACKUP}" "${CONFIG_BACKUP}" \
+        "${UNIT_BACKUP}" "${DROPIN_BACKUP}" || true
+    TRANSACTION_ACTIVE=0
+    trap - ERR INT TERM
+
+    echo -e "${green}$(t installed_running "${version}")${plain}"
+    if [[ "${desired_active}" == 1 ]]; then
+        echo -e "$(t panel_url)${green}"
+        /usr/local/s-ui/sui uri || true
+        echo -e "${plain}"
+    fi
+    /usr/bin/s-ui help || true
 }
 
 echo -e "${green}$(t running)${plain}"

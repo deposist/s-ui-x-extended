@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"context"
+	"time"
 
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
@@ -190,6 +192,44 @@ func TestListManagedAWGEndpointsFiltersByMetadata(t *testing.T) {
 	}
 	if len(ids) != 1 || ids[0] != managed.Id {
 		t.Fatalf("ids = %v", ids)
+	}
+}
+
+func TestAWGEndpointManagerStopClosesAdmissionUntilRestart(t *testing.T) {
+	initSettingTestDB(t)
+	endpoint := createManagedAWGEndpoint(t, "awg-lifecycle", true)
+	manager := NewAWGEndpointManager(nil)
+
+	if _, err := manager.manager(context.Background(), endpoint.Id); !errors.Is(err, ErrAWGManagerStopped) {
+		t.Fatalf("manager before Start error = %v, want ErrAWGManagerStopped", err)
+	}
+	if err := manager.Start(); err != nil {
+		t.Fatal(err)
+	}
+	first, err := manager.manager(context.Background(), endpoint.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := manager.StopAll(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.manager(context.Background(), endpoint.Id); !errors.Is(err, ErrAWGManagerStopped) {
+		t.Fatalf("manager after StopAll error = %v, want ErrAWGManagerStopped", err)
+	}
+	if err := manager.Start(); err != nil {
+		t.Fatal(err)
+	}
+	second, err := manager.manager(context.Background(), endpoint.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second {
+		t.Fatal("restart reused the stopped endpoint worker")
+	}
+	if err := manager.StopAll(ctx); err != nil {
+		t.Fatal(err)
 	}
 }
 

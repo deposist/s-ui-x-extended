@@ -20,7 +20,11 @@ import (
 // walCheckpoint is a test seam for post-commit, best-effort maintenance.
 // Its failure cannot invalidate a transaction that has already committed.
 var walCheckpoint = func() error {
-	return database.GetDB().Exec("PRAGMA wal_checkpoint(TRUNCATE)").Error
+	db := database.GetDB()
+	if db == nil {
+		return fmt.Errorf("destination database is not initialized")
+	}
+	return db.Exec("PRAGMA wal_checkpoint(TRUNCATE)").Error
 }
 
 func reportCheckpointFailure(report *Report, err error) {
@@ -54,12 +58,20 @@ func Import(srcPath string, opts Options) (*Report, error) {
 	if err := checkContext(opts.Context); err != nil {
 		return report, fmt.Errorf("xui-import: %w", err)
 	}
-	if !opts.DryRun {
-		if !applyMu.TryLock() {
-			return report, fmt.Errorf("xui-import: %w", ErrBusy)
+	if opts.DryRun {
+		plan, err := Plan(srcPath, PlanOptions{
+			Context: opts.Context, Strategy: opts.Strategy,
+			IncludeHistory: opts.IncludeHistory, IncludeRouting: opts.IncludeRouting,
+		})
+		if err != nil {
+			return report, err
 		}
-		defer applyMu.Unlock()
+		return reportFromPlan(plan), nil
 	}
+	if !applyMu.TryLock() {
+		return report, fmt.Errorf("xui-import: %w", ErrBusy)
+	}
+	defer applyMu.Unlock()
 	src, err := openSource(srcPath)
 	if err != nil {
 		return report, fmt.Errorf("xui-import: %w", err)
@@ -95,9 +107,6 @@ func Import(srcPath string, opts Options) (*Report, error) {
 	if err := state.run(tx, src, opts); err != nil {
 		return report, fmt.Errorf("xui-import: %w", err)
 	}
-	if opts.DryRun {
-		return report, nil
-	}
 	if err := tx.Commit().Error; err != nil {
 		return report, fmt.Errorf("xui-import: %w", err)
 	}
@@ -130,6 +139,66 @@ func (s *importState) run(tx *gorm.DB, src *sourceDB, opts Options) error {
 		}
 	}
 	return nil
+}
+
+func reportFromPlan(plan *MigrationPlan) *Report {
+	report := &Report{}
+	if plan == nil {
+		return report
+	}
+	for _, item := range plan.Items {
+		report.warnAll(item.Warnings)
+		imported := item.Action != ActionSkip
+		switch item.Kind {
+		case KindTLS:
+			if item.Conflict || !imported {
+				report.Summary.TLS.Reused++
+			} else {
+				report.Summary.TLS.Created++
+			}
+		case KindInbound:
+			report.Summary.Inbounds.Total++
+			if item.Conflict {
+				report.Summary.Inbounds.Conflicts++
+			}
+			if imported {
+				report.Summary.Inbounds.Imported++
+			} else {
+				report.Summary.Inbounds.Skipped++
+			}
+		case KindEndpoint:
+			report.Summary.Inbounds.Total++
+			if imported {
+				report.Summary.Endpoints.Imported++
+			} else {
+				report.Summary.Endpoints.Skipped++
+			}
+		case KindClient:
+			report.Summary.Clients.UniqueEmails++
+			if imported {
+				if item.Action == ActionCreate {
+					report.Summary.Clients.Created++
+				} else {
+					report.Summary.Clients.Merged++
+				}
+			}
+		case KindHistory:
+			report.Summary.Historical.Total++
+			if imported {
+				report.Summary.Historical.Imported++
+			} else {
+				report.Summary.Historical.Skipped++
+			}
+		case KindRouting:
+			report.Summary.Routing.Total++
+			if imported {
+				report.Summary.Routing.Imported++
+			} else {
+				report.Summary.Routing.Skipped++
+			}
+		}
+	}
+	return report
 }
 
 func (s *importState) importOptionalExtras(tx *gorm.DB, src *sourceDB, opts Options) error {

@@ -9,6 +9,10 @@ inputs:
     description: Previously resolved tag commit; downstream jobs fail if the tag moved
     required: false
     default: ""
+  event_commit:
+    description: Tag-push event commit; empty for manual dispatch
+    required: false
+    default: ""
 
 outputs:
   tag:
@@ -20,6 +24,9 @@ outputs:
   version:
     description: Version read from config/version
     value: ${{ steps.verify.outputs.version }}
+  prerelease:
+    description: Whether the validated SemVer tag has a hyphen prerelease suffix
+    value: ${{ steps.verify.outputs.prerelease }}
 
 runs:
   using: composite
@@ -30,6 +37,13 @@ runs:
       env:
         INPUT_TAG: ${{ inputs.tag }}
       run: echo "tag=$(scripts/validate-release-tag.sh "$INPUT_TAG")" >> "$GITHUB_OUTPUT"
+
+    - name: Stage trusted release verifier
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p "$RUNNER_TEMP/s-ui-release-tooling"
+        cp scripts/validate-release-tag.sh scripts/verify-release-tag-checkout.sh "$RUNNER_TEMP/s-ui-release-tooling/"
 
     - name: Check out release tag
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -44,17 +58,16 @@ runs:
       env:
         TAG: ${{ steps.input.outputs.tag }}
         EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        EVENT_COMMIT: ${{ inputs.event_commit }}
       run: |
         set -euo pipefail
-        TAG_COMMIT=$(git rev-list -n 1 "refs/tags/$TAG")
-        test "$(git rev-parse HEAD)" = "$TAG_COMMIT"
-        if [ -n "$EXPECTED_COMMIT" ]; then
-          test "$TAG_COMMIT" = "$EXPECTED_COMMIT"
-        fi
-        VERSION=$(git show "$TAG_COMMIT:config/version" | tr -d '\r\n')
-        test "$VERSION" = "${TAG#v}"
+        output=$("$RUNNER_TEMP/s-ui-release-tooling/verify-release-tag-checkout.sh" "$TAG" "$EXPECTED_COMMIT" "$EVENT_COMMIT")
+        TAG_COMMIT=$(sed -n 's/^commit=//p' <<<"$output")
+        VERSION=$(sed -n 's/^version=//p' <<<"$output")
+        PRERELEASE=$("$RUNNER_TEMP/s-ui-release-tooling/validate-release-tag.sh" --prerelease "$TAG")
         {
           echo "tag=$TAG"
           echo "commit=$TAG_COMMIT"
           echo "version=$VERSION"
+          echo "prerelease=$PRERELEASE"
         } >> "$GITHUB_OUTPUT"

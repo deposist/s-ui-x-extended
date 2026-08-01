@@ -9,6 +9,19 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.8-beta9] - 2026-08-01 - payment recovery and reliability fixes
+
+- Paid subscriptions now record every provider charge, recover paid orders that expired while confirmation was pending, and retry failed Telegram and CryptoBot work without skipping it. Refunds restore purchased capacity without rewriting live or lifetime traffic counters.
+- Core startup and shutdown now roll back partial initialization safely. Clash log streaming works again, panic and fatal levels keep their original behavior, and WireGuard endpoint removal uses the correct IPC synchronization.
+- Certificate renewal retries a saved but unapplied certificate pair. Telegram backup validates its fixed Argon2 profile before deriving keys, honors cancellation, and publishes certificate and key files as one complete generation.
+- Share-link and Clash parsers reject malformed input instead of panicking or silently changing it. Generated URLs now escape query values and IPv6 addresses correctly.
+- Sessions, realtime delivery, HTTPS redirects, iframe headers, host validation, and immutable asset caching now handle their edge cases consistently.
+- The frontend prevents stale or overlapping asynchronous work from affecting WebSocket, CSRF, data loading, fallback polling, update polling, and editor state. Damaged saved JSON and blocked browser storage no longer stop affected views from rendering.
+- Release workflows now validate tag provenance and artifact metadata more strictly. The updater preserves rollback state across interrupted or concurrent updates.
+- The database schema adds a durable provider-charge ledger during normal startup. No manual configuration change is required.
+
+Full release notes: [`docs/releases/v1.0.8-beta9.md`](docs/releases/v1.0.8-beta9.md).
+
 ## [1.0.8-beta8] - 2026-07-28 - WebSocket recovery and Windows tests
 
 - Realtime updates recover after the WebSocket token request fails while the browser is offline. The client enters degraded polling and retries after connectivity returns instead of remaining closed.

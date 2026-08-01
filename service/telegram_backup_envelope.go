@@ -199,13 +199,10 @@ func deriveTelegramBackupKey(passphrase []byte, salt []byte, params TelegramBack
 }
 
 func validateTelegramBackupKDFParams(params TelegramBackupKDFParams) error {
-	if params.MemoryKiB < telegramBackupArgon2MemoryKiB || params.MemoryKiB > 1024*1024 {
-		return ErrTelegramBackupInvalidEnvelope
-	}
-	if params.Iterations == 0 || params.Iterations > 16 {
-		return ErrTelegramBackupInvalidEnvelope
-	}
-	if params.Parallelism == 0 || params.Parallelism > 4 {
+	// Version 1 emits one fixed Argon2id profile. Header parameters are not
+	// authenticated until after the KDF, so accepting higher attacker-controlled
+	// costs would allow tiny forged envelopes to force excessive CPU or memory.
+	if params != telegramBackupDefaultKDFParams {
 		return ErrTelegramBackupInvalidEnvelope
 	}
 	return nil

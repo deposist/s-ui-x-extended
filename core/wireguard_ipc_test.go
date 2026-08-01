@@ -1,9 +1,12 @@
 package core
 
 import (
+	"context"
+	"errors"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestWithWireGuardIPCRequiresRunningCore(t *testing.T) {
@@ -20,6 +23,26 @@ func TestWithWireGuardIPCRejectsNilCallback(t *testing.T) {
 	err := NewCore().WithWireGuardIPC("awg", nil)
 	if err == nil || err.Error() != "wireguard IPC callback is nil" {
 		t.Fatalf("WithWireGuardIPC error = %v; want nil-callback error", err)
+	}
+}
+
+func TestWithWireGuardIPCContextCancelsWhileWaitingForCriticalSection(t *testing.T) {
+	core := NewCore()
+	<-core.wireGuardIPCAccess
+	defer func() { core.wireGuardIPCAccess <- struct{}{} }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	called := false
+	err := core.WithWireGuardIPCContext(ctx, "awg", func(WireGuardIPC) error {
+		called = true
+		return nil
+	})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("WithWireGuardIPCContext error = %v, want context deadline", err)
+	}
+	if called {
+		t.Fatal("callback ran after context expired while waiting for IPC lock")
 	}
 }
 
@@ -42,24 +65,23 @@ func TestWithWireGuardIPCReportsMissingEndpoint(t *testing.T) {
 
 func TestWireGuardIPCLockSerializesEndpointRemoval(t *testing.T) {
 	core := NewCore()
-	core.wireGuardIPCAccess.Lock()
+	<-core.wireGuardIPCAccess
 
 	acquired := make(chan struct{})
 	done := make(chan struct{})
 	go func() {
-		core.wireGuardIPCAccess.Lock()
+		<-core.wireGuardIPCAccess
 		close(acquired)
-		core.wireGuardIPCAccess.Unlock()
+		core.wireGuardIPCAccess <- struct{}{}
 		close(done)
 	}()
 	runtime.Gosched()
 
 	select {
 	case <-acquired:
-		core.wireGuardIPCAccess.Unlock()
 		t.Fatal("a competing endpoint operation entered the IPC critical section")
 	default:
 	}
-	core.wireGuardIPCAccess.Unlock()
+	core.wireGuardIPCAccess <- struct{}{}
 	<-done
 }

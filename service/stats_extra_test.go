@@ -9,6 +9,7 @@ import (
 	"github.com/deposist/s-ui-x-extended/core"
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
+	"github.com/deposist/s-ui-x-extended/ipmonitor"
 	"github.com/deposist/s-ui-x-extended/realtime"
 	"gorm.io/gorm"
 )
@@ -64,6 +65,7 @@ func TestStatsServiceSaveStatsCommitFailureAuditsAndReturnsIssue26(t *testing.T)
 		return commitErr
 	}
 	t.Cleanup(func() { commitStatsTransaction = prevCommit })
+	ipmonitor.Record("user-0000", "198.51.100.10")
 
 	tracker := core.NewStatsTracker()
 	seedSyntheticUserStatsForBench(t, tracker, 1)
@@ -102,6 +104,16 @@ func TestStatsServiceSaveStatsCommitFailureAuditsAndReturnsIssue26(t *testing.T)
 	stats := tracker.GetStats()
 	if len(*stats) == 0 {
 		t.Fatal("traffic snapshot was lost after failed commit")
+	}
+	if err := ipmonitor.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	var ipRows int64
+	if err := database.GetDB().Model(&model.ClientIP{}).Where("client_name = ?", "user-0000").Count(&ipRows).Error; err != nil {
+		t.Fatal(err)
+	}
+	if ipRows != 1 {
+		t.Fatalf("IP snapshot was lost after failed stats commit: rows=%d", ipRows)
 	}
 }
 
@@ -236,6 +248,40 @@ func TestStatsServiceDownsampleStatsIdenticalTimestampsExtra(t *testing.T) {
 	for i := 2; i < len(got); i++ {
 		if got[i].Traffic != 0 {
 			t.Fatalf("bucket %d should be empty for identical timestamps, got %#v", i, got[i])
+		}
+	}
+}
+
+func TestStatsServiceDownsampleStatsShuffledParityExtra(t *testing.T) {
+	statsService := &StatsService{}
+	input := []model.Stats{
+		{DateTime: 140, Resource: "user", Tag: "latest", Direction: true, Traffic: 99},
+		{DateTime: 100, Resource: "user", Tag: "earliest", Direction: false, Traffic: 10},
+		{DateTime: 119, Resource: "user", Tag: "middle", Direction: true, Traffic: 7},
+		{DateTime: 100, Resource: "user", Tag: "duplicate", Direction: false, Traffic: 30},
+		{DateTime: 121, Resource: "user", Tag: "middle", Direction: false, Traffic: 8},
+		{DateTime: 140, Resource: "user", Tag: "latest", Direction: true, Traffic: 101},
+	}
+	original := append([]model.Stats(nil), input...)
+
+	got := statsService.downsampleStats(input, 4)
+	want := []model.Stats{
+		{DateTime: 100, Resource: "user", Tag: "earliest", Direction: false, Traffic: 20},
+		{DateTime: 100, Resource: "user", Tag: "earliest", Direction: true, Traffic: 7},
+		{DateTime: 120, Resource: "user", Tag: "earliest", Direction: false, Traffic: 8},
+		{DateTime: 120, Resource: "user", Tag: "earliest", Direction: true, Traffic: 100},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("downsample length=%d want %d: %#v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("downsample[%d]=%#v want %#v", i, got[i], want[i])
+		}
+	}
+	for i := range original {
+		if input[i] != original[i] {
+			t.Fatalf("linear downsample mutated input at %d: got %#v want %#v", i, input[i], original[i])
 		}
 	}
 }

@@ -40,12 +40,18 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
     (response) => response,
-    (error) => {
+    async (error) => {
         if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {
             console.warn(error.message)
         }
+        const config = error.config as (typeof error.config & { _csrfRetried?: boolean }) | undefined
         if (error.response?.status === 403 && error.response?.data?.msg === 'Invalid CSRF token') {
             clearCSRFToken()
+            if (config && !config._csrfRetried) {
+                config._csrfRetried = true
+                config.headers['X-CSRF-Token'] = await getCSRFToken()
+                return api.request(config)
+            }
         }
         return Promise.reject(error)
     }

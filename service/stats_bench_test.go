@@ -39,6 +39,32 @@ func BenchmarkStatsService_SaveStats(b *testing.B) {
 	}
 }
 
+func BenchmarkStatsService_DownsampleStatsLinear(b *testing.B) {
+	statsService := &StatsService{}
+	for _, rows := range []int{1_000, 10_000, 100_000} {
+		input := make([]model.Stats, rows)
+		for i := range input {
+			// Descending timestamps make the benchmark adversarial for the old sort.
+			input[i] = model.Stats{
+				DateTime:  int64(rows - i),
+				Resource:  "user",
+				Tag:       "bench",
+				Direction: i%2 == 0,
+				Traffic:   int64(i + 1),
+			}
+		}
+		b.Run(fmt.Sprintf("rows_%d", rows), func(b *testing.B) {
+			b.ReportMetric(float64(rows), "rows/input")
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				if got := statsService.downsampleStats(input, 60); len(got) != 60 {
+					b.Fatalf("downsample length=%d", len(got))
+				}
+			}
+		})
+	}
+}
+
 func BenchmarkUpdateClientTrafficDeltas(b *testing.B) {
 	for _, emptyPercent := range []int{0, 50, 90} {
 		emptyPercent := emptyPercent

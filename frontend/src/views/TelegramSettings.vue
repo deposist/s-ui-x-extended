@@ -254,7 +254,7 @@
           <v-btn
             color="primary"
             :loading="loading"
-            :disabled="!stateChange || telegramBackupScheduleErrors.length > 0 || telegramBackupPassphraseErrors.length > 0"
+            :disabled="!hasUnsavedChanges || telegramBackupScheduleErrors.length > 0 || telegramBackupPassphraseErrors.length > 0"
             @click="save"
           >
             {{ $t('actions.save') }}
@@ -556,7 +556,7 @@ const detectTelegramChat = async () => {
 const testTelegram = async () => {
   testLoading.value = true
   testResult.value = null
-  if (stateChange.value) {
+  if (hasUnsavedChanges.value) {
     const saved = await persistTelegramSettings(false)
     if (!saved) {
       testLoading.value = false
@@ -585,7 +585,7 @@ const sendTelegramBackupNow = async () => {
   backupRunController.value = null
 }
 
-const stateChange = computed(() => {
+const hasUnsavedChanges = computed(() => {
   return !FindDiff.deepCompare(settings.value, oldSettings.value)
 })
 </script>

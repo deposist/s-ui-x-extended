@@ -6,9 +6,13 @@ validator="$root_dir/scripts/validate-release-tag.sh"
 checkout_verifier="$root_dir/scripts/verify-release-tag-checkout.sh"
 asset_guard="$root_dir/scripts/check-release-assets.sh"
 
-for tag in v1.2.3 v2.0.0-rc.1 v1.5.2-beta-hotfix2; do
+for tag in v1.2.3 v2.0.0-rc.1 v1.5.2-beta-hotfix2 v3.4.5-hotfix1 v3.4.5-preview.7; do
     actual=$("$validator" "$tag")
     test "$actual" = "$tag"
+done
+test "$("$validator" --prerelease v1.2.3)" = false
+for tag in v2.0.0-rc.1 v1.5.2-beta-hotfix2 v3.4.5-hotfix1 v3.4.5-preview.7; do
+    test "$("$validator" --prerelease "$tag")" = true
 done
 
 invalid_tags=(
@@ -33,18 +37,36 @@ done
 for workflow in release.yml windows.yml docker.yml; do
     path="$root_dir/.github/workflows/$workflow"
     grep -q 'uses: ./.github/actions/checkout-release-tag' "$path"
+    grep -q "event_commit: \${{ github.event_name == 'push' && github.sha || '' }}" "$path"
 done
 checkout_action="$root_dir/.github/actions/checkout-release-tag/action.yml"
 grep -q "ref: refs/tags/\${{ steps.input.outputs.tag }}" "$checkout_action"
 grep -q 'fetch-depth: 0' "$checkout_action"
+# The composite action must execute the tested verifier, including event-SHA binding.
+# shellcheck disable=SC2016
+grep -q 's-ui-release-tooling/verify-release-tag-checkout.sh" "$TAG" "$EXPECTED_COMMIT" "$EVENT_COMMIT"' "$checkout_action"
 # The grep needle intentionally contains shell variables.
 # shellcheck disable=SC2016
-grep -q 'test "$TAG_COMMIT" = "$EXPECTED_COMMIT"' "$checkout_action"
-# The grep needle intentionally contains a shell variable.
-# shellcheck disable=SC2016
-grep -q 'git show "$TAG_COMMIT:config/version"' "$checkout_action"
-grep -q 'overwrite_files: false' "$root_dir/.github/workflows/release.yml"
-grep -q 'overwrite_files: false' "$root_dir/.github/workflows/windows.yml"
+grep -q 'version=$(git show "$tag_commit:config/version"' "$checkout_verifier"
+release_workflow="$root_dir/.github/workflows/release.yml"
+windows_workflow="$root_dir/.github/workflows/windows.yml"
+docker_workflow="$root_dir/.github/workflows/docker.yml"
+ci_workflow="$root_dir/.github/workflows/ci.yml"
+grep -q 'prerelease: ${{ steps.checkout.outputs.prerelease }}' "$checkout_action"
+grep -q 'scripts/check-release-assets.sh --verify' "$release_workflow"
+grep -q 'uses: ./.github/workflows/windows.yml' "$release_workflow"
+grep -q 'npm ci' "$windows_workflow"
+grep -q 'npm run lint -- --max-warnings=0' "$windows_workflow"
+grep -q 'npm run test' "$windows_workflow"
+grep -q 'npm run verify:dist' "$windows_workflow"
+grep -q 'npm run verify:dist' "$release_workflow"
+grep -q 'npm run verify:dist' "$ci_workflow"
+grep -q 'push-by-digest=true,name-canonical=true' "$docker_workflow"
+grep -q 'Runtime smoke immutable platform image' "$docker_workflow"
+grep -q 'Final runtime smoke for every candidate platform' "$docker_workflow"
+grep -q 'Promote final Docker tags' "$docker_workflow"
+grep -q 'BOOTLIN_ARMV5_SHA256: 8cdb4ad70c6b5a66427fa3315fe3ddde1c19c90232674dec59045e04d2a36cf1' "$release_workflow"
+grep -q 'BOOTLIN_S390X_SHA256: 23f536ff2bf1a9d3b93210465471996bc7c918fbb5702a277d8e1e42ffab8559' "$release_workflow"
 
 while IFS= read -r -d '' workflow; do
     if ! awk '
@@ -89,11 +111,16 @@ printf '2.0.0\n' > "$tmp_dir/config/version"
 git -C "$tmp_dir" commit --quiet -am v2
 git -C "$tmp_dir" tag v2.0.0
 new_commit=$(git -C "$tmp_dir" rev-parse HEAD)
+printf '2.0.0-rc.1\n' > "$tmp_dir/config/version"
+git -C "$tmp_dir" commit --quiet -am v2-rc
+git -C "$tmp_dir" tag -a v2.0.0-rc.1 -m annotated
+annotated_commit=$(git -C "$tmp_dir" rev-parse HEAD)
 git -C "$tmp_dir" checkout --quiet v1.0.0
 (
     cd "$tmp_dir"
     output=$("$checkout_verifier" v1.0.0 "$old_commit")
     grep -q "commit=$old_commit" <<<"$output"
+    "$checkout_verifier" v1.0.0 "$old_commit" "$old_commit" >/dev/null
     if "$checkout_verifier" v9.9.9 >/dev/null 2>&1; then
         echo 'nonexistent release tag was accepted' >&2
         exit 1
@@ -102,24 +129,50 @@ git -C "$tmp_dir" checkout --quiet v1.0.0
         echo 'moved release tag was accepted' >&2
         exit 1
     fi
+    if "$checkout_verifier" v1.0.0 "$old_commit" "$new_commit" >/dev/null 2>&1; then
+        echo 'tag push event commit mismatch was accepted' >&2
+        exit 1
+    fi
     if "$checkout_verifier" v9.9.8 >/dev/null 2>&1; then
         echo 'tag/version mismatch was accepted' >&2
         exit 1
     fi
+    git checkout --quiet v2.0.0-rc.1
+    "$checkout_verifier" v2.0.0-rc.1 "$annotated_commit" "$annotated_commit" >/dev/null
 )
 
 cat > "$tmp_dir/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-printf '%s\n' "${FAKE_GH_ASSETS-}"
+if [[ $1 == api && $2 == repos/*/releases/tags/* ]]; then
+    printf '7\n'
+elif [[ $1 == api && $2 == --paginate ]]; then
+    printf '[[%s]]\n' "${FAKE_GH_ASSETS}"
+elif [[ $1 == release && $2 == upload ]]; then
+    exit 0
+else
+    echo "unexpected fake gh invocation: $*" >&2
+    exit 1
+fi
 EOF
 chmod +x "$tmp_dir/bin/gh"
 printf 'new asset\n' > "$tmp_dir/assets/new.tar.gz"
-PATH="$tmp_dir/bin:$PATH" GH_TOKEN=test FAKE_GH_ASSETS='old.tar.gz' \
+asset_digest=$(sha256sum "$tmp_dir/assets/new.tar.gz" | awk '{print $1}')
+matching_asset=$(printf '{"name":"new.tar.gz","state":"uploaded","digest":"sha256:%s"}' "$asset_digest")
+PATH="$tmp_dir/bin:$PATH" GH_TOKEN=test FAKE_GH_ASSETS="$matching_asset" \
     "$asset_guard" owner/repository v1.2.3 "$tmp_dir/assets"
-if PATH="$tmp_dir/bin:$PATH" GH_TOKEN=test FAKE_GH_ASSETS='new.tar.gz' \
+
+bad_asset='{"name":"new.tar.gz","state":"uploaded","digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'
+if PATH="$tmp_dir/bin:$PATH" GH_TOKEN=test FAKE_GH_ASSETS="$bad_asset" \
     "$asset_guard" owner/repository v1.2.3 "$tmp_dir/assets" >/dev/null 2>&1; then
-    echo 'existing release asset was accepted' >&2
+    echo 'divergent existing release asset was accepted' >&2
+    exit 1
+fi
+
+unexpected_asset='{"name":"old.tar.gz","state":"uploaded","digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'
+if PATH="$tmp_dir/bin:$PATH" GH_TOKEN=test FAKE_GH_ASSETS="$unexpected_asset" \
+    "$asset_guard" owner/repository v1.2.3 "$tmp_dir/assets" >/dev/null 2>&1; then
+    echo 'unexpected release asset was accepted' >&2
     exit 1
 fi
 

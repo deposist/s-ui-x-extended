@@ -85,7 +85,7 @@ func TestParseWireGuardPeerSnapshot(t *testing.T) {
 		"preshared_key=" + strings.Repeat("bb", wireGuardKeySize) + "\n" +
 		"protocol_version=1\nlast_handshake_time_sec=123\nlast_handshake_time_nsec=7\n" +
 		"tx_bytes=456\nrx_bytes=789\npersistent_keepalive_interval=25\n" +
-		"allowed_ip=10.77.0.2/32\nallowed_ip=10.77.1.9/24\n"
+		"allowed_ip=10.77.0.2/32\nallowed_ip=10.77.1.0/24\n"
 
 	peers, err := ParseWireGuardPeerSnapshot(input)
 	if err != nil {
@@ -100,6 +100,18 @@ func TestParseWireGuardPeerSnapshot(t *testing.T) {
 	}
 	if len(peer.AllowedIPs) != 2 || peer.AllowedIPs[0].String() != "10.77.0.2/32" || peer.AllowedIPs[1].String() != "10.77.1.0/24" {
 		t.Fatalf("unexpected allowed IPs: %v", peer.AllowedIPs)
+	}
+}
+
+func TestWireGuardAllowedIPsRejectHostBits(t *testing.T) {
+	_, err := BuildWireGuardAddPeerUAPI(testWireGuardKey(0x11), testWireGuardKey(0x22), netip.MustParsePrefix("192.168.1.5/24"))
+	if err == nil {
+		t.Fatal("BuildWireGuardAddPeerUAPI accepted a prefix with host bits")
+	}
+
+	input := "public_key=" + strings.Repeat("44", wireGuardKeySize) + "\nallowed_ip=192.168.1.5/24\n"
+	if _, err = ParseWireGuardPeerSnapshot(input); err == nil {
+		t.Fatal("ParseWireGuardPeerSnapshot accepted a prefix with host bits")
 	}
 }
 

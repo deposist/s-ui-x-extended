@@ -2,6 +2,7 @@ package importxui
 
 import (
 	"encoding/json"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -50,9 +51,15 @@ func TestBuildClientLinks(t *testing.T) {
 	if got["type"] != "local" || got["remark"] != "inbound-12223" {
 		t.Errorf("unexpected link metadata: %v", got)
 	}
-	want := "trojan://jwbMqRgdLA@panel.example.com:12223?type=grpc&serviceName=hello#inbound-12223"
-	if got["uri"] != want {
-		t.Errorf("link uri = %q, want %q", got["uri"], want)
+	parsed, err := url.Parse(got["uri"])
+	if err != nil {
+		t.Fatalf("parse generated link: %v", err)
+	}
+	if parsed.Scheme != "trojan" || parsed.User.Username() != "jwbMqRgdLA" || parsed.Host != "panel.example.com:12223" || parsed.Fragment != "inbound-12223" {
+		t.Errorf("unexpected link authority/fragment: %q", got["uri"])
+	}
+	if query := parsed.Query(); query.Get("type") != "grpc" || query.Get("serviceName") != "hello" || len(query) != 2 {
+		t.Errorf("unexpected link query: %#v", query)
 	}
 
 	// Without a hostname, links are left nil (no broken empty-host link).

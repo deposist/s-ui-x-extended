@@ -44,7 +44,7 @@ type AWGProvisioner interface {
 	Remove(ctx context.Context, publicKeyBase64 string) error
 }
 
-type withAWGIPCFunc func(tag string, fn func(core.WireGuardIPC) error) error
+type withAWGIPCFunc func(ctx context.Context, tag string, fn func(core.WireGuardIPC) error) error
 
 type awgProvisioner struct {
 	endpointTag string
@@ -67,7 +67,7 @@ func (p *awgProvisioner) Snapshot(ctx context.Context) (AWGPeerSnapshot, error) 
 		return nil, err
 	}
 	var snapshot AWGPeerSnapshot
-	if err := p.runWithIPC(func(ipc core.WireGuardIPC) error {
+	if err := p.runWithIPC(ctx, func(ipc core.WireGuardIPC) error {
 		parsed, err := readAWGPeerSnapshot(ipc)
 		if err != nil {
 			return err
@@ -92,7 +92,7 @@ func (p *awgProvisioner) Add(ctx context.Context, peer AWGPeerSpec) error {
 		return err
 	}
 	allowedIP := peer.AllowedIP.Masked()
-	return p.runWithIPC(func(ipc core.WireGuardIPC) error {
+	return p.runWithIPC(ctx, func(ipc core.WireGuardIPC) error {
 		if err := ipc.IpcSet(payload); err != nil {
 			return errAWGIPCWrite
 		}
@@ -116,7 +116,7 @@ func (p *awgProvisioner) Remove(ctx context.Context, publicKeyBase64 string) err
 	if err != nil {
 		return err
 	}
-	return p.runWithIPC(func(ipc core.WireGuardIPC) error {
+	return p.runWithIPC(ctx, func(ipc core.WireGuardIPC) error {
 		if err := ipc.IpcSet(payload); err != nil {
 			return errAWGIPCWrite
 		}
@@ -131,7 +131,7 @@ func (p *awgProvisioner) Remove(ctx context.Context, publicKeyBase64 string) err
 	})
 }
 
-func (p *awgProvisioner) runWithIPC(fn func(core.WireGuardIPC) error) error {
+func (p *awgProvisioner) runWithIPC(ctx context.Context, fn func(core.WireGuardIPC) error) error {
 	if p == nil {
 		return errAWGIPCUnavailable
 	}
@@ -148,13 +148,13 @@ func (p *awgProvisioner) runWithIPC(fn func(core.WireGuardIPC) error) error {
 	if withIPC == nil && p.runtime != nil {
 		coreInstance := p.runtime.Core()
 		if coreInstance != nil {
-			withIPC = coreInstance.WithWireGuardIPC
+			withIPC = coreInstance.WithWireGuardIPCContext
 		}
 	}
 	if withIPC == nil {
 		return errAWGIPCUnavailable
 	}
-	err := withIPC(endpointTag, fn)
+	err := withIPC(ctx, endpointTag, fn)
 	if err == nil || isAWGSafeError(err) {
 		return err
 	}

@@ -113,3 +113,30 @@ func TestConvertToClashMetaRejectsShortProxyGroupTemplate(t *testing.T) {
 		t.Fatal("expected malformed proxy-group template to return an error")
 	}
 }
+
+func TestConvertToClashMetaRejectsMalformedBaseYAML(t *testing.T) {
+	outbounds := diverseClashOutbounds()
+	for _, base := range []string{"[", "null", "- not-a-map"} {
+		if _, err := (&ClashService{}).ConvertToClashMeta(&outbounds, base); err == nil {
+			t.Fatalf("expected malformed base %q to return an error", base)
+		}
+	}
+}
+
+func TestConvertToClashMetaKeepsAllECHConfigs(t *testing.T) {
+	outbounds := []map[string]interface{}{{
+		"type": "vless", "tag": "ech", "server": "example.com", "server_port": 443,
+		"uuid": "11111111-1111-4111-8111-111111111111",
+		"tls": map[string]interface{}{
+			"enabled": true,
+			"ech":     map[string]interface{}{"enabled": true, "config": []interface{}{"first", "middle", "last"}},
+		},
+	}}
+	got, err := (&ClashService{}).ConvertToClashMeta(&outbounds, basicClashConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "config: firstmiddlelast") {
+		t.Fatalf("ECH bounds dropped a config: %s", got)
+	}
+}

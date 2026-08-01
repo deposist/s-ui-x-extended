@@ -171,12 +171,15 @@ export default {
       tlsCipherSuites,
     }
   },
+  created() {
+    if (!this.$props.data.tls) this.$props.data.tls = {}
+  },
   computed: {
     servers(): any[] {
       return Array.isArray(this.$props.data.servers) ? this.$props.data.servers : []
     },
     tls(): any {
-      return this.$props.data.tls ?? {}
+      return this.$props.data.tls
     },
   },
   methods: {

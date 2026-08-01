@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,12 +14,34 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/deposist/s-ui-x-extended/logger"
 )
+
+const updateMarkerVersion = 2
+
+type updateTransactionPhase string
+
+const (
+	updatePhasePrepared  updateTransactionPhase = "prepared"
+	updatePhaseApplied   updateTransactionPhase = "applied"
+	updatePhaseBooting   updateTransactionPhase = "booting"
+	updatePhaseConfirmed updateTransactionPhase = "confirmed"
+	updatePhaseRolledBack updateTransactionPhase = "rolled_back"
+)
+
+type pendingUpdateMarker struct {
+	Version         int                    `json:"version"`
+	TransactionID   string                 `json:"transactionId"`
+	Phase           updateTransactionPhase `json:"phase"`
+	Attempts        int                    `json:"attempts"`
+	CandidateSHA256 string                 `json:"candidateSha256"`
+	BackupSHA256    string                 `json:"backupSha256"`
+	DatabasePath    string                 `json:"databasePath,omitempty"`
+	DatabaseSHA256  string                 `json:"databaseSha256,omitempty"`
+}
 
 const (
 	backupSuffix     = ".bak"
@@ -38,6 +61,18 @@ var (
 	errArchiveMemberTooLarge = errors.New("archive member exceeds the size limit")
 	errManifestInvalid       = errors.New("update manifest is invalid")
 )
+
+// PanelUpdateDatabaseSnapshot is installed by the app layer to avoid a
+// service/database import cycle. It returns the exact pre-update SQLite image
+// and its source path. The snapshot must already be fsynced and self-contained.
+var PanelUpdateDatabaseSnapshot func() (snapshotPath string, databasePath string, err error)
+
+// PanelUpdateDatabaseRestore atomically restores the exact pre-update SQLite
+// snapshot before the old executable is restarted. The app layer owns the
+// database implementation to keep service free of a database import cycle.
+var PanelUpdateDatabaseRestore func(snapshotPath string, databasePath string) error
+
+var panelUpdatePostSwapSync = syncDirectory
 
 const maxManifestBytes = 16 << 10
 
@@ -68,7 +103,7 @@ func defaultPanelUpdateDeps() panelUpdateDeps {
 // applyPipeline downloads, integrity-checks, extracts and atomically swaps the
 // panel binary. It only mutates the live executable at the final rename, and
 // only after a successful checksum verification (SR-002, SR-007).
-func applyPipeline(target ReleaseTarget, deps panelUpdateDeps, setStage func(UpdateStage)) (bool, error) {
+func applyPipeline(ctx context.Context, target ReleaseTarget, deps panelUpdateDeps, setStage func(UpdateStage)) (bool, error) {
 	if deps.execPath == "" {
 		return false, errors.New("cannot locate current executable")
 	}
@@ -81,14 +116,14 @@ func applyPipeline(target ReleaseTarget, deps panelUpdateDeps, setStage func(Upd
 			logger.Warning("panel update: could not remove downloaded archive:", err)
 		}
 	}()
-	if err := downloadToFile(deps.client, target.AssetURL, archive); err != nil {
+	if err := downloadToFile(ctx, deps.client, target.AssetURL, archive); err != nil {
 		return false, err
 	}
-	expected, err := downloadChecksum(deps.client, target.ChecksumURL)
+	expected, err := downloadChecksum(ctx, deps.client, target.ChecksumURL)
 	if err != nil {
 		return false, err
 	}
-	manifest, err := downloadUpdateManifest(deps.client, target.AssetURL+".manifest.json")
+	manifest, err := downloadUpdateManifest(ctx, deps.client, target.AssetURL+".manifest.json")
 	if err != nil {
 		return false, err
 	}
@@ -100,44 +135,90 @@ func applyPipeline(target ReleaseTarget, deps panelUpdateDeps, setStage func(Upd
 		return false, err
 	}
 	setStage(UpdateStageApplying)
-	if err := swapBinary(archive, deps.execPath); err != nil {
-		return false, err
-	}
-	return true, nil
+	swapped, err := swapBinary(archive, deps.execPath)
+	return swapped, err
 }
 
 // swapBinary extracts the new binary next to the current one and atomically
 // replaces it, keeping the previous binary as <exec>.bak for rollback.
-func swapBinary(archive string, execPath string) error {
+func swapBinary(archive string, execPath string) (bool, error) {
+	return swapBinaryWithRename(archive, execPath, os.Rename)
+}
+
+func swapBinaryWithRename(archive string, execPath string, rename func(string, string) error) (bool, error) {
 	newBin := execPath + ".new"
+	backup := execPath + backupSuffix
+	backupStage := backup + ".new"
+	backupPrevious := backup + ".previous"
 	if err := extractBinary(archive, newBin); err != nil {
-		return errors.Join(err, removeUpdateFile(newBin))
+		return false, errors.Join(err, removeUpdateFile(newBin))
 	}
 	// #nosec G302 -- the staged program must be executable before the atomic swap.
 	if err := os.Chmod(newBin, 0o755); err != nil {
-		return errors.Join(err, removeUpdateFile(newBin))
+		return false, errors.Join(err, removeUpdateFile(newBin))
 	}
-	if err := copyFile(execPath, execPath+backupSuffix); err != nil {
-		return errors.Join(err, removeUpdateFile(newBin))
+	if err := copyFile(execPath, backupStage); err != nil {
+		return false, errors.Join(err, removeUpdateFile(newBin), removeUpdateFile(backupStage))
 	}
-	if err := os.Rename(newBin, execPath); err != nil {
-		return errors.Join(err, removeUpdateFile(newBin)) // live binary is untouched; .bak remains for safety
+	hadBackup := false
+	if _, err := os.Stat(backup); err == nil {
+		hadBackup = true
+		if err := replaceFile(backup, backupPrevious); err != nil {
+			return false, errors.Join(err, removeUpdateFile(newBin), removeUpdateFile(backupStage))
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return false, errors.Join(err, removeUpdateFile(newBin), removeUpdateFile(backupStage))
 	}
-	return nil
+	if err := replaceFile(backupStage, backup); err != nil {
+		if hadBackup {
+			err = errors.Join(err, replaceFile(backupPrevious, backup))
+		}
+		return false, errors.Join(err, removeUpdateFile(newBin), removeUpdateFile(backupStage), removeUpdateFile(backupPrevious))
+	}
+	if err := panelUpdateMarkerWriter(execPath, newBin); err != nil {
+		if hadBackup {
+			err = errors.Join(err, removeUpdateFile(backup), replaceFile(backupPrevious, backup))
+		} else {
+			err = errors.Join(err, removeUpdateFile(backup))
+		}
+		return false, errors.Join(err, removeUpdateFile(newBin), removeUpdateFile(backupStage), removeUpdateFile(backupPrevious))
+	}
+	if err := rename(newBin, execPath); err != nil {
+		if hadBackup {
+			err = errors.Join(err, removeUpdateFile(backup), replaceFile(backupPrevious, backup))
+		} else {
+			err = errors.Join(err, removeUpdateFile(backup))
+		}
+		if marker, markerErr := readPendingUpdateMarker(execPath); markerErr == nil {
+			err = errors.Join(err, removePendingDatabaseSnapshot(execPath, marker))
+		}
+		return false, errors.Join(err, removeUpdateFile(newBin), removeUpdateFile(backupPrevious), removeUpdateFile(execPath+pendingSuffix))
+	}
+	if err := panelUpdatePostSwapSync(filepath.Dir(execPath)); err != nil {
+		return true, err
+	}
+	if err := markPendingUpdateApplied(execPath); err != nil {
+		return true, err
+	}
+	return true, removeUpdateFile(backupPrevious)
 }
 
-func downloadToFile(client httpDoer, url string, dest string) error {
-	return downloadToFileLimit(client, url, dest, maxArtifactBytes)
+func replaceFile(source, dest string) error {
+	return os.Rename(source, dest)
 }
 
-func downloadToFileLimit(client httpDoer, url string, dest string, limit int64) error {
+func downloadToFile(ctx context.Context, client httpDoer, url string, dest string) error {
+	return downloadToFileLimit(ctx, client, url, dest, maxArtifactBytes)
+}
+
+func downloadToFileLimit(ctx context.Context, client httpDoer, url string, dest string, limit int64) error {
 	if limit < 0 {
 		return errArtifactTooLarge
 	}
 	if !strings.HasPrefix(url, "https://") { // SR-003/SR-004: TLS-only, template URLs
 		return fmt.Errorf("refusing non-https artifact url")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)
+	ctx, cancel := context.WithTimeout(ctx, downloadTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -173,18 +254,18 @@ func downloadToFileLimit(client httpDoer, url string, dest string, limit int64) 
 	return nil
 }
 
-func downloadChecksum(client httpDoer, url string) (string, error) {
-	return downloadChecksumLimit(client, url, maxChecksumBytes)
+func downloadChecksum(ctx context.Context, client httpDoer, url string) (string, error) {
+	return downloadChecksumLimit(ctx, client, url, maxChecksumBytes)
 }
 
-func downloadChecksumLimit(client httpDoer, url string, limit int64) (string, error) {
+func downloadChecksumLimit(ctx context.Context, client httpDoer, url string, limit int64) (string, error) {
 	if limit < 0 {
 		return "", errChecksumTooLarge
 	}
 	if !strings.HasPrefix(url, "https://") {
 		return "", fmt.Errorf("refusing non-https checksum url")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)
+	ctx, cancel := context.WithTimeout(ctx, downloadTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -214,11 +295,11 @@ func downloadChecksumLimit(client httpDoer, url string, limit int64) (string, er
 	return strings.ToLower(fields[0]), nil
 }
 
-func downloadUpdateManifest(client httpDoer, url string) ([]byte, error) {
+func downloadUpdateManifest(ctx context.Context, client httpDoer, url string) ([]byte, error) {
 	if !strings.HasPrefix(url, "https://") {
 		return nil, fmt.Errorf("refusing non-https manifest url")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)
+	ctx, cancel := context.WithTimeout(ctx, downloadTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -392,63 +473,445 @@ func RestoreBackup(execPath string) error {
 	if _, err := os.Stat(backup); err != nil {
 		return err
 	}
-	return os.Rename(backup, execPath)
+	if err := os.Rename(backup, execPath); err != nil {
+		return err
+	}
+	return syncDirectory(filepath.Dir(execPath))
 }
-
 func writePendingMarker(execPath string) error {
-	return os.WriteFile(execPath+pendingSuffix, []byte("0"), 0o600)
+	return writePendingMarkerForCandidate(execPath, execPath)
 }
 
-// ClearPendingUpdate confirms a successful boot by removing the transaction's
-// marker and backup. Without a marker, an unrelated .bak file is left alone.
-func ClearPendingUpdate(execPath string) {
-	marker := execPath + pendingSuffix
-	if err := os.Remove(marker); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			logger.Warning("panel update: could not clear pending marker: ", err)
-		}
-		return
-	}
-	if err := removeUpdateFile(execPath + backupSuffix); err != nil {
-		logger.Warning("panel update: could not remove confirmed update backup: ", err)
-	}
-}
-
-// CheckPendingUpdate runs at startup before the marker is cleared: it counts how
-// many times a freshly-applied binary has failed to reach a clean boot and, past
-// the threshold, restores the backup so a verified-but-unbootable release cannot
-// brick the panel (SR-012). Returns true if a rollback was performed.
-func CheckPendingUpdate(execPath string) bool {
-	marker := execPath + pendingSuffix
-	// #nosec G304 -- marker is a fixed suffix of os.Executable().
-	raw, err := os.ReadFile(marker)
+func writePendingMarkerForCandidate(execPath, candidatePath string) error {
+	candidateSHA256, err := fileSHA256(candidatePath)
 	if err != nil {
-		return false
+		return err
 	}
-	attempts := 0
-	trimmed := strings.TrimSpace(string(raw))
-	if trimmed != "" {
-		parsed, parseErr := strconv.Atoi(trimmed)
-		if parseErr != nil {
-			logger.Warning("panel update: invalid pending marker, resetting boot attempts: ", parseErr)
-		} else {
-			attempts = parsed
+	backupSHA256, err := fileSHA256(execPath + backupSuffix)
+	if err != nil {
+		return err
+	}
+	transactionID, err := newUpdateTransactionID()
+	if err != nil {
+		return err
+	}
+	marker := pendingUpdateMarker{
+		Version: updateMarkerVersion, TransactionID: transactionID, Phase: updatePhasePrepared,
+		CandidateSHA256: candidateSHA256, BackupSHA256: backupSHA256,
+	}
+	if PanelUpdateDatabaseSnapshot == nil {
+		return errors.New("database snapshot handler is unavailable")
+	}
+	snapshotPath, databasePath, snapshotErr := PanelUpdateDatabaseSnapshot()
+	if snapshotErr != nil {
+		return fmt.Errorf("snapshot database before update: %w", snapshotErr)
+	}
+	if snapshotPath != "" {
+		ownedPath := execPath + ".update-db-" + transactionID + ".bak"
+		if err := replaceFile(snapshotPath, ownedPath); err != nil {
+			return fmt.Errorf("install update database snapshot: %w", err)
+		}
+		databaseSHA256, err := fileSHA256(ownedPath)
+		if err != nil {
+			return errors.Join(err, removeUpdateFile(ownedPath))
+		}
+		marker.DatabasePath = databasePath
+		marker.DatabaseSHA256 = databaseSHA256
+	}
+	if err := writePendingUpdateMarker(execPath, marker); err != nil {
+		return errors.Join(err, removePendingDatabaseSnapshot(execPath, marker))
+	}
+	return nil
+}
+
+func pendingDatabaseSnapshotPath(execPath string, marker pendingUpdateMarker) string {
+	if marker.TransactionID == "" || marker.DatabasePath == "" || marker.DatabaseSHA256 == "" {
+		return ""
+	}
+	return execPath + ".update-db-" + marker.TransactionID + ".bak"
+}
+
+func removePendingDatabaseSnapshot(execPath string, marker pendingUpdateMarker) error {
+	path := pendingDatabaseSnapshotPath(execPath, marker)
+	if path == "" {
+		return nil
+	}
+	return removeUpdateFile(path)
+}
+
+func newUpdateTransactionID() (string, error) {
+	var id [16]byte
+	if _, err := rand.Read(id[:]); err != nil {
+		return "", fmt.Errorf("generate update transaction id: %w", err)
+	}
+	return hex.EncodeToString(id[:]), nil
+}
+
+func writePendingUpdateMarker(execPath string, marker pendingUpdateMarker) error {
+	encoded, err := json.Marshal(marker)
+	if err != nil {
+		return err
+	}
+	return writeAtomicUpdateFile(execPath+pendingSuffix, encoded, 0o600)
+}
+
+func markPendingUpdateApplied(execPath string) error {
+	marker, err := readPendingUpdateMarker(execPath)
+	if err != nil {
+		return err
+	}
+	if marker.Phase != updatePhasePrepared {
+		return fmt.Errorf("update transaction %s is in unexpected phase %q", marker.TransactionID, marker.Phase)
+	}
+	marker.Phase = updatePhaseApplied
+	return writePendingUpdateMarker(execPath, marker)
+}
+
+// ConfirmPendingUpdate confirms a healthy boot. Recovery and confirmation use
+// the same inter-process lock as Apply so cleanup cannot race another updater.
+// The marker remains authoritative until every owned artifact is removed.
+// MarkPendingUpdateBooting durably records that recovery succeeded and startup
+// is about to mutate the database. If Init later fails, the next process rolls
+// the database and binary back immediately rather than attempting another boot.
+func MarkPendingUpdateBooting(execPath string) error {
+	lock, err := acquirePanelUpdateProcessLock(execPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = lock.release() }()
+	marker, err := readPendingUpdateMarker(execPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if marker.Phase != updatePhaseApplied {
+		return fmt.Errorf("update transaction %s cannot boot from phase %q", marker.TransactionID, marker.Phase)
+	}
+	marker.Phase = updatePhaseBooting
+	return writePendingUpdateMarker(execPath, marker)
+}
+
+func ConfirmPendingUpdate(execPath string) error {
+	lock, err := acquirePanelUpdateProcessLock(execPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if releaseErr := lock.release(); releaseErr != nil {
+			logger.Warning("panel update: release confirmation lock: ", releaseErr)
+		}
+	}()
+	return confirmPendingUpdateLocked(execPath)
+}
+
+func confirmPendingUpdateLocked(execPath string) error {
+	marker, err := readPendingUpdateMarker(execPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read pending update for confirmation: %w", err)
+	}
+	if marker.Phase != updatePhaseBooting && marker.Phase != updatePhaseConfirmed {
+		return fmt.Errorf("update transaction %s did not complete its boot", marker.TransactionID)
+	}
+	if marker.Phase == updatePhaseBooting {
+		liveSHA256, err := fileSHA256(execPath)
+		if err != nil {
+			return fmt.Errorf("verify confirmed binary: %w", err)
+		}
+		backupSHA256, err := fileSHA256(execPath + backupSuffix)
+		if err != nil {
+			return fmt.Errorf("verify confirmed backup: %w", err)
+		}
+		if !strings.EqualFold(liveSHA256, marker.CandidateSHA256) || !strings.EqualFold(backupSHA256, marker.BackupSHA256) {
+			return fmt.Errorf("update transaction %s artifact identity mismatch", marker.TransactionID)
+		}
+		if snapshotPath := pendingDatabaseSnapshotPath(execPath, marker); snapshotPath != "" {
+			databaseSHA256, err := fileSHA256(snapshotPath)
+			if err != nil || !strings.EqualFold(databaseSHA256, marker.DatabaseSHA256) {
+				return errors.Join(fmt.Errorf("update transaction %s database snapshot identity mismatch", marker.TransactionID), err)
+			}
+		}
+		marker.Phase = updatePhaseConfirmed
+		if err := writePendingUpdateMarker(execPath, marker); err != nil {
+			return fmt.Errorf("persist confirmed update state: %w", err)
 		}
 	}
-	attempts++
-	if attempts >= rollbackAfterAttempts {
-		restoreErr := RestoreBackup(execPath)
-		if restoreErr == nil {
-			_ = os.Remove(marker)
-			return true
+	cleanupErr := errors.Join(
+		removeUpdateFile(execPath+backupSuffix),
+		cleanupUpdateStagingFiles(execPath),
+		removePendingDatabaseSnapshot(execPath, marker),
+	)
+	if cleanupErr != nil {
+		return fmt.Errorf("clean confirmed update artifacts: %w", cleanupErr)
+	}
+	if err := syncDirectory(filepath.Dir(execPath)); err != nil {
+		return fmt.Errorf("sync confirmed update cleanup: %w", err)
+	}
+	if err := removeUpdateFile(execPath + pendingSuffix); err != nil {
+		return fmt.Errorf("remove confirmed update marker: %w", err)
+	}
+	return syncDirectory(filepath.Dir(execPath))
+}
+
+// ClearPendingUpdate is retained as a compatibility wrapper for older callers.
+// New callers should use ConfirmPendingUpdate and handle its error.
+func ClearPendingUpdate(execPath string) {
+	if err := ConfirmPendingUpdate(execPath); err != nil {
+		logger.Warning("panel update: could not confirm pending transaction: ", err)
+	}
+}
+
+// RecoverPendingUpdate checks an update transaction during process startup.
+// It reports rollback explicitly and never collapses an unresolved recovery
+// failure into the ordinary no-pending state.
+func RecoverPendingUpdate(execPath string) (bool, error) {
+	lock, err := acquirePanelUpdateProcessLock(execPath)
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		if releaseErr := lock.release(); releaseErr != nil {
+			logger.Warning("panel update: release recovery lock: ", releaseErr)
 		}
-		// Threshold reached but the backup is unavailable: make the failure
-		// operator-visible rather than silently boot-looping (SR-012).
-		logger.Error("panel update: new binary failed to boot ", attempts,
-			" times and the rollback backup is unavailable: ", restoreErr)
+	}()
+	return recoverPendingUpdateLocked(execPath, writeBootAttempts)
+}
+
+// CheckPendingUpdate is retained for API compatibility. Unresolved recovery is
+// logged, but startup must call RecoverPendingUpdate to handle it fatally.
+func CheckPendingUpdate(execPath string) bool {
+	rolledBack, err := RecoverPendingUpdate(execPath)
+	if err != nil {
+		logger.Error("panel update: pending recovery failed: ", err)
 	}
-	if err := os.WriteFile(marker, fmt.Appendf(nil, "%d", attempts), 0o600); err != nil {
-		logger.Error("panel update: could not update pending marker: ", err)
+	return rolledBack
+}
+func fileSHA256(path string) (string, error) {
+	// #nosec G304 -- updater identity paths are fixed beside os.Executable().
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
 	}
-	return false
+	defer file.Close()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+func readPendingUpdateMarker(execPath string) (pendingUpdateMarker, error) {
+	markerPath := execPath + pendingSuffix
+	// #nosec G304 -- marker is a fixed suffix of os.Executable().
+	raw, err := os.ReadFile(markerPath)
+	if err != nil {
+		return pendingUpdateMarker{}, err
+	}
+	var marker pendingUpdateMarker
+	if err := json.Unmarshal(raw, &marker); err != nil {
+		return pendingUpdateMarker{}, fmt.Errorf("decode pending marker: %w", err)
+	}
+	if marker.Version != updateMarkerVersion || len(marker.TransactionID) != 32 ||
+		(marker.Phase != updatePhasePrepared && marker.Phase != updatePhaseApplied && marker.Phase != updatePhaseBooting &&
+			marker.Phase != updatePhaseConfirmed && marker.Phase != updatePhaseRolledBack) ||
+		marker.Attempts < 0 || len(marker.CandidateSHA256) != sha256.Size*2 || len(marker.BackupSHA256) != sha256.Size*2 {
+		return pendingUpdateMarker{}, errors.New("invalid pending update marker")
+	}
+	if _, err := hex.DecodeString(marker.TransactionID); err != nil {
+		return pendingUpdateMarker{}, fmt.Errorf("invalid update transaction id: %w", err)
+	}
+	if _, err := hex.DecodeString(marker.CandidateSHA256); err != nil {
+		return pendingUpdateMarker{}, fmt.Errorf("invalid candidate digest: %w", err)
+	}
+	if _, err := hex.DecodeString(marker.BackupSHA256); err != nil {
+		return pendingUpdateMarker{}, fmt.Errorf("invalid backup digest: %w", err)
+	}
+	if marker.DatabasePath == "" != (marker.DatabaseSHA256 == "") {
+		return pendingUpdateMarker{}, errors.New("invalid pending database snapshot metadata")
+	}
+	if marker.DatabaseSHA256 != "" {
+		if len(marker.DatabaseSHA256) != sha256.Size*2 {
+			return pendingUpdateMarker{}, errors.New("invalid database snapshot digest")
+		}
+		if _, err := hex.DecodeString(marker.DatabaseSHA256); err != nil {
+			return pendingUpdateMarker{}, fmt.Errorf("invalid database snapshot digest: %w", err)
+		}
+	}
+	if marker.DatabasePath != "" && PanelUpdateDatabaseRestore == nil {
+		return pendingUpdateMarker{}, errors.New("database rollback handler is unavailable")
+	}
+	return marker, nil
+}
+
+func recoverPendingUpdateLocked(execPath string, writeAttempts func(string, int) error) (bool, error) {
+	marker, err := readPendingUpdateMarker(execPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	backupSHA256, err := fileSHA256(execPath + backupSuffix)
+	if err != nil {
+		return false, fmt.Errorf("verify transaction %s backup: %w", marker.TransactionID, err)
+	}
+	if !strings.EqualFold(backupSHA256, marker.BackupSHA256) {
+		return false, fmt.Errorf("update transaction %s backup identity mismatch", marker.TransactionID)
+	}
+	liveSHA256, err := fileSHA256(execPath)
+	if err != nil {
+		return false, fmt.Errorf("verify transaction %s live binary: %w", marker.TransactionID, err)
+	}
+	if strings.EqualFold(liveSHA256, marker.BackupSHA256) {
+		if marker.Phase != updatePhasePrepared {
+			return false, fmt.Errorf("applied transaction %s unexpectedly runs its backup binary", marker.TransactionID)
+		}
+		if err := cleanupPreparedUpdateLocked(execPath, marker); err != nil {
+			return false, err
+		}
+		return false, nil
+	}
+	if !strings.EqualFold(liveSHA256, marker.CandidateSHA256) {
+		return false, fmt.Errorf("update transaction %s candidate identity mismatch", marker.TransactionID)
+	}
+	if marker.Phase == updatePhasePrepared {
+		// The rename and directory sync completed but the APPLIED marker write was
+		// interrupted. Promote the only identity-consistent crash state.
+		marker.Phase = updatePhaseApplied
+		if err := writePendingUpdateMarker(execPath, marker); err != nil {
+			return rollbackPendingUpdateLocked(execPath, marker, fmt.Errorf("persist applied phase: %w", err))
+		}
+	}
+	if marker.Phase == updatePhaseBooting {
+		return rollbackPendingUpdateLocked(execPath, marker, nil)
+	}
+	marker.Attempts++
+	if marker.Attempts >= rollbackAfterAttempts {
+		return rollbackPendingUpdateLocked(execPath, marker, nil)
+	}
+	if err := writeAttempts(execPath, marker.Attempts); err != nil {
+		return rollbackPendingUpdateLocked(execPath, marker, fmt.Errorf("persist boot attempt: %w", err))
+	}
+	return false, nil
+}
+
+func rollbackCurrentUpdate(execPath string) error {
+	marker, err := readPendingUpdateMarker(execPath)
+	if err != nil {
+		return err
+	}
+	rolledBack, err := rollbackPendingUpdateLocked(execPath, marker, nil)
+	if err != nil {
+		return err
+	}
+	if !rolledBack {
+		return errors.New("update transaction was not rolled back")
+	}
+	return nil
+}
+
+func rollbackPendingUpdateLocked(execPath string, marker pendingUpdateMarker, cause error) (bool, error) {
+	snapshotPath := pendingDatabaseSnapshotPath(execPath, marker)
+	if snapshotPath != "" {
+		snapshotSHA256, err := fileSHA256(snapshotPath)
+		if err != nil || !strings.EqualFold(snapshotSHA256, marker.DatabaseSHA256) {
+			return false, errors.Join(cause, fmt.Errorf("verify transaction %s database snapshot: %w", marker.TransactionID, err))
+		}
+		if err := PanelUpdateDatabaseRestore(snapshotPath, marker.DatabasePath); err != nil {
+			return false, errors.Join(cause, fmt.Errorf("rollback transaction %s database: %w", marker.TransactionID, err))
+		}
+	}
+	if err := RestoreBackup(execPath); err != nil {
+		return false, errors.Join(cause, fmt.Errorf("rollback transaction %s binary: %w", marker.TransactionID, err))
+	}
+	if err := cleanupUpdateStagingFiles(execPath); err != nil {
+		return true, errors.Join(cause, err)
+	}
+	if err := removePendingDatabaseSnapshot(execPath, marker); err != nil {
+		return true, errors.Join(cause, fmt.Errorf("remove rolled-back database snapshot: %w", err))
+	}
+	if err := removeUpdateFile(execPath + pendingSuffix); err != nil {
+		return true, errors.Join(cause, fmt.Errorf("remove rolled-back marker: %w", err))
+	}
+	if err := syncDirectory(filepath.Dir(execPath)); err != nil {
+		return true, errors.Join(cause, fmt.Errorf("sync rolled-back transaction: %w", err))
+	}
+	return true, nil
+}
+
+func cleanupPreparedUpdateLocked(execPath string, marker pendingUpdateMarker) error {
+	if err := removeUpdateFile(execPath + backupSuffix); err != nil {
+		return fmt.Errorf("remove prepared backup: %w", err)
+	}
+	if err := cleanupUpdateStagingFiles(execPath); err != nil {
+		return err
+	}
+	if err := syncDirectory(filepath.Dir(execPath)); err != nil {
+		return fmt.Errorf("sync prepared cleanup: %w", err)
+	}
+	if err := removePendingDatabaseSnapshot(execPath, marker); err != nil {
+		return fmt.Errorf("remove prepared database snapshot: %w", err)
+	}
+	if err := removeUpdateFile(execPath + pendingSuffix); err != nil {
+		return fmt.Errorf("remove prepared marker: %w", err)
+	}
+	return syncDirectory(filepath.Dir(execPath))
+}
+
+func cleanupUpdateStagingFiles(execPath string) error {
+	return errors.Join(
+		removeUpdateFile(execPath+".new"),
+		removeUpdateFile(execPath+backupSuffix+".new"),
+		removeUpdateFile(execPath+backupSuffix+".previous"),
+		removeUpdateFile(filepath.Join(filepath.Dir(execPath), ".sui-update.tar.gz")),
+	)
+}
+
+func checkPendingUpdateWithWriter(execPath string, writeAttempts func(string, int) error) bool {
+	rolledBack, err := recoverPendingUpdateLocked(execPath, writeAttempts)
+	if err != nil {
+		logger.Error("panel update: pending recovery failed: ", err)
+	}
+	return rolledBack
+}
+
+func writeBootAttempts(execPath string, attempts int) error {
+	marker, err := readPendingUpdateMarker(execPath)
+	if err != nil {
+		return err
+	}
+	marker.Attempts = attempts
+	return writePendingUpdateMarker(execPath, marker)
+}
+
+func writeAtomicUpdateFile(path string, data []byte, mode os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer func() { _ = removeUpdateFile(tmpPath) }()
+	if err := tmp.Chmod(mode); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := replaceFile(tmpPath, path); err != nil {
+		return err
+	}
+	return syncDirectory(filepath.Dir(path))
 }

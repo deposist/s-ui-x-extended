@@ -1,12 +1,57 @@
+# Linux release/VM artifacts support amd64, arm64, armv7, armv6, armv5, 386,
+# and s390x. The published GHCR image is deliberately narrower: linux/amd64
+# and linux/arm64 only. With no `platform:` override Compose selects the native
+# manifest; unsupported hosts must use the matching VM/release artifact instead
+# of silently emulating a production service. docker-build-test.sh makes the
+# release/provider-to-container platform mapping and opt-in emulation explicit.
 services:
   s-ui:
-    image: ghcr.io/deposist/s-ui-x:v1.0.8-beta8
-    container_name: s-ui
-    hostname: "s-ui"
+    image: ${SUI_IMAGE:-ghcr.io/deposist/s-ui-x:v1.0.8-beta9}
+    hostname: s-ui
+    # Host networking is a Linux-only delivery choice and exposes configured
+    # panel/subscription/inbound ports without granting network capabilities.
     network_mode: host
+    environment:
+      SUI_DB_FOLDER: /app/db
+      SUI_HEALTHCHECK_URL: ${SUI_HEALTHCHECK_URL:-http://127.0.0.1:2095/app/login}
     volumes:
-      - "./db:/app/db"
-      - "./cert:/app/cert"
-    tty: true
+      # s-ui-db owns SQLite plus persisted settings/config and managed certs.
+      # s-ui-certs is for operator-supplied certificate/key files. Configure
+      # file-based core logging with a safe relative path such as logs/box.log
+      # so s-ui-logs owns it; panel/stdout logs use Docker's logging driver.
+      # Docker initializes these directories with the image's non-root `sui`
+      # ownership when it creates the named volumes.
+      - s-ui-db:/app/db
+      - s-ui-certs:/app/cert
+      - s-ui-logs:/app/logs
+    healthcheck:
+      # Readiness, not just process liveness: fetch the default panel login SPA
+      # and require its application root. Set SUI_HEALTHCHECK_URL if persisted
+      # settings change the panel port/path or enable HTTPS.
+      test:
+        - CMD-SHELL
+        - >-
+          wget -q -T 5 -O - "$${SUI_HEALTHCHECK_URL:-http://127.0.0.1:2095/app/login}"
+          | grep -Fq '<div id="app"></div>'
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    logging:
+      # Panel/stdout logs persist in Docker storage with bounded rotation.
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "5"
     restart: unless-stopped
-    entrypoint: "./entrypoint.sh"
+    # Least privilege is the default: no privileged mode, root user, devices,
+    # or added capabilities. See docker-compose.nftables.yml for NET_ADMIN.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  s-ui-db:
+  s-ui-certs:
+  s-ui-logs:

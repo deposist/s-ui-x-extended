@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 export type RowKey = string | number
 
@@ -13,6 +13,11 @@ export const useRowSelection = (pageKeys: () => readonly RowKey[]) => {
   const replace = (next: Set<RowKey>): void => {
     selected.value = next
   }
+  watch(() => pageKeys(), keys => {
+    const visible = new Set(keys)
+    const next = new Set([...selected.value].filter(key => visible.has(key)))
+    if (next.size !== selected.value.size) replace(next)
+  })
 
   const toggle = (key: RowKey): void => {
     const next = new Set(selected.value)
@@ -34,10 +39,13 @@ export const useRowSelection = (pageKeys: () => readonly RowKey[]) => {
     return keys.length > 0 && keys.every(key => selected.value.has(key))
   })
 
-  const indeterminate = computed<boolean>(() => count.value > 0 && !allSelected.value)
+  const indeterminate = computed<boolean>(() => {
+    const keys = pageKeys()
+    return keys.some(key => selected.value.has(key)) && !allSelected.value
+  })
 
-  // Select-all toggles only the keys on the current page, leaving any
-  // off-page selections intact (matches paginated bulk-action expectations).
+  // Selection is scoped to the currently visible page; changing page/filter
+  // prunes keys that can no longer be acted on.
   const toggleAll = (): void => {
     const keys = pageKeys()
     const next = new Set(selected.value)

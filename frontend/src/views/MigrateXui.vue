@@ -317,7 +317,7 @@
                     </v-btn>
                   </v-col>
                 </v-row>
-                <pre v-if="generatedAdminsRevealed" class="preview-json" data-testid="migrate-xui-generated-admins-json">{{ generatedAdminsText }}</pre>
+                <pre v-if="generatedAdminsRevealed" class="preview-json" data-testid="migrate-xui-generated-admins-json">{{ generatedAdminsText() }}</pre>
               </v-alert>
             </v-col>
           </v-row>
@@ -332,6 +332,12 @@ import Data from '@/store/modules/data'
 import Ws from '@/store/ws'
 import HttpUtils from '@/plugins/httputil'
 import api from '@/plugins/api'
+import {
+  eraseGeneratedAdminSecrets,
+  generatedAdminsFromReport,
+  type GeneratedAdmin,
+  type MigrationReport,
+} from './migrateXuiSecrets'
 
 type PlanItem = {
   rowKey?: string
@@ -372,7 +378,7 @@ export default {
       kindFilter: 'all',
       search: '',
       plan: null as MigrationPlan | null,
-      report: null as any,
+      report: null as MigrationReport | null,
       progress: null as any,
       applyError: '',
       rollbackError: '',
@@ -445,16 +451,11 @@ export default {
     summaryText(): string {
       return JSON.stringify(this.report?.summary ?? {}, null, 2)
     },
-    generatedAdmins(): any[] {
-      if (Array.isArray(this.report?.generatedAdmins)) return this.report.generatedAdmins
-      if (Array.isArray(this.report?.generated_admins)) return this.report.generated_admins
-      return []
+    generatedAdmins(): GeneratedAdmin[] {
+      return generatedAdminsFromReport(this.report)
     },
     hasGeneratedAdmins(): boolean {
       return this.generatedAdmins.length > 0
-    },
-    generatedAdminsText(): string {
-      return JSON.stringify(this.generatedAdmins, null, 2)
     },
   },
   watch: {
@@ -467,12 +468,20 @@ export default {
   mounted() {
     Ws().connect()
   },
+  deactivated() {
+    this.clearGeneratedAdmins()
+  },
+  beforeRouteLeave(_to: unknown, _from: unknown, next: () => void) {
+    this.clearGeneratedAdmins()
+    next()
+  },
   beforeUnmount() {
-    this.clearGeneratedAdminsTimer()
+    this.clearGeneratedAdmins()
   },
   methods: {
     async buildPlan() {
       if (!this.selectedFile) return
+      this.clearGeneratedAdmins()
       this.loading = true
       this.applyError = ''
       const formData = new FormData()
@@ -491,8 +500,6 @@ export default {
         rowKey: `${item.kind}:${String(item.srcId)}:${index}`,
       }))
       this.plan = plan
-      this.clearGeneratedAdminsTimer()
-      this.generatedAdminsRevealed = false
       this.report = null
       this.progress = null
       this.maxStep = Math.max(this.maxStep, 2)
@@ -514,7 +521,8 @@ export default {
         this.applyError = msg.msg || this.$t('migrateXui.applyFailedFallback')
         return
       }
-      this.report = msg.obj
+      this.clearGeneratedAdmins()
+      this.report = msg.obj as MigrationReport
       this.generatedAdminsRevealed = false
       this.scheduleGeneratedAdminsClear()
       this.progress = { step: 'done', current: this.selectedCount, total: Math.max(this.selectedCount, 1), percent: 100 }
@@ -561,10 +569,9 @@ export default {
       return false
     },
     clearGeneratedAdminsTimer() {
-      if (this.generatedAdminsClearTimer) {
-        clearTimeout(this.generatedAdminsClearTimer)
-        this.generatedAdminsClearTimer = undefined
-      }
+      if (this.generatedAdminsClearTimer === undefined) return
+      clearTimeout(this.generatedAdminsClearTimer)
+      this.generatedAdminsClearTimer = undefined
     },
     scheduleGeneratedAdminsClear() {
       this.clearGeneratedAdminsTimer()
@@ -575,10 +582,11 @@ export default {
     },
     clearGeneratedAdmins() {
       this.clearGeneratedAdminsTimer()
-      if (this.report) {
-        this.report.generatedAdmins = []
-      }
+      eraseGeneratedAdminSecrets(this.report)
       this.generatedAdminsRevealed = false
+    },
+    generatedAdminsText(): string {
+      return JSON.stringify(this.generatedAdmins, null, 2)
     },
     setImport(item: PlanItem, enabled: boolean) {
       item.action = enabled ? (item.conflict ? this.strategy : 'create') : 'skip'

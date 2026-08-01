@@ -18,7 +18,7 @@ func TestSecurityTelegramBackupAuditOmitsPayloadPassphraseAndToken(t *testing.T)
 		BackupEnabled:   true,
 		Passphrase:      passphrase,
 	})
-	restoreSend := replaceTelegramBackupSendDocumentForTest(t, func(_ *TelegramService, _ string, _ []byte, _ string) TelegramResult {
+	restoreSend := replaceTelegramBackupSendDocumentForTest(t, func(_ context.Context, _ *TelegramService, _ string, _ []byte, _ string) TelegramResult {
 		return TelegramResult{Success: true}
 	})
 	defer restoreSend()

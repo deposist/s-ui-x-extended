@@ -59,10 +59,11 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { locale } from '@/locales'
 import HttpUtils from '@/plugins/httputil'
 import { ClientIPHistoryRow, displayIP, hasRawIPRows } from '@/components/ipHistory'
+import { createLatestRequestRunner } from '@/components/asyncRequestFence'
 
 const props = withDefaults(defineProps<{
   visible: boolean
@@ -84,40 +85,61 @@ const confirmRaw = ref(false)
 
 const hasRawRows = computed(() => hasRawIPRows(rows.value))
 
-watch(() => [props.visible, props.client] as const, async ([visible, client]) => {
+const requests = createLatestRequestRunner(value => {
+  loading.value = value
+})
+
+const cancelRequests = () => {
+  requests.abort()
+}
+
+const loadHistory = (client: string) => {
+  showRaw.value = false
+  rows.value = []
+  return requests.start(
+    signal => HttpUtils.get('api/ip-monitor/' + encodeURIComponent(client), {}, { signal }),
+    response => {
+      if (response.success) {
+        rows.value = response.obj ?? []
+      }
+    },
+  )
+}
+
+const clearHistory = async () => {
+  const client = props.client
+  const request = requests.start(
+    signal => HttpUtils.post('api/ip-monitor/' + encodeURIComponent(client) + '/clear', {}, { signal }),
+    response => {
+      if (response.success) {
+        rows.value = []
+        showRaw.value = false
+        emit('cleared')
+      }
+    },
+  )
+  await request.done
+}
+
+watch(() => [props.visible, props.client] as const, async ([visible, client], _previous, onCleanup) => {
   if (visible && client) {
-    await loadHistory(client)
+    const request = loadHistory(client)
+    onCleanup(request.abort)
+    await request.done
     return
   }
+
+  cancelRequests()
   if (!visible) {
     showRaw.value = false
     confirmRaw.value = false
   }
 }, { immediate: true })
 
-const loadHistory = async (client: string) => {
-  loading.value = true
-  showRaw.value = false
-  rows.value = []
-  const response = await HttpUtils.get('api/ip-monitor/' + encodeURIComponent(client))
-  if (response.success) {
-    rows.value = response.obj ?? []
-  }
-  loading.value = false
-}
-
-const clearHistory = async () => {
-  loading.value = true
-  const response = await HttpUtils.post('api/ip-monitor/' + encodeURIComponent(props.client) + '/clear', {})
-  if (response.success) {
-    rows.value = []
-    showRaw.value = false
-    emit('cleared')
-  }
-  loading.value = false
-}
+onBeforeUnmount(cancelRequests)
 
 const setVisible = (value: boolean) => {
+  if (!value) cancelRequests()
   emit('update:visible', value)
 }
 

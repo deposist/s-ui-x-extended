@@ -129,9 +129,12 @@ const itemsPerPageStorageKey = (): string =>
   props.storageKey ? `${ITEMS_PER_PAGE_KEY}:${props.storageKey}` : ITEMS_PER_PAGE_KEY
 
 const readItemsPerPage = (): number => {
-  const stored = Number(localStorage.getItem(itemsPerPageStorageKey()))
-
-  return Number.isFinite(stored) && stored > 0 ? stored : 10
+  try {
+    const stored = Number(localStorage.getItem(itemsPerPageStorageKey()))
+    return Number.isFinite(stored) && stored > 0 ? stored : 10
+  } catch {
+    return 10
+  }
 }
 
 const sort = ref<SortState | null>(null)

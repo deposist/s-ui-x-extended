@@ -101,15 +101,28 @@ export default {
         return indexKeys > -1 ? this.$props.ext.keys[indexKeys].private_key : ''
       },
       set(v:string) {
-        const indexKeys = this.$props.ext?.keys.findIndex((key: any) => key.public_key == this.$props.data.public_key)?? -1
-        this.$props.ext.keys[indexKeys].private_key = v
+        if (!this.$props.ext) return
+        if (!Array.isArray(this.$props.ext.keys)) this.$props.ext.keys = []
+        let key = this.$props.ext.keys.find((item: any) => item.public_key == this.$props.data.public_key)
+        if (!key) {
+          key = { public_key: this.$props.data.public_key }
+          this.$props.ext.keys.push(key)
+        }
+        key.private_key = v
       }
     },
     publicKey: {
       get() { return this.$props.data.public_key },
       set(v:string) {
-        const indexKeys = this.$props.ext?.keys.findIndex((key: any) => key.public_key == this.$props.data.public_key)?? -1
-        this.$props.ext.keys[indexKeys].public_key = v
+        if (this.$props.ext) {
+          if (!Array.isArray(this.$props.ext.keys)) this.$props.ext.keys = []
+          let key = this.$props.ext.keys.find((item: any) => item.public_key == this.$props.data.public_key)
+          if (!key) {
+            key = { public_key: this.$props.data.public_key }
+            this.$props.ext.keys.push(key)
+          }
+          key.public_key = v
+        }
         this.$props.data.public_key = v
       }
     }

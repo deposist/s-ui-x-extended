@@ -52,6 +52,8 @@ func backupTables() []backupTable {
 		{name: "paidsub_bindings", model: &model.PaidSubBinding{}, optional: true},
 		{name: "tariffs", model: &model.PaidSubTariff{}, optional: true},
 		{name: "payment_orders", model: &model.PaidSubPaymentOrder{}, optional: true},
+		{name: "paidsub_poll_cursors", model: &model.PaidSubPollCursor{}, optional: true},
+		{name: "paidsub_invoice_cancellations", model: &model.PaidSubInvoiceCancellation{}, optional: true},
 		{name: "client_endpoint_access", model: &model.ClientEndpointAccess{}, optional: true},
 		{name: "awg_devices", model: &model.AWGDevice{}, optional: true},
 	}

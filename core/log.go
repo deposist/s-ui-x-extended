@@ -30,7 +30,11 @@ func (p PlatformWriter) WriteMessage(level log.Level, message string) {
 	case log.LevelWarn:
 		suiLog.CoreWarning(message)
 	case log.LevelPanic:
+		suiLog.CoreError(message)
+		panic(message)
 	case log.LevelFatal:
+		suiLog.CoreError(message)
+		os.Exit(1)
 	case log.LevelError:
 		suiLog.CoreError(message)
 	default:
@@ -122,6 +126,7 @@ func NewDefaultFactory(
 		level:      log.LevelTrace,
 		subscriber: observable.NewSubscriber[log.Entry](128),
 	}
+	factory.observer = observable.NewObserver[log.Entry](factory.subscriber, 64)
 	return factory
 }
 
@@ -179,6 +184,8 @@ func (l *observableLogger) Log(ctx context.Context, level log.Level, args []any)
 		return
 	}
 	msg := F.ToString(args...)
+	now := time.Now()
+	message, messageSimple := l.formatter.FormatWithSimple(ctx, level, l.tag, msg, now)
 	switch level {
 	case log.LevelInfo:
 		suiLog.CoreInfo(l.tag, msg)
@@ -187,16 +194,20 @@ func (l *observableLogger) Log(ctx context.Context, level log.Level, args []any)
 	case log.LevelWarn:
 		suiLog.CoreWarning(l.tag, msg)
 	case log.LevelPanic:
+		suiLog.CoreError(l.tag, msg)
+		panic(message)
 	case log.LevelFatal:
+		suiLog.CoreError(l.tag, msg)
+		os.Exit(1)
 	case log.LevelError:
 		suiLog.CoreError(l.tag, msg)
 	default:
 		suiLog.CoreDebug(l.tag, msg)
 	}
 	if (l.filePath != "" || l.writer != os.Stderr) && l.writer != nil {
-		message := l.formatter.Format(ctx, level, l.tag, msg, time.Now())
 		_, _ = l.writer.Write([]byte(message))
 	}
+	l.subscriber.Emit(log.Entry{Level: level, Message: messageSimple})
 }
 
 func (l *observableLogger) Trace(args ...any) {

@@ -17,6 +17,10 @@ import "runtime"
 // there but recommended for consistency.
 var ArtifactPlatform string
 
+// ArtifactGOOS is injected alongside ArtifactPlatform for release builds. It is
+// overridable in tests so non-Linux hosts can exercise Linux release metadata.
+var ArtifactGOOS = runtime.GOOS
+
 // ResolveArtifactPlatform returns the release artifact platform suffix for the
 // running binary. It prefers the build-time ArtifactPlatform; when that is empty
 // it falls back to runtime.GOARCH for the unambiguous architectures. For ARM
@@ -24,6 +28,9 @@ var ArtifactPlatform string
 // determined at runtime — callers MUST treat an empty result as "self-update not
 // available on this build" rather than guessing a wrong artifact.
 func ResolveArtifactPlatform() string {
+	if ArtifactGOOS != "linux" {
+		return ""
+	}
 	if ArtifactPlatform != "" {
 		return ArtifactPlatform
 	}

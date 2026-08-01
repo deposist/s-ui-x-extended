@@ -164,7 +164,10 @@ func (s *WarpService) getWarpInfo(version, deviceId, accessToken string) ([]byte
 
 func (s *WarpService) RegisterWarp(ep *model.Endpoint) error {
 	tos := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
-	privateKey, _ := wgtypes.GenerateKey()
+	privateKey, err := wgtypes.GenerateKey()
+	if err != nil {
+		return common.NewError("generate warp private key: ", err.Error())
+	}
 	publicKey := privateKey.PublicKey().String()
 	hostName, _ := os.Hostname()
 
@@ -203,11 +206,11 @@ func (s *WarpService) RegisterWarp(ep *model.Endpoint) error {
 		return err
 	}
 
-	deviceId, ok := rspData["id"].(string)
+	deviceId, ok := nonEmptyWarpString(rspData, "id")
 	if !ok {
 		return common.NewError("missing warp device id")
 	}
-	token, ok := rspData["token"].(string)
+	token, ok := nonEmptyWarpString(rspData, "token")
 	if !ok {
 		return common.NewError("missing warp token")
 	}
@@ -215,9 +218,8 @@ func (s *WarpService) RegisterWarp(ep *model.Endpoint) error {
 	if !ok {
 		return common.NewError("missing warp account")
 	}
-	license, ok := account["license"].(string)
+	license, ok := nonEmptyWarpString(account, "license")
 	if !ok {
-		logger.Debug("Error accessing license value.")
 		return common.NewError("missing warp license")
 	}
 
@@ -231,11 +233,26 @@ func (s *WarpService) RegisterWarp(ep *model.Endpoint) error {
 		return err
 	}
 
-	warpConfig, _ := warpDetails["config"].(map[string]interface{})
-	interfaceConfig, _ := warpConfig["interface"].(map[string]interface{})
-	addresses, _ := interfaceConfig["addresses"].(map[string]interface{})
-	v4, _ := addresses["v4"].(string)
-	v6, _ := addresses["v6"].(string)
+	warpConfig, ok := warpDetails["config"].(map[string]interface{})
+	if !ok {
+		return common.NewError("missing warp config")
+	}
+	interfaceConfig, ok := warpConfig["interface"].(map[string]interface{})
+	if !ok {
+		return common.NewError("missing warp interface")
+	}
+	addresses, ok := interfaceConfig["addresses"].(map[string]interface{})
+	if !ok {
+		return common.NewError("missing warp addresses")
+	}
+	v4, ok := nonEmptyWarpString(addresses, "v4")
+	if !ok || net.ParseIP(v4) == nil {
+		return common.NewError("invalid warp IPv4 address")
+	}
+	v6, ok := nonEmptyWarpString(addresses, "v6")
+	if !ok || net.ParseIP(v6) == nil {
+		return common.NewError("invalid warp IPv6 address")
+	}
 	peers, ok := warpConfig["peers"].([]interface{})
 	if !ok || len(peers) == 0 {
 		return common.NewError("missing warp peers")
@@ -248,16 +265,25 @@ func (s *WarpService) RegisterWarp(ep *model.Endpoint) error {
 	if !ok {
 		return common.NewError("missing warp peer endpoint")
 	}
-	peerEndpoint, ok := peerEndpointObj["host"].(string)
+	peerEndpoint, ok := nonEmptyWarpString(peerEndpointObj, "host")
 	if !ok {
 		return common.NewError("missing warp peer endpoint host")
 	}
 	peerEpAddress, peerEpPort, err := net.SplitHostPort(peerEndpoint)
-	if err != nil {
-		return err
+	if err != nil || net.ParseIP(peerEpAddress) == nil {
+		return common.NewError("invalid warp peer endpoint")
 	}
-	peerPublicKey, _ := peer["public_key"].(string)
-	peerPort, _ := strconv.Atoi(peerEpPort)
+	peerPublicKey, ok := nonEmptyWarpString(peer, "public_key")
+	if !ok {
+		return common.NewError("missing warp peer public key")
+	}
+	if _, err := wgtypes.ParseKey(peerPublicKey); err != nil {
+		return common.NewError("invalid warp peer public key")
+	}
+	peerPort, err := strconv.Atoi(peerEpPort)
+	if err != nil || peerPort < 1 || peerPort > 65535 {
+		return common.NewError("invalid warp peer port")
+	}
 
 	peerConfigs := []map[string]interface{}{
 		{
@@ -292,6 +318,11 @@ func (s *WarpService) RegisterWarp(ep *model.Endpoint) error {
 
 	ep.Options, err = json.MarshalIndent(epOptions, "", "  ")
 	return err
+}
+
+func nonEmptyWarpString(values map[string]interface{}, key string) (string, bool) {
+	value, ok := values[key].(string)
+	return value, ok && value != ""
 }
 
 func uniqueWarpAPIVersions(preferred string) []string {
@@ -375,12 +406,19 @@ attempt:
 		return err
 	}
 
-	if success, ok := response["success"].(bool); ok && !success {
+	success, ok := response["success"].(bool)
+	if !ok {
+		return common.NewError("warp license update returned invalid success status")
+	}
+	if !success {
 		errorArr, _ := response["errors"].([]interface{})
 		if len(errorArr) == 0 {
 			return common.NewError("warp license update failed")
 		}
-		errorObj, _ := errorArr[0].(map[string]interface{})
+		errorObj, ok := errorArr[0].(map[string]interface{})
+		if !ok {
+			return common.NewError("warp license update failed")
+		}
 		return common.NewError(errorObj["code"], errorObj["message"])
 	}
 

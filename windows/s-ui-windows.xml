@@ -3,6 +3,11 @@
   <id>s-ui</id>
   <name>S-UI Proxy Panel</name>
   <description>S-UI is a proxy panel for managing proxy services</description>
+  <!-- Built-in least-privilege identity; installer ACLs grant it write access only to data directories. -->
+  <serviceaccount>
+    <domain>NT AUTHORITY</domain>
+    <user>LocalService</user>
+  </serviceaccount>
   <executable>%BASE%\sui.exe</executable>
   <arguments></arguments>
   <logmode>rotate</logmode>

@@ -35,8 +35,8 @@ type TelegramBackupService struct {
 type telegramBackupActorContextKey struct{}
 
 var telegramBackupRunMu sync.Mutex
-var telegramBackupSendDocument = func(s *TelegramService, filename string, payload []byte, caption string) TelegramResult {
-	return s.SendTelegramDocument(filename, payload, caption)
+var telegramBackupSendDocument = func(ctx context.Context, s *TelegramService, filename string, payload []byte, caption string) TelegramResult {
+	return s.SendTelegramDocumentContext(ctx, filename, payload, caption)
 }
 
 type telegramBackupSecretBag struct {
@@ -142,6 +142,10 @@ func (s *TelegramBackupService) RunOnce(ctx context.Context, trigger string) (re
 		return result
 	}
 
+	if err := ctx.Err(); err != nil {
+		result.ErrorClass = "internal"
+		return result
+	}
 	payload, err := database.GetDb(exclude)
 	if err != nil {
 		result.ErrorClass = "db_snapshot_failed"
@@ -152,6 +156,10 @@ func (s *TelegramBackupService) RunOnce(ctx context.Context, trigger string) (re
 	defer secrets.zero()
 	result.PayloadSizeBytes = int64(len(secrets.payload))
 
+	if err := ctx.Err(); err != nil {
+		result.ErrorClass = "internal"
+		return result
+	}
 	passphrase, err := s.SettingService.GetTelegramBackupPassphraseBytes()
 	if err != nil {
 		result.ErrorClass = "settings"
@@ -160,6 +168,10 @@ func (s *TelegramBackupService) RunOnce(ctx context.Context, trigger string) (re
 	secrets.setPassphrase(passphrase)
 	if len(secrets.passphrase) == 0 {
 		result.ErrorClass = "missing_passphrase"
+		return result
+	}
+	if err := ctx.Err(); err != nil {
+		result.ErrorClass = "internal"
 		return result
 	}
 	envelope, err := BuildTelegramBackupEnvelope(secrets.payload, secrets.passphrase)
@@ -177,10 +189,14 @@ func (s *TelegramBackupService) RunOnce(ctx context.Context, trigger string) (re
 		return result
 	}
 
+	if err := ctx.Err(); err != nil {
+		result.ErrorClass = "internal"
+		return result
+	}
 	now := time.Now().UTC()
 	filename := telegramBackupFilename(now)
 	caption := telegramBackupCaption(now, trigger, result.ExcludedTables)
-	sendResult := telegramBackupSendDocument(&s.TelegramService, filename, envelope, caption)
+	sendResult := telegramBackupSendDocument(ctx, &s.TelegramService, filename, envelope, caption)
 	if !sendResult.Success {
 		result.ErrorClass = sendResult.ErrorClass
 		if result.ErrorClass == "" {

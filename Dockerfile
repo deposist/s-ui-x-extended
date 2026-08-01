@@ -74,7 +74,9 @@ RUN chmod +x /app/entrypoint.sh
 # Create a non-root user and run as that user by default.
 # Note: nftables management requires CAP_NET_ADMIN. When running in Docker, pass
 # --cap-add=NET_ADMIN (or use the appropriate Kubernetes securityContext).
-RUN addgroup -S sui && adduser -S -G sui sui && chown -R sui:sui /app
+RUN addgroup -S sui && adduser -S -G sui sui && \
+    mkdir -p /app/db /app/cert /app/logs && \
+    chown -R sui:sui /app
 USER sui
 
 ENTRYPOINT [ "./entrypoint.sh" ]

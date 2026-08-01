@@ -96,6 +96,7 @@ func showSetting() {
 	allSetting, err := settingService.GetAllSetting()
 	if err != nil {
 		fmt.Println("get current port failed,error info:", err)
+		return
 	}
 	fmt.Println("Current panel settings:")
 	fmt.Println("\tPanel port:\t", (*allSetting)["webPort"])

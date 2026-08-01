@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/deposist/s-ui-x-extended/core"
@@ -47,5 +48,47 @@ func TestLoadDataIncludesSubscriptionURIOverrides(t *testing.T) {
 	}
 	if payload["subClashURI"] != "https://clash.example/sub/" {
 		t.Fatalf("subClashURI override missing: %#v", payload)
+	}
+}
+
+func TestLoadDataReturnsAuthoritativeRevisionForFullAndUnchangedResponses(t *testing.T) {
+	initSessionTestDB(t)
+	runtime := service.NewRuntime(core.NewCore())
+	restoreRuntime := service.ReplaceDefaultRuntimeForTest(runtime)
+	t.Cleanup(restoreRuntime)
+	apiService := NewApiService(WithRuntime(runtime))
+
+	gin.SetMode(gin.TestMode)
+	load := func(rawURL string) map[string]interface{} {
+		t.Helper()
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Request = httptest.NewRequest(http.MethodGet, rawURL, nil)
+		data, err := apiService.getData(c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, ok := data.(map[string]interface{})
+		if !ok {
+			t.Fatalf("unexpected load payload: %#v", data)
+		}
+		return payload
+	}
+
+	full := load("http://panel.example/api/load")
+	revision, ok := full["revision"].(int64)
+	if !ok || revision <= 0 {
+		t.Fatalf("expected positive authoritative revision, got %#v", full["revision"])
+	}
+	if _, ok := full["config"]; !ok {
+		t.Fatalf("expected initial full snapshot, got %#v", full)
+	}
+
+	unchanged := load("http://panel.example/api/load?lu=" + strconv.FormatInt(revision, 10))
+	if unchanged["revision"] != revision {
+		t.Fatalf("revision changed without a server update: got %#v want %d", unchanged["revision"], revision)
+	}
+	if _, ok := unchanged["config"]; ok {
+		t.Fatalf("unchanged response unexpectedly included config: %#v", unchanged)
 	}
 }
