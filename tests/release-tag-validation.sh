@@ -91,6 +91,18 @@ grep -Fq '"$IMAGE_NAME@$platform_digest"' "$docker_workflow"
 grep -q 'Promote final Docker tags' "$docker_workflow"
 grep -q 'BOOTLIN_ARMV5_SHA256: 8cdb4ad70c6b5a66427fa3315fe3ddde1c19c90232674dec59045e04d2a36cf1' "$release_workflow"
 grep -q 'BOOTLIN_S390X_SHA256: 23f536ff2bf1a9d3b93210465471996bc7c918fbb5702a277d8e1e42ffab8559' "$release_workflow"
+grep -q 'DEBIAN_ARCHIVE_KEYRING_URL: https://deb.debian.org/debian/pool/main/d/debian-archive-keyring/debian-archive-keyring_2023.3%2Bdeb12u2_all.deb' "$release_workflow"
+grep -q 'DEBIAN_ARCHIVE_KEYRING_SHA256: f699e2f88dca05212f2a452b58475f2993cb6993dfbafb1d0205a3291eb8b4b8' "$release_workflow"
+grep -q 'Install pinned Debian keyring (cronet sysroot)' "$release_workflow"
+# The grep needles intentionally contain shell variables.
+# shellcheck disable=SC2016
+grep -Fq 'echo "$DEBIAN_ARCHIVE_KEYRING_SHA256  $package" | sha256sum --check --strict' "$release_workflow"
+# shellcheck disable=SC2016
+grep -Fq 'dpkg-deb --extract "$package" "$extract_dir"' "$release_workflow"
+if grep -q 'generate_keyring.sh' "$release_workflow"; then
+    echo 'release workflow still depends on the public GPG keyserver' >&2
+    exit 1
+fi
 
 while IFS= read -r -d '' workflow; do
     if ! awk '

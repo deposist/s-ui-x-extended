@@ -24,6 +24,10 @@ env:
   NODE_VERSION: "25"
   CRONET_GO_VERSION: "2faf34666c2cc8234f10f2ab6d4c4d6104d34ae2"
   CRONET_GO_REPO: https://github.com/sagernet/cronet-go.git
+  # Pinned Debian package supplies cronet-go's sysroot signing keys without a
+  # network key lookup. Update URL and digest together.
+  DEBIAN_ARCHIVE_KEYRING_URL: https://deb.debian.org/debian/pool/main/d/debian-archive-keyring/debian-archive-keyring_2023.3%2Bdeb12u2_all.deb
+  DEBIAN_ARCHIVE_KEYRING_SHA256: f699e2f88dca05212f2a452b58475f2993cb6993dfbafb1d0205a3291eb8b4b8
   # Exact Bootlin releases; archive URLs and SHA-256 values are published by
   # Bootlin beside each archive. Never replace these with directory scraping.
   BOOTLIN_ARMV5_URL: https://toolchains.bootlin.com/downloads/releases/toolchains/armv5-eabi/tarballs/armv5-eabi--musl--stable-2025.08-1.tar.xz
@@ -220,13 +224,22 @@ jobs:
           git -C ~/cronet-go checkout FETCH_HEAD
           git -C ~/cronet-go submodule update --init --recursive --depth=1
 
-      - name: Regenerate Debian keyring (cronet sysroot)
+      - name: Install pinned Debian keyring (cronet sysroot)
         if: matrix.naive
         run: |
-          set -e
-          rm -f ~/cronet-go/naiveproxy/src/build/linux/sysroot_scripts/keyring.gpg
-          cd ~/cronet-go
-          GPG_TTY=/dev/null ./naiveproxy/src/build/linux/sysroot_scripts/generate_keyring.sh
+          set -euo pipefail
+          package="$RUNNER_TEMP/debian-archive-keyring.deb"
+          extract_dir="$RUNNER_TEMP/debian-archive-keyring"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --connect-timeout 15 --retry 5 --retry-all-errors \
+            --output "$package" "$DEBIAN_ARCHIVE_KEYRING_URL"
+          echo "$DEBIAN_ARCHIVE_KEYRING_SHA256  $package" | sha256sum --check --strict
+          rm -rf "$extract_dir"
+          mkdir -p "$extract_dir"
+          dpkg-deb --extract "$package" "$extract_dir"
+          install -m 0644 \
+            "$extract_dir/usr/share/keyrings/debian-archive-keyring.gpg" \
+            "$HOME/cronet-go/naiveproxy/src/build/linux/sysroot_scripts/keyring.gpg"
 
       - name: Build cronet library and set toolchain environment
         if: matrix.naive
