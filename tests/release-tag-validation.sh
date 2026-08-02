@@ -176,7 +176,12 @@ if [[ $1 == api ]]; then
     case $api_path in
         *releases?per_page=100)
             if [[ -n ${FAKE_GH_RELEASES+x} ]]; then
-                printf '%s\n' "$FAKE_GH_RELEASES"
+                if [[ -n ${FAKE_GH_RELEASES_EMPTY_ONCE+x} && ! -f ${FAKE_GH_RELEASES_EMPTY_ONCE} ]]; then
+                    : > "$FAKE_GH_RELEASES_EMPTY_ONCE"
+                    printf '[[]]\n'
+                else
+                    printf '%s\n' "$FAKE_GH_RELEASES"
+                fi
             else
                 printf '[[{"id":7,"tag_name":"v1.2.3","draft":true}]]\n'
             fi
@@ -221,6 +226,10 @@ printf 'new asset\n' > "$tmp_dir/assets/new.tar.gz"
 asset_digest=$(sha256sum "$tmp_dir/assets/new.tar.gz" | awk '{print $1}')
 matching_asset=$(printf '{"name":"new.tar.gz","state":"uploaded","digest":"sha256:%s"}' "$asset_digest")
 PATH="$tmp_dir/bin:$PATH" GH_TOKEN=test FAKE_GH_ASSETS="$matching_asset" \
+    bash "$asset_guard" owner/repository v1.2.3 "$tmp_dir/assets"
+rm -f "$tmp_dir/release-visibility-seen"
+PATH="$tmp_dir/bin:$PATH" GH_TOKEN=test FAKE_GH_RELEASES='[[{"id":7,"tag_name":"v1.2.3","draft":true}]]' \
+    FAKE_GH_RELEASES_EMPTY_ONCE="$tmp_dir/release-visibility-seen" FAKE_GH_ASSETS="$matching_asset" \
     bash "$asset_guard" owner/repository v1.2.3 "$tmp_dir/assets"
 
 bad_asset='{"name":"new.tar.gz","state":"uploaded","digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'

@@ -52,9 +52,23 @@ if ((${#local_path[@]} == 0)); then
     exit 1
 fi
 
-release_id=$(gh api --paginate --slurp "repos/$repository/releases?per_page=100" |
-    jq -cer --arg tag "$tag" 'add | map(select(.tag_name == $tag)) | if length == 1 then .[0].id else error("expected exactly one release for " + $tag) end')
-[[ $release_id =~ ^[0-9]+$ ]] || { echo "release for $tag has no valid id" >&2; exit 1; }
+release_id=
+for _ in {1..10}; do
+    release_id=$(gh api --paginate --slurp "repos/$repository/releases?per_page=100" |
+        jq -cr --arg tag "$tag" '
+            add
+            | map(select(.tag_name == $tag))
+            | if length == 0 then null
+              elif length == 1 then .[0].id
+              else error("expected at most one release for " + $tag)
+              end
+        ')
+    if [[ $release_id =~ ^[0-9]+$ ]]; then
+        break
+    fi
+    sleep 2
+done
+[[ $release_id =~ ^[0-9]+$ ]] || { echo "release for $tag is not visible through the GitHub API" >&2; exit 1; }
 
 fetch_remote_assets() {
     gh api --paginate --slurp "repos/$repository/releases/$release_id/assets?per_page=100" | jq -ce 'add'
