@@ -61,8 +61,8 @@ fetch_remote_assets() {
 }
 
 wait_for_remote_assets() {
-    local remote_json attempt
-    for attempt in {1..10}; do
+    local remote_json
+    for _ in {1..10}; do
         remote_json=$(fetch_remote_assets)
         if jq -e 'all(.[]; .state == "uploaded" and (.digest // "" | test("^sha256:[0-9a-f]{64}$")))' <<<"$remote_json" >/dev/null; then
             printf '%s\n' "$remote_json"

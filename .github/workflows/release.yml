@@ -53,6 +53,12 @@ jobs:
           tag: ${{ inputs.tag || github.ref_name }}
           event_commit: ${{ github.event_name == 'push' && github.sha || '' }}
 
+      - name: Reject already-published release tag reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.checkout.outputs.tag }}
+        run: bash "$RUNNER_TEMP/s-ui-release-tooling/check-release-state.sh" "$GITHUB_REPOSITORY" "$TAG"
+
   build-windows:
     needs: release-ref
     uses: ./.github/workflows/windows.yml

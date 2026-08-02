@@ -9,6 +9,17 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.8-beta10] - 2026-08-02 - release pipeline recovery
+
+- CI invokes release validation scripts through Bash, so their tracked non-executable file mode no longer causes `Permission denied` failures.
+- Release jobs stage the tag validators and release-state guard before checking out the requested tag. The guard permits a missing release or one draft, but rejects published tag reuse, duplicate releases, and malformed release state.
+- SHA-256 asset verification remains fail-closed. A published release cannot be replaced with different files; a different build requires a new SemVer tag.
+- Docker smoke checks run each architecture by its immutable platform manifest digest. This avoids loading two platforms through the same local multi-platform digest reference.
+- Release regression tests cover script invocation, trusted guard staging, release-state decisions, and per-platform Docker digests.
+- The default Compose image and frontend package version are `1.0.8-beta10`. No database migration or manual configuration change is required.
+
+Full release notes: [`docs/releases/v1.0.8-beta10.md`](docs/releases/v1.0.8-beta10.md).
+
 ## [1.0.8-beta9] - 2026-08-01 - payment recovery and reliability fixes
 
 - Paid subscriptions now record every provider charge, recover paid orders that expired while confirmation was pending, and retry failed Telegram and CryptoBot work without skipping it. Refunds restore purchased capacity without rewriting live or lifetime traffic counters.

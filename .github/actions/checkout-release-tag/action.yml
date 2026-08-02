@@ -43,8 +43,8 @@ runs:
       run: |
         set -euo pipefail
         mkdir -p "$RUNNER_TEMP/s-ui-release-tooling"
-        cp scripts/validate-release-tag.sh scripts/verify-release-tag-checkout.sh "$RUNNER_TEMP/s-ui-release-tooling/"
-        chmod +x "$RUNNER_TEMP/s-ui-release-tooling/validate-release-tag.sh" "$RUNNER_TEMP/s-ui-release-tooling/verify-release-tag-checkout.sh"
+        cp scripts/validate-release-tag.sh scripts/verify-release-tag-checkout.sh scripts/check-release-state.sh "$RUNNER_TEMP/s-ui-release-tooling/"
+        chmod +x "$RUNNER_TEMP/s-ui-release-tooling/validate-release-tag.sh" "$RUNNER_TEMP/s-ui-release-tooling/verify-release-tag-checkout.sh" "$RUNNER_TEMP/s-ui-release-tooling/check-release-state.sh"
 
     - name: Check out release tag
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

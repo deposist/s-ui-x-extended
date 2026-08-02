@@ -5,6 +5,11 @@ root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 validator="$root_dir/scripts/validate-release-tag.sh"
 checkout_verifier="$root_dir/scripts/verify-release-tag-checkout.sh"
 asset_guard="$root_dir/scripts/check-release-assets.sh"
+release_state_guard="$root_dir/scripts/check-release-state.sh"
+if [[ ! -f $release_state_guard ]]; then
+    echo "release state guard is missing: $release_state_guard" >&2
+    exit 1
+fi
 for tool in jq sha256sum; do
     if ! command -v "$tool" >/dev/null; then
         echo "release tag validation smoke test requires $tool" >&2
@@ -13,12 +18,12 @@ for tool in jq sha256sum; do
 done
 
 for tag in v1.2.3 v2.0.0-rc.1 v1.5.2-beta-hotfix2 v3.4.5-hotfix1 v3.4.5-preview.7; do
-    actual=$("$validator" "$tag")
+    actual=$(bash "$validator" "$tag")
     test "$actual" = "$tag"
 done
-test "$("$validator" --prerelease v1.2.3)" = false
+test "$(bash "$validator" --prerelease v1.2.3)" = false
 for tag in v2.0.0-rc.1 v1.5.2-beta-hotfix2 v3.4.5-hotfix1 v3.4.5-preview.7; do
-    test "$("$validator" --prerelease "$tag")" = true
+    test "$(bash "$validator" --prerelease "$tag")" = true
 done
 
 invalid_tags=(
@@ -34,7 +39,7 @@ invalid_tags=(
     $'v1.2.3\necho injected'
 )
 for tag in "${invalid_tags[@]}"; do
-    if "$validator" "$tag" >/dev/null 2>&1; then
+    if bash "$validator" "$tag" >/dev/null 2>&1; then
         printf 'accepted invalid release tag: %q\n' "$tag" >&2
         exit 1
     fi
@@ -51,6 +56,10 @@ grep -q 'fetch-depth: 0' "$checkout_action"
 # The composite action must execute the tested verifier, including event-SHA binding.
 # shellcheck disable=SC2016
 grep -q 's-ui-release-tooling/verify-release-tag-checkout.sh" "$TAG" "$EXPECTED_COMMIT" "$EVENT_COMMIT"' "$checkout_action"
+grep -q 's-ui-release-tooling/.*check-release-state.sh' "$checkout_action"
+stage_guard_line=$(grep -n 'cp .*check-release-state.sh' "$checkout_action" | cut -d: -f1)
+checkout_tag_line=$(grep -n 'name: Check out release tag' "$checkout_action" | cut -d: -f1)
+test -n "$stage_guard_line" && test -n "$checkout_tag_line" && test "$stage_guard_line" -lt "$checkout_tag_line"
 # The grep needle intentionally contains shell variables.
 # shellcheck disable=SC2016
 grep -q 'version=$(git show "$tag_commit:config/version"' "$checkout_verifier"
@@ -61,6 +70,9 @@ ci_workflow="$root_dir/.github/workflows/ci.yml"
 # The grep needle intentionally contains a GitHub expression.
 # shellcheck disable=SC2016
 grep -q 'value: ${{ steps.verify.outputs.prerelease }}' "$checkout_action"
+# The grep needle intentionally contains shell variables.
+# shellcheck disable=SC2016
+grep -Fq 'run: bash "$RUNNER_TEMP/s-ui-release-tooling/check-release-state.sh" "$GITHUB_REPOSITORY" "$TAG"' "$release_workflow"
 grep -q 'scripts/check-release-assets.sh --verify' "$release_workflow"
 grep -q 'uses: ./.github/workflows/windows.yml' "$release_workflow"
 grep -q 'npm ci' "$windows_workflow"
@@ -130,27 +142,27 @@ annotated_commit=$(git -C "$tmp_dir" rev-parse HEAD)
 git -C "$tmp_dir" checkout --quiet v1.0.0
 (
     cd "$tmp_dir"
-    output=$("$checkout_verifier" v1.0.0 "$old_commit")
+    output=$(bash "$checkout_verifier" v1.0.0 "$old_commit")
     grep -q "commit=$old_commit" <<<"$output"
-    "$checkout_verifier" v1.0.0 "$old_commit" "$old_commit" >/dev/null
-    if "$checkout_verifier" v9.9.9 >/dev/null 2>&1; then
+    bash "$checkout_verifier" v1.0.0 "$old_commit" "$old_commit" >/dev/null
+    if bash "$checkout_verifier" v9.9.9 >/dev/null 2>&1; then
         echo 'nonexistent release tag was accepted' >&2
         exit 1
     fi
-    if "$checkout_verifier" v1.0.0 "$new_commit" >/dev/null 2>&1; then
+    if bash "$checkout_verifier" v1.0.0 "$new_commit" >/dev/null 2>&1; then
         echo 'moved release tag was accepted' >&2
         exit 1
     fi
-    if "$checkout_verifier" v1.0.0 "$old_commit" "$new_commit" >/dev/null 2>&1; then
+    if bash "$checkout_verifier" v1.0.0 "$old_commit" "$new_commit" >/dev/null 2>&1; then
         echo 'tag push event commit mismatch was accepted' >&2
         exit 1
     fi
-    if "$checkout_verifier" v9.9.8 >/dev/null 2>&1; then
+    if bash "$checkout_verifier" v9.9.8 >/dev/null 2>&1; then
         echo 'tag/version mismatch was accepted' >&2
         exit 1
     fi
     git checkout --quiet v2.0.0-rc.1
-    "$checkout_verifier" v2.0.0-rc.1 "$annotated_commit" "$annotated_commit" >/dev/null
+    bash "$checkout_verifier" v2.0.0-rc.1 "$annotated_commit" "$annotated_commit" >/dev/null
 )
 
 cat > "$tmp_dir/bin/gh" <<'EOF'
@@ -163,7 +175,11 @@ if [[ $1 == api ]]; then
     done
     case $api_path in
         *releases?per_page=100)
-            printf '[[{"id":7,"tag_name":"v1.2.3"}]]\n'
+            if [[ -n ${FAKE_GH_RELEASES+x} ]]; then
+                printf '%s\n' "$FAKE_GH_RELEASES"
+            else
+                printf '[[{"id":7,"tag_name":"v1.2.3","draft":true}]]\n'
+            fi
             ;;
         *releases/7/assets?per_page=100)
             printf '[[%s]]\n' "${FAKE_GH_ASSETS}"
@@ -181,6 +197,26 @@ else
 fi
 EOF
 chmod +x "$tmp_dir/bin/gh"
+
+PATH="$tmp_dir/bin:$PATH" GH_TOKEN=test FAKE_GH_RELEASES='[[]]' \
+    bash "$release_state_guard" owner/repository v1.2.3
+PATH="$tmp_dir/bin:$PATH" GH_TOKEN=test FAKE_GH_RELEASES='[[{"id":7,"tag_name":"v1.2.3","draft":true}]]' \
+    bash "$release_state_guard" owner/repository v1.2.3
+if PATH="$tmp_dir/bin:$PATH" GH_TOKEN=test FAKE_GH_RELEASES='[[{"id":7,"tag_name":"v1.2.3","draft":false}]]' \
+    bash "$release_state_guard" owner/repository v1.2.3 >/dev/null 2>&1; then
+    echo 'published release tag reuse was accepted' >&2
+    exit 1
+fi
+if PATH="$tmp_dir/bin:$PATH" GH_TOKEN=test FAKE_GH_RELEASES='[[{"id":7,"tag_name":"v1.2.3","draft":true},{"id":8,"tag_name":"v1.2.3","draft":true}]]' \
+    bash "$release_state_guard" owner/repository v1.2.3 >/dev/null 2>&1; then
+    echo 'duplicate matching releases were accepted' >&2
+    exit 1
+fi
+if PATH="$tmp_dir/bin:$PATH" GH_TOKEN=test FAKE_GH_RELEASES='[[{"id":7,"tag_name":"v1.2.3","draft":"yes"}]]' \
+    bash "$release_state_guard" owner/repository v1.2.3 >/dev/null 2>&1; then
+    echo 'malformed release state was accepted' >&2
+    exit 1
+fi
 printf 'new asset\n' > "$tmp_dir/assets/new.tar.gz"
 asset_digest=$(sha256sum "$tmp_dir/assets/new.tar.gz" | awk '{print $1}')
 matching_asset=$(printf '{"name":"new.tar.gz","state":"uploaded","digest":"sha256:%s"}' "$asset_digest")

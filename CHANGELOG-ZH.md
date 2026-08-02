@@ -8,6 +8,17 @@
 
 - 暂无未发布变更。
 
+## [1.0.8-beta10] - 2026-08-02 - 修复发布流水线
+
+- CI 现在通过 Bash 调用发布校验脚本，因此脚本在 Git 中没有可执行权限时不会再触发 `Permission denied`。
+- 发布任务会在检出目标 tag 前复制可信的 tag 校验器和 release 状态检查脚本。检查允许 release 不存在或只有一个 draft，但拒绝复用已发布的 tag、重复 release 和无效状态。
+- SHA-256 构件校验仍保持失败即终止。已发布 release 不能被不同文件覆盖；不同构建必须使用新的 SemVer tag。
+- Docker smoke 检查按各架构不可变的 platform manifest digest 运行镜像，避免用同一个本地多平台 digest 引用依次加载两个平台。
+- 回归测试覆盖 Bash 调用、可信检查脚本的预先复制、不同 release 状态和各平台 Docker digest。
+- 默认 Compose 镜像和 frontend package 版本已更新为 `1.0.8-beta10`。无需迁移数据库或手动修改配置。
+
+完整发布说明：[`docs/releases/v1.0.8-beta10.md`](docs/releases/v1.0.8-beta10.md)。
+
 ## [1.0.8-beta9] - 2026-08-01 - 支付恢复与可靠性修复
 
 - 付费订阅现在会记录每笔供应商扣款，恢复确认期间已过期的已付款订单，并重试失败的 Telegram 与 CryptoBot 操作。退款只恢复已购买额度，不再改写当前或累计流量计数。
