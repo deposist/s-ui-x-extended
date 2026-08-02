@@ -6,7 +6,16 @@
 
 ## [Unreleased]
 
-- 通过 beta 通道选中的稳定版本现在会按其 `main` 发布清单进行校验，修复了面板从 beta 更新到稳定版时出现的 `update manifest is invalid` 错误。
+- 暂无未发布变更。
+
+## [1.0.9-beta1] - 2026-08-02 - 修复 beta 到稳定版的更新
+
+- 通过 beta 通道选中的稳定版本现在会按该版本的 `main` 清单进行校验。beta 安装在保留 beta 通道设置时升级到稳定版，不再出现 `update manifest is invalid`。
+- 预发布构件仍必须使用 beta 清单；版本、平台、归档名称和 SHA-256 校验保持不变。
+- Cronet 发布构建现在使用经 SHA-256 校验的固定 Debian 密钥环软件包，不再从公共密钥服务器下载密钥。回归检查会阻止重新引入该不稳定流程。
+- 无需迁移数据库或手动修改配置。
+
+完整发布说明：[`docs/releases/v1.0.9-beta1.md`](docs/releases/v1.0.9-beta1.md)。
 
 ## [1.0.8] - 2026-08-02 - 安全性、可靠性和本地规则集
 

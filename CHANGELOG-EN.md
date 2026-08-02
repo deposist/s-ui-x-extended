@@ -7,7 +7,16 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 ## [Unreleased]
 
-- Stable releases selected from the beta channel now validate against their `main` release manifest, fixing `update manifest is invalid` during beta-to-stable panel updates.
+- No unreleased changes.
+
+## [1.0.9-beta1] - 2026-08-02 - beta-to-stable update fix
+
+- A stable release selected while tracking the beta channel now validates against the release's `main` manifest. This fixes `update manifest is invalid` when a beta installation graduates to stable without changing its saved channel.
+- Prerelease artifacts still require a beta manifest. Version, platform, archive name, and SHA-256 checks remain unchanged.
+- Cronet release builds now install a pinned Debian archive keyring package verified by SHA-256 instead of downloading keys from a public keyserver. Regression checks prevent the flaky keyserver path from returning.
+- No database migration or manual configuration change is required.
+
+Full release notes: [`docs/releases/v1.0.9-beta1.md`](docs/releases/v1.0.9-beta1.md).
 
 ## [1.0.8] - 2026-08-02 - security, reliability, and managed rule-sets
 
