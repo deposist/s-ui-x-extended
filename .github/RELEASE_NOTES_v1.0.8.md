@@ -35,7 +35,7 @@ journalctl -u s-ui -n 50 --no-pager
 
 The installer preserves the panel database and configuration.
 
-Servers caught in the beta8 to beta9 restart loop must use the console command. Beta10 may offer beta9 because of its old comparator. Do not apply that downgrade; install 1.0.8 instead.
+Servers caught in the beta8 to beta9 restart loop must use the console command. Beta10 and beta11 users should switch the panel selector to **Main (stable)** before applying 1.0.8; applying stable 1.0.8 while `beta` remains selected fails with `update manifest is invalid`. If beta10 offers beta9, do not apply that downgrade.
 
 Full release notes: [`docs/releases/v1.0.8.md`](../docs/releases/v1.0.8.md).
 
@@ -59,4 +59,4 @@ journalctl -u s-ui -n 50 --no-pager
 
 Установщик сохраняет базу и настройки панели. При обычном запуске создаётся таблица списаний провайдера. Ручное изменение конфигурации не требуется.
 
-Если сервер постоянно перезапускается после перехода с beta8 на beta9, используйте команду из консоли. Beta10 может предлагать beta9 из-за старого сравнения версий. Не устанавливайте это понижение, сразу ставьте 1.0.8.
+Если сервер постоянно перезапускается после перехода с beta8 на beta9, используйте команду из консоли. В beta10 и beta11 перед установкой 1.0.8 через панель переключите канал на **Main (стабильные)**: при выбранном `beta` установка завершается ошибкой `update manifest is invalid`. Если beta10 предлагает beta9, не устанавливайте это понижение.

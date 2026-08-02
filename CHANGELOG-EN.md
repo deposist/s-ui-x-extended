@@ -7,7 +7,7 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 ## [Unreleased]
 
-- No unreleased changes.
+- Stable releases selected from the beta channel now validate against their `main` release manifest, fixing `update manifest is invalid` during beta-to-stable panel updates.
 
 ## [1.0.8] - 2026-08-02 - security, reliability, and managed rule-sets
 

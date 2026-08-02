@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/deposist/s-ui-x-extended/config"
 )
 
 func TestMain(m *testing.M) {
@@ -97,6 +99,62 @@ func TestApplyPipelineRequiresSignedManifestBindingArtifact(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(execPath); !bytes.Equal(got, []byte("NEW-BINARY")) {
 		t.Fatalf("binary = %q, want signed artifact", got)
+	}
+}
+
+// A stable release selected while tracking the beta channel carries a main-channel
+// manifest. The selected release type, not the tracking channel, defines the
+// manifest binding.
+func TestApplyPipelineAcceptsStableReleaseSelectedFromBetaChannel(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	if err := os.WriteFile(execPath, []byte("OLD-WORKING-BINARY"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	target := ReleaseTarget{
+		Channel:    "beta",
+		Version:    "1.0.8",
+		Prerelease: false,
+		Platform:   "amd64",
+	}
+	tarball := makeTarGz(t, []byte("STABLE-BINARY"))
+	manifestTarget := target
+	manifestTarget.Channel = "main"
+	manifest := updateManifest(t, manifestTarget, tarball)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/asset", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(tarball) })
+	mux.HandleFunc("/checksum", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(checksumHex(tarball) + "  s-ui-linux-amd64.tar.gz\n"))
+	})
+	mux.HandleFunc("/asset.manifest.json", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(manifest) })
+	server := httptest.NewTLSServer(mux)
+	defer server.Close()
+
+	target.AssetURL = server.URL + "/asset"
+	target.ChecksumURL = server.URL + "/checksum"
+	deps := panelUpdateDeps{client: server.Client(), execPath: execPath}
+	if _, err := applyPipeline(context.Background(), target, deps, func(UpdateStage) {}); err != nil {
+		t.Fatalf("stable graduation update failed: %v", err)
+	}
+	if got, err := os.ReadFile(execPath); err != nil || !bytes.Equal(got, []byte("STABLE-BINARY")) {
+		t.Fatalf("binary = %q, err = %v; want stable artifact", got, err)
+	}
+}
+
+func TestVerifyUpdateManifestRejectsPrereleaseWithMainManifest(t *testing.T) {
+	archive := []byte("BETA-ARCHIVE")
+	target := ReleaseTarget{
+		Channel:    config.UpdateChannelBeta,
+		Version:    "1.0.9-beta1",
+		Prerelease: true,
+		Platform:   "amd64",
+	}
+	manifestTarget := target
+	manifestTarget.Channel = config.UpdateChannelMain
+	err := verifyUpdateManifest(updateManifest(t, manifestTarget, archive), target, checksumHex(archive))
+	if !errors.Is(err, errManifestInvalid) {
+		t.Fatalf("prerelease with main manifest error = %v, want %v", err, errManifestInvalid)
 	}
 }
 

@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deposist/s-ui-x-extended/config"
 	"github.com/deposist/s-ui-x-extended/logger"
 )
 
@@ -330,7 +331,11 @@ func verifyUpdateManifest(rawManifest []byte, target ReleaseTarget, checksum str
 		return errors.Join(errManifestInvalid, err)
 	}
 	filename := fmt.Sprintf("s-ui-linux-%s.tar.gz", target.Platform)
-	if manifest.Version != target.Version || manifest.Channel != target.Channel ||
+	manifestChannel := target.Channel
+	if !target.Prerelease {
+		manifestChannel = config.UpdateChannelMain
+	}
+	if manifest.Version != target.Version || manifest.Channel != manifestChannel ||
 		manifest.Platform != target.Platform || manifest.Filename != filename ||
 		len(manifest.SHA256) != sha256.Size*2 || !strings.EqualFold(manifest.SHA256, checksum) {
 		return errManifestInvalid
