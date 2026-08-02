@@ -25,10 +25,10 @@ const updateMarkerVersion = 2
 type updateTransactionPhase string
 
 const (
-	updatePhasePrepared  updateTransactionPhase = "prepared"
-	updatePhaseApplied   updateTransactionPhase = "applied"
-	updatePhaseBooting   updateTransactionPhase = "booting"
-	updatePhaseConfirmed updateTransactionPhase = "confirmed"
+	updatePhasePrepared   updateTransactionPhase = "prepared"
+	updatePhaseApplied    updateTransactionPhase = "applied"
+	updatePhaseBooting    updateTransactionPhase = "booting"
+	updatePhaseConfirmed  updateTransactionPhase = "confirmed"
 	updatePhaseRolledBack updateTransactionPhase = "rolled_back"
 )
 
@@ -747,13 +747,75 @@ func readPendingUpdateMarker(execPath string) (pendingUpdateMarker, error) {
 	return marker, nil
 }
 
+func migrateLegacyPendingUpdateMarker(execPath string) (pendingUpdateMarker, bool, error) {
+	// #nosec G304 -- recovery paths are fixed beside os.Executable().
+	raw, err := os.ReadFile(execPath + pendingSuffix)
+	if err != nil {
+		return pendingUpdateMarker{}, false, err
+	}
+	attempts, ok := parseLegacyBootAttempts(raw)
+	if !ok {
+		return pendingUpdateMarker{}, false, nil
+	}
+	candidateSHA256, err := fileSHA256(execPath)
+	if err != nil {
+		return pendingUpdateMarker{}, true, fmt.Errorf("hash legacy candidate: %w", err)
+	}
+	backupSHA256, err := fileSHA256(execPath + backupSuffix)
+	if err != nil {
+		return pendingUpdateMarker{}, true, fmt.Errorf("hash legacy backup: %w", err)
+	}
+	transactionID, err := newUpdateTransactionID()
+	if err != nil {
+		return pendingUpdateMarker{}, true, err
+	}
+	marker := pendingUpdateMarker{
+		Version:         updateMarkerVersion,
+		TransactionID:   transactionID,
+		Phase:           updatePhaseApplied,
+		Attempts:        attempts,
+		CandidateSHA256: candidateSHA256,
+		BackupSHA256:    backupSHA256,
+	}
+	if err := writePendingUpdateMarker(execPath, marker); err != nil {
+		return pendingUpdateMarker{}, true, fmt.Errorf("migrate legacy pending marker: %w", err)
+	}
+	return marker, true, nil
+}
+
+func parseLegacyBootAttempts(raw []byte) (int, bool) {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" {
+		return 0, false
+	}
+	attempts := 0
+	for _, r := range trimmed {
+		if r < '0' || r > '9' {
+			return 0, false
+		}
+		attempts = attempts*10 + int(r-'0')
+		if attempts >= rollbackAfterAttempts {
+			return 0, false
+		}
+	}
+	return attempts, true
+}
+
 func recoverPendingUpdateLocked(execPath string, writeAttempts func(string, int) error) (bool, error) {
 	marker, err := readPendingUpdateMarker(execPath)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
 	if err != nil {
-		return false, err
+		decodeErr := err
+		migratedMarker, migrated, migrationErr := migrateLegacyPendingUpdateMarker(execPath)
+		if migrationErr != nil {
+			return false, migrationErr
+		}
+		if !migrated {
+			return false, decodeErr
+		}
+		marker = migratedMarker
 	}
 	backupSHA256, err := fileSHA256(execPath + backupSuffix)
 	if err != nil {

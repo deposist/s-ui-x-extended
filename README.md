@@ -30,7 +30,7 @@
 
 ## Support S-UI-X Extended
 
-S-UI-X Extended is an open-source project. Donations help pay for development, security work, testing, and release preparation.
+S-UI-X Extended is open source. Donations pay for development, security work, testing, and release preparation.
 
 - WEB: [https://web.tribute.tg/d/LRJ](https://web.tribute.tg/d/LRJ)
 - Telegram: [https://t.me/tribute/app?startapp=dLRJ](https://t.me/tribute/app?startapp=dLRJ)
@@ -66,7 +66,7 @@ Release history and upgrade notes:
 - Latest stable notes: [`docs/releases/v1.0.7.md`](docs/releases/v1.0.7.md)
 - Upstream parity reference: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
-## How this differs from `alireza0/s-ui`
+## How this fork differs from `alireza0/s-ui`
 
 <details>
   <summary>Show details</summary>
@@ -90,7 +90,7 @@ This fork is built to stay compatible with existing 1.x installs. You can replac
 
 </details>
 
-## Supported Protocols
+## Supported protocols
 
 <details>
   <summary>Show supported protocols</summary>
@@ -192,7 +192,7 @@ This list follows the repository capability matrix. Some protocols, endpoints, a
 
 </details>
 
-## Supported Platforms
+## Supported platforms
 
 | Platform | Architecture | Status |
 |----------|--------------|---------|
@@ -200,7 +200,7 @@ This list follows the repository capability matrix. Some protocols, endpoints, a
 | Windows | amd64, 386, arm64 | Supported |
 | macOS | amd64, arm64 | Experimental support |
 
-## Default Installation Information
+## Default installation information
 
 - Panel port: 2095
 - Panel path: /app/
@@ -212,36 +212,74 @@ This list follows the repository capability matrix. Some protocols, endpoints, a
 
 ## Install or upgrade
 
-Use the stable build for normal installations. Use beta releases only if you want to test changes before they become stable.
+The installer handles new installations and upgrades. Existing installations keep
+their settings, users, inbounds, outbounds, clients, TLS configuration, services,
+and tokens. Database migrations run on the first start after an upgrade.
 
 | Channel | Version | Notes |
-|---|---|---|
-| Stable | `v1.0.7` | Recommended for production. Keeps the management menu available while the service is starting, improves Sudoku key controls, and makes the domain-reset action stop using panel and subscription certificates. Release notes: [`docs/releases/v1.0.7.md`](docs/releases/v1.0.7.md). |
-| Beta | [`v1.0.8-beta8`](docs/releases/v1.0.8-beta8.md) | For testing. Restores realtime updates after offline WebSocket token requests and fixes the Windows frontend test runner. |
+| --- | --- | --- |
+| Stable | [`v1.0.7`](docs/releases/v1.0.7.md) | Recommended for production. |
+| Beta | [`v1.0.8-beta11`](docs/releases/v1.0.8-beta11.md) | For testing on a non-critical server. Fixes beta version ordering and the beta8 recovery-marker restart loop. |
 
-### Linux/macOS, stable
+### Upgrade to the current stable release
+
+This command installs or upgrades the server to `v1.0.7`:
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.7/install.sh)
+curl -fLsS \
+  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.7/install.sh \
+  | sudo bash -s -- v1.0.7
 ```
 
-The command above installs the latest stable release. Pass a version tag explicitly if you need a specific beta or older build.
+### Upgrade to the current beta release
+
+This command installs or upgrades the server to `v1.0.8-beta11`. Use it from the console if an earlier beta update left the service in a restart loop:
+
+```sh
+curl -fLsS \
+  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.8-beta11/install.sh \
+  | sudo bash -s -- v1.0.8-beta11
+```
+
+The version argument matters. If you run a tagged `install.sh` without an
+argument, the installer queries GitHub for the latest stable release. It does
+not infer the release from the script URL.
+
+If you are already running as `root`, the equivalent short form is:
+
+```sh
+bash <(curl -fLsS \
+  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.8-beta11/install.sh) \
+  v1.0.8-beta11
+```
+
+After the upgrade, check the installed version and service state:
+
+```sh
+/usr/local/s-ui/sui -v
+systemctl is-active s-ui
+```
+
+The first command should report the selected version. The second should print `active`.
 
 ### Local clone
 
 ```sh
-git clone --branch v1.0.2 --depth 1 https://github.com/deposist/s-ui-x-extended.git
+git clone --branch v1.0.7 --depth 1 \
+  https://github.com/deposist/s-ui-x-extended.git
 cd s-ui-x-extended
-sudo bash install.sh v1.0.2
+sudo bash install.sh v1.0.7
 ```
 
 ### Windows
 
-- Stable: download `v1.0.2` from [its release page](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.2), extract the ZIP, and run `install-windows.bat` as Administrator.
+- Stable: download [`v1.0.7`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.7), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
+- Beta: download [`v1.0.8-beta11`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.8-beta11), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
 
-Existing installations keep their settings, users, inbounds, outbounds, clients, TLS, services, and tokens. Database migrations run automatically on first start. Upgrade and rollback notes are in the changelog files: [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), [中文](CHANGELOG-ZH.md).
+Upgrade and rollback notes are in the changelogs:
+[EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), and [中文](CHANGELOG-ZH.md).
 
-## Manual Installation
+## Manual installation
 
 <details>
   <summary>Show manual installation steps</summary>
@@ -249,7 +287,7 @@ Existing installations keep their settings, users, inbounds, outbounds, clients,
 ### Linux/macOS
 
 1. Download the latest S-UI-X Extended version for your system and architecture from GitHub: [https://github.com/deposist/s-ui-x-extended/releases/latest](https://github.com/deposist/s-ui-x-extended/releases/latest)
-2. Optional: download the latest `s-ui.sh`: [https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.2/s-ui.sh](https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.2/s-ui.sh)
+2. Optional: download `s-ui.sh` from the same release tag as the archive.
 3. Optional: copy `s-ui.sh` to `/usr/bin/` and run `chmod +x /usr/bin/s-ui`.
 4. Extract the S-UI-X Extended tar.gz archive to your chosen directory and enter the extracted folder.
 5. Copy the `*.service` files to `/etc/systemd/system/`, then run `systemctl daemon-reload`.
@@ -281,7 +319,7 @@ rm -fr /usr/local/s-ui
 rm /usr/bin/s-ui
 ```
 
-## Docker Installation
+## Docker installation
 
 <details>
    <summary>Show details</summary>
@@ -305,7 +343,7 @@ Docker Compose option:
 ```shell
 services:
   s-ui:
-    image: ghcr.io/deposist/s-ui-x:v1.0.8-beta4
+    image: ghcr.io/deposist/s-ui-x:v1.0.8-beta11
     container_name: s-ui
     hostname: "s-ui"
     network_mode: host
@@ -330,7 +368,7 @@ docker run -itd \
     -v $PWD/cert/:/root/cert/ \
     --name s-ui \
     --restart=unless-stopped \
-    ghcr.io/deposist/s-ui-x:v1.0.8-beta4
+    ghcr.io/deposist/s-ui-x:v1.0.8-beta11
 ```
 
 Build the image yourself:
@@ -342,18 +380,18 @@ docker build -t s-ui-x-extended .
 
 </details>
 
-## Manual Run for Development and Contributions
+## Manual run for development and contributions
 
 <details>
    <summary>Show details</summary>
 
-### Build and Run the Full Project
+### Build and run the full project
 
 ```shell
 ./runSUI.sh
 ```
 
-### Clone the Repository
+### Clone the repository
 
 ```shell
 git clone https://github.com/deposist/s-ui-x-extended
@@ -392,7 +430,7 @@ Run the backend from the repository root:
 - Traditional Chinese
 - Russian
 
-## Environment Variables
+## Environment variables
 
 <details>
   <summary>Show details</summary>
@@ -414,7 +452,7 @@ For systemd installs run by `install.sh`, S-UI-X Extended generates a stable `SU
 
 </details>
 
-## SSL Certificates
+## SSL certificates
 
 <details>
   <summary>Show details</summary>

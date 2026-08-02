@@ -471,6 +471,61 @@ func TestRecoverPendingUpdateInvalidMarkerFailsClosed(t *testing.T) {
 	}
 }
 
+func TestRecoverPendingUpdateMigratesLegacyNumericMarker(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	if err := os.WriteFile(execPath, []byte("CANDIDATE"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("KNOWN-GOOD"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+pendingSuffix, []byte("0"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	rolledBack, err := RecoverPendingUpdate(execPath)
+	if err != nil || rolledBack {
+		t.Fatalf("legacy marker recovery = (%t, %v), want successful candidate boot", rolledBack, err)
+	}
+	marker, err := readPendingUpdateMarker(execPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if marker.Version != updateMarkerVersion || marker.Phase != updatePhaseApplied || marker.Attempts != 1 {
+		t.Fatalf("legacy marker was not migrated before recovery: %#v", marker)
+	}
+}
+
+func TestLegacyNumericMarkerCompletesHealthyBootLifecycle(t *testing.T) {
+	dir := t.TempDir()
+	execPath := filepath.Join(dir, "sui")
+	if err := os.WriteFile(execPath, []byte("CANDIDATE"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+backupSuffix, []byte("KNOWN-GOOD"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(execPath+pendingSuffix, []byte("0"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if rolledBack, err := RecoverPendingUpdate(execPath); err != nil || rolledBack {
+		t.Fatalf("recovery = (%t, %v)", rolledBack, err)
+	}
+	if err := MarkPendingUpdateBooting(execPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := ConfirmPendingUpdate(execPath); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{execPath + pendingSuffix, execPath + backupSuffix} {
+		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("healthy legacy update left recovery artifact %q: %v", path, err)
+		}
+	}
+}
+
 func TestPreparedPendingUpdateRollsBackAfterCrashBeforeSwapCompletion(t *testing.T) {
 	dir := t.TempDir()
 	execPath := filepath.Join(dir, "sui")

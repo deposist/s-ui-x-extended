@@ -231,6 +231,22 @@ func comparePrerelease(left []string, right []string) int {
 	return 0
 }
 
+// compactPrereleaseNumber supports the repository's historical prerelease tags
+// (beta1, beta2, ..., beta10 and rc1, rc2, ...). Plain SemVer compares each of
+// these as a single alphanumeric identifier, which would incorrectly put beta10
+// before beta9 lexically.
+func compactPrereleaseNumber(value string) (prefix string, number int, ok bool) {
+	for _, prefix := range []string{"beta", "rc"} {
+		rest, found := strings.CutPrefix(value, prefix)
+		if !found || rest == "" {
+			continue
+		}
+		number, ok := parseNumericIdentifier(rest)
+		return prefix, number, ok
+	}
+	return "", 0, false
+}
+
 func comparePrereleaseIdentifier(left string, right string) int {
 	leftNum, leftIsNum := parseNumericIdentifier(left)
 	rightNum, rightIsNum := parseNumericIdentifier(right)
@@ -248,6 +264,18 @@ func comparePrereleaseIdentifier(left string, right string) int {
 	case rightIsNum:
 		return 1
 	default:
+		leftPrefix, leftCompactNum, leftCompact := compactPrereleaseNumber(left)
+		rightPrefix, rightCompactNum, rightCompact := compactPrereleaseNumber(right)
+		if leftCompact && rightCompact && leftPrefix == rightPrefix {
+			switch {
+			case leftCompactNum > rightCompactNum:
+				return 1
+			case leftCompactNum < rightCompactNum:
+				return -1
+			default:
+				return 0
+			}
+		}
 		return strings.Compare(left, right)
 	}
 }

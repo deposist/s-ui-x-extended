@@ -9,6 +9,17 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.8-beta11] - 2026-08-02 - self-update compatibility fixes
+
+- The beta channel compares compact prerelease suffixes numerically. It now selects `beta10` and `beta11` correctly instead of treating `beta9` as newer because of string ordering.
+- Startup recognizes the numeric `.update-pending` marker written by beta8. It converts that marker to the current recovery format, checks both binaries by SHA-256, and keeps the normal rollback protection.
+- Release asset reconciliation waits briefly for a newly-created draft release to appear through the GitHub API. A short visibility delay no longer fails an otherwise valid release run.
+- Invalid recovery markers still stop startup rather than risking an update with unknown state.
+- No database migration or manual configuration change is required.
+- Servers caught in the beta8 to beta9 restart loop must upgrade from the console. Run the command in the beta11 release notes; it replaces the release files while preserving panel data and configuration.
+
+Full release notes: [`docs/releases/v1.0.8-beta11.md`](docs/releases/v1.0.8-beta11.md).
+
 ## [1.0.8-beta10] - 2026-08-02 - release pipeline recovery
 
 - CI invokes release validation scripts through Bash, so their tracked non-executable file mode no longer causes `Permission denied` failures.

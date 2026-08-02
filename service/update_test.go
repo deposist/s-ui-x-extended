@@ -134,6 +134,39 @@ func TestSelectBetaReleasePicksHighestIncludingStableGraduation(t *testing.T) {
 	}
 }
 
+func TestSelectBetaReleaseOrdersNumericSuffixes(t *testing.T) {
+	releases := []ghRelease{
+		{TagName: "v1.0.8-beta10"},
+		{TagName: "v1.0.8-beta9"},
+	}
+	best := selectBetaRelease(releases)
+	if best == nil || best.TagName != "v1.0.8-beta10" {
+		t.Fatalf("beta channel should pick beta10 over beta9, got %#v", best)
+	}
+}
+
+func TestFetchBetaChannelSelectsBeta10OverBeta9(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/releases" || r.URL.Query().Get("per_page") != "20" {
+			t.Fatalf("unexpected release request: %s", r.URL.String())
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[
+			{"tag_name":"v1.0.8-beta10","prerelease":true},
+			{"tag_name":"v1.0.8-beta9","prerelease":true}
+		]`))
+	}))
+	defer server.Close()
+
+	release, _, notModified, err := fetchChannelRelease(server.Client(), server.URL, config.UpdateChannelBeta, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if notModified || release == nil || release.tag != "v1.0.8-beta10" {
+		t.Fatalf("beta lookup should resolve beta10, got release=%#v notModified=%v", release, notModified)
+	}
+}
+
 // T010: artifact URLs are derived from a fixed template (SR-004) and asset
 // availability is taken from the release's published assets.
 func TestResolveReleaseBuildsAssetURLsFromTemplate(t *testing.T) {
