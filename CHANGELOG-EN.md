@@ -9,6 +9,21 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.8] - 2026-08-02 - security, reliability, and managed rule-sets
+
+- Self-update verifies HTTPS release metadata, version, channel, platform, archive name, SHA-256, size limits, and safe extraction before replacing the binary. Durable transaction markers protect the binary and database during interrupted updates and rollback.
+- The beta version comparator now orders compact `betaN` and `rcN` suffixes numerically. Startup also migrates the numeric `.update-pending` marker written by beta8 while malformed recovery state remains fail-closed.
+- Paid subscriptions keep a durable provider-charge ledger, recover confirmed orders after pending expiry, retry unfinished Telegram and CryptoBot work, and restore purchased capacity correctly on refunds.
+- Database restore drains active panel, subscription, and cron work before replacing SQLite. Backup export checks integrity and foreign keys, while failed counter, audit, IP-monitor, and token-use writes stay queued for retry.
+- Regional routing and DNS presets materialize verified HTTPS `.srs` files locally, refresh them daily, and reject private-address redirects, DNS rebinding, oversized files, and invalid rule-sets. Route and DNS editors support nested `and` and `or` groups with bounded validation.
+- The panel improves narrow-screen layouts, empty states, disabled Save explanations, accessibility, WebSocket recovery, stale-request handling, CSRF refresh, polling, and damaged browser-storage recovery.
+- Core startup and shutdown handle partial failure and concurrent close safely. Clash log streaming, certificate renewal, WireGuard IPC removal, subscription parsing, generated links, sessions, realtime delivery, redirects, and cache headers handle their recorded edge cases.
+- The bundled core is `sing-box-extended v1.13.14-extended-2.5.4`. The release also updates affected Go, QUIC, Axios, gRPC, text-processing, and frontend build dependencies.
+- Release jobs validate tag provenance and exact artifact metadata, build Linux and Windows packages, verify checksums and inventories, scan release assets, publish SPDX SBOMs and provenance, and smoke-test Docker images by immutable platform digest.
+- Normal startup creates the provider-charge ledger. No manual configuration change is required.
+
+Full release notes: [`docs/releases/v1.0.8.md`](docs/releases/v1.0.8.md).
+
 ## [1.0.8-beta11] - 2026-08-02 - self-update compatibility fixes
 
 - The beta channel compares compact prerelease suffixes numerically. It now selects `beta10` and `beta11` correctly instead of treating `beta9` as newer because of string ordering.
