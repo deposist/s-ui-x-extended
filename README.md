@@ -219,7 +219,7 @@ and tokens. Database migrations run on the first start after an upgrade.
 | Channel | Version | Notes |
 | --- | --- | --- |
 | Stable | [`v1.0.8`](docs/releases/v1.0.8.md) | Recommended for production. Includes the full 1.0.8 beta series: safer updates and recovery, managed local rule-sets, payment and database reliability fixes, panel improvements, and `sing-box-extended v1.13.14-extended-2.5.4`. |
-| Beta | [`v1.0.9-beta1`](docs/releases/v1.0.9-beta1.md) | Fixes beta-to-stable self-update manifest validation and makes future release builds independent of public keyserver responses. |
+| Beta | [`v1.0.9-beta2`](docs/releases/v1.0.9-beta2.md) | Fixes WARP Endpoint creation so the panel accepts the peer endpoint Cloudflare actually returns. |
 
 ### Upgrade to the current stable release
 
@@ -233,12 +233,12 @@ curl -fLsS \
 
 ### Upgrade to the current beta release
 
-This command installs or upgrades the server to `v1.0.9-beta1`:
+This command installs or upgrades the server to `v1.0.9-beta2`:
 
 ```sh
 curl -fLsS \
-  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.9-beta1/install.sh \
-  | sudo bash -s -- v1.0.9-beta1
+  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.9-beta2/install.sh \
+  | sudo bash -s -- v1.0.9-beta2
 ```
 
 The version argument matters. If you run a tagged `install.sh` without an
@@ -249,8 +249,8 @@ If you are already running as `root`, the equivalent short form is:
 
 ```sh
 bash <(curl -fLsS \
-  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.9-beta1/install.sh) \
-  v1.0.9-beta1
+  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.9-beta2/install.sh) \
+  v1.0.9-beta2
 ```
 
 After the upgrade, check the installed version and service state:
@@ -274,7 +274,7 @@ sudo bash install.sh v1.0.8
 ### Windows
 
 - Stable: download [`v1.0.8`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.8), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
-- Beta: download [`v1.0.9-beta1`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.9-beta1), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
+- Beta: download [`v1.0.9-beta2`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.9-beta2), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
 
 Upgrade and rollback notes are in the changelogs:
 [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), and [中文](CHANGELOG-ZH.md).

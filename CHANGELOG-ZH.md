@@ -8,6 +8,13 @@
 
 - 暂无未发布变更。
 
+## [1.0.9-beta2] - 2026-08-06 - 修复 WARP Endpoint 创建
+
+- WARP Endpoint 创建现在接受 Cloudflare 实际返回的 peer 端点。`host` 字段可以是域名，`v4`/`v6` 字段的端口可以是占位符 `0`；面板会从 `ports` 列表或常用端口 `2408` 中选取可用端口，并优先使用字面 IP 地址，避免 core 在启动时通过自身 DNS 解析 peer。
+- 无需迁移数据库或手动修改配置。
+
+完整发布说明：[`docs/releases/v1.0.9-beta2.md`](docs/releases/v1.0.9-beta2.md)。
+
 ## [1.0.9-beta1] - 2026-08-02 - 修复 beta 到稳定版的更新
 
 - 通过 beta 通道选中的稳定版本现在会按该版本的 `main` 清单进行校验。beta 安装在保留 beta 通道设置时升级到稳定版，不再出现 `update manifest is invalid`。

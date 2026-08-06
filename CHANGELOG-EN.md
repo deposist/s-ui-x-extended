@@ -9,6 +9,13 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.9-beta2] - 2026-08-06 - WARP Endpoint creation fix
+
+- WARP Endpoint creation now accepts the peer endpoint Cloudflare actually returns. The `host` field may be a domain, and the `v4`/`v6` fields may carry a placeholder port of `0`; the panel substitutes a usable port from the `ports` list or the well-known `2408` and prefers a literal address so the core does not resolve the peer through its own DNS at startup.
+- No database migration or manual configuration change is required.
+
+Full release notes: [`docs/releases/v1.0.9-beta2.md`](docs/releases/v1.0.9-beta2.md).
+
 ## [1.0.9-beta1] - 2026-08-02 - beta-to-stable update fix
 
 - A stable release selected while tracking the beta channel now validates against the release's `main` manifest. This fixes `update manifest is invalid` when a beta installation graduates to stable without changing its saved channel.

@@ -6,7 +6,7 @@
 # release/provider-to-container platform mapping and opt-in emulation explicit.
 services:
   s-ui:
-    image: ${SUI_IMAGE:-ghcr.io/deposist/s-ui-x:v1.0.9-beta1}
+    image: ${SUI_IMAGE:-ghcr.io/deposist/s-ui-x:v1.0.9-beta2}
     hostname: s-ui
     # Host networking is a Linux-only delivery choice and exposes configured
     # panel/subscription/inbound ports without granting network capabilities.
