@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/deposist/s-ui-x-extended/database/model"
@@ -265,13 +266,9 @@ func (s *WarpService) RegisterWarp(ep *model.Endpoint) error {
 	if !ok {
 		return common.NewError("missing warp peer endpoint")
 	}
-	peerEndpoint, ok := nonEmptyWarpString(peerEndpointObj, "host")
-	if !ok {
-		return common.NewError("missing warp peer endpoint host")
-	}
-	peerEpAddress, peerEpPort, err := net.SplitHostPort(peerEndpoint)
-	if err != nil || net.ParseIP(peerEpAddress) == nil {
-		return common.NewError("invalid warp peer endpoint")
+	peerEpAddress, peerPort, err := parseWarpPeerEndpoint(peerEndpointObj)
+	if err != nil {
+		return err
 	}
 	peerPublicKey, ok := nonEmptyWarpString(peer, "public_key")
 	if !ok {
@@ -279,10 +276,6 @@ func (s *WarpService) RegisterWarp(ep *model.Endpoint) error {
 	}
 	if _, err := wgtypes.ParseKey(peerPublicKey); err != nil {
 		return common.NewError("invalid warp peer public key")
-	}
-	peerPort, err := strconv.Atoi(peerEpPort)
-	if err != nil || peerPort < 1 || peerPort > 65535 {
-		return common.NewError("invalid warp peer port")
 	}
 
 	peerConfigs := []map[string]interface{}{
@@ -323,6 +316,107 @@ func (s *WarpService) RegisterWarp(ep *model.Endpoint) error {
 func nonEmptyWarpString(values map[string]interface{}, key string) (string, bool) {
 	value, ok := values[key].(string)
 	return value, ok && value != ""
+}
+
+// warpDefaultPeerPort is the port first-party WARP clients use. It is the
+// fallback for the `v4` / `v6` endpoint forms, which Cloudflare returns with
+// a `:0` placeholder port rather than a real one.
+const warpDefaultPeerPort = 2408
+
+// parseWarpPeerEndpoint extracts a peer address and port from a WARP
+// registration `peers[].endpoint` object.
+//
+// Cloudflare returns the same endpoint in several forms, and which of them
+// are populated varies between API versions:
+//
+//	"endpoint": {
+//	  "v4":    "162.159.192.1:0",
+//	  "v6":    "[2606:4700:d0::a29f:c001]:0",
+//	  "host":  "engage.cloudflareclient.com:2408",
+//	  "ports": [2408, 500, 1701, 4500]
+//	}
+//
+// Two properties of that payload matter here. `host` is a DOMAIN, not an IP,
+// so an IP-only check rejects every real response. And the `v4` / `v6` forms
+// carry port 0, which is a placeholder, so a port from `ports` (or the
+// well-known 2408) is substituted instead.
+//
+// The IP forms are preferred over `host`: a literal address keeps the core
+// from having to resolve the peer through its own DNS at start-up, which is
+// a bootstrap hazard when DNS is itself routed over the tunnel. `host` stays
+// as a fallback for versions that omit the addresses, and sing-box resolves
+// it via `ResolvePeer` when it is a domain.
+func parseWarpPeerEndpoint(endpoint map[string]interface{}) (string, int, error) {
+	fallbackPort := warpDefaultPeerPort
+	if ports, ok := endpoint["ports"].([]interface{}); ok {
+		for _, entry := range ports {
+			port, ok := entry.(float64)
+			if ok && port >= 1 && port <= 65535 {
+				fallbackPort = int(port)
+				break
+			}
+		}
+	}
+
+	var lastErr error
+	for _, key := range []string{"v4", "host", "v6"} {
+		raw, ok := nonEmptyWarpString(endpoint, key)
+		if !ok {
+			continue
+		}
+		address, portString, err := net.SplitHostPort(raw)
+		if err != nil {
+			// Some responses carry the address without a port at all.
+			address, portString = raw, ""
+		}
+		address = strings.Trim(address, "[]")
+		if address == "" || (net.ParseIP(address) == nil && !isWarpPeerHostname(address)) {
+			lastErr = common.NewErrorf("invalid warp peer endpoint %q", raw)
+			continue
+		}
+		port := fallbackPort
+		if portString != "" {
+			parsed, err := strconv.Atoi(portString)
+			if err != nil {
+				lastErr = common.NewErrorf("invalid warp peer endpoint port %q", raw)
+				continue
+			}
+			// Anything outside the valid range (in practice the `:0`
+			// placeholder) falls back to a usable port.
+			if parsed >= 1 && parsed <= 65535 {
+				port = parsed
+			}
+		}
+		return address, port, nil
+	}
+	if lastErr != nil {
+		return "", 0, lastErr
+	}
+	return "", 0, common.NewError("missing warp peer endpoint host")
+}
+
+// isWarpPeerHostname reports whether host looks like a DNS name. It is
+// deliberately lenient about TLDs - the value comes from Cloudflare, so the
+// only goal is rejecting junk that would produce a broken core config.
+func isWarpPeerHostname(host string) bool {
+	host = strings.TrimSuffix(host, ".")
+	if len(host) == 0 || len(host) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if len(label) == 0 || len(label) > 63 {
+			return false
+		}
+		if label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, r := range label {
+			if r > 127 || !(r == '-' || r >= '0' && r <= '9' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z') {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func uniqueWarpAPIVersions(preferred string) []string {
