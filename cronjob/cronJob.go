@@ -14,13 +14,19 @@ const defaultStopTimeout = 10 * time.Second
 // databaseMaintenanceJob makes cron jobs participate in the restore drain
 // barrier. It is deliberately applied at the scheduler boundary so every
 // current and future scheduled job cannot obtain a DB handle while restore is
-// swapping it.
+// swapping it. While the restore barrier is held the tick is skipped entirely:
+// blocking would occupy the cron run slot and make SkipIfStillRunning log
+// "cron: skip" at every schedule until the restore finishes. Periodic jobs
+// tolerate the missed tick and run again after the swap.
 type databaseMaintenanceJob struct {
 	cron.Job
 }
 
 func (j databaseMaintenanceJob) Run() {
-	leave := database.EnterDBOperation()
+	leave, ok := database.TryEnterDBOperation()
+	if !ok {
+		return
+	}
 	defer leave()
 	j.Job.Run()
 }

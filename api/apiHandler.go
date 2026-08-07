@@ -24,11 +24,24 @@ func IsRestoreRequestPath(path string) bool {
 	return strings.HasSuffix(path, "/importdb") || strings.HasSuffix(path, "/import-xui/rollback")
 }
 
+// IsLongLivedStreamPath reports whether the request is the realtime WebSocket
+// upgrade endpoint. The engine-wide request lease must NOT cover it: the WS
+// handler would otherwise hold the shared maintenance lease for the whole
+// socket session, and a database restore (which drains readers before swapping
+// SQLite) would wait forever, freezing the panel while cron jobs spam
+// "cron: skip" behind the drain barrier. The WS handler acquires the lease
+// itself for its brief DB-touching preamble instead.
+func IsLongLivedStreamPath(path string) bool {
+	return strings.HasSuffix(path, "/realtime/ws")
+}
+
 func databaseOperationMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// The restore endpoint must acquire the exclusive barrier itself; taking a
 		// shared request lease here would otherwise deadlock behind this request.
-		if IsRestoreRequestPath(c.Request.URL.Path) {
+		// The realtime WebSocket must not hold a session-scoped lease either: the
+		// upgrade handler takes it for its preamble only.
+		if IsRestoreRequestPath(c.Request.URL.Path) || IsLongLivedStreamPath(c.Request.URL.Path) {
 			c.Next()
 			return
 		}

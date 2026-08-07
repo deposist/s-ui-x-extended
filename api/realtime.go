@@ -140,6 +140,18 @@ func (a *ApiService) RealtimeWSWithOptions(options ...realtimeOption) gin.Handle
 }
 
 func (a *ApiService) realtimeWS(c *gin.Context, config realtimeConfig) {
+	// Take the maintenance lease only for the DB-touching preamble (session
+	// lookup, web-domain setting, legacy-protocol audit). It must not extend
+	// into the connection loop: a restore drains readers before swapping
+	// SQLite and would otherwise wait for every open dashboard socket forever,
+	// freezing the panel and spamming "cron: skip" behind the drain barrier.
+	leave := database.EnterDBOperation()
+	defer func() {
+		if leave != nil {
+			leave()
+		}
+	}()
+
 	if !a.enforceWSHandshakeRateLimit(c, "ws") {
 		return
 	}
@@ -162,6 +174,11 @@ func (a *ApiService) realtimeWS(c *gin.Context, config realtimeConfig) {
 		c.Status(http.StatusTooManyRequests)
 		return
 	}
+
+	// All DB work is done; drop the lease before the long-lived connection
+	// loop so an open socket cannot stall a restore.
+	leave()
+	leave = nil
 
 	conn, err := websocket.Accept(c.Writer, c.Request, &websocket.AcceptOptions{
 		Subprotocols: []string{wsSubprotocol},

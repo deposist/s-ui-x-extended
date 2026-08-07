@@ -93,8 +93,11 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	// Guard the whole panel ingress, including the SQLite session store that
 	// runs before the nested API groups. ImportDB itself takes the exclusive
 	// lease, so it must not hold a shared request lease while waiting to restore.
+	// The realtime WebSocket must not hold a session-scoped lease either: the
+	// upgrade handler acquires it for its DB-touching preamble only, so an open
+	// dashboard socket can never stall a restore.
 	engine.Use(func(c *gin.Context) {
-		if api.IsRestoreRequestPath(c.Request.URL.Path) {
+		if api.IsRestoreRequestPath(c.Request.URL.Path) || api.IsLongLivedStreamPath(c.Request.URL.Path) {
 			c.Next()
 			return
 		}

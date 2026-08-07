@@ -46,6 +46,18 @@ func EnterDBOperation() func() {
 	return maintenanceMu.RUnlock
 }
 
+// TryEnterDBOperation is the non-blocking variant of EnterDBOperation for
+// scheduled jobs. It reports whether the read lease was acquired; when a
+// restore holds or is waiting for the exclusive lock, the lease is refused so
+// the caller can skip its tick instead of blocking on the drain and tripping
+// cron's SkipIfStillRunning warning on every subsequent schedule.
+func TryEnterDBOperation() (func(), bool) {
+	if !maintenanceMu.TryRLock() {
+		return nil, false
+	}
+	return maintenanceMu.RUnlock, true
+}
+
 // beginRestore serializes restore attempts and drains operations that entered
 // through EnterDBOperation. It must be paired with the returned function.
 func beginRestore() (func(), error) {

@@ -49,10 +49,13 @@ func TestDatabaseMaintenanceJobDoesNotStartWhileRestoreIsQueued(t *testing.T) {
 
 	jobRan := make(chan struct{})
 	wrapped := databaseMaintenanceJob{Job: cronFuncJob(func() { close(jobRan) })}
-	go wrapped.Run()
+	// The tick must skip non-blockingly while the restore drains: it neither
+	// starts the job nor occupies the run slot (which is what used to make
+	// cron log "cron: skip" at every schedule during a restore).
+	wrapped.Run()
 	select {
 	case <-jobRan:
-		t.Fatal("cron DB job started while restore was waiting to drain")
+		t.Fatal("cron DB job ran while restore was waiting to drain")
 	case <-time.After(50 * time.Millisecond):
 	}
 
@@ -60,10 +63,11 @@ func TestDatabaseMaintenanceJobDoesNotStartWhileRestoreIsQueued(t *testing.T) {
 	if err := <-restoreDone; err != nil {
 		t.Fatal(err)
 	}
+	wrapped.Run()
 	select {
 	case <-jobRan:
 	case <-time.After(time.Second):
-		t.Fatal("cron DB job did not resume after restore")
+		t.Fatal("cron DB job did not run after restore")
 	}
 }
 
