@@ -68,4 +68,19 @@ describe('api instance form encoding', () => {
     expect([...params.keys()]).toEqual(['data'])
     expect(JSON.parse(params.get('data') as string)).toEqual({ kind: 'route', rule })
   })
+
+  // The rmux multiplex protocol value must survive the same JSON-encoded data
+  // path the panel uses for outbound configs (multiplex.protocol union).
+  it('round-trips the rmux multiplex protocol through the data field', async () => {
+    const outbound = {
+      type: 'shadowsocks',
+      tag: 'ss-rmux',
+      multiplex: { enabled: true, protocol: 'rmux', max_connections: 8 },
+    }
+    const body = await serializeBody({ data: JSON.stringify({ outbound }) })
+
+    const params = new URLSearchParams(body)
+    const decoded = JSON.parse(params.get('data') as string)
+    expect(decoded.outbound.multiplex).toEqual({ enabled: true, protocol: 'rmux', max_connections: 8 })
+  })
 })

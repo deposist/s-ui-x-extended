@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/deposist/s-ui-x-extended/core"
+	"github.com/deposist/s-ui-x-extended/database"
+	"github.com/deposist/s-ui-x-extended/database/model"
 )
 
 type fakeAWGIPC struct {
@@ -247,6 +249,50 @@ func TestAWGProvisionerRemoveVerifiesAfterCancellationDuringIpcSet(t *testing.T)
 	}
 	if ipc.getCalls != 1 {
 		t.Fatalf("IpcGet calls = %d, want verification after completed mutation", ipc.getCalls)
+	}
+}
+
+// An endpoint-scoped provisioner is constructed with the managed endpoint's
+// own tag (awg_endpoint_manager.go). The legacy global AWG settings must never
+// replace it: when the legacy scheme is disabled its awgEndpointTag is empty,
+// which previously sent every scoped reconcile to "AWG endpoint is
+// unavailable" and collapsed into "AWG reconcile failed".
+func TestAWGProvisionerEndpointTagWinsOverGlobalSettings(t *testing.T) {
+	initSettingTestDB(t)
+	runtime := NewRuntime(nil)
+	provisioner := NewAWGProvisioner(runtime, "ep-scoped")
+	var gotTag string
+	provisioner.(*awgProvisioner).withIPC = func(_ context.Context, tag string, fn func(core.WireGuardIPC) error) error {
+		gotTag = tag
+		return fn(&fakeAWGIPC{})
+	}
+	if _, err := provisioner.Snapshot(context.Background()); err != nil {
+		t.Fatalf("Snapshot() error = %v", err)
+	}
+	if gotTag != "ep-scoped" {
+		t.Fatalf("IPC endpoint tag = %q, want %q (legacy global AWG settings must not override an endpoint-scoped tag)", gotTag, "ep-scoped")
+	}
+}
+
+// The legacy global manager is built before the admin enables AWG, so an empty
+// constructed tag must still resolve against the live awgEndpointTag setting.
+func TestAWGProvisionerEmptyTagFallsBackToGlobalSettings(t *testing.T) {
+	initSettingTestDB(t)
+	if err := database.GetDB().Create(&model.Setting{Key: "awgEndpointTag", Value: "legacy-awg"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	runtime := NewRuntime(nil)
+	provisioner := NewAWGProvisioner(runtime, "")
+	var gotTag string
+	provisioner.(*awgProvisioner).withIPC = func(_ context.Context, tag string, fn func(core.WireGuardIPC) error) error {
+		gotTag = tag
+		return fn(&fakeAWGIPC{})
+	}
+	if _, err := provisioner.Snapshot(context.Background()); err != nil {
+		t.Fatalf("Snapshot() error = %v", err)
+	}
+	if gotTag != "legacy-awg" {
+		t.Fatalf("IPC endpoint tag = %q, want legacy settings tag %q", gotTag, "legacy-awg")
 	}
 }
 

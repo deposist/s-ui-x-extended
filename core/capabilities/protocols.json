@@ -168,7 +168,10 @@
       "clientDelivery": "json",
       "outJsonBuilder": "mieru",
       "hasInData": true,
-      "credentialMap": { "name": "username", "password": "password" },
+      "credentialMap": {
+        "name": "username",
+        "password": "password"
+      },
       "uiEditor": "Mieru",
       "notes": "out_json copies transport/traffic_pattern and maps listen_ports->server_ports; username/password merged per-user"
     },
@@ -178,7 +181,9 @@
       "clientDelivery": "json",
       "outJsonBuilder": "sudoku",
       "hasInData": true,
-      "credentialMap": { "key": "key" },
+      "credentialMap": {
+        "key": "key"
+      },
       "buildTag": "with_sudoku",
       "uiEditor": "Sudoku",
       "notes": "keyless (no server-side per-user objects); an optional client split key overrides only outbound.key during delivery, otherwise the inbound key is used. http_mask is built nested from flat inbound fields, merged with C-side host/multiplex"
@@ -191,10 +196,13 @@
       "outJsonBuilder": "trusttunnel",
       "hasInData": true,
       "hasTlsTemplate": true,
-      "credentialMap": { "name": "username", "password": "password" },
+      "credentialMap": {
+        "name": "username",
+        "password": "password"
+      },
       "buildTag": "with_trusttunnel",
       "uiEditor": "TrustTunnel",
-      "notes": "out_json copies network/quic/congestion_controller/bbr_profile/cwnd; NOT health_check/multiplex/username/password; username/password merged per-user"
+      "notes": "out_json copies network/quic/congestion_controller/cwnd; NOT health_check/multiplex/username/password; username/password merged per-user"
     },
     {
       "type": "ssh",
@@ -203,7 +211,10 @@
       "clientDelivery": "json",
       "outJsonBuilder": "ssh",
       "hasInData": true,
-      "credentialMap": { "name": "user", "password": "password" },
+      "credentialMap": {
+        "name": "user",
+        "password": "password"
+      },
       "uiEditor": "SshInbound",
       "notes": "out_json copies NOTHING server-side (host_key* are PRIVATE server keys); user/password merged per-user"
     },
@@ -226,6 +237,15 @@
       "uiEditor": "Direct"
     },
     {
+      "type": "call",
+      "hasUsers": false,
+      "clientDelivery": "none",
+      "skipOutJson": true,
+      "buildTag": "with_call",
+      "uiEditor": "Call",
+      "notes": "server-side WebRTC bridge (dion/telemost/vk/wbstream); inbound creates a call room, clients join via join_link. No per-user credentials or subscription outbound."
+    },
+    {
       "type": "tun",
       "hasUsers": false,
       "clientDelivery": "none",
@@ -246,32 +266,104 @@
       "skipOutJson": true,
       "uiEditor": "TProxy"
     },
-    { "type": "bond", "hasUsers": false, "clientDelivery": "none", "skipOutJson": true, "uiEditor": "BondInbound", "notes": "native core bond inbound" },
-    { "type": "core-failover", "hasUsers": false, "clientDelivery": "none", "skipOutJson": true, "uiEditor": "CoreFailoverInbound", "notes": "native core failover inbound" }
+    {
+      "type": "bond",
+      "hasUsers": false,
+      "clientDelivery": "none",
+      "skipOutJson": true,
+      "uiEditor": "BondInbound",
+      "notes": "native core bond inbound"
+    },
+    {
+      "type": "core-failover",
+      "hasUsers": false,
+      "clientDelivery": "none",
+      "skipOutJson": true,
+      "uiEditor": "CoreFailoverInbound",
+      "notes": "native core failover inbound"
+    }
   ],
   "outbounds": [
-    { "type": "direct" },
-    { "type": "block" },
-    { "type": "socks" },
-    { "type": "http" },
-    { "type": "shadowsocks" },
-    { "type": "vmess" },
-    { "type": "vless" },
-    { "type": "trojan" },
-    { "type": "naive", "buildTag": "with_naive_outbound" },
-    { "type": "tor" },
-    { "type": "ssh" },
-    { "type": "shadowtls" },
-    { "type": "anytls" },
-    { "type": "mieru" },
-    { "type": "trusttunnel", "buildTag": "with_trusttunnel" },
-    { "type": "sudoku", "buildTag": "with_sudoku" },
-    { "type": "masque", "buildTag": "with_masque" },
-    { "type": "openvpn", "buildTag": "with_openvpn" },
-    { "type": "hysteria", "buildTag": "with_quic" },
-    { "type": "hysteria2", "buildTag": "with_quic" },
-    { "type": "tuic", "buildTag": "with_quic" },
-    { "type": "core-failover", "notes": "native core failover outbound (dial-time)" }
+    {
+      "type": "direct"
+    },
+    {
+      "type": "block"
+    },
+    {
+      "type": "socks"
+    },
+    {
+      "type": "http"
+    },
+    {
+      "type": "shadowsocks"
+    },
+    {
+      "type": "vmess"
+    },
+    {
+      "type": "vless"
+    },
+    {
+      "type": "trojan"
+    },
+    {
+      "type": "naive",
+      "buildTag": "with_naive_outbound"
+    },
+    {
+      "type": "tor"
+    },
+    {
+      "type": "ssh"
+    },
+    {
+      "type": "shadowtls"
+    },
+    {
+      "type": "anytls"
+    },
+    {
+      "type": "mieru"
+    },
+    {
+      "type": "trusttunnel",
+      "buildTag": "with_trusttunnel"
+    },
+    {
+      "type": "sudoku",
+      "buildTag": "with_sudoku"
+    },
+    {
+      "type": "call",
+      "buildTag": "with_call",
+      "notes": "client-side WebRTC bridge; requires join_link (empty = create a new call on the platform)"
+    },
+    {
+      "type": "masque",
+      "buildTag": "with_masque"
+    },
+    {
+      "type": "openvpn",
+      "buildTag": "with_openvpn"
+    },
+    {
+      "type": "hysteria",
+      "buildTag": "with_quic"
+    },
+    {
+      "type": "hysteria2",
+      "buildTag": "with_quic"
+    },
+    {
+      "type": "tuic",
+      "buildTag": "with_quic"
+    },
+    {
+      "type": "core-failover",
+      "notes": "native core failover outbound (dial-time)"
+    }
   ],
   "groups": [
     {
@@ -301,22 +393,57 @@
     }
   ],
   "endpoints": [
-    { "type": "wireguard", "buildTag": "with_wireguard", "notes": "warp maps to a wireguard endpoint" },
-    { "type": "tailscale", "buildTag": "with_tailscale" },
-    { "type": "vpn", "notes": "warp/vpn client+server endpoint" }
+    {
+      "type": "wireguard",
+      "buildTag": "with_wireguard",
+      "notes": "warp maps to a wireguard endpoint"
+    },
+    {
+      "type": "tailscale",
+      "buildTag": "with_tailscale"
+    },
+    {
+      "type": "vpn",
+      "notes": "warp/vpn client+server endpoint"
+    }
   ],
   "providers": [
-    { "type": "inline" },
-    { "type": "local" },
-    { "type": "remote" }
+    {
+      "type": "inline"
+    },
+    {
+      "type": "local"
+    },
+    {
+      "type": "remote"
+    }
   ],
   "services": [
-    { "type": "resolved" },
-    { "type": "ssm-api" },
-    { "type": "derp" },
-    { "type": "ccm", "buildTag": "with_ccm" },
-    { "type": "ocm", "buildTag": "with_ocm" },
-    { "type": "oom-killer", "buildTag": "with_oomkiller" },
-    { "type": "profiler", "buildTag": "with_profiler", "notes": "dev-only" }
+    {
+      "type": "resolved"
+    },
+    {
+      "type": "ssm-api"
+    },
+    {
+      "type": "derp"
+    },
+    {
+      "type": "ccm",
+      "buildTag": "with_ccm"
+    },
+    {
+      "type": "ocm",
+      "buildTag": "with_ocm"
+    },
+    {
+      "type": "oom-killer",
+      "buildTag": "with_oomkiller"
+    },
+    {
+      "type": "profiler",
+      "buildTag": "with_profiler",
+      "notes": "dev-only"
+    }
   ]
 }

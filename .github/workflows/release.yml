@@ -36,7 +36,7 @@ env:
   BOOTLIN_S390X_SHA256: 23f536ff2bf1a9d3b93210465471996bc7c918fbb5702a277d8e1e42ffab8559
   # Full extended tags that do not need the cronet/naive toolchain. The build
   # step appends with_naive_outbound only for matrix.naive platforms.
-  RELEASE_BUILD_TAGS: "with_quic,with_grpc,with_utls,with_acme,with_gvisor,badlinkname,tfogo_checklinkname0,with_tailscale,with_dhcp,with_wireguard,with_masque,with_mtproxy,with_openvpn,with_sudoku,with_trusttunnel,with_ccm,with_ocm,with_oomkiller"
+  RELEASE_BUILD_TAGS: "with_quic,with_grpc,with_utls,with_acme,with_gvisor,badlinkname,tfogo_checklinkname0,with_tailscale,with_dhcp,with_wireguard,with_masque,with_mtproxy,with_openvpn,with_sudoku,with_trusttunnel,with_call,with_ccm,with_ocm,with_oomkiller"
 
 jobs:
   release-ref:

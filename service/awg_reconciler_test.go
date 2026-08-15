@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/netip"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/deposist/s-ui-x-extended/database"
@@ -182,6 +183,21 @@ func TestAWGReconcileEndpointUnavailableKeepsDurablePendingState(t *testing.T) {
 	}
 	if device.SyncState != "pending_add" || device.Provisioned {
 		t.Fatalf("durable pending state changed: %#v", device)
+	}
+}
+
+func TestAWGReconcileSurfacesSanitizedCauseWithSentinelIdentity(t *testing.T) {
+	manager, _ := newAWGCreateTestManager(t, &fakeAWGProvisioner{
+		snapshot: func(context.Context) (AWGPeerSnapshot, error) { return nil, errors.New("unavailable") },
+		add:      func(context.Context, AWGPeerSpec) error { return errors.New("unavailable") },
+		remove:   func(context.Context, string) error { return errors.New("unavailable") },
+	})
+	_, err := manager.Reconcile(context.Background())
+	if !errors.Is(err, ErrAWGReconcileFailed) {
+		t.Fatalf("reconcile error = %v, want ErrAWGReconcileFailed", err)
+	}
+	if !strings.Contains(err.Error(), "unavailable") {
+		t.Fatalf("reconcile error %q hides the sanitized underlying cause", err)
 	}
 }
 

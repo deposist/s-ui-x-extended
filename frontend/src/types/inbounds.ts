@@ -24,6 +24,7 @@ export const InTypes = {
   TrustTunnel: 'trusttunnel',
   SSH: 'ssh',
   MTProxy: 'mtproxy',
+  Call: 'call',
   Tun: 'tun',
   Redirect: 'redirect',
   TProxy: 'tproxy',
@@ -264,11 +265,39 @@ export interface Sudoku extends InboundBasics {
   path_root?: string
   fallback?: string
 }
+export interface CallCookie {
+  name: string
+  value?: string
+}
+
+// Call inbound embeds DialerOptions in the kernel. The panel inbound form
+// shows only the dialer fields that are absent from the shared Listen fields;
+// domain_resolver stays the Listen form (string).
+export interface Call extends InboundBasics {
+  platform?: string
+  mode?: string
+  read_buffer?: number
+  max_buffered_amount?: number
+  memory_limit?: number
+  cookies?: CallCookie[]
+  join_link?: string
+  email?: string
+  password?: string
+  inet4_bind_address?: string
+  inet6_bind_address?: string
+  bind_address_no_port?: boolean
+  protect_path?: string
+  connect_timeout?: string
+  network_strategy?: 'default' | 'fallback' | 'hybrid'
+  network_type?: string[]
+  fallback_network_type?: string[]
+  fallback_delay?: string
+}
+
 export interface TrustTunnel extends InboundBasics {
   tls: iTls
   network?: string[]
   congestion_controller?: string
-  bbr_profile?: string
   cwnd?: number
 }
 export interface SSH extends InboundBasics {
@@ -318,6 +347,7 @@ type InterfaceMap = {
   trusttunnel: TrustTunnel
   ssh: SSH
   mtproxy: MTProxy
+  call: Call
   tun: Tun
   redirect: Redirect
   tproxy: TProxy
@@ -357,6 +387,7 @@ const defaultValues: Record<InType, Inbound> = {
   trusttunnel: <TrustTunnel>{ type: InTypes.TrustTunnel, tls_id: 0, network: ['tcp', 'udp'], congestion_controller: 'bbr' },
   ssh: <SSH>{ type: InTypes.SSH },
   mtproxy: <MTProxy>{ type: InTypes.MTProxy, prefer_ip: 'prefer-ipv4' },
+  call: <Call>{ type: InTypes.Call, platform: 'dion', read_buffer: 32768 },
   tun: <Tun>{ type: InTypes.Tun, mtu: 9000, stack: 'system', udp_timeout: '5m', auto_route: false },
   redirect: <Redirect>{ type: InTypes.Redirect },
   tproxy: <TProxy>{ type: InTypes.TProxy },

@@ -12,7 +12,7 @@
           <v-col cols="12" sm="6" md="4">
             <v-select
               hide-details
-              :items="[ 'smux', 'yamux', 'h2mux']"
+              :items="[ 'smux', 'yamux', 'h2mux', 'rmux']"
               :label="$t('protocol')"
               clearable
               @click:clear="delete mux?.protocol"

@@ -308,8 +308,9 @@ func mieruOut(out *map[string]interface{}, inbound map[string]interface{}) {
 // copy health_check / multiplex / username / password (out-direction-only fields):
 // username/password are merged per-user; health_check/multiplex are client-local
 // preferences set by the operator on the outbound, not derivable from the inbound.
+// bbr_profile was removed from the trusttunnel options in sing-box 2.6.x.
 func trustTunnelOut(out *map[string]interface{}, inbound map[string]interface{}) {
-	keys := []string{"network", "quic", "congestion_controller", "bbr_profile", "cwnd"}
+	keys := []string{"network", "quic", "congestion_controller", "cwnd"}
 	for _, k := range keys {
 		delete(*out, k)
 	}

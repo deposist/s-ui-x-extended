@@ -7,7 +7,7 @@ export interface iMultiplex{
 }
 
 export interface oMultiplex extends iMultiplex{
-  protocol?: "smux" | "yamux" | "h2mux"
+  protocol?: "smux" | "yamux" | "h2mux" | "rmux"
   max_connections?: number
   min_streams?: number
   max_streams?: number

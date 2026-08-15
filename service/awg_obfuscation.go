@@ -2,6 +2,7 @@ package service
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -23,7 +24,7 @@ import (
 //	MessageTransportType   = 4
 //
 // The official Amnezia client generator (awgInstaller.cpp) picks headers from
-// [5, INT32_MAX); AWG 2.0 additionally requires the four H ranges to be
+// [5, INT32_MAX); AWG additionally requires the four H ranges to be
 // pairwise non-overlapping because the receive path disambiguates packet
 // types by matching the 32-bit header against the configured ranges.
 const (
@@ -35,6 +36,12 @@ const (
 	awgMaxJunkCount = 128  // installer flag bound (--jc)
 	awgMaxJunkSize  = 1280 // installer flag bound (--jmin/--jmax)
 	awgMaxPadding   = 1280
+
+	// AWG 3.0 header protection (amneziawg-go device/noise-types.go). The key
+	// is a 32-byte base64 value; S1-S4 paddings form the per-packet nonce, so
+	// they must be at least the 12-byte nonce size for the cipher to work.
+	awgHeaderCipherKeySize   = 32
+	awgHeaderCipherNonceSize = 12
 
 	// Base wire sizes from amneziawg-go device/noise-protocol.go. Padded
 	// handshake/cookie/transport packets must stay pairwise distinguishable
@@ -124,13 +131,27 @@ type awgAmneziaObfuscation struct {
 	H2   any `json:"h2"`
 	H3   any `json:"h3"`
 	H4   any `json:"h4"`
+
+	HeaderProtectionKey    string `json:"header_protection_key"`
+	ContentPaddingAddition any    `json:"content_padding_addition"`
+	RekeyAfterTime         any    `json:"rekey_after_time"`
+	RekeyTimeout           any    `json:"rekey_timeout"`
+	RejectAfterTime        any    `json:"reject_after_time"`
+	KeepaliveTimeout       any    `json:"keepalive_timeout"`
+	MaxHandshakeAttempts   any    `json:"max_handshake_attempts"`
 }
 
 // ValidateAmneziaOptions rejects Amnezia obfuscation parameter combinations
 // that make the tunnel silently fail to come up. It is intentionally a hard
 // block on endpoint save: with incompatible parameters the handshake never
 // completes and there is no error on either side.
-func ValidateAmneziaOptions(options json.RawMessage) error {
+//
+// endpointType distinguishes the wireguard and warp schemas: since 2.6.x
+// WARPAmnezia carries only jc/jmin/jmax/i1-i5 plus the 3.0 timing fields —
+// s1..s4, h1..h4 and header_protection_key do not exist on warp endpoints and
+// are silently ignored by the kernel, so they are skipped (not rejected, so
+// legacy warp endpoints that still carry them stay editable).
+func ValidateAmneziaOptions(endpointType string, options json.RawMessage) error {
 	if len(options) == 0 {
 		return nil
 	}
@@ -143,10 +164,10 @@ func ValidateAmneziaOptions(options json.RawMessage) error {
 	if wrapper.Amnezia == nil {
 		return nil
 	}
-	return validateAmneziaObfuscation(*wrapper.Amnezia)
+	return validateAmneziaObfuscation(endpointType, *wrapper.Amnezia)
 }
 
-func validateAmneziaObfuscation(a awgAmneziaObfuscation) error {
+func validateAmneziaObfuscation(endpointType string, a awgAmneziaObfuscation) error {
 	if a.JC < 0 || a.JC > awgMaxJunkCount {
 		return fmt.Errorf("amnezia Jc must be between 0 and %d", awgMaxJunkCount)
 	}
@@ -155,6 +176,13 @@ func validateAmneziaObfuscation(a awgAmneziaObfuscation) error {
 	}
 	if a.JMin > a.JMax {
 		return fmt.Errorf("amnezia Jmin (%d) must not exceed Jmax (%d)", a.JMin, a.JMax)
+	}
+	// s1..s4, h1..h4 and header protection exist only on wireguard endpoints;
+	// the warp schema (WARPAmnezia since 2.6.x) does not carry them and the
+	// kernel ignores them, so nothing to validate (or reject) there.
+	wireguardOnly := endpointType != "warp"
+	if !wireguardOnly {
+		return validateAmneziaTimings(a)
 	}
 	for _, s := range []struct {
 		name  string
@@ -219,6 +247,48 @@ func validateAmneziaObfuscation(a awgAmneziaObfuscation) error {
 					"amnezia %s (%s) and %s (%s) overlap; the receiver identifies packet types by header ranges, so overlapping ranges break the handshake",
 					headers[i].name, headers[i].value, headers[j].name, headers[j].value)
 			}
+		}
+	}
+	// AWG 3.0 timing fields are uint32 ranges ("N" or "N-M") accepted by the
+	// wireguard-go UAPI parser (device/uapi.go). Missing fields are legal and
+	// fall back to vanilla WireGuard timings; malformed ones would make the
+	// kernel reject the endpoint config, so they are rejected here.
+	if err := validateAmneziaTimings(a); err != nil {
+		return err
+	}
+	if a.HeaderProtectionKey != "" {
+		key, err := base64.StdEncoding.DecodeString(a.HeaderProtectionKey)
+		if err != nil || len(key) != awgHeaderCipherKeySize {
+			return fmt.Errorf("amnezia header_protection_key must be a %d-byte base64 key", awgHeaderCipherKeySize)
+		}
+		// The cipher salts each packet with its S1-S4 padding; a padding below
+		// the 12-byte nonce size cannot form a valid nonce and the tunnel
+		// silently fails (amneziawg-go docs: "Header protection requires S1-S4
+		// value to be 12 at least").
+		if a.S1 < awgHeaderCipherNonceSize || a.S2 < awgHeaderCipherNonceSize ||
+			a.S3 < awgHeaderCipherNonceSize || a.S4 < awgHeaderCipherNonceSize {
+			return fmt.Errorf("amnezia header protection requires S1-S4 to be at least %d", awgHeaderCipherNonceSize)
+		}
+	}
+	return nil
+}
+
+// validateAmneziaTimings checks the AWG 3.0 uint32 range fields shared by the
+// wireguard and warp schemas.
+func validateAmneziaTimings(a awgAmneziaObfuscation) error {
+	for _, field := range []struct {
+		name  string
+		value any
+	}{
+		{"content_padding_addition", a.ContentPaddingAddition},
+		{"rekey_after_time", a.RekeyAfterTime},
+		{"rekey_timeout", a.RekeyTimeout},
+		{"reject_after_time", a.RejectAfterTime},
+		{"keepalive_timeout", a.KeepaliveTimeout},
+		{"max_handshake_attempts", a.MaxHandshakeAttempts},
+	} {
+		if _, err := parseAWGHeaderValue(field.name, field.value); err != nil {
+			return err
 		}
 	}
 	return nil

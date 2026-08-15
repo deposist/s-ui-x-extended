@@ -107,6 +107,7 @@
               <TrustTunnel v-if="inbound.type == inTypes.TrustTunnel" direction="in" :data="inbound" :field-hints="currentFieldHints" />
               <SshInbound v-if="inbound.type == inTypes.SSH" :data="inbound" :field-hints="currentFieldHints" />
               <MTProxy v-if="inbound.type == inTypes.MTProxy" :data="inbound" :field-hints="currentFieldHints" />
+              <Call v-if="inbound.type == inTypes.Call" direction="in" :data="inbound" :field-hints="currentFieldHints" />
               <BondInbound v-if="inbound.type == inTypes.Bond" :data="inbound" :inTags="inTags" />
               <CoreFailoverInbound v-if="inbound.type == inTypes.CoreFailover" :data="inbound" :inTags="inTags" />
               <TProxy v-if="inbound.type == inTypes.TProxy" :inbound="inbound" :field-hints="currentFieldHints" />
@@ -184,6 +185,7 @@ import Sudoku from '@/components/protocols/Sudoku.vue'
 import TrustTunnel from '@/components/protocols/TrustTunnel.vue'
 import SshInbound from '@/components/protocols/SshInbound.vue'
 import MTProxy from '@/components/protocols/MTProxy.vue'
+import Call from '@/components/protocols/Call.vue'
 import BondInbound from '@/components/protocols/BondInbound.vue'
 import CoreFailoverInbound from '@/components/protocols/CoreFailoverInbound.vue'
 import InTls from '@/components/tls/InTLS.vue'
@@ -429,7 +431,7 @@ export default {
     Listen, InTls, Hysteria2, Naive, Direct, Shadowsocks,
     Users, Hysteria, ShadowTls, TProxy, Multiplex, Tuic, Tun,
     Trojan, AnyTls, Transport, AddrVue, OutJsonVue, Dial, DomainResolver,
-    Mieru, Sudoku, TrustTunnel, SshInbound, MTProxy, BondInbound, CoreFailoverInbound, VlessInbound,
+    Mieru, Sudoku, TrustTunnel, SshInbound, MTProxy, Call, BondInbound, CoreFailoverInbound, VlessInbound,
     SettingInfo
   }
 }

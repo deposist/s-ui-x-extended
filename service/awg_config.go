@@ -20,7 +20,7 @@ var (
 	ErrAWGConfigTooLargeQR  = errors.New("AWG configuration is too large for QR")
 )
 
-// RenderOwnedConfig decrypts and renders the complete current AWG 2.0 config
+// RenderOwnedConfig decrypts and renders the complete current AWG 3.0 config
 // only for a provisioned device belonging to clientID.
 func (m *AWGManager) RenderOwnedConfig(ctx context.Context, deviceID, clientID uint) ([]byte, error) {
 	if ctx == nil {
@@ -116,10 +116,13 @@ func (m *AWGManager) renderOwnedConfigInWorker(deviceID, clientID uint) ([]byte,
 	writeAWGConfigString(&config, "I3", a.I3)
 	writeAWGConfigString(&config, "I4", a.I4)
 	writeAWGConfigString(&config, "I5", a.I5)
-	writeAWGConfigString(&config, "J1", a.J1)
-	writeAWGConfigString(&config, "J2", a.J2)
-	writeAWGConfigString(&config, "J3", a.J3)
-	writeAWGConfigInt64(&config, "Itime", a.ITime)
+	writeAWGConfigString(&config, "HeaderProtectionKey", a.HeaderProtectionKey)
+	writeAWGConfigValue(&config, "ContentPaddingAddition", a.ContentPaddingAddition)
+	writeAWGConfigValue(&config, "RekeyAfterTime", a.RekeyAfterTime)
+	writeAWGConfigValue(&config, "RekeyTimeout", a.RekeyTimeout)
+	writeAWGConfigValue(&config, "RejectAfterTime", a.RejectAfterTime)
+	writeAWGConfigValue(&config, "KeepaliveTimeout", a.KeepaliveTimeout)
+	writeAWGConfigValue(&config, "MaxHandshakeAttempts", a.MaxHandshakeAttempts)
 	config.WriteString("\n[Peer]\n")
 	config.WriteString("PublicKey = " + managed.ServerPublicKey + "\n")
 	config.WriteString("PresharedKey = " + base64.StdEncoding.EncodeToString(psk) + "\n")
@@ -160,12 +163,12 @@ func awgClientKeepalive(override int) int {
 
 // RenderAWGConfigQR encodes the rendered AWG config as a PNG QR image. The
 // upper size bound is not a hand-picked constant: it is whatever the QR codec
-// can actually fit at the chosen error-correction level. AWG 2.0 configs carry
-// long junk/init-packet fields (I1-I5, J1-J3), so Low ECC is used for the
-// widest byte capacity (~2953 bytes at version 40). When the payload still
-// exceeds that, qrcode.Encode reports "content too long to encode"; that case
-// is surfaced as ErrAWGConfigTooLargeQR so callers can fall back to the .conf
-// download instead of shipping a broken image.
+// can actually fit at the chosen error-correction level. AWG 3.0 configs carry
+// long init-packet fields (I1-I5), so Low ECC is used for the widest byte
+// capacity (~2953 bytes at version 40). When the payload still exceeds that,
+// qrcode.Encode reports "content too long to encode"; that case is surfaced as
+// ErrAWGConfigTooLargeQR so callers can fall back to the .conf download
+// instead of shipping a broken image.
 func RenderAWGConfigQR(config []byte) ([]byte, error) {
 	if len(config) == 0 {
 		return nil, ErrAWGConfigUnavailable
@@ -180,12 +183,6 @@ func RenderAWGConfigQR(config []byte) ([]byte, error) {
 func writeAWGConfigInt(builder *strings.Builder, key string, value int) {
 	if value > 0 {
 		builder.WriteString(key + " = " + strconv.Itoa(value) + "\n")
-	}
-}
-
-func writeAWGConfigInt64(builder *strings.Builder, key string, value int64) {
-	if value > 0 {
-		builder.WriteString(key + " = " + strconv.FormatInt(value, 10) + "\n")
 	}
 }
 

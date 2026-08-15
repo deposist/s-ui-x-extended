@@ -118,7 +118,7 @@ func (s *EndpointService) saveEndpointUpsert(tx *gorm.DB, act string, data json.
 	// to come up (no error on either side), so saving is blocked outright.
 	// Existing endpoints are untouched until their next edit.
 	if endpoint.Type == "wireguard" || endpoint.Type == "warp" {
-		if err := ValidateAmneziaOptions(endpoint.Options); err != nil {
+		if err := ValidateAmneziaOptions(endpoint.Type, endpoint.Options); err != nil {
 			return nil, err
 		}
 	}

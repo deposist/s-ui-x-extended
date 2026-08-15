@@ -43,15 +43,6 @@
         </v-select>
       </v-col>
       <v-col cols="12" sm="6" md="4">
-        <v-select
-          clearable
-          hide-details
-          :label="$t('types.trusttunnel.bbrProfile')"
-          :items="['standard', 'conservative', 'aggressive']"
-          v-model="data.bbr_profile">
-        </v-select>
-      </v-col>
-      <v-col cols="12" sm="6" md="4">
         <v-text-field type="number" hide-details label="CWND" v-model.number="data.cwnd"></v-text-field>
       </v-col>
     </v-row>

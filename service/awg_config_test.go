@@ -27,7 +27,9 @@ func TestAWGConfigGoldenRerenderAndOwnership(t *testing.T) {
 		"address": []string{"10.77.0.1/29"}, "private_key": serverPrivate.String(), "listen_port": 51820, "mtu": 1380,
 		"amnezia": map[string]any{"jc": 3, "jmin": 10, "jmax": 20, "s1": 15, "s2": 18, "s3": 12, "s4": 8,
 			"h1": "1000-1099", "h2": 2000, "h3": 3000, "h4": 4000, "i1": "<b 0x01020304><r 8>",
-			"j1": "<b 0x11><r 4>", "j2": "<c><r 6>", "j3": "<t><r 2>", "itime": 120},
+			"header_protection_key": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=", "content_padding_addition": "0",
+			"rekey_after_time": "120-180", "rekey_timeout": 5, "reject_after_time": "90-120",
+			"keepalive_timeout": "5-10", "max_handshake_attempts": "20-30"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -49,7 +51,7 @@ func TestAWGConfigGoldenRerenderAndOwnership(t *testing.T) {
 	}
 	want := "[Interface]\n" +
 		"PrivateKey = " + base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x11}, 32)) + "\n" +
-		"Address = 10.77.0.2/32\nDNS = 1.1.1.1\nMTU = 1380\nJc = 3\nJmin = 10\nJmax = 20\nS1 = 15\nS2 = 18\nS3 = 12\nS4 = 8\nH1 = 1000-1099\nH2 = 2000\nH3 = 3000\nH4 = 4000\nI1 = <b 0x01020304><r 8>\nJ1 = <b 0x11><r 4>\nJ2 = <c><r 6>\nJ3 = <t><r 2>\nItime = 120\n\n[Peer]\n" +
+		"Address = 10.77.0.2/32\nDNS = 1.1.1.1\nMTU = 1380\nJc = 3\nJmin = 10\nJmax = 20\nS1 = 15\nS2 = 18\nS3 = 12\nS4 = 8\nH1 = 1000-1099\nH2 = 2000\nH3 = 3000\nH4 = 4000\nI1 = <b 0x01020304><r 8>\nHeaderProtectionKey = AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=\nContentPaddingAddition = 0\nRekeyAfterTime = 120-180\nRekeyTimeout = 5\nRejectAfterTime = 90-120\nKeepaliveTimeout = 5-10\nMaxHandshakeAttempts = 20-30\n\n[Peer]\n" +
 		"PublicKey = " + serverPrivate.PublicKey().String() + "\n" +
 		"PresharedKey = " + base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x33}, 32)) + "\n" +
 		"Endpoint = vpn.example.com:51820\nAllowedIPs = 0.0.0.0/0, ::/0\nPersistentKeepalive = 25\n"
@@ -91,11 +93,11 @@ func TestAWGConfigUnavailableWhilePendingAndQRExactPolicy(t *testing.T) {
 	if _, err := RenderAWGConfigQR(nil); !errors.Is(err, ErrAWGConfigUnavailable) {
 		t.Fatalf("empty config error=%v", err)
 	}
-	// A full AWG 2.0 config (long I/J junk fields) must still fit at Low ECC.
-	// qrcode.Low tops out near 2953 bytes; ~2200 exercises the realistic upper
-	// band without tripping the codec limit.
+	// A full AWG 3.0 config (long I1-I5 init-packet fields plus timings) must
+	// still fit at Low ECC. qrcode.Low tops out near 2953 bytes; ~2200
+	// exercises the realistic upper band without tripping the codec limit.
 	if _, err := RenderAWGConfigQR([]byte(strings.Repeat("x", 2200))); err != nil {
-		t.Fatalf("realistic AWG 2.0 config should render: %v", err)
+		t.Fatalf("realistic AWG 3.0 config should render: %v", err)
 	}
 	// Beyond the codec capacity, surface ErrAWGConfigTooLargeQR so callers fall
 	// back to the .conf download.

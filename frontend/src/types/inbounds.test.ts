@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { createInbound, InTypes, type Shadowsocks, type ShadowTLS, type Sudoku } from './inbounds'
+import { createInbound, InTypes, type Call, type Shadowsocks, type ShadowTLS, type Sudoku } from './inbounds'
 
 beforeEach(() => {
   vi.stubGlobal('window', { crypto: globalThis.crypto })
@@ -56,5 +56,15 @@ describe('createInbound generated secrets', () => {
 
     expect(existingSudoku.key).toBe('')
     expect(existingShadowTls.password).toBe('')
+  })
+
+  it('creates a call inbound with platform defaults', () => {
+    const call = createInbound(InTypes.Call, { id: 0, tag: 'call', listen_port: 10010 }) as Call
+
+    expect(call.type).toBe('call')
+    expect(call.platform).toBe('dion')
+    expect(call.read_buffer).toBe(32768)
+    expect(call.join_link).toBeUndefined()
+    expect(call.cookies).toBeUndefined()
   })
 })

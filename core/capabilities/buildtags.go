@@ -15,7 +15,7 @@ var compiledBuildTags = map[string]bool{}
 var knownBuildTags = []string{
 	"with_quic", "with_grpc", "with_utls", "with_acme", "with_gvisor",
 	"with_tailscale", "with_dhcp", "with_wireguard", "with_masque", "with_mtproxy",
-	"with_openvpn", "with_sudoku", "with_trusttunnel", "with_ccm", "with_ocm",
+	"with_openvpn", "with_sudoku", "with_trusttunnel", "with_call", "with_ccm", "with_ocm",
 	"with_oomkiller", "with_naive_outbound", "with_profiler",
 }
 

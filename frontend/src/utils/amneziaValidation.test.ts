@@ -115,4 +115,62 @@ describe('validateAmnezia', () => {
     const errors = validateAmnezia({ ...valid, h3: undefined, h4: '' })
     expect(errors).toEqual({})
   })
+
+  const valid30 = {
+    ...valid,
+    s4: 12,
+    header_protection_key: 'AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=',
+    content_padding_addition: '0',
+    rekey_after_time: '120-180',
+    rekey_timeout: 5,
+    reject_after_time: '90-120',
+    keepalive_timeout: '5-10',
+    max_handshake_attempts: '20-30',
+  }
+
+  it('accepts valid AWG 3.0 fields', () => {
+    expect(validateAmnezia(valid30)).toEqual({})
+  })
+
+  it('accepts missing timing fields (kernel falls back to defaults)', () => {
+    const errors = validateAmnezia({ ...valid, s4: 12, header_protection_key: 'AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=' })
+    expect(errors).toEqual({})
+  })
+
+  it('flags malformed timing ranges', () => {
+    expect(validateAmnezia({ ...valid, rekey_after_time: '2000-1000' }).rekey_after_time).toBe('timingFormat')
+    expect(validateAmnezia({ ...valid, rekey_timeout: 'abc' }).rekey_timeout).toBe('timingFormat')
+    expect(validateAmnezia({ ...valid, content_padding_addition: '1-2-3' }).content_padding_addition).toBe('timingFormat')
+    expect(validateAmnezia({ ...valid, keepalive_timeout: 1.5 }).keepalive_timeout).toBe('timingFormat')
+    expect(validateAmnezia({ ...valid, max_handshake_attempts: true }).max_handshake_attempts).toBe('timingFormat')
+    expect(validateAmnezia({ ...valid, reject_after_time: '4294967296' }).reject_after_time).toBe('timingFormat')
+  })
+
+  it('flags a malformed header protection key', () => {
+    expect(validateAmnezia({ ...valid, s4: 12, header_protection_key: '!!!' }).header_protection_key).toBe('keyFormat')
+    expect(validateAmnezia({ ...valid, s4: 12, header_protection_key: 'c2hvcnQ=' }).header_protection_key).toBe('keyFormat')
+  })
+
+  it('flags header protection with small S paddings', () => {
+    const errors = validateAmnezia({ ...valid, header_protection_key: 'AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=' })
+    expect(errors.header_protection_key).toBe('keyPadding')
+  })
+
+  it('skips wireguard-only fields for warp endpoints', () => {
+    const warp = {
+      jc: 4, jmin: 40, jmax: 90,
+      // Legacy 2.5.x warp leftovers: reserved headers, tiny paddings and a
+      // short key are all kernel-ignored on warp, so they must not error.
+      s1: 1, s2: 2, s3: 3, s4: 4,
+      h1: '1-100', h2: '2-200', h3: '3-300', h4: '4-400',
+      header_protection_key: 'c2hvcnQ=',
+    }
+    expect(validateAmnezia(warp, { warp: true })).toEqual({})
+  })
+
+  it('still validates junk and timings for warp endpoints', () => {
+    const errors = validateAmnezia({ jc: 129, jmin: 40, jmax: 90, rekey_after_time: '2000-1000' }, { warp: true })
+    expect(errors.jc).toBe('jcRange')
+    expect(errors.rekey_after_time).toBe('timingFormat')
+  })
 })

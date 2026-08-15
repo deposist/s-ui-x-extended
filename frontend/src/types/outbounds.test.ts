@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { OutTypes } from './outbounds'
+import { OutTypes, createOutbound, type Call } from './outbounds'
 import { outboundGroupCapabilities } from './capabilities'
 
 describe('outbound group types', () => {
@@ -25,5 +25,15 @@ describe('outbound group types', () => {
     expect(failover).toBeDefined()
     expect(failover!.assembledAs).toBe('selector')
     expect(failover!.panelManaged).toBe(true)
+  })
+
+  it('creates a call outbound with join_link required by the core', () => {
+    const call = createOutbound(OutTypes.Call, { id: 0, tag: 'call' }) as Call
+
+    expect(call.type).toBe('call')
+    expect(call.platform).toBe('dion')
+    expect(call.join_link).toBe('')
+    expect(call.read_buffer).toBe(32768)
+    expect(call.cookies).toBeUndefined()
   })
 })

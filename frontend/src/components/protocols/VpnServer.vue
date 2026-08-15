@@ -23,6 +23,26 @@
           </template>
         </v-text-field>
       </v-col>
+      <v-col cols="12" sm="6" md="4">
+        <v-text-field
+          v-model="data.default_gateway"
+          :label="$t('types.vpn.defaultGateway')"
+          :placeholder="'10.0.0.1'"
+          hide-details>
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="default_gateway" />
+          </template>
+        </v-text-field>
+      </v-col>
+      <v-col cols="12" sm="6" md="4">
+        <v-text-field
+          v-model="data.pool_size"
+          :label="$t('types.vpn.poolSize')"
+          hide-details
+          type="number"
+          min="0">
+        </v-text-field>
+      </v-col>
     </v-row>
 
     <v-card :subtitle="$t('types.vpn.users')" class="mt-2">

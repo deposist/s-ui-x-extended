@@ -113,6 +113,35 @@ func TestValidateAmneziaOptionsTable(t *testing.T) {
 		{"s above limit", func(m map[string]any) { m["s4"] = 1281 }, "S4"},
 		{"bad header text", func(m map[string]any) { m["h2"] = "12ab" }, "H2"},
 		{"reversed header range", func(m map[string]any) { m["h3"] = "500-100" }, "H3"},
+		{"awg 3.0 fields valid", func(m map[string]any) {
+			m["s4"] = 12
+			m["header_protection_key"] = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+			m["content_padding_addition"] = "0"
+			m["rekey_after_time"] = "120-180"
+			m["rekey_timeout"] = 5
+			m["reject_after_time"] = "90-120"
+			m["keepalive_timeout"] = "5-10"
+			m["max_handshake_attempts"] = "20-30"
+		}, ""},
+		{"timings absent ok", func(m map[string]any) {
+			delete(m, "rekey_after_time")
+			delete(m, "max_handshake_attempts")
+		}, ""},
+		{"rekey range reversed", func(m map[string]any) { m["rekey_after_time"] = "2000-1000" }, "rekey_after_time"},
+		{"rekey timeout malformed", func(m map[string]any) { m["rekey_timeout"] = "abc" }, "rekey_timeout"},
+		{"reject over uint32", func(m map[string]any) { m["reject_after_time"] = "4294967296" }, "reject_after_time"},
+		{"content padding three parts", func(m map[string]any) { m["content_padding_addition"] = "1-2-3" }, "content_padding_addition"},
+		{"keepalive fractional", func(m map[string]any) { m["keepalive_timeout"] = 1.5 }, "keepalive_timeout"},
+		{"max handshake bool", func(m map[string]any) { m["max_handshake_attempts"] = true }, "max_handshake_attempts"},
+		{"header key not base64", func(m map[string]any) { m["header_protection_key"] = "!!!" }, "header_protection_key"},
+		{"header key wrong size", func(m map[string]any) { m["header_protection_key"] = "c2hvcnQ=" }, "header_protection_key"},
+		{"header key with small s", func(m map[string]any) {
+			m["header_protection_key"] = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+		}, "S1-S4"},
+		{"header key with s >= 12 ok", func(m map[string]any) {
+			m["s4"] = 12
+			m["header_protection_key"] = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+		}, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -121,7 +150,7 @@ func TestValidateAmneziaOptionsTable(t *testing.T) {
 				amnezia[k] = v
 			}
 			tc.mutate(amnezia)
-			err := ValidateAmneziaOptions(amneziaOptions(t, amnezia))
+			err := ValidateAmneziaOptions("wireguard", amneziaOptions(t, amnezia))
 			if tc.errChunk == "" {
 				if err != nil {
 					t.Fatalf("expected valid, got: %v", err)
@@ -145,14 +174,75 @@ func TestValidateAmneziaOptionsWithoutAmneziaSection(t *testing.T) {
 		json.RawMessage(`{"address":["10.0.0.1/24"],"peers":[]}`),
 		json.RawMessage(`{"amnezia":null}`),
 	} {
-		if err := ValidateAmneziaOptions(options); err != nil {
+		if err := ValidateAmneziaOptions("wireguard", options); err != nil {
 			t.Fatalf("options %s: unexpected error %v", string(options), err)
 		}
 	}
 }
 
+// WARPAmnezia (since 2.6.x) carries only jc/jmin/jmax/i1-i5 and the 3.0
+// timing fields. Legacy warp endpoints may still contain s1..s4/h1..h4 or a
+// header_protection_key from the 2.5.x shared schema; the kernel ignores them,
+// so the validator must neither reject them nor require the wireguard-only
+// invariants (packet sizes, header ranges, S1-S4 >= 12).
+func TestValidateAmneziaOptionsWarp(t *testing.T) {
+	warp := func(m map[string]any) json.RawMessage {
+		return amneziaOptions(t, m)
+	}
+	cases := []struct {
+		name     string
+		amnezia  map[string]any
+		errChunk string
+	}{
+		{"valid warp profile", map[string]any{
+			"jc": 4, "jmin": 40, "jmax": 90,
+			"i1": "<b 0x01020304><r 8>",
+		}, ""},
+		{"warp with timing ranges", map[string]any{
+			"jc": 4, "jmin": 40, "jmax": 90,
+			"content_padding_addition": "0",
+			"rekey_after_time":         "120-180",
+			"rekey_timeout":            5,
+			"reject_after_time":        "90-120",
+			"keepalive_timeout":        "5-10",
+			"max_handshake_attempts":   "20-30",
+		}, ""},
+		// Legacy 2.5.x warp schema leftovers: ignored by the kernel, accepted.
+		{"warp with legacy s/h fields", map[string]any{
+			"jc": 4, "jmin": 40, "jmax": 90,
+			"s1": 1, "s2": 2, "s3": 3, "s4": 4,
+			"h1": "1-100", "h2": "2-200", "h3": "3-300", "h4": "4-400",
+			"header_protection_key": "c2hvcnQ=",
+		}, ""},
+		{"warp junk bounds still enforced", map[string]any{
+			"jc": 129, "jmin": 40, "jmax": 90,
+		}, "Jc"},
+		{"warp timing still validated", map[string]any{
+			"jc": 4, "jmin": 40, "jmax": 90,
+			"rekey_after_time": "2000-1000",
+		}, "rekey_after_time"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateAmneziaOptions("warp", warp(tc.amnezia))
+			if tc.errChunk == "" {
+				if err != nil {
+					t.Fatalf("expected valid, got: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tc.errChunk)
+			}
+			if !strings.Contains(err.Error(), tc.errChunk) {
+				t.Fatalf("error %q does not contain %q", err.Error(), tc.errChunk)
+			}
+		})
+	}
+}
+
 func TestValidateAmneziaOptionsMalformedJSON(t *testing.T) {
-	if err := ValidateAmneziaOptions(json.RawMessage(`{"amnezia":{"jc":"not-a-number"}}`)); err == nil {
+	if err := ValidateAmneziaOptions("wireguard", json.RawMessage(`{"amnezia":{"jc":"not-a-number"}}`)); err == nil {
 		t.Fatal("expected error for malformed amnezia options")
 	}
 }
@@ -212,7 +302,7 @@ func TestGenerateAmneziaParamsPassValidator(t *testing.T) {
 			"s1": 15, "s2": 20, "s3": 12, "s4": 8,
 			"h1": params.H1, "h2": params.H2, "h3": params.H3, "h4": params.H4,
 		}
-		if err := ValidateAmneziaOptions(amneziaOptions(t, amnezia)); err != nil {
+		if err := ValidateAmneziaOptions("wireguard", amneziaOptions(t, amnezia)); err != nil {
 			t.Fatalf("iteration %d: generated params rejected by validator: %v", i, err)
 		}
 	}
@@ -233,7 +323,7 @@ func TestAmneziaPresetValuesPassValidator(t *testing.T) {
 				"s1": 15, "s2": 20, "s3": 12, "s4": 8,
 				"h1": "1000-1099", "h2": 2000, "h3": "3000-3099", "h4": "4000-4099",
 			}
-			if err := ValidateAmneziaOptions(amneziaOptions(t, amnezia)); err != nil {
+			if err := ValidateAmneziaOptions("wireguard", amneziaOptions(t, amnezia)); err != nil {
 				t.Fatalf("preset %s rejected by server validator: %v", name, err)
 			}
 		})

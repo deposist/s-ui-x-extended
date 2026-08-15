@@ -44,10 +44,13 @@ export interface WireGuardAmnezia {
   i3?: string
   i4?: string
   i5?: string
-  j1?: string
-  j2?: string
-  j3?: string
-  itime?: number
+  header_protection_key?: string
+  content_padding_addition?: number | string
+  rekey_after_time?: number | string
+  rekey_timeout?: number | string
+  reject_after_time?: number | string
+  keepalive_timeout?: number | string
+  max_handshake_attempts?: number | string
 }
 
 export interface WireGuard extends EndpointBasics, Dial {
@@ -102,12 +105,18 @@ export interface VpnServer extends EndpointBasics {
   users: VpnUser[]
   inbounds: any[]
   connect_timeout?: string
+  default_gateway?: string
+  pool_size?: number
 }
 
 export interface VpnClient extends EndpointBasics {
   address: string
   key: string
   outbound: any
+  default_gateway?: string
+  reconnect_delay?: string
+  reject_delay?: string
+  pool_size?: number
 }
 
 // Create interfaces dynamically based on EpTypes keys

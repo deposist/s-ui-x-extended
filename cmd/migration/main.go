@@ -75,6 +75,14 @@ func MigrateDbWithOptions(options Options) error {
 		if err = migrateutil.MigrateLegacyInboundRuleActionFields(tx); err != nil {
 			return fmt.Errorf("migration of legacy inbound fields: %w", err)
 		}
+		// Data migrations that must also reach already-migrated databases run
+		// here as well as in the version chain below (same pattern as
+		// MigrateLegacyInboundRuleActionFields). to1_8 rewrites AWG 2.0
+		// endpoint options to the 3.0 schema; it is idempotent and a no-op
+		// once every row is migrated.
+		if err = to1_8(tx); err != nil {
+			return fmt.Errorf("migration of AWG 3.0 endpoint options: %w", err)
+		}
 		if err = tx.Commit().Error; err != nil {
 			return fmt.Errorf("commit migration: %w", err)
 		}
@@ -154,6 +162,21 @@ func MigrateDbWithOptions(options Options) error {
 			return fmt.Errorf("migration to 1.7: %w", err)
 		}
 		dbVersion = "1.7"
+	}
+
+	// Before 1.8
+	if strings.HasPrefix(dbVersion, "1.7") {
+		if err = to1_8(tx); err != nil {
+			return fmt.Errorf("migration to 1.8: %w", err)
+		}
+		dbVersion = "1.8"
+	}
+
+	// Extended-line databases (settings version 1.0.x) never match the
+	// upstream prefix chain above; run the idempotent AWG options rewrite for
+	// them too, exactly like the up-to-date branch does.
+	if err = to1_8(tx); err != nil {
+		return fmt.Errorf("migration of AWG 3.0 endpoint options: %w", err)
 	}
 
 	if err = migrateutil.MigrateLegacyInboundRuleActionFields(tx); err != nil {

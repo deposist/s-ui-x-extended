@@ -144,18 +144,35 @@ func TestAWG2ServerEndpoint(t *testing.T) {
 
 func awgCoreConfig(t *testing.T, address, privateKey string, listenPort uint16, peers []map[string]any) []byte {
 	t.Helper()
+	return awgCoreConfigWith(t, address, privateKey, listenPort, peers, false)
+}
+
+// awgCoreConfigWith renders the AWG endpoint config; awg30 adds the AWG 3.0
+// timing/header-protection fields so the integration test proves the new
+// wireguard-go UAPI keys are accepted end to end.
+func awgCoreConfigWith(t *testing.T, address, privateKey string, listenPort uint16, peers []map[string]any, awg30 bool) []byte {
+	t.Helper()
+	amnezia := map[string]any{
+		"jc": 3, "jmin": 10, "jmax": 20,
+		"s1": 15, "s2": 18, "s3": 12, "s4": 8,
+		"h1": "1000-1099", "h2": "2000-2099", "h3": "3000-3099", "h4": "4000-4099",
+		"i1": "<b 0x01020304><r 8>",
+	}
+	if awg30 {
+		amnezia["content_padding_addition"] = "0"
+		amnezia["rekey_after_time"] = "120-180"
+		amnezia["rekey_timeout"] = "1-5"
+		amnezia["reject_after_time"] = "90-120"
+		amnezia["keepalive_timeout"] = "5-10"
+		amnezia["max_handshake_attempts"] = "20-30"
+	}
 	endpoint := map[string]any{
 		"type":        "wireguard",
 		"tag":         awgEndpointTag,
 		"address":     []string{address},
 		"private_key": privateKey,
 		"peers":       peers,
-		"amnezia": map[string]any{
-			"jc": 3, "jmin": 10, "jmax": 20,
-			"s1": 15, "s2": 18, "s3": 12, "s4": 8,
-			"h1": "1000-1099", "h2": "2000-2099", "h3": "3000-3099", "h4": "4000-4099",
-			"i1": "<b 0x01020304><r 8>",
-		},
+		"amnezia":     amnezia,
 	}
 	if listenPort != 0 {
 		endpoint["listen_port"] = listenPort
@@ -171,6 +188,76 @@ func awgCoreConfig(t *testing.T, address, privateKey string, listenPort uint16, 
 		t.Fatal(err)
 	}
 	return encoded
+}
+
+// TestAWG30ServerFieldsAccepted proves the AWG 3.0 timing fields are accepted
+// by wireguard-go v0.0.4 via the sing-box UAPI setup path, and that a
+// 2.0-style client peer (no new fields) still completes a handshake against a
+// 3.0-configured server.
+func TestAWG30ServerFieldsAccepted(t *testing.T) {
+	serverPrivateKey, err := wgtypes.GeneratePrivateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientPrivateKey, err := wgtypes.GeneratePrivateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	presharedKey, err := wgtypes.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	serverPort := freeUDPPort(t)
+	server := startAWGCore(t, awgCoreConfigWith(t, "10.77.0.1/24", serverPrivateKey.String(), serverPort, nil, true))
+
+	addPayload, err := BuildWireGuardAddPeerUAPI(
+		clientPrivateKey.PublicKey().String(),
+		presharedKey.String(),
+		netip.MustParsePrefix("10.77.0.2/32"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := server.WithWireGuardIPC(awgEndpointTag, func(ipc WireGuardIPC) error {
+		return ipc.IpcSet(addPayload)
+	}); err != nil {
+		t.Fatalf("add dynamic peer: %v", err)
+	}
+
+	clientPeer := map[string]any{
+		"address":                       "127.0.0.1",
+		"port":                          serverPort,
+		"public_key":                    serverPrivateKey.PublicKey().String(),
+		"pre_shared_key":                presharedKey.String(),
+		"allowed_ips":                   []string{"0.0.0.0/0"},
+		"persistent_keepalive_interval": 1,
+	}
+	client := startAWGCore(t, awgCoreConfigWith(t, "10.77.0.2/32", clientPrivateKey.String(), 0, []map[string]any{clientPeer}, false))
+
+	tcpAddress := startTCPEchoServer(t)
+	serverAddress := netip.MustParseAddr("10.77.0.1")
+	assertAWGTCP(t, client, netip.AddrPortFrom(serverAddress, tcpAddress.Port()))
+
+	var peers []WireGuardPeerSnapshot
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		err = server.WithWireGuardIPC(awgEndpointTag, func(ipc WireGuardIPC) error {
+			snapshot, getErr := ipc.IpcGet()
+			if getErr != nil {
+				return getErr
+			}
+			peers, getErr = ParseWireGuardPeerSnapshot(snapshot)
+			return getErr
+		})
+		if err == nil && len(peers) == 1 && peers[0].LastHandshake > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("AWG 3.0 handshake not observed: peer_count=%d err=%v", len(peers), err)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 func startAWGCore(t *testing.T, config []byte) *Core {

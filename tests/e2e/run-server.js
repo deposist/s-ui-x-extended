@@ -81,8 +81,21 @@ process.on('SIGTERM', () => {
 process.on('exit', stopAll)
 
 const main = async () => {
+  // The e2e panel must expose the same protocol surface as the release build;
+  // without these tags api/capabilities marks call (and other tagged types)
+  // unavailable and the drawer disables the picker entry. with_naive_outbound
+  // is excluded: no e2e spec covers naive, and its cronet-go libcronet.a is a
+  // musl build that neither stock ubuntu gcc nor Windows can link. Set
+  // GOFLAGS in the environment to override the set.
+  const releaseTags = [
+    'with_quic', 'with_grpc', 'with_utls', 'with_acme', 'with_gvisor',
+    'with_tailscale', 'with_dhcp', 'with_wireguard', 'with_masque',
+    'with_mtproxy', 'with_openvpn', 'with_sudoku', 'with_trusttunnel',
+    'with_call', 'with_ccm', 'with_ocm', 'with_oomkiller',
+  ]
   const backendEnv = {
     ...process.env,
+    GOFLAGS: process.env.GOFLAGS ?? `-tags=${releaseTags.join(',')}`,
     SUI_DB_FOLDER: dbDir,
     SUI_SECRET: 'phase6-e2e-secret',
     SUI_LOG_LEVEL: 'warn',

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/deposist/s-ui-x-extended/database"
@@ -170,11 +171,13 @@ func (s *AWGEndpointManager) ReconcileAll(ctx context.Context) error {
 		}
 		manager, managerErr := s.manager(ctx, endpointID)
 		if managerErr != nil {
-			result = errors.Join(result, managerErr)
+			result = errors.Join(result, fmt.Errorf("endpoint %d: %w", endpointID, managerErr))
 			continue
 		}
 		_, managerErr = manager.Reconcile(ctx)
-		result = errors.Join(result, managerErr)
+		if managerErr != nil {
+			result = errors.Join(result, fmt.Errorf("endpoint %d: %w", endpointID, managerErr))
+		}
 	}
 	return result
 }

@@ -93,6 +93,7 @@ func InboundRegistry() *inbound.Registry {
 	registerStubForRemovedInbounds(registry)
 	registerMTProxyInbound(registry)
 	registerSudokuInbound(registry)
+	registerCallInbound(registry)
 
 	return registry
 }
@@ -137,6 +138,7 @@ func OutboundRegistry() *outbound.Registry {
 	registerQUICOutbounds(registry)
 	registerStubForRemovedOutbounds(registry)
 	registerSudokuOutbound(registry)
+	registerCallOutbound(registry)
 
 	return registry
 }

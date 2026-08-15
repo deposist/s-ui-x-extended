@@ -70,7 +70,7 @@
             :error-messages="errorText('s4')"></v-text-field>
         </v-col>
       </v-row>
-      <v-row>
+      <v-row v-if="full">
         <v-col cols="6" sm="3">
           <v-text-field :label="$t('types.amnezia.h1')" v-model="h1"
             :error-messages="errorText('h1')"></v-text-field>
@@ -115,20 +115,41 @@
           </v-col>
         </v-row>
         <v-row>
-          <v-col cols="12" md="4">
-            <v-text-field hide-details :label="$t('types.amnezia.j1')" v-model="amnezia.j1"></v-text-field>
+          <v-col cols="12" md="6">
+            <v-text-field hide-details :label="$t('types.amnezia.headerProtectionKey')" v-model="headerProtectionKey"
+              :error-messages="errorText('header_protection_key')"></v-text-field>
           </v-col>
-          <v-col cols="12" md="4">
-            <v-text-field hide-details :label="$t('types.amnezia.j2')" v-model="amnezia.j2"></v-text-field>
-          </v-col>
-          <v-col cols="12" md="4">
-            <v-text-field hide-details :label="$t('types.amnezia.j3')" v-model="amnezia.j3"></v-text-field>
-          </v-col>
-          <v-col cols="6" sm="3">
-            <v-text-field type="number" min="0" hide-details :label="$t('types.amnezia.itime')" v-model.number="amnezia.itime"></v-text-field>
+          <v-col cols="12" md="6">
+            <v-text-field hide-details :label="$t('types.amnezia.contentPaddingAddition')" v-model="contentPaddingAddition"
+              :error-messages="errorText('content_padding_addition')"></v-text-field>
           </v-col>
         </v-row>
       </template>
+      <v-row>
+        <v-col cols="12" sm="6" md="4">
+          <v-text-field hide-details :label="$t('types.amnezia.rekeyAfterTime')" v-model="rekeyAfterTime"
+            :error-messages="errorText('rekey_after_time')"></v-text-field>
+        </v-col>
+        <v-col cols="12" sm="6" md="4">
+          <v-text-field hide-details :label="$t('types.amnezia.rekeyTimeout')" v-model="rekeyTimeout"
+            :error-messages="errorText('rekey_timeout')"></v-text-field>
+        </v-col>
+        <v-col cols="12" sm="6" md="4">
+          <v-text-field hide-details :label="$t('types.amnezia.rejectAfterTime')" v-model="rejectAfterTime"
+            :error-messages="errorText('reject_after_time')"></v-text-field>
+        </v-col>
+        <v-col cols="12" sm="6" md="4">
+          <v-text-field hide-details :label="$t('types.amnezia.keepaliveTimeout')" v-model="keepaliveTimeout"
+            :error-messages="errorText('keepalive_timeout')"></v-text-field>
+        </v-col>
+        <v-col cols="12" sm="6" md="4">
+          <v-text-field hide-details :label="$t('types.amnezia.maxHandshakeAttempts')" v-model="maxHandshakeAttempts"
+            :error-messages="errorText('max_handshake_attempts')"></v-text-field>
+        </v-col>
+      </v-row>
+      <div class="text-caption text-medium-emphasis mt-1">
+        {{ $t('types.amnezia.hints.timings') }}
+      </div>
     </v-card-text>
   </v-card>
 </template>
@@ -136,14 +157,15 @@
 <script lang="ts">
 import HttpUtils from '@/plugins/httputil'
 import { validateAmnezia } from '@/utils/amneziaValidation'
-import { amneziaPresetCatalog, applyAmneziaPreset, detectAmneziaPreset, type AmneziaPresetId } from '@/components/presets/amneziaPresets'
+import { amneziaPresetCatalog, applyAmneziaPreset, applyAmneziaTimingDefaults, detectAmneziaPreset, type AmneziaPresetId } from '@/components/presets/amneziaPresets'
 import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
 import { applyRecommendation, type ResolvedRecommendation } from '@/utils/recommendations'
 export default {
   components: { RecommendedValues },
   props: {
     data: { type: Object, required: true },
-    // full = WireGuard (s-params + junk packets), else WARP (jc/jmin/jmax + h1-h4)
+    // full = WireGuard (s-params + headers + header protection), else WARP
+    // (jc/jmin/jmax + 3.0 timings only — WARPAmnezia has no s/h fields)
     full: { type: Boolean, default: false },
   },
   data() {
@@ -160,9 +182,11 @@ export default {
           // Junk defaults follow the Balanced preset; headers are filled by
           // the server-side crypto/rand generator (the legacy h1:1..h4:4
           // defaults were vanilla WireGuard message types and provided no
-          // header masking at all).
+          // header masking at all). AWG 3.0 timing ranges follow the official
+          // client defaults so the profile is a full 3.0 one out of the box.
           this.data.amnezia = {}
           applyAmneziaPreset(this.data.amnezia, 'balanced')
+          applyAmneziaTimingDefaults(this.data.amnezia)
           this.selectedPreset = 'balanced'
           this.fetchRandom(false)
         } else {
@@ -208,7 +232,7 @@ export default {
       return this.data.amnezia
     },
     validationErrors(): Record<string, string> {
-      return validateAmnezia(this.data.amnezia)
+      return validateAmnezia(this.data.amnezia, { warp: !this.full })
     },
     h1: {
       get(): string { return this.amnezia.h1 != undefined ? String(this.amnezia.h1) : '' },
@@ -225,6 +249,41 @@ export default {
     h4: {
       get(): string { return this.amnezia.h4 != undefined ? String(this.amnezia.h4) : '' },
       set(v: string) { this.setRange('h4', v) },
+    },
+    headerProtectionKey: {
+      get(): string { return this.amnezia.header_protection_key != undefined ? String(this.amnezia.header_protection_key) : '' },
+      set(v: string) {
+        const trimmed = (v ?? '').trim()
+        if (trimmed.length === 0) {
+          delete this.amnezia.header_protection_key
+        } else {
+          this.amnezia.header_protection_key = trimmed
+        }
+      },
+    },
+    contentPaddingAddition: {
+      get(): string { return this.amnezia.content_padding_addition != undefined ? String(this.amnezia.content_padding_addition) : '' },
+      set(v: string) { this.setRange('content_padding_addition', v) },
+    },
+    rekeyAfterTime: {
+      get(): string { return this.amnezia.rekey_after_time != undefined ? String(this.amnezia.rekey_after_time) : '' },
+      set(v: string) { this.setRange('rekey_after_time', v) },
+    },
+    rekeyTimeout: {
+      get(): string { return this.amnezia.rekey_timeout != undefined ? String(this.amnezia.rekey_timeout) : '' },
+      set(v: string) { this.setRange('rekey_timeout', v) },
+    },
+    rejectAfterTime: {
+      get(): string { return this.amnezia.reject_after_time != undefined ? String(this.amnezia.reject_after_time) : '' },
+      set(v: string) { this.setRange('reject_after_time', v) },
+    },
+    keepaliveTimeout: {
+      get(): string { return this.amnezia.keepalive_timeout != undefined ? String(this.amnezia.keepalive_timeout) : '' },
+      set(v: string) { this.setRange('keepalive_timeout', v) },
+    },
+    maxHandshakeAttempts: {
+      get(): string { return this.amnezia.max_handshake_attempts != undefined ? String(this.amnezia.max_handshake_attempts) : '' },
+      set(v: string) { this.setRange('max_handshake_attempts', v) },
     },
   },
   watch: {
@@ -269,14 +328,15 @@ export default {
       applyRecommendation(this.amnezia, spec, { model: this.amnezia }, { force: true })
     },
     // Decision 1: Randomize always regenerates H1-H4; junk parameters only
-    // when the Balanced preset is active.
+    // when the Balanced preset is active. WARP (full=false) has no H1-H4 in
+    // its schema, so only junk is randomized there.
     async randomize() {
-      await this.fetchRandom(this.selectedPreset === 'balanced')
+      await this.fetchRandom(this.selectedPreset === 'balanced' || !this.full)
     },
     // Server-generated parameters: one source of truth, crypto/rand instead
     // of Math.random. includeJunk mirrors the Balanced-preset decision and is
     // wired up by stage 2 (presets); the manual Randomize button touches
-    // headers only.
+    // headers only (never for WARP, whose schema has no headers).
     async fetchRandom(includeJunk: boolean) {
       if (this.randomizing) return
       this.randomizing = true
@@ -284,10 +344,12 @@ export default {
         const query = includeJunk ? { preset: 'balanced' } : undefined
         const msg = await HttpUtils.get('api/awg/obfuscation/random', query)
         if (msg.success && msg.obj && this.data.amnezia) {
-          this.amnezia.h1 = msg.obj.h1
-          this.amnezia.h2 = msg.obj.h2
-          this.amnezia.h3 = msg.obj.h3
-          this.amnezia.h4 = msg.obj.h4
+          if (this.full) {
+            this.amnezia.h1 = msg.obj.h1
+            this.amnezia.h2 = msg.obj.h2
+            this.amnezia.h3 = msg.obj.h3
+            this.amnezia.h4 = msg.obj.h4
+          }
           if (includeJunk && msg.obj.jc !== undefined) {
             this.amnezia.jc = msg.obj.jc
             this.amnezia.jmin = msg.obj.jmin

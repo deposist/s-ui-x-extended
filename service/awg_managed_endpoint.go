@@ -45,15 +45,19 @@ type awgManagedEndpointOptions struct {
 		H2    any    `json:"h2"`
 		H3    any    `json:"h3"`
 		H4    any    `json:"h4"`
-		J1    string `json:"j1"`
-		J2    string `json:"j2"`
-		J3    string `json:"j3"`
-		ITime int64  `json:"itime"`
 		I1    string `json:"i1"`
 		I2    string `json:"i2"`
 		I3    string `json:"i3"`
 		I4    string `json:"i4"`
 		I5    string `json:"i5"`
+
+		HeaderProtectionKey    string `json:"header_protection_key"`
+		ContentPaddingAddition any    `json:"content_padding_addition"`
+		RekeyAfterTime         any    `json:"rekey_after_time"`
+		RekeyTimeout           any    `json:"rekey_timeout"`
+		RejectAfterTime        any    `json:"reject_after_time"`
+		KeepaliveTimeout       any    `json:"keepalive_timeout"`
+		MaxHandshakeAttempts   any    `json:"max_handshake_attempts"`
 	} `json:"amnezia"`
 }
 

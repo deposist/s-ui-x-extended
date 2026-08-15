@@ -4,6 +4,8 @@ import {
   amneziaPresetCatalog,
   amneziaPresetById,
   applyAmneziaPreset,
+  applyAmneziaTimingDefaults,
+  amneziaTimingDefaults,
   detectAmneziaPreset,
 } from './amneziaPresets'
 import { validateAmnezia } from '@/utils/amneziaValidation'
@@ -70,5 +72,33 @@ describe('amnezia presets', () => {
 
   it('throws on an unknown preset id', () => {
     expect(() => amneziaPresetById('nope' as never)).toThrow('unknown amnezia preset')
+  })
+
+  it('timing defaults cover the six AWG 3.0 range fields', () => {
+    expect(Object.keys(amneziaTimingDefaults).sort()).toEqual([
+      'content_padding_addition',
+      'keepalive_timeout',
+      'max_handshake_attempts',
+      'reject_after_time',
+      'rekey_after_time',
+      'rekey_timeout',
+    ])
+  })
+
+  it('applying timing defaults fills only missing fields', () => {
+    const amnezia: Record<string, unknown> = { rekey_after_time: '300-400' }
+    applyAmneziaTimingDefaults(amnezia)
+    expect(amnezia.rekey_after_time).toBe('300-400')
+    expect(amnezia.rekey_timeout).toBe('1-5')
+    expect(amnezia.keepalive_timeout).toBe('5-10')
+  })
+
+  it('a profile seeded with junk + timing defaults passes the validator', () => {
+    const amnezia: Record<string, unknown> = {}
+    applyAmneziaPreset(amnezia, 'balanced')
+    applyAmneziaTimingDefaults(amnezia)
+    const wireguard = { ...amnezia, s1: 15, s2: 20, s3: 12, s4: 8, h1: '1000-1099', h2: 2000, h3: '3000-3099', h4: '4000-4099' }
+    expect(validateAmnezia(wireguard)).toEqual({})
+    expect(validateAmnezia(amnezia, { warp: true })).toEqual({})
   })
 })

@@ -122,7 +122,7 @@ func TestAllowedFieldsAreExactlyUserFieldValues(t *testing.T) {
 // TestSkipOutJSONTypesMatchesLegacy locks FillOutJson's early-return set
 // (formerly the literal switch case in util/outJson.go).
 func TestSkipOutJSONTypesMatchesLegacy(t *testing.T) {
-	want := map[string]struct{}{"direct": {}, "tun": {}, "redirect": {}, "tproxy": {}, "bond": {}, "core-failover": {}}
+	want := map[string]struct{}{"direct": {}, "tun": {}, "redirect": {}, "tproxy": {}, "bond": {}, "core-failover": {}, "call": {}}
 	if got := SkipOutJSONTypes(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("SkipOutJSONTypes drifted.\n got: %v\nwant: %v", got, want)
 	}
@@ -146,7 +146,7 @@ func TestOutJSONBuildersMatchesLegacy(t *testing.T) {
 		// early-return types still appear with empty builder (never reached)
 		"direct": "", "tun": "", "redirect": "", "tproxy": "",
 		// native core inbound types with no client delivery
-		"bond": "", "core-failover": "",
+		"bond": "", "core-failover": "", "call": "",
 	}
 	if got := OutJSONBuilders(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("OutJSONBuilders drifted.\n got: %v\nwant: %v", got, want)

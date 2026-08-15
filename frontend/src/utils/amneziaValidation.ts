@@ -11,6 +11,11 @@ export const AWG_MAX_JUNK_COUNT = 128
 export const AWG_MAX_JUNK_SIZE = 1280
 export const AWG_MAX_PADDING = 1280
 
+// AWG 3.0 header protection: the key is 32 base64 bytes; S1-S4 paddings form
+// the per-packet nonce and must be at least the 12-byte nonce size.
+export const AWG_HEADER_CIPHER_KEY_SIZE = 32
+export const AWG_HEADER_CIPHER_NONCE_SIZE = 12
+
 // Base wire sizes from amneziawg-go device/noise-protocol.go; padded packets
 // must stay pairwise distinguishable by size.
 const MESSAGE_BASE_SIZES: Record<string, number> = {
@@ -60,10 +65,17 @@ export type AmneziaErrors = Record<string, string>
 
 // Validates the amnezia options object from the endpoint form. Returns a map
 // of field -> locale key (empty object = valid). Keys: jc, jmin, jmax,
-// s1..s4, h1..h4.
-export function validateAmnezia(amnezia: Record<string, unknown> | undefined | null): AmneziaErrors {
+// s1..s4, h1..h4, header_protection_key and the 3.0 timing ranges.
+// warp=true mirrors the kernel's WARPAmnezia schema (2.6.x): s1..s4, h1..h4
+// and header_protection_key do not exist there, so they are neither validated
+// nor rejected (legacy warp endpoints may still carry them).
+export function validateAmnezia(
+  amnezia: Record<string, unknown> | undefined | null,
+  options?: { warp?: boolean },
+): AmneziaErrors {
   const errors: AmneziaErrors = {}
   if (!amnezia) return errors
+  const warp = Boolean(options?.warp)
 
   const num = (key: string): number => {
     const v = amnezia[key]
@@ -81,48 +93,87 @@ export function validateAmnezia(amnezia: Record<string, unknown> | undefined | n
     errors.jmax = 'jminAboveJmax'
   }
 
-  const paddings: Record<string, number> = {}
-  for (const key of ['s1', 's2', 's3', 's4']) {
-    const value = num(key)
-    if (value < 0 || value > AWG_MAX_PADDING) {
-      errors[key] = 'paddingRange'
-    } else {
-      paddings[key] = value
+  if (!warp) {
+    const paddings: Record<string, number> = {}
+    for (const key of ['s1', 's2', 's3', 's4']) {
+      const value = num(key)
+      if (value < 0 || value > AWG_MAX_PADDING) {
+        errors[key] = 'paddingRange'
+      } else {
+        paddings[key] = value
+      }
     }
-  }
-  const keys = Object.keys(paddings)
-  for (let i = 0; i < keys.length; i++) {
-    for (let j = i + 1; j < keys.length; j++) {
-      const a = keys[i]
-      const b = keys[j]
-      if (MESSAGE_BASE_SIZES[a] + paddings[a] === MESSAGE_BASE_SIZES[b] + paddings[b]) {
-        errors[a] = 'equalPacketSizes'
-        errors[b] = 'equalPacketSizes'
+    const keys = Object.keys(paddings)
+    for (let i = 0; i < keys.length; i++) {
+      for (let j = i + 1; j < keys.length; j++) {
+        const a = keys[i]
+        const b = keys[j]
+        if (MESSAGE_BASE_SIZES[a] + paddings[a] === MESSAGE_BASE_SIZES[b] + paddings[b]) {
+          errors[a] = 'equalPacketSizes'
+          errors[b] = 'equalPacketSizes'
+        }
+      }
+    }
+
+    const headers: Record<string, AmneziaHeaderRange> = {}
+    for (const key of ['h1', 'h2', 'h3', 'h4']) {
+      const parsed = parseAmneziaHeader(amnezia[key])
+      if (parsed === undefined) {
+        errors[key] = 'headerFormat'
+      } else if (parsed !== null) {
+        if (parsed.from <= AWG_HEADER_RESERVED_MAX) {
+          errors[key] = 'headerReserved'
+        } else {
+          headers[key] = parsed
+        }
+      }
+    }
+    const headerKeys = Object.keys(headers)
+    for (let i = 0; i < headerKeys.length; i++) {
+      for (let j = i + 1; j < headerKeys.length; j++) {
+        const a = headerKeys[i]
+        const b = headerKeys[j]
+        if (headerRangesOverlap(headers[a], headers[b])) {
+          errors[a] = 'headerOverlap'
+          errors[b] = 'headerOverlap'
+        }
       }
     }
   }
 
-  const headers: Record<string, AmneziaHeaderRange> = {}
-  for (const key of ['h1', 'h2', 'h3', 'h4']) {
-    const parsed = parseAmneziaHeader(amnezia[key])
-    if (parsed === undefined) {
-      errors[key] = 'headerFormat'
-    } else if (parsed !== null) {
-      if (parsed.from <= AWG_HEADER_RESERVED_MAX) {
-        errors[key] = 'headerReserved'
-      } else {
-        headers[key] = parsed
-      }
+  // AWG 3.0 timing fields: uint32 ranges ("N" or "N-M") in both schemas.
+  for (const key of [
+    'content_padding_addition',
+    'rekey_after_time',
+    'rekey_timeout',
+    'reject_after_time',
+    'keepalive_timeout',
+    'max_handshake_attempts',
+  ]) {
+    if (parseAmneziaHeader(amnezia[key]) === undefined) {
+      errors[key] = 'timingFormat'
     }
   }
-  const headerKeys = Object.keys(headers)
-  for (let i = 0; i < headerKeys.length; i++) {
-    for (let j = i + 1; j < headerKeys.length; j++) {
-      const a = headerKeys[i]
-      const b = headerKeys[j]
-      if (headerRangesOverlap(headers[a], headers[b])) {
-        errors[a] = 'headerOverlap'
-        errors[b] = 'headerOverlap'
+
+  if (!warp) {
+    const key = amnezia['header_protection_key']
+    if (typeof key === 'string' && key.trim().length > 0) {
+      let decoded: Uint8Array | null = null
+      try {
+        const binary = atob(key.trim())
+        decoded = Uint8Array.from(binary, c => c.charCodeAt(0))
+      } catch {
+        decoded = null
+      }
+      if (!decoded || decoded.length !== AWG_HEADER_CIPHER_KEY_SIZE) {
+        errors.header_protection_key = 'keyFormat'
+      } else if (
+        num('s1') < AWG_HEADER_CIPHER_NONCE_SIZE ||
+        num('s2') < AWG_HEADER_CIPHER_NONCE_SIZE ||
+        num('s3') < AWG_HEADER_CIPHER_NONCE_SIZE ||
+        num('s4') < AWG_HEADER_CIPHER_NONCE_SIZE
+      ) {
+        errors.header_protection_key = 'keyPadding'
       }
     }
   }

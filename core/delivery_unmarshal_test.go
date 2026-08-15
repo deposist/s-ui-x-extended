@@ -45,7 +45,7 @@ func TestExtendedDeliveryOutboundsUnmarshal(t *testing.T) {
       "server": "example.com", "server_port": 443,
       "username": "bob", "password": "pw",
       "network": ["tcp", "udp"], "quic": true,
-      "congestion_controller": "bbr", "bbr_profile": "standard", "cwnd": 32
+      "congestion_controller": "bbr", "cwnd": 32
     }
   ]
 }`)

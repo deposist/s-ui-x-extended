@@ -141,10 +141,7 @@ func ValidateAWGManagedEndpoint(db *gorm.DB, settings AWGSettings) error {
 	if options.Amnezia == nil || options.Amnezia.JC <= 0 || options.Amnezia.JMin <= 0 || options.Amnezia.JMax <= 0 ||
 		options.Amnezia.S1 <= 0 || options.Amnezia.S2 <= 0 || options.Amnezia.S3 <= 0 || options.Amnezia.S4 <= 0 ||
 		options.Amnezia.H1 == nil || options.Amnezia.H2 == nil || options.Amnezia.H3 == nil || options.Amnezia.H4 == nil {
-		return fmt.Errorf("managed AWG endpoint requires an AWG 2.0 profile")
-	}
-	if options.Amnezia.J1 != "" || options.Amnezia.J2 != "" || options.Amnezia.J3 != "" || options.Amnezia.ITime != 0 {
-		return fmt.Errorf("managed AWG endpoint uses parameters unsupported by the current backend")
+		return fmt.Errorf("managed AWG endpoint requires an AWG 3.0 profile")
 	}
 	for _, peer := range options.Peers {
 		if peer.Address != "" || peer.Port != 0 {

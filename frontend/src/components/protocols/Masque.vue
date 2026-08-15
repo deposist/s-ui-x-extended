@@ -54,6 +54,12 @@
             <v-text-field hide-details :label="$t('types.masque.authToken')" v-model="profile.auth_token"></v-text-field>
           </v-col>
           <v-col cols="12" sm="6">
+            <v-text-field hide-details :label="$t('types.masque.licenseKey')" v-model="profile.license_key"></v-text-field>
+          </v-col>
+          <v-col cols="12" sm="6">
+            <v-text-field hide-details :label="$t('types.masque.privateKey')" v-model="profile.private_key"></v-text-field>
+          </v-col>
+          <v-col cols="12" sm="6">
             <v-text-field hide-details :label="$t('types.masque.detour')" v-model="profile.detour"></v-text-field>
           </v-col>
           <v-col cols="12" sm="6">

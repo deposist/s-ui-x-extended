@@ -63,6 +63,17 @@
           </template>
         </v-text-field>
       </v-col>
+      <v-col cols="12">
+        <v-text-field
+        :label="$t('types.anytls.clientMetadata')"
+        hide-details
+        :placeholder="$t('types.anytls.clientMetadataPlaceholder')"
+        v-model="data.client_metadata">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="client_metadata" />
+          </template>
+        </v-text-field>
+      </v-col>
     </v-row>
     <InboundAdvanced :data="data" :field-hints="fieldHints" />
   </v-card>

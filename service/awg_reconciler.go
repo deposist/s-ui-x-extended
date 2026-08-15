@@ -61,14 +61,14 @@ func (m *AWGManager) reconcileInWorker(ctx context.Context) (AWGReconcileResult,
 	}
 	settings, err := m.deps.LoadSettings()
 	if err != nil {
-		return result, ErrAWGReconcileFailed
+		return result, fmt.Errorf("%w: %v", ErrAWGReconcileFailed, err)
 	}
 	if !settings.Enabled {
 		return result, nil
 	}
 	db := m.deps.DB.WithContext(ctx)
 	if _, err := m.deps.LoadEndpoint(db, settings); err != nil {
-		return result, ErrAWGReconcileFailed
+		return result, fmt.Errorf("%w: %v", ErrAWGReconcileFailed, err)
 	}
 
 	var devices []model.AWGDevice
@@ -120,7 +120,7 @@ func (m *AWGManager) reconcileInWorker(ctx context.Context) (AWGReconcileResult,
 
 	snapshot, err := m.provisioner.Snapshot(ctx)
 	if err != nil {
-		return result, ErrAWGReconcileFailed
+		return result, fmt.Errorf("%w: %v", ErrAWGReconcileFailed, err)
 	}
 
 	removeKeys := make([]string, 0)
@@ -141,7 +141,7 @@ func (m *AWGManager) reconcileInWorker(ctx context.Context) (AWGReconcileResult,
 			return result, err
 		}
 		if err := m.provisioner.Remove(ctx, publicKey); err != nil {
-			return result, ErrAWGReconcileFailed
+			return result, fmt.Errorf("%w: %v", ErrAWGReconcileFailed, err)
 		}
 		result.Removed++
 	}
@@ -162,7 +162,7 @@ func (m *AWGManager) reconcileInWorker(ctx context.Context) (AWGReconcileResult,
 		}
 		if err := m.provisioner.Add(ctx, wanted.peer); err != nil {
 			m.recordAWGReconcileFailure(wanted.device.Id)
-			return result, ErrAWGReconcileFailed
+			return result, fmt.Errorf("%w: %v", ErrAWGReconcileFailed, err)
 		}
 		result.Added++
 	}
@@ -205,7 +205,7 @@ func (m *AWGManager) reconcileInWorker(ctx context.Context) (AWGReconcileResult,
 			})
 		}
 		if err := m.deps.SyncEndpointPeers(db, settings, persisted); err != nil {
-			return result, ErrAWGReconcileFailed
+			return result, fmt.Errorf("%w: %v", ErrAWGReconcileFailed, err)
 		}
 	}
 	return result, nil

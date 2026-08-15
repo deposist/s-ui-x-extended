@@ -1,11 +1,12 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
-	"context"
 	"time"
 
 	"github.com/deposist/s-ui-x-extended/database"
@@ -230,6 +231,31 @@ func TestAWGEndpointManagerStopClosesAdmissionUntilRestart(t *testing.T) {
 	}
 	if err := manager.StopAll(ctx); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The periodic loop calls ReconcileAll (app.startAWGLoops). When a scoped
+// endpoint cannot be reached, the joined error must identify the failing
+// endpoint while still unwrapping to ErrAWGReconcileFailed.
+func TestAWGReconcileAllTagsErrorsWithEndpointID(t *testing.T) {
+	initSettingTestDB(t)
+	endpoint := createManagedAWGEndpoint(t, "awg-reconcile-all", true)
+	manager := NewAWGEndpointManager(nil)
+	if err := manager.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := manager.StopAll(context.Background()); err != nil {
+			t.Errorf("StopAll: %v", err)
+		}
+	}()
+
+	err := manager.ReconcileAll(context.Background())
+	if !errors.Is(err, ErrAWGReconcileFailed) {
+		t.Fatalf("ReconcileAll error = %v, want wrapped ErrAWGReconcileFailed", err)
+	}
+	if !strings.Contains(err.Error(), fmt.Sprintf("endpoint %d", endpoint.Id)) {
+		t.Fatalf("ReconcileAll error %q does not identify the failing endpoint", err)
 	}
 }
 

@@ -113,7 +113,7 @@ try {
     $env:CGO_ENABLED = if ($NoCGO) { "0" } else { "1" }
 
     Write-Host "Building backend with CGO_ENABLED=$env:CGO_ENABLED..." -ForegroundColor Yellow
-    $buildTags = "with_quic,with_grpc,with_utls,with_acme,with_gvisor,with_naive_outbound,with_purego,badlinkname,tfogo_checklinkname0,with_tailscale,with_dhcp,with_wireguard,with_masque,with_mtproxy,with_openvpn,with_sudoku,with_trusttunnel,with_ccm,with_ocm,with_oomkiller"
+    $buildTags = "with_quic,with_grpc,with_utls,with_acme,with_gvisor,with_naive_outbound,with_purego,badlinkname,tfogo_checklinkname0,with_tailscale,with_dhcp,with_wireguard,with_masque,with_mtproxy,with_openvpn,with_sudoku,with_trusttunnel,with_call,with_ccm,with_ocm,with_oomkiller"
     $artifactPlatformFlag = "github.com/deposist/s-ui-x-extended/config.ArtifactPlatform=$Architecture"
     $ldFlags = "-w -s -checklinkname=0 -X $artifactPlatformFlag"
     $buildArguments = @("-C", $repoRoot, "build", "-ldflags", $ldFlags, "-tags", $buildTags, "-o", $outputPath, "main.go")

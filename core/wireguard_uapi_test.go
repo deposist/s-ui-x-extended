@@ -81,6 +81,9 @@ func TestParseWireGuardPeerSnapshot(t *testing.T) {
 	publicKeyHex := strings.Repeat("44", wireGuardKeySize)
 	input := "private_key=" + strings.Repeat("aa", wireGuardKeySize) + "\n" +
 		"listen_port=51820\njc=5\ni1=<b 0x01>\n" +
+		"header_protection_key=" + strings.Repeat("cc", wireGuardKeySize) + "\n" +
+		"content_padding_addition=0\nrekey_after_time=120-180\nrekey_timeout=1-5\n" +
+		"reject_after_time=90-120\nkeepalive_timeout=5-10\nmax_handshake_attempts=20-30\n" +
 		"public_key=" + publicKeyHex + "\n" +
 		"preshared_key=" + strings.Repeat("bb", wireGuardKeySize) + "\n" +
 		"protocol_version=1\nlast_handshake_time_sec=123\nlast_handshake_time_nsec=7\n" +
@@ -100,6 +103,19 @@ func TestParseWireGuardPeerSnapshot(t *testing.T) {
 	}
 	if len(peer.AllowedIPs) != 2 || peer.AllowedIPs[0].String() != "10.77.0.2/32" || peer.AllowedIPs[1].String() != "10.77.1.0/24" {
 		t.Fatalf("unexpected allowed IPs: %v", peer.AllowedIPs)
+	}
+}
+
+// The AWG 2.0 device fields j1/j2/j3/itime no longer exist in wireguard-go
+// v0.0.4 (removed upstream), so IpcGet output containing them must be
+// rejected as unknown device fields instead of silently accepted.
+func TestParseWireGuardPeerSnapshotRejectsAWG20DeviceFields(t *testing.T) {
+	for _, key := range []string{"j1", "j2", "j3", "itime"} {
+		input := "private_key=" + strings.Repeat("aa", wireGuardKeySize) + "\n" +
+			key + "=something\npublic_key=" + strings.Repeat("44", wireGuardKeySize) + "\n"
+		if _, err := ParseWireGuardPeerSnapshot(input); err == nil {
+			t.Fatalf("ParseWireGuardPeerSnapshot accepted removed AWG 2.0 device field %q", key)
+		}
 	}
 }
 

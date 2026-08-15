@@ -22,6 +22,7 @@ export const OutTypes = {
   Mieru: 'mieru',
   Sudoku: 'sudoku',
   TrustTunnel: 'trusttunnel',
+  Call: 'call',
   MASQUE: 'masque',
   OpenVPN: 'openvpn',
   Parser: 'parser',
@@ -219,6 +220,7 @@ export interface AnyTls extends OutboundBasics, Dial {
   idle_session_check_interval: string
   idle_session_timeout: string
   min_idle_session: number
+  client_metadata?: string
   tls: oTls
 }
 
@@ -275,6 +277,21 @@ export interface Sudoku extends OutboundBasics, Dial {
   }
 }
 
+export interface CallCookie {
+  name: string
+  value?: string
+}
+
+export interface Call extends OutboundBasics, Dial {
+  platform?: string
+  mode?: string
+  read_buffer?: number
+  max_buffered_amount?: number
+  memory_limit?: number
+  join_link: string
+  cookies?: CallCookie[]
+}
+
 export interface TrustTunnel extends OutboundBasics, Dial {
   server: string
   server_port: number
@@ -284,7 +301,6 @@ export interface TrustTunnel extends OutboundBasics, Dial {
   health_check?: boolean
   quic?: boolean
   congestion_controller?: string
-  bbr_profile?: string
   cwnd?: number
   multiplex?: {
     enabled?: boolean
@@ -552,6 +568,7 @@ const defaultValues: Record<OutType, Outbound> = {
   mieru: { type: OutTypes.Mieru, transport: 'TCP', multiplexing: 'MULTIPLEXING_LOW' },
   sudoku: { type: OutTypes.Sudoku, key: '', aead_method: 'chacha20-poly1305', padding_min: 10, padding_max: 30, enable_pure_downlink: true },
   trusttunnel: { type: OutTypes.TrustTunnel, network: ['tcp', 'udp'], congestion_controller: 'bbr', tls: { enabled: true } },
+  call: { type: OutTypes.Call, platform: 'dion', join_link: '', read_buffer: 32768 },
   masque: { type: OutTypes.MASQUE, use_http2: false, use_ipv6: false, profile: { detour: 'direct' }, udp_timeout: '5m0s', udp_keepalive_period: '30s', reconnect_delay: '5s', tls: {} },
   openvpn: { type: OutTypes.OpenVPN, servers: [{ server: '', server_port: 1194 }], proto: 'udp', cipher: 'AES-256-GCM', auth: 'SHA256', tls: {} },
   parser: { type: OutTypes.Parser, link: '' },

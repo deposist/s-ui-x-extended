@@ -133,17 +133,21 @@ func TestTrustTunnelOutCopiesTransportNotOutOnly(t *testing.T) {
 		"network":               []interface{}{"tcp", "udp"},
 		"quic":                  true,
 		"congestion_controller": "bbr",
-		"bbr_profile":           "standard",
 		"cwnd":                  32,
 		"health_check":          true,
 		"multiplex":             map[string]interface{}{"enabled": true},
 		"username":              "server-side-should-not-copy",
 		"password":              "server-side-should-not-copy",
 	}))
-	for _, want := range []string{"network", "quic", "congestion_controller", "bbr_profile", "cwnd"} {
+	for _, want := range []string{"network", "quic", "congestion_controller", "cwnd"} {
 		if _, ok := out[want]; !ok {
 			t.Errorf("trusttunnel out_json missing %q: %v", want, out)
 		}
+	}
+	// bbr_profile was removed from trusttunnel options in sing-box 2.6.x and
+	// must not reach the client config even if an old inbound carries it.
+	if _, leaked := out["bbr_profile"]; leaked {
+		t.Errorf("trusttunnel out_json must not carry removed bbr_profile: %v", out)
 	}
 	for _, forbidden := range []string{"health_check", "multiplex", "username", "password"} {
 		if _, leaked := out[forbidden]; leaked {

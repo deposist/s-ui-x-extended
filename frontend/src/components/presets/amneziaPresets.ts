@@ -80,3 +80,29 @@ export function detectAmneziaPreset(amnezia: Record<string, unknown> | undefined
   }
   return 'custom'
 }
+
+// AWG 3.0 timing defaults seeded into a freshly enabled amnezia profile.
+// Values follow the ranges the official Amnezia client generates for new 3.0
+// configs (amneziawg-go UAPI ranges, seconds; max_handshake_attempts is a
+// count). content_padding_addition 0 means no extra padding; the wireguard
+// server fills the junk/header fields separately. HeaderProtectionKey is not
+// defaulted: it is a server-side key that must match the client and requires
+// S1-S4 >= 12.
+export const amneziaTimingDefaults: Record<string, string | number> = {
+  content_padding_addition: 0,
+  rekey_after_time: '120-180',
+  rekey_timeout: '1-5',
+  reject_after_time: '90-120',
+  keepalive_timeout: '5-10',
+  max_handshake_attempts: '20-30',
+}
+
+// Applies the AWG 3.0 timing defaults to the amnezia options object in place,
+// leaving any values the operator already set untouched.
+export function applyAmneziaTimingDefaults(amnezia: Record<string, unknown>): void {
+  for (const [key, value] of Object.entries(amneziaTimingDefaults)) {
+    if (amnezia[key] === undefined || amnezia[key] === null) {
+      amnezia[key] = value
+    }
+  }
+}

@@ -91,6 +91,7 @@
               <Mieru v-if="outbound.type == outTypes.Mieru" direction="out" :data="outbound" :field-hints="currentFieldHints" />
               <Sudoku v-if="outbound.type == outTypes.Sudoku" direction="out" :data="outbound" :field-hints="currentFieldHints" />
               <TrustTunnel v-if="outbound.type == outTypes.TrustTunnel" direction="out" :data="outbound" :field-hints="currentFieldHints" />
+              <Call v-if="outbound.type == outTypes.Call" direction="out" :data="outbound" :field-hints="currentFieldHints" />
               <Masque v-if="outbound.type == outTypes.MASQUE" :data="outbound" />
               <OpenVpn v-if="outbound.type == outTypes.OpenVPN" :data="outbound" :field-hints="currentFieldHints" />
               <Parser v-if="outbound.type == outTypes.Parser" :data="outbound" />
@@ -173,6 +174,7 @@ import Mieru from '@/components/protocols/Mieru.vue'
 import Sudoku from '@/components/protocols/Sudoku.vue'
 import TrustTunnel from '@/components/protocols/TrustTunnel.vue'
 import Masque from '@/components/protocols/Masque.vue'
+import Call from '@/components/protocols/Call.vue'
 import OpenVpn from '@/components/protocols/OpenVPN.vue'
 import Parser from '@/components/protocols/Parser.vue'
 import Selector from '@/components/protocols/Selector.vue'
@@ -301,7 +303,7 @@ export default {
   components: { SettingInfo, Dial, Multiplex, Transport, OutTLS,
     Direct, Socks, Http, Shadowsocks, Vmess, Trojan,
     Wireguard, Hysteria, Naive, ShadowTls, Vless, Tuic,
-    Hysteria2, AnyTls, Tor, Ssh, Mieru, Sudoku, TrustTunnel, Masque, OpenVpn, Parser, Selector, UrlTest, Bond, Failover, Block, CoreFailover, Fallback,
+    Hysteria2, AnyTls, Tor, Ssh, Mieru, Sudoku, TrustTunnel, Call, Masque, OpenVpn, Parser, Selector, UrlTest, Bond, Failover, Block, CoreFailover, Fallback,
     BandwidthLimiter, ConnectionLimiter, TrafficLimiter, RateLimiter }
 }
 </script>

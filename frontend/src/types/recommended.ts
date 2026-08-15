@@ -9,8 +9,8 @@
 /* ───────────── Protocol enums (fixed value sets → v-select) ───────────── */
 
 // TrustTunnel congestion controller. Verified: transport/trusttunnel/quic.go switch.
-// NOTE: "new_reno" is NOT valid for trusttunnel (it is "reno"); bbr_profile is a no-op
-// in this core version, so it is intentionally NOT pre-filled anywhere.
+// NOTE: "new_reno" is NOT valid for trusttunnel (it is "reno"); bbr_profile was
+// removed from the trusttunnel options in sing-box 2.6.x and is not pre-filled.
 export const trustTunnelCongestion = ['bbr', 'bbr_standard', 'bbr2', 'bbr2_variant', 'cubic', 'reno']
 
 // TUIC congestion control. Type union: "cubic" | "new_reno" | "bbr".

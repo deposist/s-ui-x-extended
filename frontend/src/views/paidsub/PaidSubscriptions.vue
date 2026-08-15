@@ -146,7 +146,7 @@
           </v-col>
         </v-row>
         <v-divider class="my-4" />
-        <div class="text-subtitle-2 mb-2">AmneziaWG 2.0</div>
+        <div class="text-subtitle-2 mb-2">AmneziaWG 3.0</div>
         <v-row>
           <v-col cols="12" md="4"><v-switch v-model="awgEnabled" color="primary" label="Enable managed AWG devices" hide-details /></v-col>
           <v-col cols="12" md="4"><v-text-field v-model="settings.awgEndpointTag" label="Managed endpoint tag" /></v-col>

@@ -148,7 +148,9 @@ func ParseWireGuardPeerSnapshot(input string) ([]WireGuardPeerSnapshot, error) {
 func isWireGuardDeviceField(key string) bool {
 	switch key {
 	case "private_key", "listen_port", "fwmark", "jc", "jmin", "jmax", "s1", "s2", "s3", "s4",
-		"h1", "h2", "h3", "h4", "i1", "i2", "i3", "i4", "i5", "j1", "j2", "j3", "itime":
+		"h1", "h2", "h3", "h4", "i1", "i2", "i3", "i4", "i5", "header_protection_key",
+		"content_padding_addition", "rekey_after_time", "rekey_timeout", "reject_after_time",
+		"keepalive_timeout", "max_handshake_attempts":
 		return true
 	default:
 		return false

@@ -84,6 +84,7 @@
       <Mieru v-if="outbound.type == outTypes.Mieru" direction="out" :data="outbound" :field-hints="currentFieldHints" />
       <Sudoku v-if="outbound.type == outTypes.Sudoku" direction="out" :data="outbound" :field-hints="currentFieldHints" />
       <TrustTunnel v-if="outbound.type == outTypes.TrustTunnel" direction="out" :data="outbound" :field-hints="currentFieldHints" />
+      <Call v-if="outbound.type == outTypes.Call" direction="out" :data="outbound" :field-hints="currentFieldHints" />
       <Masque v-if="outbound.type == outTypes.MASQUE" :data="outbound" />
       <OpenVPN v-if="outbound.type == outTypes.OpenVPN" :data="outbound" :field-hints="currentFieldHints" />
       <Bond v-if="outbound.type == outTypes.Bond" :data="outbound" :tags="tags" />
@@ -143,6 +144,7 @@ import Mieru from '@/components/protocols/Mieru.vue'
 import Sudoku from '@/components/protocols/Sudoku.vue'
 import TrustTunnel from '@/components/protocols/TrustTunnel.vue'
 import Masque from '@/components/protocols/Masque.vue'
+import Call from '@/components/protocols/Call.vue'
 import OpenVPN from '@/components/protocols/OpenVPN.vue'
 import Bond from '@/components/protocols/Bond.vue'
 import Parser from '@/components/protocols/Parser.vue'
@@ -283,7 +285,7 @@ export default {
     Direct, Socks, Http, Shadowsocks, Vmess, Trojan,
     Wireguard, Hysteria, Naive, ShadowTls, Vless, Tuic,
     Hysteria2, AnyTls, Tor, Ssh, Selector, UrlTest, Failover, Block, CoreFailover,
-    Mieru, Sudoku, TrustTunnel, Masque, OpenVPN, Bond, Parser,
+    Mieru, Sudoku, TrustTunnel, Call, Masque, OpenVPN, Bond, Parser,
     BandwidthLimiter, ConnectionLimiter, TrafficLimiter, RateLimiter, Fallback }
 }
 </script>

@@ -10,7 +10,7 @@ import (
 )
 
 func TestSingBox113RepresentativeConfigUnmarshals(t *testing.T) {
-	ctx := Context(context.Background(), InboundRegistry(), OutboundRegistry(), EndpointRegistry(), DNSTransportRegistry(), ServiceRegistry())
+	ctx := Context(context.Background(), InboundRegistry(), OutboundRegistry(), EndpointRegistry(), ProviderRegistry(), DNSTransportRegistry(), ServiceRegistry())
 	config := []byte(`{
   "dns": {
     "servers": [
