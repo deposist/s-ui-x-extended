@@ -63,7 +63,7 @@ Release history and upgrade notes:
 - English changelog: [`CHANGELOG-EN.md`](CHANGELOG-EN.md)
 - Russian changelog: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - Simplified Chinese changelog: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
-- Latest stable notes: [`docs/releases/v1.0.7.md`](docs/releases/v1.0.7.md)
+- Latest stable notes: [`docs/releases/v1.0.9.md`](docs/releases/v1.0.9.md)
 - Upstream parity reference: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 ## How this fork differs from `alireza0/s-ui`
