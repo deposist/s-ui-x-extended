@@ -109,7 +109,7 @@ const main = async () => {
   }
   spawnLogged('backend', 'go', ['run', './tests/e2e/panel-server'], { cwd: repoRoot, env: backendEnv })
 
-  const password = await waitForFile(path.join(dbDir, 'initial-admin.txt'), 120000)
+  const password = await waitForFile(path.join(dbDir, 'initial-admin.txt'), 420000)
   await waitForURL('http://127.0.0.1:2095/app/login', 120000)
   fs.writeFileSync(statePath, JSON.stringify({
     baseURL: 'http://127.0.0.1:3000/app/',

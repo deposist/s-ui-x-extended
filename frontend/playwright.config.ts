@@ -23,7 +23,7 @@ export default defineConfig({
     command: 'node ../tests/e2e/run-server.js',
     url: process.env.SUI_E2E_BASE_URL ?? 'http://127.0.0.1:3000/app/login',
     reuseExistingServer: true,
-    timeout: 180_000,
+    timeout: 480_000,
   },
   projects: [
     {
