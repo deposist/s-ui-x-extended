@@ -8,6 +8,21 @@
 
 - 暂无未发布变更。
 
+## [1.0.9] - 2026-08-15 - AmneziaWG 3.0、Call 协议与可靠性修复
+
+- 核心升级至 sing-box-extended 2.6.5，支持 AmneziaWG 3.0。受管 AWG 端点和设备配置改用 3.0 选项集：头部保护密钥、内容填充、rekey/reject/keepalive 计时以及最大握手尝试次数；J1/J2/J3 与 itime 已移除。
+- 现有 AWG 2.0 端点选项会在升级后首次启动时自动迁移到 3.0。WARP 端点会清理已移除的 2.x 字段并补充默认计时；Amnezia 2.x 客户端仍可正常使用。
+- 新增 Call 协议：服务端 WebRTC 桥接（dion、telemost、vk、wbstream）可作为入站或出站。入站会创建通话房间，客户端通过 `join_link` 加入；所有发布构建均已启用。
+- 新增协议选项：VPN 客户端/服务端（默认网关、池大小、reconnect 与 reject 延迟）、AnyTLS `client_metadata`、MASQUE license/private 密钥、multiplex `rmux`。
+- 修复周期 AWG reconcile 仅记录 `AWG reconcile failed` 而缺少原因的问题：端点级设备现在按自身端点标签同步，错误日志会包含端点 ID 与脱敏原因。
+- 修复数据库恢复死锁：实时 WebSocket 现在握手结束后立即释放维护锁，恢复期间定时任务静默跳过本周期，不再刷屏 `cron: skip`。
+- WARP Endpoint 创建现在接受 Cloudflare 实际返回的 peer 端点，包括域名 `host` 和占位端口 `0`；面板会选取可用端口。
+- 通过 beta 通道选中的稳定版本现在按该版本的 `main` 清单校验，修复 beta 安装升级到稳定版时出现的 `update manifest is invalid`。
+- TrustTunnel 不再提供 `bbr_profile` 字段（sing-box 2.6.x 已移除）。请重新保存此前保存的 trusttunnel 条目。
+- 使用 Go 1.26.6 构建，修复了 2026-08-13 公布的七个 Go 标准库漏洞。
+
+完整发布说明：[`docs/releases/v1.0.9.md`](docs/releases/v1.0.9.md)。
+
 ## [1.0.9-beta4] - 2026-08-15 - AmneziaWG 3.0 与 Call 协议
 
 - 核心升级至 sing-box-extended 2.6.5，支持 AmneziaWG 3.0。受管 AWG 端点和设备配置改用 3.0 选项集：头部保护密钥、内容填充、rekey/reject/keepalive 计时以及最大握手尝试次数；J1/J2/J3 与 itime 已移除。

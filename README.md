@@ -218,17 +218,17 @@ and tokens. Database migrations run on the first start after an upgrade.
 
 | Channel | Version | Notes |
 | --- | --- | --- |
-| Stable | [`v1.0.8`](docs/releases/v1.0.8.md) | Recommended for production. Includes the full 1.0.8 beta series: safer updates and recovery, managed local rule-sets, payment and database reliability fixes, panel improvements, and `sing-box-extended v1.13.14-extended-2.5.4`. |
+| Stable | [`v1.0.9`](docs/releases/v1.0.9.md) | Recommended for production. Includes the full 1.0.9 beta series: AmneziaWG 3.0, the Call protocol, new VPN/AnyTLS/MASQUE options, database restore and WARP Endpoint fixes, and `sing-box-extended 2.6.5`. |
 | Beta | [`v1.0.9-beta4`](docs/releases/v1.0.9-beta4.md) | AmneziaWG 3.0 on a new core, the Call protocol, new VPN/AnyTLS/MASQUE options, and a fix for periodic AWG reconcile failing with no cause in the log. |
 
 ### Upgrade to the current stable release
 
-This command installs or upgrades the server to `v1.0.8`:
+This command installs or upgrades the server to `v1.0.9`:
 
 ```sh
 curl -fLsS \
-  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.8/install.sh \
-  | sudo bash -s -- v1.0.8
+  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.9/install.sh \
+  | sudo bash -s -- v1.0.9
 ```
 
 ### Upgrade to the current beta release
@@ -265,15 +265,15 @@ The first command should report the selected version. The second should print `a
 ### Local clone
 
 ```sh
-git clone --branch v1.0.8 --depth 1 \
+git clone --branch v1.0.9 --depth 1 \
   https://github.com/deposist/s-ui-x-extended.git
 cd s-ui-x-extended
-sudo bash install.sh v1.0.8
+sudo bash install.sh v1.0.9
 ```
 
 ### Windows
 
-- Stable: download [`v1.0.8`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.8), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
+- Stable: download [`v1.0.9`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.9), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
 - Beta: download [`v1.0.9-beta4`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.9-beta4), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
 
 Upgrade and rollback notes are in the changelogs:
@@ -343,7 +343,7 @@ Docker Compose option:
 ```shell
 services:
   s-ui:
-    image: ghcr.io/deposist/s-ui-x:v1.0.8
+    image: ghcr.io/deposist/s-ui-x:v1.0.9
     container_name: s-ui
     hostname: "s-ui"
     network_mode: host
@@ -368,7 +368,7 @@ docker run -itd \
     -v $PWD/cert/:/root/cert/ \
     --name s-ui \
     --restart=unless-stopped \
-    ghcr.io/deposist/s-ui-x:v1.0.8
+    ghcr.io/deposist/s-ui-x:v1.0.9
 ```
 
 Build the image yourself:

@@ -9,6 +9,21 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.0.9] - 2026-08-15 - AmneziaWG 3.0, Call protocol, and reliability fixes
+
+- The core now runs sing-box-extended 2.6.5 with AmneziaWG 3.0. Managed AWG endpoints and device configs use the 3.0 option set: header protection key, content padding addition, rekey/reject/keepalive timings, and max handshake attempts. J1/J2/J3 and itime are gone.
+- Existing AWG 2.0 endpoint options migrate to 3.0 automatically on the first start after the upgrade. WARP endpoints get the removed 2.x fields cleaned and timing defaults added. Amnezia 2.x clients keep working.
+- New Call protocol: a server-side WebRTC bridge (dion, telemost, vk, wbstream) as inbound or outbound. The inbound creates a call room; clients join through a `join_link`. Enabled in all release builds.
+- New protocol options: VPN client/server (default gateway, pool size, reconnect and reject delays), AnyTLS `client_metadata`, MASQUE license and private keys, multiplex `rmux`.
+- Fixed periodic AWG reconcile failing with a bare `AWG reconcile failed` log: endpoint-scoped devices now reconcile against their own endpoint tag, and reconcile errors log the endpoint ID with the sanitized cause.
+- Database restore no longer deadlocks behind an open realtime WebSocket. The socket releases its maintenance lease right after the handshake, and cron jobs skip ticks silently during a restore instead of spamming `cron: skip`.
+- WARP Endpoint creation accepts the peer endpoint Cloudflare returns, including a domain host and a placeholder port of `0`; the panel substitutes a usable port.
+- A stable release selected while tracking the beta channel validates against the release's `main` manifest, fixing `update manifest is invalid` when a beta installation graduates to stable.
+- TrustTunnel no longer exposes `bbr_profile` (removed in sing-box 2.6.x). Re-save a trusttunnel entry saved before this release.
+- Built with Go 1.26.6, which fixes seven Go standard library vulnerabilities published on 2026-08-13.
+
+Full release notes: [`docs/releases/v1.0.9.md`](docs/releases/v1.0.9.md).
+
 ## [1.0.9-beta4] - 2026-08-15 - AmneziaWG 3.0 and Call protocol
 
 - The core now runs sing-box-extended 2.6.5 with AmneziaWG 3.0. Managed AWG endpoints and device configs use the 3.0 option set: header protection key, content padding addition, rekey/reject/keepalive timings, and max handshake attempts. J1/J2/J3 and itime are gone.
