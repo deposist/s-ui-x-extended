@@ -118,7 +118,7 @@ func TestManagedAWGEndpointPeersCannotBeEdited(t *testing.T) {
 	managedExt := `{"managed":true,"publicEndpoint":"vpn.example.com:51820","dns":["1.1.1.1"],"defaultDeviceLimit":3}`
 	endpoint := createTestEndpoint(t, "managed-awg")
 	if err := db.Model(&model.Endpoint{}).Where("id = ?", endpoint.Id).
-		Update("options", json.RawMessage(fmt.Sprintf(`{"system":false,"address":["10.77.0.1/24"],"private_key":%q,"listen_port":51820,"peers":[],"mtu":1408}`, testWireguardKey))).
+		Update("options", json.RawMessage(fmt.Sprintf(`{"system":false,"address":["10.77.0.1/24"],"private_key":%q,"listen_port":51820,"peers":[{"public_key":"PK1","allowed_ips":["10.77.0.2/32"],"persistent_keepalive_interval":25}],"mtu":1408}`, testWireguardKey))).
 		Update("ext", json.RawMessage(managedExt)).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -130,11 +130,26 @@ func TestManagedAWGEndpointPeersCannotBeEdited(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "peers are controlled") {
 		t.Fatalf("managed peer edit error = %v", err)
 	}
-	unchanged := json.RawMessage(fmt.Sprintf(
-		`{"id":%d,"type":"wireguard","tag":"managed-awg","system":false,"address":["10.77.0.1/24"],"private_key":%q,"listen_port":51820,"ext":%s,"peers":[],"mtu":1400}`,
+	// A frontend round-trip re-marshals options through generic maps: peer
+	// object keys come back sorted and nested values re-indented. The guard
+	// must treat that as the same peer set, not as an edit.
+	roundTrip := json.RawMessage(fmt.Sprintf(
+		`{"id":%d,"type":"wireguard","tag":"managed-awg","system":false,"address":["10.77.0.1/24"],"private_key":%q,"listen_port":51820,"ext":%s,"peers":[{"allowed_ips":["10.77.0.2/32"],"persistent_keepalive_interval":25,"public_key":"PK1"}],"mtu":1400}`,
 		endpoint.Id, testWireguardKey, managedExt))
-	if _, err := configService.Save("endpoints", "edit", unchanged, "", "admin", "example.com"); err != nil {
-		t.Fatalf("non-peer managed endpoint edit was blocked: %v", err)
+	if _, err := configService.Save("endpoints", "edit", roundTrip, "", "admin", "example.com"); err != nil {
+		t.Fatalf("round-tripped managed endpoint edit was blocked: %v", err)
+	}
+	// Reordered arrays are still the same set.
+	reordered := json.RawMessage(fmt.Sprintf(
+		`{"id":%d,"type":"wireguard","tag":"managed-awg","system":false,"address":["10.77.0.1/24"],"private_key":%q,"listen_port":51820,"ext":%s,"peers":[{"public_key":"PK2","allowed_ips":["10.77.0.3/32"]},{"persistent_keepalive_interval":25,"allowed_ips":["10.77.0.2/32"],"public_key":"PK1"}],"mtu":1400}`,
+		endpoint.Id, testWireguardKey, managedExt))
+	if err := db.Model(&model.Endpoint{}).Where("id = ?", endpoint.Id).
+		Update("options", json.RawMessage(fmt.Sprintf(`{"system":false,"address":["10.77.0.1/24"],"private_key":%q,"listen_port":51820,"peers":[{"public_key":"PK1","allowed_ips":["10.77.0.2/32"],"persistent_keepalive_interval":25},{"public_key":"PK2","allowed_ips":["10.77.0.3/32"]}],"mtu":1408}`, testWireguardKey))).
+		Update("ext", json.RawMessage(managedExt)).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := configService.Save("endpoints", "edit", reordered, "", "admin", "example.com"); err != nil {
+		t.Fatalf("reordered managed endpoint edit was blocked: %v", err)
 	}
 	all, err := (&EndpointService{}).GetAll()
 	if err != nil {

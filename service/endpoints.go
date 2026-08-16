@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
@@ -187,20 +188,46 @@ func (s *EndpointService) saveEndpointUpsert(tx *gorm.DB, act string, data json.
 	return change, nil
 }
 
+// awgEndpointPeersEqual reports whether two endpoint option documents carry
+// the same peer set. The comparison must be semantic: options are serialized
+// differently depending on the writer (the device manager stores
+// struct-ordered compact peers inside an indented envelope, while a form
+// round-trip re-marshals peers through generic maps with sorted keys and full
+// indentation), so byte equality rejected every legitimate edit of a managed
+// endpoint that had devices.
 func awgEndpointPeersEqual(current, next json.RawMessage) bool {
-	var currentOptions, nextOptions map[string]json.RawMessage
-	if json.Unmarshal(current, &currentOptions) != nil || json.Unmarshal(next, &nextOptions) != nil {
+	currentPeers, currentErr := canonicalAWGPeers(current)
+	nextPeers, nextErr := canonicalAWGPeers(next)
+	if currentErr != nil || nextErr != nil {
 		return false
 	}
-	currentPeers := bytes.TrimSpace(currentOptions["peers"])
-	nextPeers := bytes.TrimSpace(nextOptions["peers"])
-	if len(currentPeers) == 0 {
-		currentPeers = []byte("[]")
-	}
-	if len(nextPeers) == 0 {
-		nextPeers = []byte("[]")
-	}
 	return bytes.Equal(currentPeers, nextPeers)
+}
+
+// canonicalAWGPeers extracts the peers array in a writer-independent form:
+// generic decoding normalizes key order, number formatting, and whitespace,
+// and peers are sorted by public_key because WireGuard treats them as a set,
+// not an ordered list.
+func canonicalAWGPeers(options json.RawMessage) ([]byte, error) {
+	var parsed map[string]json.RawMessage
+	if err := json.Unmarshal(options, &parsed); err != nil {
+		return nil, err
+	}
+	rawPeers := bytes.TrimSpace(parsed["peers"])
+	if len(rawPeers) == 0 || bytes.Equal(rawPeers, []byte("null")) {
+		rawPeers = []byte("[]")
+	}
+	var peers []map[string]any
+	if err := json.Unmarshal(rawPeers, &peers); err != nil {
+		return nil, err
+	}
+	if peers == nil {
+		peers = []map[string]any{}
+	}
+	sort.Slice(peers, func(i, j int) bool {
+		return fmt.Sprint(peers[i]["public_key"]) < fmt.Sprint(peers[j]["public_key"])
+	})
+	return json.Marshal(peers)
 }
 
 func (s *EndpointService) saveEndpointDelete(tx *gorm.DB, data json.RawMessage) (*entityCoreChange, error) {

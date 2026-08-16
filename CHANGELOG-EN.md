@@ -9,6 +9,16 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.1.0-beta3] - 2026-08-17 - managed AWG endpoint editing, obfuscation presets, call outbound fix
+
+- Fixed: an endpoint with "Managed AWG server" enabled could not be saved once it had devices. Every edit failed with `managed AWG endpoint peers are controlled by the device manager` even though the peers were not touched: the guard compared the peers byte by byte, and a form round-trip reorders keys and reformats whitespace. Peers are now compared as a set, so normal edits (MTU, DNS, public endpoint) go through. Editing the peers themselves is still rejected.
+- Added: two buttons in the Amnezia block of the endpoint form. "Recommended" applies a curated profile: balanced junk padding, packet sizes that stay pairwise distinct and ready for header protection, the stock init packet prefix, and fixed safe timings. "Hardened (randomized)" generates the whole set on the server with crypto/rand: headers, junk, padding, and init packet values. Devices must re-download their config after obfuscation changes; the form warns about this.
+- Added: when "Managed AWG server" is switched on and the public endpoint field is empty, the form suggests the panel's own hostname with the listen port. The suggestion follows listen port changes until the field is edited by hand. Stored values are never overwritten, and local-only panel addresses are not suggested.
+- Fixed: saving a call outbound stored a `server` field that the core schema does not have, so every core start failed with `json: unknown field "server"` and sing-box crash-looped until the row was deleted from the database. The outbound form no longer shows the address and port fields for call (it joins a room through `join_link`), and the panel now rejects such saves with an explanatory error.
+- Fixed: the core start cooldown log line printed `15ns seconds`; it now prints the actual duration.
+
+Full release notes: [`docs/releases/v1.1.0-beta3.md`](docs/releases/v1.1.0-beta3.md).
+
 ## [1.1.0-beta2] - 2026-08-16 - AmneziaWG on its own, automatic device key, legacy mode retired
 
 - Managed AmneziaWG no longer depends on the Paid Subscriptions page. The AWG status line moved to a new "AmneziaWG 3.0" tab in panel Settings and is served from `api/awg/status` (the old `api/paidsub/awg/status` route keeps working). Enable "Managed AWG server" on a WireGuard endpoint, assign the server to clients, and create devices in the client card. The paid module is not involved anywhere in this flow.

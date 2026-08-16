@@ -297,6 +297,8 @@ func validateAmneziaTimings(a awgAmneziaObfuscation) error {
 // AmneziaRandomParams is the server-generated obfuscation parameter set.
 // H1-H4 are always generated; Jc/Jmin/Jmax only for the Balanced preset
 // (project decision: Randomize touches junk parameters only on Balanced).
+// The Hardened preset additionally returns header-protection-ready S1-S4 and
+// randomized init packet values I1-I5.
 type AmneziaRandomParams struct {
 	H1   string `json:"h1"`
 	H2   string `json:"h2"`
@@ -305,6 +307,15 @@ type AmneziaRandomParams struct {
 	JC   int    `json:"jc,omitempty"`
 	JMin int    `json:"jmin,omitempty"`
 	JMax int    `json:"jmax,omitempty"`
+	S1   int    `json:"s1,omitempty"`
+	S2   int    `json:"s2,omitempty"`
+	S3   int    `json:"s3,omitempty"`
+	S4   int    `json:"s4,omitempty"`
+	I1   string `json:"i1,omitempty"`
+	I2   string `json:"i2,omitempty"`
+	I3   string `json:"i3,omitempty"`
+	I4   string `json:"i4,omitempty"`
+	I5   string `json:"i5,omitempty"`
 }
 
 // GenerateAmneziaParams builds four pairwise disjoint H1-H4 ranges within
@@ -384,6 +395,51 @@ func generateDisjointHeaderRanges() ([4]awgHeaderRange, error) {
 		return result, nil
 	}
 	return result, fmt.Errorf("failed to generate disjoint Amnezia header ranges")
+}
+
+// GenerateAmneziaHardenedParams builds the full Hardened profile: H1-H4 as
+// always, junk from the Balanced distribution, S1-S4 drawn from [15, 40], and
+// init packet values I1-I5 with a random magic prefix plus a random tail.
+//
+// The S window width (25) is deliberately narrower than the smallest gap
+// between base packet sizes (32), so the padded sizes 148+S1, 92+S2, 64+S3,
+// 32+S4 are pairwise distinct by construction, and every value is >= 12 so
+// header protection can be enabled later without touching S again.
+func GenerateAmneziaHardenedParams() (AmneziaRandomParams, error) {
+	params, err := GenerateAmneziaParams(true)
+	if err != nil {
+		return params, err
+	}
+	for _, field := range []*int{&params.S1, &params.S2, &params.S3, &params.S4} {
+		value, err := awgCryptoRandInt(15, 40)
+		if err != nil {
+			return params, err
+		}
+		*field = int(value) // #nosec G115 -- bounded by awgCryptoRandInt(15, 40).
+	}
+	for _, field := range []*string{&params.I1, &params.I2, &params.I3, &params.I4, &params.I5} {
+		value, err := generateAWGInitPacketValue()
+		if err != nil {
+			return params, err
+		}
+		*field = value
+	}
+	return params, nil
+}
+
+// generateAWGInitPacketValue renders one init packet field in the Amnezia
+// special-value syntax: a random 4-byte prefix followed by 8-24 random bytes,
+// e.g. "<b 0x1a2b3c4d><r 17>".
+func generateAWGInitPacketValue() (string, error) {
+	magic := make([]byte, 4)
+	if _, err := rand.Read(magic); err != nil {
+		return "", fmt.Errorf("generate AWG init packet magic: %w", err)
+	}
+	tail, err := awgCryptoRandInt(8, 24)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("<b 0x%02x%02x%02x%02x><r %d>", magic[0], magic[1], magic[2], magic[3], tail), nil
 }
 
 // awgCryptoRandInt returns a uniform random value in [min, max] inclusive

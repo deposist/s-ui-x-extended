@@ -106,14 +106,24 @@ func (a *ApiService) AWGStatus(c *gin.Context) {
 // GetAWGObfuscationRandom returns a server-generated Amnezia obfuscation
 // parameter set. Generation stays on the server so there is one source of
 // truth using crypto/rand instead of the browser's Math.random. H1-H4 are
-// always generated; junk parameters (Jc/Jmin/Jmax) only when the caller
-// explicitly asks for them (preset=balanced).
+// always generated; preset=balanced adds junk parameters (Jc/Jmin/Jmax);
+// preset=hardened adds junk plus header-protection-ready S1-S4 and randomized
+// init packet values I1-I5.
 func (a *ApiService) GetAWGObfuscationRandom(c *gin.Context) {
 	if !a.requireTokenScopeAny(c, "awg", "admin") {
 		return
 	}
-	includeJunk := c.Query("preset") == "balanced"
-	params, err := service.GenerateAmneziaParams(includeJunk)
+	switch c.Query("preset") {
+	case "hardened":
+		params, err := service.GenerateAmneziaHardenedParams()
+		jsonObj(c, params, err)
+		return
+	case "balanced":
+		params, err := service.GenerateAmneziaParams(true)
+		jsonObj(c, params, err)
+		return
+	}
+	params, err := service.GenerateAmneziaParams(false)
 	jsonObj(c, params, err)
 }
 

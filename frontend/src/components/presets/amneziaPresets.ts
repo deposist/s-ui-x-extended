@@ -106,3 +106,33 @@ export function applyAmneziaTimingDefaults(amnezia: Record<string, unknown>): vo
     }
   }
 }
+
+// One curated "recommended" profile: balanced junk midpoints, padding values
+// that keep the four padded packet sizes distinct and stay >= 12 so header
+// protection can be enabled later without touching S again, the stock init
+// packet prefix, and fixed vanilla-WireGuard timings (ordered so a session is
+// always rekeyed before it can be rejected).
+export const amneziaRecommendedParams: Record<string, unknown> = {
+  jc: 4,
+  jmin: 40,
+  jmax: 90,
+  s1: 15,
+  s2: 18,
+  s3: 16,
+  s4: 20,
+  i1: '<b 0x01020304><r 8>',
+  content_padding_addition: 0,
+  rekey_after_time: 120,
+  rekey_timeout: 5,
+  reject_after_time: 180,
+  keepalive_timeout: 10,
+  max_handshake_attempts: 18,
+}
+
+// Applies the recommended profile in place. Header fields (H1-H4) are left
+// alone: they are per-endpoint random by design and must stay unique.
+export function applyAmneziaRecommended(amnezia: Record<string, unknown>): void {
+  for (const [key, value] of Object.entries(amneziaRecommendedParams)) {
+    amnezia[key] = value
+  }
+}

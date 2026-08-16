@@ -199,7 +199,9 @@ func (s *ConfigService) startCoreLocked(force bool) error {
 	}
 	runtime := s.runtime()
 	if !force && runtime.startCooldownActive() {
-		logger.Info("start core cooldown ", runtime.coreStartCooldownDuration()/time.Second, " seconds")
+		// Print the duration itself: Duration/Duration keeps the Duration type
+		// and Sprint renders the quotient as nanoseconds ("15ns seconds").
+		logger.Info("start core cooldown ", runtime.coreStartCooldownDuration())
 		return nil
 	}
 

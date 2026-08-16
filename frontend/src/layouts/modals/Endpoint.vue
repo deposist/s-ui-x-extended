@@ -148,6 +148,7 @@ import { i18n } from '@/locales'
 import Data from '@/store/modules/data'
 import SettingInfo from '@/components/SettingInfo.vue'
 import { applyEndpointRecommendedValues, endpointFieldHintsForType, hasEndpointRecommendedPreset } from '@/utils/defaultRecommendations'
+import { panelHostname, suggestAWGPublicEndpoint } from '@/utils/awgPublicEndpoint'
 export default {
   props: ['visible', 'data', 'id', 'tags'],
   emits: ['close'],
@@ -162,12 +163,18 @@ export default {
       // (configs render live from endpoint options, so nothing regenerates
       // server-side - but already-installed clients keep the old values).
       originalAmnezia: "",
+      // Last public endpoint value this form suggested automatically; null
+      // once the admin edits the field by hand, which stops the sync.
+      awgAutoPublicEndpoint: null as string | null,
       epTypes: EpTypes,
       noDial: [EpTypes.VpnServer, EpTypes.VpnClient],
     }
   },
   methods: {
     async updateData(id: number) {
+      // Never auto-suggest over a stored endpoint; the flag only turns on
+      // again when the admin flips the managed switch in this session.
+      this.awgAutoPublicEndpoint = null
       if (id > 0) {
         const newData = JSON.parse(this.$props.data)
         this.endpoint = newData
@@ -366,6 +373,17 @@ export default {
         if (v) {
           this.endpoint.ext.managed = true
           if (!this.endpoint.ext.publicEndpoint) this.endpoint.ext.publicEndpoint = ''
+          // Best-effort suggestion: the panel's own hostname plus the listen
+          // port. The admin confirms or replaces it; validation stays the
+          // server's. Skipped for local-only panel addresses, which devices
+          // could never reach.
+          if (!this.endpoint.ext.publicEndpoint) {
+            const suggestion = suggestAWGPublicEndpoint(panelHostname(), this.endpoint.listen_port)
+            if (suggestion) {
+              this.endpoint.ext.publicEndpoint = suggestion
+              this.awgAutoPublicEndpoint = suggestion
+            }
+          }
           if (!this.endpoint.ext.dns || this.endpoint.ext.dns.length === 0) this.endpoint.ext.dns = ['1.1.1.1', '1.0.0.1']
           if (!this.endpoint.ext.defaultDeviceLimit) this.endpoint.ext.defaultDeviceLimit = 3
           // The default WireGuard address is a /32 host route; the device
@@ -485,6 +503,20 @@ export default {
     visible(v) {
       if (v) {
         this.updateData(this.$props.id)
+      }
+    },
+    'endpoint.listen_port'(port: number) {
+      // Keep the suggested endpoint in sync with the listen port until the
+      // admin edits the public endpoint by hand.
+      if (!this.awgManagedFlag || this.awgAutoPublicEndpoint === null) return
+      const suggestion = suggestAWGPublicEndpoint(panelHostname(), port)
+      if (!suggestion) return
+      this.endpoint.ext.publicEndpoint = suggestion
+      this.awgAutoPublicEndpoint = suggestion
+    },
+    awgPublicEndpoint(value: string) {
+      if (this.awgAutoPublicEndpoint !== null && value !== this.awgAutoPublicEndpoint) {
+        this.awgAutoPublicEndpoint = null
       }
     },
   },

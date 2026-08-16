@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -354,4 +355,55 @@ func TestAWGCryptoRandIntBounds(t *testing.T) {
 		t.Fatalf("single-value range: v=%d err=%v", v, err)
 	}
 	_ = strconv.IntSize
+}
+
+func TestGenerateAmneziaHardenedParamsProperties(t *testing.T) {
+	for i := 0; i < 500; i++ {
+		params, err := GenerateAmneziaHardenedParams()
+		if err != nil {
+			t.Fatalf("iteration %d: %v", i, err)
+		}
+		for _, s := range []struct {
+			name  string
+			value int
+		}{{"S1", params.S1}, {"S2", params.S2}, {"S3", params.S3}, {"S4", params.S4}} {
+			if s.value < 15 || s.value > 40 {
+				t.Fatalf("iteration %d: %s=%d outside 15-40", i, s.name, s.value)
+			}
+		}
+		sizes := []int{148 + params.S1, 92 + params.S2, 64 + params.S3, 32 + params.S4}
+		for a := 0; a < len(sizes); a++ {
+			for b := a + 1; b < len(sizes); b++ {
+				if sizes[a] == sizes[b] {
+					t.Fatalf("iteration %d: padded sizes collide: %v", i, sizes)
+				}
+			}
+		}
+		for idx, value := range []string{params.I1, params.I2, params.I3, params.I4, params.I5} {
+			if !regexp.MustCompile(`^<b 0x[0-9a-f]{8}><r (?:[8-9]|1[0-9]|2[0-4])>$`).MatchString(value) {
+				t.Fatalf("iteration %d: I%d=%q has unexpected shape", i, idx+1, value)
+			}
+		}
+		if params.JC == 0 || params.JMin == 0 || params.JMax == 0 {
+			t.Fatalf("iteration %d: hardened profile lacks junk: %+v", i, params)
+		}
+	}
+}
+
+func TestGenerateAmneziaHardenedParamsPassValidator(t *testing.T) {
+	for i := 0; i < 200; i++ {
+		params, err := GenerateAmneziaHardenedParams()
+		if err != nil {
+			t.Fatal(err)
+		}
+		amnezia := map[string]any{
+			"jc": params.JC, "jmin": params.JMin, "jmax": params.JMax,
+			"s1": params.S1, "s2": params.S2, "s3": params.S3, "s4": params.S4,
+			"h1": params.H1, "h2": params.H2, "h3": params.H3, "h4": params.H4,
+			"i1": params.I1, "i2": params.I2, "i3": params.I3, "i4": params.I4, "i5": params.I5,
+		}
+		if err := ValidateAmneziaOptions("wireguard", amneziaOptions(t, amnezia)); err != nil {
+			t.Fatalf("iteration %d: hardened params rejected by validator: %v", i, err)
+		}
+	}
 }

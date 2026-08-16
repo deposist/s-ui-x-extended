@@ -1764,6 +1764,8 @@ export default {
       keepaliveTimeout: "Keepalive timeout (s)",
       maxHandshakeAttempts: "Max handshake attempts",
       randomize: "Randomize",
+      recommended: "Recommended",
+      hardened: "Hardened (randomized)",
       preset: "Obfuscation preset",
       presets: {
         balanced: {

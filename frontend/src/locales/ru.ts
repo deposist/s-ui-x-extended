@@ -1772,6 +1772,8 @@ export default {
       keepaliveTimeout: "Таймаут keepalive (с)",
       maxHandshakeAttempts: "Максимум попыток рукопожатия",
       randomize: "Случайные значения",
+      recommended: "Рекомендуемые",
+      hardened: "Усиленные (рандом)",
       preset: "Пресет обфускации",
       presets: {
         balanced: {

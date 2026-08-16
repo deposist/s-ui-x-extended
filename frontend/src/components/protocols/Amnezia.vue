@@ -22,7 +22,7 @@
             @update:modelValue="applyPreset">
           </v-select>
         </v-col>
-        <v-col cols="12" sm="6" md="4" class="d-flex align-center">
+        <v-col cols="12" sm="6" md="4" class="d-flex align-center ga-2 flex-wrap">
           <v-btn
             color="primary"
             variant="tonal"
@@ -32,6 +32,22 @@
             :disabled="randomizing"
             @click="randomize">
             {{ $t('types.amnezia.randomize') }}
+          </v-btn>
+          <v-btn
+            variant="tonal"
+            size="small"
+            prepend-icon="mdi-check-decagram"
+            @click="applyRecommended">
+            {{ $t('types.amnezia.recommended') }}
+          </v-btn>
+          <v-btn
+            variant="tonal"
+            size="small"
+            prepend-icon="mdi-shield-plus"
+            :loading="hardening"
+            :disabled="hardening"
+            @click="applyHardened">
+            {{ $t('types.amnezia.hardened') }}
           </v-btn>
         </v-col>
       </v-row>
@@ -157,7 +173,7 @@
 <script lang="ts">
 import HttpUtils from '@/plugins/httputil'
 import { validateAmnezia } from '@/utils/amneziaValidation'
-import { amneziaPresetCatalog, applyAmneziaPreset, applyAmneziaTimingDefaults, detectAmneziaPreset, type AmneziaPresetId } from '@/components/presets/amneziaPresets'
+import { amneziaPresetCatalog, applyAmneziaPreset, applyAmneziaRecommended, applyAmneziaTimingDefaults, detectAmneziaPreset, type AmneziaPresetId } from '@/components/presets/amneziaPresets'
 import RecommendedValues from '@/components/recommendations/RecommendedValues.vue'
 import { applyRecommendation, type ResolvedRecommendation } from '@/utils/recommendations'
 export default {
@@ -171,6 +187,7 @@ export default {
   data() {
     return {
       randomizing: false,
+      hardening: false,
       selectedPreset: detectAmneziaPreset(this.data?.amnezia) as AmneziaPresetId,
     }
   },
@@ -332,6 +349,50 @@ export default {
     // its schema, so only junk is randomized there.
     async randomize() {
       await this.fetchRandom(this.selectedPreset === 'balanced' || !this.full)
+    },
+    // Deterministic curated profile: balanced junk, header-protection-ready
+    // padding, stock init prefix, fixed safe timings. Headers stay as they
+    // are (they are unique per endpoint by design).
+    applyRecommended() {
+      if (!this.data.amnezia) return
+      applyAmneziaRecommended(this.data.amnezia)
+      this.selectedPreset = 'balanced'
+    },
+    // Hardened profile: server-side crypto/rand for junk, H1-H4, S1-S4 and the
+    // init packet values I1-I5 in one shot. WARP lacks H/S/I fields, so there
+    // the button degrades to the junk randomization.
+    async applyHardened() {
+      if (this.hardening || !this.data.amnezia) return
+      this.hardening = true
+      try {
+        const msg = await HttpUtils.get('api/awg/obfuscation/random', { preset: 'hardened' })
+        if (!msg.success || !msg.obj) return
+        const obj = msg.obj
+        const amnezia = this.amnezia as Record<string, unknown>
+        if (obj.jc !== undefined) {
+          amnezia.jc = obj.jc
+          amnezia.jmin = obj.jmin
+          amnezia.jmax = obj.jmax
+        }
+        if (this.full) {
+          amnezia.h1 = obj.h1
+          amnezia.h2 = obj.h2
+          amnezia.h3 = obj.h3
+          amnezia.h4 = obj.h4
+          if (obj.s1 !== undefined) {
+            amnezia.s1 = obj.s1
+            amnezia.s2 = obj.s2
+            amnezia.s3 = obj.s3
+            amnezia.s4 = obj.s4
+          }
+          for (const field of ['i1', 'i2', 'i3', 'i4', 'i5'] as const) {
+            if (obj[field]) amnezia[field] = obj[field]
+          }
+        }
+        this.selectedPreset = 'custom'
+      } finally {
+        this.hardening = false
+      }
     },
     // Server-generated parameters: one source of truth, crypto/rand instead
     // of Math.random. includeJunk mirrors the Balanced-preset decision and is

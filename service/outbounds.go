@@ -12,6 +12,26 @@ import (
 	"gorm.io/gorm"
 )
 
+// rejectUnknownCallOutboundDialFields blocks call outbounds carrying
+// server/server_port before they reach the database. The call outbound schema
+// in the core has no dial fields (it joins a room via join_link), so the core
+// rejects the saved config with "json: unknown field \"server\"" on every
+// start, which crash-loops sing-box until the row is removed by hand.
+func rejectUnknownCallOutboundDialFields(data json.RawMessage) error {
+	var fields struct {
+		Type       string  `json:"type"`
+		Server     *string `json:"server"`
+		ServerPort *uint16 `json:"server_port"`
+	}
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return nil // malformed payloads fail later in the model unmarshal
+	}
+	if fields.Type != "call" || fields.Server == nil && fields.ServerPort == nil {
+		return nil
+	}
+	return fmt.Errorf("call outbounds have no server or port; configure join_link instead (a saved server field makes the core reject the whole config)")
+}
+
 type OutboundService struct {
 	Runtime *Runtime
 }
@@ -80,6 +100,9 @@ func (s *OutboundService) Save(tx *gorm.DB, act string, data json.RawMessage) (*
 }
 
 func (s *OutboundService) saveOutboundUpsert(tx *gorm.DB, data json.RawMessage) (*entityCoreChange, error) {
+	if err := rejectUnknownCallOutboundDialFields(data); err != nil {
+		return nil, err
+	}
 	var outbound model.Outbound
 	if err := outbound.UnmarshalJSON(data); err != nil {
 		return nil, err

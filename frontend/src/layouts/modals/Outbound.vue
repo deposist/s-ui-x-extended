@@ -206,7 +206,10 @@ export default {
       outTypes: OutTypes,
       unavailableOutboundTypes: <string[]>[],
       NoDial: [OutTypes.Selector, OutTypes.URLTest, OutTypes.Bond, OutTypes.Failover, OutTypes.Block, OutTypes.CoreFailover, OutTypes.Fallback, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter],
-      NoServer: [OutTypes.Direct, OutTypes.Selector, OutTypes.URLTest, OutTypes.Tor, OutTypes.OpenVPN, OutTypes.MASQUE, OutTypes.Parser, OutTypes.Bond, OutTypes.Failover, OutTypes.Block, OutTypes.CoreFailover, OutTypes.Fallback, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter],
+      // Call has no server/server_port in the core schema (it joins a room via
+      // join_link); the generic fields poisoned saved configs with an unknown
+      // "server" key that the core rejects, leaving it crash-looping.
+      NoServer: [OutTypes.Direct, OutTypes.Selector, OutTypes.URLTest, OutTypes.Tor, OutTypes.OpenVPN, OutTypes.MASQUE, OutTypes.Parser, OutTypes.Bond, OutTypes.Failover, OutTypes.Block, OutTypes.CoreFailover, OutTypes.Fallback, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter, OutTypes.Call],
     }
   },
   async mounted() {

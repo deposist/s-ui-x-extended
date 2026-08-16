@@ -8,6 +8,16 @@
 
 - 暂无未发布变更。
 
+## [1.1.0-beta3] - 2026-08-17 - 受管 AWG 端点编辑、混淆预设、call outbound 修复
+
+- 修复：启用 “Managed AWG server” 的端点一旦有了设备就无法保存。任何编辑都报 `managed AWG endpoint peers are controlled by the device manager`，尽管根本没有人改动过 peers：守卫按字节比较，而表单往返会重排键并重排空白。现在按集合比较 peers，常规修改（MTU、DNS、公网地址）可以保存；修改 peers 本身仍会被拒绝。
+- 新增：端点表单 Amnezia 区块的两个按钮。“Recommended” 应用一套校准配置：均衡的 junk 填充、保持各包长两两不同且为 header protection 预留的 S 值、标准 init 包前缀和固定的安全时序。“Hardened (randomized)” 在服务器端用 crypto/rand 生成整套参数：头部、junk、填充和 init 包取值。混淆变更后设备需要重新下载配置，表单会提示。
+- 新增：开启 “Managed AWG server” 且公网地址为空时，表单会用面板自身的主机名加 listen 端口给出建议。建议会跟随 listen 端口变化，直到手工编辑该字段。已保存的值不会被改写，仅本地面板地址不会被建议。
+- 修复：保存 call outbound 会写入内核 schema 中不存在的 `server` 字段，导致每次内核启动都报 `json: unknown field "server"`，sing-box 反复崩溃重启，只能手动从数据库删除该行。outbound 表单不再为 call 显示地址和端口字段（它通过 `join_link` 加入房间），面板也会在保存时拒绝并说明原因。
+- 修复：内核启动冷却日志打印 `15ns seconds`；现在打印实际时长。
+
+完整发行说明：[`docs/releases/v1.1.0-beta3.md`](docs/releases/v1.1.0-beta3.md)。
+
 ## [1.1.0-beta2] - 2026-08-16 - 独立的 AmneziaWG、自动设备密钥、旧模式退役
 
 - 受管 AmneziaWG 不再依赖付费订阅页面。AWG 状态行移至面板设置中新的 “AmneziaWG 3.0” 标签页，状态改由 `api/awg/status` 提供（旧路由 `api/paidsub/awg/status` 继续可用）。在 WireGuard 端点上启用 “Managed AWG server”，把服务器分配给客户，然后在客户卡片中创建设备，整个流程不涉及付费模块。
