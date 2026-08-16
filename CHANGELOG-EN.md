@@ -9,6 +9,16 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.1.0-beta1] - 2026-08-16 - panel startup fix and self-update hardening
+
+- The panel no longer shows a blank page in browsers that block storage. In Chrome with "Block all cookies", reading `localStorage` throws a `SecurityError`, and startup code read stored preferences before the app could render. Preference access now goes through a wrapper that falls back to in-memory values for the session, so theme, language, table page sizes, and sidebar state keep working.
+- The page `lang` attribute follows the selected interface language instead of a hardcoded `zh-CN`. Screen readers pick the right pronunciation; the attribute starts as `en` until the app applies the saved locale.
+- The self-updater's artifact downloader refuses a redirect that would move the transfer from HTTPS to plain HTTP.
+- A release tag from the GitHub API must normalize to a valid version before it is placed in a download URL. A tag that fails validation is reported as no release; before, the raw tag went into the URL template after `TrimSpace` alone.
+- New tests cover the storage wrapper, the redirect refusal, and tag validation.
+
+Full release notes: [`docs/releases/v1.1.0-beta1.md`](docs/releases/v1.1.0-beta1.md).
+
 ## [1.0.9] - 2026-08-15 - AmneziaWG 3.0, Call protocol, and reliability fixes
 
 - The core now runs sing-box-extended 2.6.5 with AmneziaWG 3.0. Managed AWG endpoints and device configs use the 3.0 option set: header protection key, content padding addition, rekey/reject/keepalive timings, and max handshake attempts. J1/J2/J3 and itime are gone.

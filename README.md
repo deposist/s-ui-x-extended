@@ -219,7 +219,7 @@ and tokens. Database migrations run on the first start after an upgrade.
 | Channel | Version | Notes |
 | --- | --- | --- |
 | Stable | [`v1.0.9`](docs/releases/v1.0.9.md) | Recommended for production. Includes the full 1.0.9 beta series: AmneziaWG 3.0, the Call protocol, new VPN/AnyTLS/MASQUE options, database restore and WARP Endpoint fixes, and `sing-box-extended 2.6.5`. |
-| Beta | [`v1.0.9-beta4`](docs/releases/v1.0.9-beta4.md) | AmneziaWG 3.0 on a new core, the Call protocol, new VPN/AnyTLS/MASQUE options, and a fix for periodic AWG reconcile failing with no cause in the log. |
+| Beta | [`v1.1.0-beta1`](docs/releases/v1.1.0-beta1.md) | Panel loads in browsers that block storage, the page language attribute follows the UI locale, and the self-updater rejects non-HTTPS redirects and invalid release tags. |
 
 ### Upgrade to the current stable release
 
@@ -233,12 +233,12 @@ curl -fLsS \
 
 ### Upgrade to the current beta release
 
-This command installs or upgrades the server to `v1.0.9-beta4`:
+This command installs or upgrades the server to `v1.1.0-beta1`:
 
 ```sh
 curl -fLsS \
-  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.9-beta4/install.sh \
-  | sudo bash -s -- v1.0.9-beta4
+  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.0-beta1/install.sh \
+  | sudo bash -s -- v1.1.0-beta1
 ```
 
 The version argument matters. If you run a tagged `install.sh` without an
@@ -249,8 +249,8 @@ If you are already running as `root`, the equivalent short form is:
 
 ```sh
 bash <(curl -fLsS \
-  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.9-beta4/install.sh) \
-  v1.0.9-beta4
+  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.0-beta1/install.sh) \
+  v1.1.0-beta1
 ```
 
 After the upgrade, check the installed version and service state:
