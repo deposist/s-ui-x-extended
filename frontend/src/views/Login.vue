@@ -100,6 +100,7 @@
 import { ref } from "vue"
 import { useLocale,useTheme } from 'vuetify'
 import { i18n, languages, setI18nLocale } from '@/locales'
+import { safeGetItem, safeSetItem } from '@/utils/safeStorage'
 import { useRouter } from 'vue-router'
 import HttpUtil, { resetInvalidLoginHandling, markLoginSuccess } from '@/plugins/httputil'
 import { useNexusTheme } from '@/uiMode/nexusTheme'
@@ -186,12 +187,12 @@ const changeLocale = async (l: string | null) => {
 }
 const changeTheme = (th: string) => {
   theme.change(th)
-  localStorage.setItem('theme', th)
+  safeSetItem('theme', th)
 }
 const isActiveTheme = (th: string) => {
   // Mirror vuetify.ts defaultTheme and the in-app topbar: no stored choice → dark.
   // This screen previously reported 'system' as active while rendering dark.
-  const current = localStorage.getItem('theme') ?? 'dark'
+  const current = safeGetItem('theme') ?? 'dark'
   return current == th
 }
 </script>

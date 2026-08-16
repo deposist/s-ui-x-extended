@@ -22,7 +22,7 @@ import store from './store'
 import { registerPlugins } from '@/plugins'
 
 // Locale
-import { i18n, loadInitialLocaleMessages } from '@/locales'
+import { applyDocumentLocale, i18n, loadInitialLocaleMessages } from '@/locales'
 
 // Notivue
 import { createNotivue } from 'notivue'
@@ -42,6 +42,9 @@ const notivue = createNotivue({
 
 const bootstrap = async () => {
   await loadInitialLocaleMessages()
+  // index.html ships a neutral lang="en"; replace it with the user's locale
+  // so screen readers pick the right pronunciation from first paint on.
+  applyDocumentLocale()
 
   const loading = ref(false)
   const app = createApp(App)

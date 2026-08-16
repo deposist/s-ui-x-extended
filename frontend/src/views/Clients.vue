@@ -292,6 +292,7 @@ import { Client } from '@/types/clients'
 import { computed, defineAsyncComponent, ref } from 'vue'
 import { HumanReadable } from '@/plugins/utils'
 import { i18n, locale } from '@/locales'
+import { safeGetItem, safeSetItem } from '@/utils/safeStorage'
 import { useDisplay } from 'vuetify'
 import { useUiMode } from '@/uiMode/useUiMode'
 
@@ -356,11 +357,11 @@ const headers = [
   { key: 'data-table-group', width: 0 },
 ]
 
-const itemPerPage = ref(localStorage.getItem('items-per-page') || '10')
+const itemPerPage = ref(safeGetItem('items-per-page') || '10')
 
 const setItemPerPage = (items: number) => {
   itemPerPage.value = items.toString()
-  localStorage.setItem('items-per-page', items.toString())
+  safeSetItem('items-per-page', items.toString())
 }
 
 const modal = ref({

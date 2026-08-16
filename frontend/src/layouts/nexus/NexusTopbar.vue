@@ -196,6 +196,7 @@
 import { pageHeader, topbarSearch } from '@/components/nexus/primitives/pageHeaderPortal'
 import { languages, setI18nLocale } from '@/locales'
 import { logout } from '@/plugins/httputil'
+import { safeGetItem, safeSetItem } from '@/utils/safeStorage'
 import { UI_PALETTES, useUiPalette } from '@/uiMode/palette'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -237,12 +238,12 @@ const themes = [
 
 const changeTheme = (nextTheme: string) => {
   theme.change(nextTheme)
-  localStorage.setItem('theme', nextTheme)
+  safeSetItem('theme', nextTheme)
 }
 
 const isActiveTheme = (value: string) => {
   // Mirror vuetify.ts defaultTheme: no stored choice → dark.
-  const currentTheme = localStorage.getItem('theme') ?? 'dark'
+  const currentTheme = safeGetItem('theme') ?? 'dark'
 
   return currentTheme === value
 }

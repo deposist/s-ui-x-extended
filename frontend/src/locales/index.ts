@@ -1,4 +1,5 @@
 import { createI18n } from 'vue-i18n'
+import { safeGetItem, safeSetItem } from '@/utils/safeStorage'
 
 type LocaleCode = 'en' | 'fa' | 'vi' | 'zhHans' | 'zhHant' | 'ru'
 type LocaleMessages = Record<string, unknown>
@@ -24,12 +25,7 @@ const normalizeLocale = (value?: string | null): LocaleCode => {
   return DEFAULT_LOCALE
 }
 
-const storedLocale = () => {
-  if (typeof localStorage === 'undefined' || typeof localStorage.getItem !== 'function') {
-    return DEFAULT_LOCALE
-  }
-  return normalizeLocale(localStorage.getItem('locale'))
-}
+const storedLocale = () => normalizeLocale(safeGetItem('locale'))
 
 const initialLocale = storedLocale()
 
@@ -63,22 +59,32 @@ export const loadInitialLocaleMessages = () => loadLocaleMessages(initialLocale)
 export const setI18nLocale = async (localeCode: string) => {
   const normalized = await loadLocaleMessages(localeCode)
   i18n.global.locale.value = normalized
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('locale', normalized)
-  }
+  safeSetItem('locale', normalized)
+  applyDocumentLocale()
   return normalized
 }
 
-export const locale = (() => {
-  switch (initialLocale) {
+// Maps an internal locale code to a BCP47 tag usable outside vue-i18n
+// (Vuetify locale names, document.documentElement.lang).
+const bcp47Locale = (value: LocaleCode): string => {
+  switch (value) {
     case 'zhHans':
       return 'zh-cn'
     case 'zhHant':
       return 'zh-tw'
     default:
-      return initialLocale
+      return value
   }
-})()
+}
+
+// Keeps <html lang> in sync with the active locale so screen readers pick the
+// right pronunciation; index.html ships a neutral "en" until this runs.
+export const applyDocumentLocale = () => {
+  if (typeof document === 'undefined') return
+  document.documentElement.lang = bcp47Locale(normalizeLocale(i18n.global.locale.value))
+}
+
+export const locale = bcp47Locale(initialLocale)
 
 export const languages = [
   { title: 'English', value: 'en' },

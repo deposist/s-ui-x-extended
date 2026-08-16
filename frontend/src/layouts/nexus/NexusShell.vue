@@ -45,6 +45,7 @@ import { useDisplay, useLocale } from 'vuetify'
 
 import ConfirmHost from '@/components/nexus/primitives/ConfirmHost.vue'
 import { useNexusTheme } from '@/uiMode/nexusTheme'
+import { safeGetItem, safeSetItem } from '@/utils/safeStorage'
 import NexusServerStatus from './NexusServerStatus.vue'
 import NexusSidebar from './NexusSidebar.vue'
 import NexusTopbar from './NexusTopbar.vue'
@@ -54,14 +55,7 @@ const { lgAndUp, smAndDown } = useDisplay()
 
 const RAIL_STORAGE_KEY = 'nexus.sidebar.rail'
 
-const readStoredRail = () => {
-  try {
-    return localStorage.getItem(RAIL_STORAGE_KEY) === '1'
-  } catch {
-    // Private mode / disabled storage: fall back to expanded.
-    return false
-  }
-}
+const readStoredRail = () => safeGetItem(RAIL_STORAGE_KEY) === '1'
 
 const isMobile = computed(() => smAndDown.value)
 // Auto-collapse only on true tablet widths (<= 1023px). `mdAndDown` covers up to
@@ -76,12 +70,7 @@ const sidebarRail = computed(() => !isMobile.value && (isTablet.value || manualR
 const sidebarOpen = ref(true)
 const toggleRail = () => {
   manualRail.value = !manualRail.value
-
-  try {
-    localStorage.setItem(RAIL_STORAGE_KEY, manualRail.value ? '1' : '0')
-  } catch {
-    // Non-fatal: the toggle still applies for this session.
-  }
+  safeSetItem(RAIL_STORAGE_KEY, manualRail.value ? '1' : '0')
 }
 
 watch(isMobile, async (mobile) => {

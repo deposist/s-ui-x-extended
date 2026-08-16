@@ -2,6 +2,7 @@ import HttpUtils from '@/plugins/httputil'
 import { defineStore } from 'pinia'
 import { push } from 'notivue'
 import { i18n } from '@/locales'
+import { safeGetItem } from '@/utils/safeStorage'
 import { Inbound } from '@/types/inbounds'
 import { Client } from '@/types/clients'
 import { FailoverStatusEntry } from '@/types/outbounds'
@@ -27,7 +28,7 @@ const Data = defineStore('Data', {
     // Authoritative /api/load acknowledgement cursor returned by the server.
     lastLoad: 0,
     loadGeneration: 0,
-    reloadItems: localStorage.getItem("reloadItems")?.split(',')?? <string[]>[],
+    reloadItems: safeGetItem("reloadItems")?.split(',')?? <string[]>[],
     subURI: "",
     subJsonURI: "",
     subClashURI: "",

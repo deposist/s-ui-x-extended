@@ -196,6 +196,7 @@ import Gauge from '@/components/tiles/Gauge.vue'
 import History from '@/components/tiles/History.vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { i18n, locale } from '@/locales'
+import { safeRemoveItem, safeSetItem } from '@/utils/safeStorage'
 import LogVue from '@/layouts/modals/Logs.vue'
 import Backup from '@/layouts/modals/Backup.vue'
 import UsageStats from '@/layouts/modals/UsageStats.vue'
@@ -233,7 +234,7 @@ const reloadItems = computed({
     if (Data().reloadItems.length == 0 && v.length>0) startTimer()
     if (Data().reloadItems.length > 0 && v.length == 0) stopTimer()
     Data().reloadItems = v
-    v.length>0 ? localStorage.setItem("reloadItems",v.join(',')) : localStorage.removeItem("reloadItems")
+    v.length>0 ? safeSetItem("reloadItems",v.join(',')) : safeRemoveItem("reloadItems")
   }
 })
 

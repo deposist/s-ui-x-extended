@@ -46,6 +46,7 @@ import { useTheme } from 'vuetify'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { languages, setI18nLocale } from '@/locales'
+import { safeGetItem, safeSetItem } from '@/utils/safeStorage'
 
 defineProps(['isMobile'])
 
@@ -66,10 +67,10 @@ const themes = [
 
 const changeTheme = (th: string) => {
   theme.change(th)
-  localStorage.setItem('theme', th)
+  safeSetItem('theme', th)
 }
 const isActiveTheme = (th: string) => {
-  const current = localStorage.getItem('theme') ?? 'system'
+  const current = safeGetItem('theme') ?? 'system'
   return current == th
 }
 </script>

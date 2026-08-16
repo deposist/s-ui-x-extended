@@ -1,16 +1,14 @@
 import { computed, readonly, ref } from 'vue'
 
+import { safeGetItem, safeSetItem } from '@/utils/safeStorage'
+
 import { isNexusEnabled } from './featureGate'
 import { DEFAULT_UI_MODE, UI_MODE_KEY, type UiMode } from './types'
 
 const readPersisted = (): UiMode => {
-  try {
-    const raw = localStorage.getItem(UI_MODE_KEY)
+  const raw = safeGetItem(UI_MODE_KEY)
 
-    return raw === DEFAULT_UI_MODE ? DEFAULT_UI_MODE : DEFAULT_UI_MODE
-  } catch {
-    return DEFAULT_UI_MODE
-  }
+  return raw === DEFAULT_UI_MODE ? DEFAULT_UI_MODE : DEFAULT_UI_MODE
 }
 
 const persisted = ref<UiMode>(readPersisted())
@@ -31,12 +29,7 @@ const syncDocumentUiMode = (next: UiMode): void => {
 const setMode = (_next: UiMode): void => {
   persisted.value = DEFAULT_UI_MODE
   syncDocumentUiMode(effective.value)
-
-  try {
-    localStorage.setItem(UI_MODE_KEY, DEFAULT_UI_MODE)
-  } catch {
-    // Keep the reactive preference when storage is unavailable.
-  }
+  safeSetItem(UI_MODE_KEY, DEFAULT_UI_MODE)
 }
 
 export const useUiMode = () => ({
