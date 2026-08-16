@@ -2,7 +2,6 @@ package service
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -161,7 +160,7 @@ func TestMigrateLegacyAWGSettingsRepointsDevicesOfManagedEndpoint(t *testing.T) 
 	db := database.GetDB()
 	seedLegacyAWGSettings(t, map[string]string{"awgEnabled": "true", "awgEndpointTag": "legacy-awg"})
 	endpoint := createLegacyManagedEndpoint(t, "legacy-awg", "10.77.0.1/16")
-	managedExt := fmt.Sprintf(`{"managed":true,"publicEndpoint":"203.0.113.10:51820","dns":["1.1.1.1"],"defaultDeviceLimit":3}`)
+	managedExt := `{"managed":true,"publicEndpoint":"203.0.113.10:51820","dns":["1.1.1.1"],"defaultDeviceLimit":3}`
 	if err := db.Model(&model.Endpoint{}).Where("id = ?", endpoint.Id).Update("ext", json.RawMessage(managedExt)).Error; err != nil {
 		t.Fatal(err)
 	}

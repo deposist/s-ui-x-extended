@@ -47,7 +47,7 @@ func EnsureAWGEncryptionKey() error {
 	}
 	key, err := readAWGEnvKey(path)
 	if err == nil {
-		os.Setenv(awgEncryptionKeyEnv, key)
+		_ = os.Setenv(awgEncryptionKeyEnv, key)
 		return nil
 	}
 	if !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, errAWGEnvKeyMissing) {
@@ -60,7 +60,7 @@ func EnsureAWGEncryptionKey() error {
 	if err := writeAWGEnvKey(path, key); err != nil {
 		return fmt.Errorf("store %s in %s: %w", awgEncryptionKeyEnv, path, err)
 	}
-	os.Setenv(awgEncryptionKeyEnv, key)
+	_ = os.Setenv(awgEncryptionKeyEnv, key)
 	logger.Info("generated ", awgEncryptionKeyEnv, " in ", path)
 	return nil
 }
@@ -68,6 +68,7 @@ func EnsureAWGEncryptionKey() error {
 // readAWGEnvKey returns the first valid AWG_KEY_ENC entry, matching the
 // installer's first-non-empty-wins read so both consumers agree on one value.
 func readAWGEnvKey(path string) (string, error) {
+	// #nosec G304 G703 -- path is the installer's fixed env file or the admin-set SUI_SECRETBOX_ENV_FILE.
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return "", fmt.Errorf("read env file: %w", err)
@@ -102,10 +103,12 @@ func generateAWGEnvKey() (string, error) {
 // panel and install.sh. The file is replaced atomically and kept owner-only.
 func writeAWGEnvKey(path, key string) error {
 	dir := filepath.Dir(path)
+	// #nosec G703 -- dir derives from the same fixed/admin-set env file path.
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create env dir: %w", err)
 	}
 	content := []byte(nil)
+	// #nosec G304 G703 -- path is the installer's fixed env file or the admin-set SUI_SECRETBOX_ENV_FILE.
 	if raw, err := os.ReadFile(path); err == nil {
 		var kept []string
 		for _, line := range strings.Split(string(raw), "\n") {
@@ -125,22 +128,25 @@ func writeAWGEnvKey(path, key string) error {
 		return fmt.Errorf("create temp env file: %w", err)
 	}
 	tempName := temp.Name()
+	// #nosec G703 -- temp name derives from the fixed/admin-set env file dir.
+	removeTemp := func() { _ = os.Remove(tempName) }
 	if _, err := temp.Write(content); err != nil {
-		temp.Close()
-		os.Remove(tempName)
+		_ = temp.Close()
+		removeTemp()
 		return fmt.Errorf("write temp env file: %w", err)
 	}
 	if err := temp.Chmod(0o600); err != nil {
-		temp.Close()
-		os.Remove(tempName)
+		_ = temp.Close()
+		removeTemp()
 		return fmt.Errorf("restrict temp env file: %w", err)
 	}
 	if err := temp.Close(); err != nil {
-		os.Remove(tempName)
+		removeTemp()
 		return fmt.Errorf("close temp env file: %w", err)
 	}
+	// #nosec G703 -- target is the same fixed/admin-set env file path.
 	if err := os.Rename(tempName, path); err != nil {
-		os.Remove(tempName)
+		removeTemp()
 		return fmt.Errorf("replace env file: %w", err)
 	}
 	return nil

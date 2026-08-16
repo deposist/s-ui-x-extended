@@ -61,7 +61,10 @@ func TestDatabaseOperationMiddlewareAllowsImportXuiRollbackToAcquireRestoreLease
 		if response.Code != http.StatusNoContent {
 			t.Fatalf("rollback restore status=%d", response.Code)
 		}
-	case <-time.After(time.Second):
+	// A real lease deadlock still trips this; the generous window only absorbs
+	// slow first-boot migrations under -race on loaded CI runners, where a
+	// single seed insert has been measured near 1s.
+	case <-time.After(15 * time.Second):
 		t.Fatal("rollback restore deadlocked on its own database request lease")
 	}
 }
