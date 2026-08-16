@@ -152,15 +152,8 @@ func (s *ConfigService) GetConfig(data string) (*[]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if awgSettings, settingsErr := s.SettingService.GetAWGSettings(); settingsErr == nil {
-		var injectErr error
-		endpoints, injectErr = injectAWGManagedEndpointPeers(database.GetDB(), awgSettings, endpoints)
-		if injectErr != nil {
-			logger.Warning("managed AWG peers omitted from core config: ", injectErr)
-		}
-	}
 	if injected, injectErr := InjectManagedAWGEndpointPeers(database.GetDB(), endpoints); injectErr != nil {
-		logger.Warning("endpoint-managed AWG peers omitted from core config: ", injectErr)
+		logger.Warning("managed AWG peers omitted from core config: ", injectErr)
 	} else {
 		endpoints = injected
 	}

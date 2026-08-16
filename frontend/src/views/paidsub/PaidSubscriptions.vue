@@ -23,10 +23,6 @@
       {{ $t('paidSub.secretboxWarning') }}
     </v-alert>
 
-    <v-alert class="mb-3" :type="awgStatus?.enabled && awgStatus?.coreReachable && awgStatus?.encryptionKeyAvailable ? 'success' : 'warning'" variant="tonal">
-      AWG: {{ awgStatus?.enabled ? 'enabled' : 'disabled' }} · core {{ awgStatus?.coreReachable ? 'online' : 'offline' }} · desired {{ awgStatus?.desired ?? 0 }} · provisioned {{ awgStatus?.provisioned ?? 0 }} · pending {{ awgStatus?.pending ?? 0 }} · errors {{ awgStatus?.errors ?? 0 }}
-    </v-alert>
-
     <v-tabs v-model="tab" color="primary" class="px-2">
       <v-tab value="bindings">{{ $t('paidSub.tabs.bindings') }}</v-tab>
       <v-tab value="autoreg">{{ $t('paidSub.tabs.autoreg') }}</v-tab>
@@ -146,18 +142,6 @@
           </v-col>
         </v-row>
         <v-divider class="my-4" />
-        <div class="text-subtitle-2 mb-2">AmneziaWG 3.0</div>
-        <v-row>
-          <v-col cols="12" md="4"><v-switch v-model="awgEnabled" color="primary" label="Enable managed AWG devices" hide-details /></v-col>
-          <v-col cols="12" md="4"><v-text-field v-model="settings.awgEndpointTag" label="Managed endpoint tag" /></v-col>
-          <v-col cols="12" md="4"><v-text-field v-model="settings.awgPublicEndpoint" label="Public endpoint host:port" /></v-col>
-          <v-col cols="12" md="4"><v-text-field v-model="settings.awgSubnet" label="IPv4 subnet" /></v-col>
-          <v-col cols="12" md="4"><v-text-field v-model="settings.awgDNS" label="DNS" /></v-col>
-          <v-col cols="6" md="2"><v-text-field v-model="settings.awgDefaultDeviceLimit" type="number" label="Default device limit" /></v-col>
-          <v-col cols="6" md="2"><v-text-field v-model="settings.awgMTU" type="number" label="MTU (0 = endpoint)" /></v-col>
-          <v-col cols="6" md="2"><v-text-field v-model="settings.awgReconcileIntervalSec" type="number" label="Reconcile seconds" /></v-col>
-          <v-col cols="6" md="2"><v-text-field v-model="settings.awgStatsIntervalSec" type="number" label="Stats seconds" /></v-col>
-        </v-row>
         <v-btn color="primary" :loading="loading" @click="saveSettings">{{ $t('actions.set') }}</v-btn>
       </v-window-item>
 
@@ -650,15 +634,6 @@ const defaults: SMap = {
   paidSubExternalUrlTemplate: '',
   paidSubOrderTTLMinutes: '30',
   paidSubGreeting: '',
-  awgEnabled: 'false',
-  awgEndpointTag: '',
-  awgPublicEndpoint: '',
-  awgSubnet: '10.77.0.0/16',
-  awgDNS: '1.1.1.1,1.0.0.1',
-  awgDefaultDeviceLimit: '3',
-  awgReconcileIntervalSec: '30',
-  awgStatsIntervalSec: '60',
-  awgMTU: '0',
 }
 
 const tab = ref('bindings')
@@ -693,7 +668,6 @@ const stripeEnabled = boolSetting('paidSubStripeEnabled')
 const paymasterEnabled = boolSetting('paidSubPayMasterEnabled')
 const cryptoEnabled = boolSetting('paidSubCryptoBotEnabled')
 const externalEnabled = boolSetting('paidSubExternalEnabled')
-const awgEnabled = boolSetting('awgEnabled')
 
 const autoInbounds = computed<number[]>({
   get: () => {
@@ -716,12 +690,6 @@ const loadStatus = async () => {
   const msg = await HttpUtils.get('api/paidsub/status')
   if (msg.success) secretboxKeySet.value = !!msg.obj?.secretboxKeySet
   else push.error({ title: i18n.global.t('failed'), message: i18n.global.t('pages.paidSub') + ': status' })
-}
-
-const awgStatus = ref<any>(null)
-const loadAWGStatus = async () => {
-  const msg = await HttpUtils.get('api/paidsub/awg/status')
-  if (msg.success) awgStatus.value = msg.obj
 }
 
 const saveSettings = async () => {
@@ -988,7 +956,7 @@ const formatMoney = (amount: number, currency: string) =>
 
 const reloadAll = async () => {
   loading.value = true
-  await Promise.all([loadSettings(), loadStatus(), loadAWGStatus(), loadInbounds(), loadOutbounds(), loadBindings(), loadTariffs(), loadOrders()])
+  await Promise.all([loadSettings(), loadStatus(), loadInbounds(), loadOutbounds(), loadBindings(), loadTariffs(), loadOrders()])
   loading.value = false
 }
 

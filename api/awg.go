@@ -21,6 +21,7 @@ func (a *APIHandler) registerAWGRoutes(g *gin.RouterGroup) {
 	awg := g.Group("/awg")
 	awg.GET("/endpoints", a.ApiService.ListAWGEndpoints)
 	awg.GET("/obfuscation/random", a.ApiService.GetAWGObfuscationRandom)
+	awg.GET("/status", a.ApiService.AWGStatus)
 	awg.GET("/clients/:clientId/access", a.ApiService.ListClientAWGAccess)
 	awg.GET("/clients/:clientId/devices", a.ApiService.ListClientAWGDevices)
 	awg.POST("/clients/:clientId/devices", a.ApiService.CreateClientAWGDevice)
@@ -90,6 +91,16 @@ func (a *ApiService) ListAWGEndpoints(c *gin.Context) {
 		})
 	}
 	jsonObj(c, rows, nil)
+}
+
+// AWGStatus returns the managed-AWG health snapshot for the settings page.
+func (a *ApiService) AWGStatus(c *gin.Context) {
+	info, err := service.CollectAWGStatus()
+	if err != nil {
+		jsonMsg(c, "awg", err)
+		return
+	}
+	jsonObj(c, info, nil)
 }
 
 // GetAWGObfuscationRandom returns a server-generated Amnezia obfuscation

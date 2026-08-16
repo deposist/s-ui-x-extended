@@ -41,7 +41,7 @@ func TestInjectAWGManagedEndpointPeersAddsPSKOnlyInMemory(t *testing.T) {
 		t.Fatal(err)
 	}
 	endpoints := []json.RawMessage{json.RawMessage(`{"type":"wireguard","tag":"awg","peers":[]}`)}
-	got, err := injectAWGManagedEndpointPeers(db, AWGSettings{Enabled: true, EndpointTag: "awg", Subnet: netip.MustParsePrefix("10.77.0.0/29")}, endpoints)
+	got, err := injectAWGManagedEndpointPeersForEndpoint(db, AWGSettings{Enabled: true, EndpointTag: "awg", Subnet: netip.MustParsePrefix("10.77.0.0/29")}, 0, endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}

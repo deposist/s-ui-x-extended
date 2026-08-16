@@ -45,37 +45,15 @@ func RegisterRoutes(g *gin.RouterGroup, deps Deps) {
 	grp.POST("/broadcast", h.broadcast)
 }
 
+// awgStatus keeps the module-namespaced route alive for panels whose bundled
+// frontend still calls it; the canonical endpoint is api/awg/status.
 func (h *apiHandlers) awgStatus(c *gin.Context) {
-	settings, err := (&service.SettingService{}).GetAWGSettings()
+	info, err := service.CollectAWGStatus()
 	if err != nil {
-		respFail(c, "invalid AWG settings")
-		return
-	}
-	var counts struct {
-		Desired     int64
-		Provisioned int64
-		Pending     int64
-		Errors      int64
-	}
-	db := database.GetDB()
-	if err := db.Model(&model.AWGDevice{}).Where("desired_enabled = ?", true).Count(&counts.Desired).Error; err != nil {
 		respFail(c, "AWG status unavailable")
 		return
 	}
-	_ = db.Model(&model.AWGDevice{}).Where("provisioned = ?", true).Count(&counts.Provisioned).Error
-	_ = db.Model(&model.AWGDevice{}).Where("sync_state <> ?", "in_sync").Count(&counts.Pending).Error
-	_ = db.Model(&model.AWGDevice{}).Where("last_error <> ''").Count(&counts.Errors).Error
-	coreReachable := false
-	if core := service.DefaultRuntime().Core(); core != nil {
-		coreReachable = core.IsRunning()
-	}
-	_, encryptionErr := service.NewAWGCipherFromEnv()
-	respOK(c, map[string]any{
-		"enabled": settings.Enabled, "endpointTag": settings.EndpointTag,
-		"coreReachable": coreReachable, "encryptionKeyAvailable": encryptionErr == nil,
-		"desired": counts.Desired, "provisioned": counts.Provisioned,
-		"pending": counts.Pending, "errors": counts.Errors,
-	})
+	respOK(c, info)
 }
 
 type broadcastRequest struct {

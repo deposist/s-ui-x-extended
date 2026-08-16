@@ -30,8 +30,8 @@ type awgNameState struct {
 	expiresAt  int64
 }
 
-// awgOps unifies the legacy single-endpoint device service and the
-// endpoint-scoped manager behind the deviceID-shaped calls the bot uses.
+// awgOps wraps the endpoint-scoped device manager behind the deviceID-shaped
+// calls the bot uses.
 type awgOps struct {
 	get    func(deviceID uint) (service.AWGDeviceInfo, error)
 	render func(ctx context.Context, deviceID uint) ([]byte, error)
@@ -68,48 +68,36 @@ func (b *Bot) awgOpsFor(clientID, deviceID uint) (awgOps, error) {
 	if err != nil {
 		return awgOps{}, err
 	}
-	if endpointID > 0 {
-		managed := service.DefaultRuntime().AWGEndpointDeviceService()
-		if managed == nil || !awgCommandsAccepted() {
-			return awgOps{}, service.ErrAWGConfigUnavailable
-		}
-		return awgOps{
-			get: func(id uint) (service.AWGDeviceInfo, error) { return managed.GetOwnedDevice(clientID, endpointID, id) },
-			render: func(ctx context.Context, id uint) ([]byte, error) {
-				return managed.RenderOwnedConfig(ctx, clientID, endpointID, id)
-			},
-			rotate: func(ctx context.Context, id uint, requestKey string) (service.AWGDeviceInfo, error) {
-				return managed.RotateOwnedDevice(ctx, clientID, endpointID, id, requestKey)
-			},
-			revoke: func(ctx context.Context, id uint) error {
-				return managed.RevokeOwnedDevice(ctx, clientID, endpointID, id)
-			},
-		}, nil
+	if endpointID == 0 {
+		return awgOps{}, service.ErrAWGConfigUnavailable
 	}
-	legacy := service.DefaultRuntime().AWGDeviceService()
-	if legacy == nil || !awgCommandsAccepted() {
+	managed := service.DefaultRuntime().AWGEndpointDeviceService()
+	if managed == nil || !awgCommandsAccepted() {
 		return awgOps{}, service.ErrAWGConfigUnavailable
 	}
 	return awgOps{
-		get:    func(id uint) (service.AWGDeviceInfo, error) { return legacy.GetOwnedDevice(id, clientID) },
-		render: func(ctx context.Context, id uint) ([]byte, error) { return legacy.RenderOwnedConfig(ctx, id, clientID) },
-		rotate: func(ctx context.Context, id uint, requestKey string) (service.AWGDeviceInfo, error) {
-			return legacy.RotateOwnedDevice(ctx, id, clientID, requestKey)
+		get: func(id uint) (service.AWGDeviceInfo, error) { return managed.GetOwnedDevice(clientID, endpointID, id) },
+		render: func(ctx context.Context, id uint) ([]byte, error) {
+			return managed.RenderOwnedConfig(ctx, clientID, endpointID, id)
 		},
-		revoke: func(ctx context.Context, id uint) error { return legacy.RevokeOwnedDevice(ctx, id, clientID) },
+		rotate: func(ctx context.Context, id uint, requestKey string) (service.AWGDeviceInfo, error) {
+			return managed.RotateOwnedDevice(ctx, clientID, endpointID, id, requestKey)
+		},
+		revoke: func(ctx context.Context, id uint) error {
+			return managed.RevokeOwnedDevice(ctx, clientID, endpointID, id)
+		},
 	}, nil
 }
 
-func (b *Bot) awgClient(tgID int64) (uint, service.AWGDeviceService, error) {
+func (b *Bot) awgClient(tgID int64) (uint, error) {
 	client, err := b.svc.ClientByTgUserId(tgID)
 	if err != nil {
-		return 0, nil, err
+		return 0, err
 	}
-	devices := service.DefaultRuntime().AWGDeviceService()
-	if devices == nil || !awgCommandsAccepted() {
-		return 0, nil, service.ErrAWGConfigUnavailable
+	if !awgCommandsAccepted() {
+		return 0, service.ErrAWGConfigUnavailable
 	}
-	return client.Id, devices, nil
+	return client.Id, nil
 }
 
 func (b *Bot) allowAWG(tgID int64) bool {
@@ -121,7 +109,7 @@ func (b *Bot) cmdAWGList(ctx context.Context, chatID, tgID int64, l lang) {
 		_ = b.sendMessage(ctx, chatID, tr(l, "rate_limited"), nil)
 		return
 	}
-	clientID, devices, err := b.awgClient(tgID)
+	clientID, err := b.awgClient(tgID)
 	if err != nil {
 		_ = b.sendMessage(ctx, chatID, tr(l, "awg_unavailable"), nil)
 		return
@@ -158,20 +146,6 @@ func (b *Bot) cmdAWGList(ctx context.Context, chatID, tgID int64, l lang) {
 			}
 			rows = append(rows, []inlineButton{{Text: addLabel, CallbackData: fmt.Sprintf("awg:add:%d", access.EndpointID)}})
 		}
-	} else {
-		list, listErr := devices.ListDevices(clientID)
-		if listErr != nil {
-			_ = b.sendMessage(ctx, chatID, tr(l, "error"), nil)
-			return
-		}
-		for _, device := range list {
-			label := device.Name
-			if !device.Provisioned {
-				label += " (pending)"
-			}
-			rows = append(rows, []inlineButton{{Text: label, CallbackData: fmt.Sprintf("awg:v:%d", device.ID)}})
-		}
-		rows = append(rows, []inlineButton{{Text: tr(l, "awg_add"), CallbackData: "awg:add"}})
 	}
 	rows = append(rows, []inlineButton{{Text: tr(l, "menu_back"), CallbackData: "menu"}})
 	_ = b.sendMessage(ctx, chatID, tr(l, "awg_title"), &inlineKeyboard{InlineKeyboard: rows})
@@ -182,7 +156,7 @@ func (b *Bot) cmdAWGCreate(ctx context.Context, chatID, tgID int64, endpointID u
 		_ = b.sendMessage(ctx, chatID, tr(l, "rate_limited"), nil)
 		return
 	}
-	clientID, _, err := b.awgClient(tgID)
+	clientID, err := b.awgClient(tgID)
 	if err != nil {
 		_ = b.sendMessage(ctx, chatID, tr(l, "awg_unavailable"), nil)
 		return
@@ -203,34 +177,23 @@ func (b *Bot) cmdAWGCreate(ctx context.Context, chatID, tgID int64, endpointID u
 }
 
 func (b *Bot) createNamedAWG(ctx context.Context, chatID, tgID int64, name string, state awgNameState, l lang) {
-	clientID, devices, err := b.awgClient(tgID)
+	clientID, err := b.awgClient(tgID)
 	if err != nil {
 		_ = b.sendMessage(ctx, chatID, tr(l, "awg_unavailable"), nil)
 		return
 	}
-	var device service.AWGDeviceInfo
-	if state.endpointID > 0 {
-		managed := service.DefaultRuntime().AWGEndpointDeviceService()
-		if managed == nil {
-			_ = b.sendMessage(ctx, chatID, tr(l, "awg_unavailable"), nil)
-			return
-		}
-		// Bot-created devices have no expiry (0 = never); setting a term from
-		// the bot is a possible follow-up, not part of this stage.
-		device, err = managed.CreateDevice(ctx, clientID, state.endpointID, state.requestKey, name, 0)
-	} else {
-		settings, settingsErr := (&service.SettingService{}).GetAWGSettings()
-		if settingsErr != nil {
-			_ = b.sendMessage(ctx, chatID, tr(l, "awg_unavailable"), nil)
-			return
-		}
-		limit, limitErr := (&TariffService{}).EffectiveAWGDeviceLimit(clientID, settings.DefaultDeviceLimit)
-		if limitErr != nil {
-			_ = b.sendMessage(ctx, chatID, tr(l, "error"), nil)
-			return
-		}
-		device, err = devices.CreateDevice(ctx, clientID, state.requestKey, name, limit, 0)
+	if state.endpointID == 0 {
+		_ = b.sendMessage(ctx, chatID, tr(l, "awg_unavailable"), nil)
+		return
 	}
+	managed := service.DefaultRuntime().AWGEndpointDeviceService()
+	if managed == nil {
+		_ = b.sendMessage(ctx, chatID, tr(l, "awg_unavailable"), nil)
+		return
+	}
+	// Bot-created devices have no expiry (0 = never); setting a term from
+	// the bot is a possible follow-up, not part of this stage.
+	device, err := managed.CreateDevice(ctx, clientID, state.endpointID, state.requestKey, name, 0)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrAWGInvalidDeviceName):
@@ -247,7 +210,7 @@ func (b *Bot) createNamedAWG(ctx context.Context, chatID, tgID int64, name strin
 }
 
 func (b *Bot) cmdAWGView(ctx context.Context, chatID, tgID int64, deviceID uint, l lang) {
-	clientID, _, err := b.awgClient(tgID)
+	clientID, err := b.awgClient(tgID)
 	if err != nil {
 		return
 	}
@@ -277,7 +240,7 @@ func (b *Bot) cmdAWGConfig(ctx context.Context, chatID, tgID int64, deviceID uin
 	if !b.allowAWG(tgID) {
 		return
 	}
-	clientID, _, err := b.awgClient(tgID)
+	clientID, err := b.awgClient(tgID)
 	if err != nil {
 		return
 	}
@@ -299,7 +262,7 @@ func (b *Bot) cmdAWGQR(ctx context.Context, chatID, tgID int64, deviceID uint, l
 	if !b.allowAWG(tgID) {
 		return
 	}
-	clientID, _, err := b.awgClient(tgID)
+	clientID, err := b.awgClient(tgID)
 	if err != nil {
 		return
 	}
@@ -323,7 +286,7 @@ func (b *Bot) cmdAWGQR(ctx context.Context, chatID, tgID int64, deviceID uint, l
 }
 
 func (b *Bot) confirmAWGRotate(ctx context.Context, chatID, tgID int64, deviceID uint, callbackID string, l lang) {
-	clientID, _, err := b.awgClient(tgID)
+	clientID, err := b.awgClient(tgID)
 	if err != nil {
 		return
 	}
@@ -346,7 +309,7 @@ func (b *Bot) rotateAWG(ctx context.Context, chatID, tgID int64, deviceID uint, 
 	if !b.allowAWG(tgID) {
 		return
 	}
-	clientID, _, err := b.awgClient(tgID)
+	clientID, err := b.awgClient(tgID)
 	if err != nil {
 		return
 	}
@@ -363,7 +326,7 @@ func (b *Bot) rotateAWG(ctx context.Context, chatID, tgID int64, deviceID uint, 
 }
 
 func (b *Bot) confirmAWGDelete(ctx context.Context, chatID, tgID int64, deviceID uint, l lang) {
-	clientID, _, err := b.awgClient(tgID)
+	clientID, err := b.awgClient(tgID)
 	if err != nil {
 		return
 	}
@@ -382,7 +345,7 @@ func (b *Bot) deleteAWG(ctx context.Context, chatID, tgID int64, deviceID uint, 
 	if !b.allowAWG(tgID) {
 		return
 	}
-	clientID, _, err := b.awgClient(tgID)
+	clientID, err := b.awgClient(tgID)
 	if err != nil {
 		return
 	}

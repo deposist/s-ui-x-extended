@@ -986,6 +986,15 @@ export default {
     basics: "Basics",
     interface: "Interface",
     maintenance: "Maintenance",
+    awg: {
+      title: "AmneziaWG 3.0",
+      hint: "AmneziaWG devices are managed per endpoint: enable 'Managed AWG server' in the endpoint form, assign the server to a client, then create devices in the client card. The device encryption key (AWG_KEY_ENC) is provisioned automatically on panel start. Installations from the old single-endpoint mode are migrated automatically.",
+      status: {
+        summary: "AWG: {servers} managed server(s) · core {core} · desired {desired} · provisioned {provisioned} · pending {pending} · errors {errors}",
+        coreOnline: "online",
+        coreOffline: "offline",
+      },
+    },
     regenerateLinks: "Regenerate client links & QR",
     sub: "Subscription",
     addr: "Address",

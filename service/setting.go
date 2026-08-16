@@ -152,7 +152,10 @@ var defaultValueMap = map[string]string{
 	"paidSubOrderTTLMinutes":      "30",
 	"paidSubGreeting":             "",
 	"paidSubRefundRevoke":         "true",
-	// Managed AmneziaWG devices.
+	// Legacy settings-based managed AWG mode. The runtime path was removed;
+	// startup migration converts these into endpoint Ext metadata and switches
+	// awgEnabled off. Keys stay accepted so older bundled frontends can still
+	// save the whole settings block without errors.
 	"awgEnabled":              "false",
 	"awgEndpointTag":          "",
 	"awgPublicEndpoint":       "",
@@ -980,9 +983,6 @@ func (s *SettingService) validateAll(settings map[string]string) error {
 			return err
 		}
 		if err := validatePaidSubSettingInput(key, obj); err != nil {
-			return err
-		}
-		if err := validateAWGSettingInput(key, obj); err != nil {
 			return err
 		}
 		if err := validateIpCertSettingInput(key, obj); err != nil {

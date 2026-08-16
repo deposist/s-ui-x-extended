@@ -101,8 +101,10 @@ type AWGManagerDeps struct {
 func defaultAWGManagerDeps() AWGManagerDeps {
 	return AWGManagerDeps{
 		DB: database.GetDB(),
+		// Endpoint-scoped managers always override LoadSettings with their
+		// endpoint's Ext metadata; there is no global fallback anymore.
 		LoadSettings: func() (AWGSettings, error) {
-			return (&SettingService{}).GetAWGSettings()
+			return AWGSettings{}, errors.New("AWG settings require an endpoint-scoped manager")
 		},
 		LoadEndpoint:      LoadAWGManagedEndpoint,
 		SyncEndpointPeers: SyncAWGManagedEndpointPeers,

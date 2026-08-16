@@ -12,11 +12,12 @@
     <v-tab value="t3">{{ $t('setting.jsonSub') }}</v-tab>
     <v-tab value="t4">{{ $t('setting.clashSub') }}</v-tab>
     <v-tab value="t6">{{ $t('setting.basics') }}</v-tab>
+    <v-tab value="t7">{{ $t('setting.awg.title') }}</v-tab>
     <v-tab value="t5">{{ $t('setting.maintenance') }}</v-tab>
   </v-tabs>
   <v-card-text>
     <v-row
-      v-if="tab !== 't5'"
+      v-if="tab !== 't5' && tab !== 't7'"
       align="center"
       class="settings-actions"
       :class="{ 'settings-actions--nexus': nexus }"
@@ -1385,6 +1386,10 @@
         </v-row>
       </v-window-item>
 
+      <v-window-item value="t7">
+        <AwgSettingsTab />
+      </v-window-item>
+
       <v-window-item value="t5">
         <MaintenanceTab />
       </v-window-item>
@@ -1407,6 +1412,7 @@ import { FindDiff } from '@/plugins/utils'
 import SubJsonExtVue from '@/components/SubJsonExt.vue'
 import SubClashExtVue from '@/components/SubClashExt.vue'
 import MaintenanceTab from '@/components/settings/MaintenanceTab.vue'
+import AwgSettingsTab from '@/components/settings/AwgSettingsTab.vue'
 import Dial from '@/components/Dial.vue'
 import { normalizeSecretFields, stripSecretPlaceholders } from '@/components/settingsSecretField'
 import { push } from 'notivue'

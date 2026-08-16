@@ -8,6 +8,14 @@
 
 - 暂无未发布变更。
 
+## [1.1.0-beta2] - 2026-08-16 - 独立的 AmneziaWG、自动设备密钥、旧模式退役
+
+- 受管 AmneziaWG 不再依赖付费订阅页面。AWG 状态行移至面板设置中新的 “AmneziaWG 3.0” 标签页，状态改由 `api/awg/status` 提供（旧路由 `api/paidsub/awg/status` 继续可用）。在 WireGuard 端点上启用 “Managed AWG server”，把服务器分配给客户，然后在客户卡片中创建设备，整个流程不涉及付费模块。
+- 面板启动时若缺少 AmneziaWG 设备加密密钥（`AWG_KEY_ENC`）会自动补齐：优先使用环境变量，其次使用环境文件（`/etc/s-ui/secretbox.env`，或 `SUI_SECRETBOX_ENV_FILE` 指定的路径）中已有的有效密钥，仅在两者都没有时生成新密钥。已有密钥永不轮换。这补上了通过网页面板更新只替换二进制、不运行安装器，导致设备操作报 `awg: AWG encryption key is unavailable` 的缺口。Windows 下请在服务环境中设置该变量，或用 `SUI_SECRETBOX_ENV_FILE` 指向密钥文件。
+- 旧的单端点受管模式（“Enable managed AWG devices” 开关）已移除。升级后首次启动时面板会自动转换此类配置：带该标签的端点获得受管元数据，既有设备重新指向它，客户保留访问权限，状态行改为统计受管服务器数量。若端点缺失或设备地址不在端点子网内，面板会在日志中写明问题并保留设置等待下次启动。beta1 中开启该区块始终报 `enabled AWG requires endpoint tag and public endpoint`（即使两个字段都已填写）的缺陷也随之消除。
+
+完整发行说明：[`docs/releases/v1.1.0-beta2.md`](docs/releases/v1.1.0-beta2.md)。
+
 ## [1.1.0-beta1] - 2026-08-16 - 面板启动修复与自更新加固
 
 - 修复在禁用存储的浏览器中面板显示空白页的问题。在 Chrome 开启「阻止所有 Cookie」时，读取 `localStorage` 会抛出 `SecurityError`，而启动代码在界面渲染前就读取保存的偏好。现在所有偏好访问都经过一个包装器，失败时在内存中保留本会话的值，主题、语言、表格分页大小和侧边栏状态恢复正常。

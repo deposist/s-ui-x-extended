@@ -9,6 +9,14 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.1.0-beta2] - 2026-08-16 - AmneziaWG on its own, automatic device key, legacy mode retired
+
+- Managed AmneziaWG no longer depends on the Paid Subscriptions page. The AWG status line moved to a new "AmneziaWG 3.0" tab in panel Settings and is served from `api/awg/status` (the old `api/paidsub/awg/status` route keeps working). Enable "Managed AWG server" on a WireGuard endpoint, assign the server to clients, and create devices in the client card. The paid module is not involved anywhere in this flow.
+- The panel provisions the AmneziaWG device encryption key (`AWG_KEY_ENC`) automatically on start when it is missing: it reuses the environment value, then a valid key already stored in the environment file (`/etc/s-ui/secretbox.env`, or the path in `SUI_SECRETBOX_ENV_FILE`), and only generates a new key when neither exists. An existing key is never rotated. This closes the gap where an update through the web panel replaced the binary without running the installer, leaving managed device operations failing with `awg: AWG encryption key is unavailable`. On Windows, set the variable in the service environment or point `SUI_SECRETBOX_ENV_FILE` at a file.
+- The old single-endpoint managed AWG mode (the "Enable managed AWG devices" switch) has been removed. On the first start after the upgrade the panel converts such setups automatically: the tagged endpoint receives managed metadata, existing devices are re-pointed to it, clients keep their access, and the status line starts counting managed servers. If the endpoint is missing or a device address falls outside the endpoint subnet, the panel logs a warning naming the problem and leaves the settings for the next start. This also fixes the beta1 defect where enabling the block always failed with `enabled AWG requires endpoint tag and public endpoint` even when both fields were filled in.
+
+Full release notes: [`docs/releases/v1.1.0-beta2.md`](docs/releases/v1.1.0-beta2.md).
+
 ## [1.1.0-beta1] - 2026-08-16 - panel startup fix and self-update hardening
 
 - The panel no longer shows a blank page in browsers that block storage. In Chrome with "Block all cookies", reading `localStorage` throws a `SecurityError`, and startup code read stored preferences before the app could render. Preference access now goes through a wrapper that falls back to in-memory values for the session, so theme, language, table page sizes, and sidebar state keep working.

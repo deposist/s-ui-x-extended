@@ -119,10 +119,6 @@ func SyncAWGManagedEndpointPeers(db *gorm.DB, settings AWGSettings, peers []AWGP
 	return nil
 }
 
-func injectAWGManagedEndpointPeers(db *gorm.DB, settings AWGSettings, endpoints []json.RawMessage) ([]json.RawMessage, error) {
-	return injectAWGManagedEndpointPeersForEndpoint(db, settings, 0, endpoints)
-}
-
 func injectAWGManagedEndpointPeersForEndpoint(db *gorm.DB, settings AWGSettings, endpointID uint, endpoints []json.RawMessage) ([]json.RawMessage, error) {
 	if !settings.Enabled {
 		return endpoints, nil

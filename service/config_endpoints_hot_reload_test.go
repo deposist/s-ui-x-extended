@@ -115,21 +115,25 @@ func TestConfigSaveEndpointsEditHotReloadsWithoutCoreRestart(t *testing.T) {
 func TestManagedAWGEndpointPeersCannotBeEdited(t *testing.T) {
 	initSettingTestDB(t)
 	db := database.GetDB()
-	for key, value := range validAWGSettingValues() {
-		if err := db.Where("key = ?", key).Assign(model.Setting{Value: value}).FirstOrCreate(&model.Setting{Key: key}).Error; err != nil {
-			t.Fatal(err)
-		}
-	}
+	managedExt := `{"managed":true,"publicEndpoint":"vpn.example.com:51820","dns":["1.1.1.1"],"defaultDeviceLimit":3}`
 	endpoint := createTestEndpoint(t, "managed-awg")
+	if err := db.Model(&model.Endpoint{}).Where("id = ?", endpoint.Id).
+		Update("options", json.RawMessage(fmt.Sprintf(`{"system":false,"address":["10.77.0.1/24"],"private_key":%q,"listen_port":51820,"peers":[],"mtu":1408}`, testWireguardKey))).
+		Update("ext", json.RawMessage(managedExt)).Error; err != nil {
+		t.Fatal(err)
+	}
 	changedPeers := json.RawMessage(fmt.Sprintf(
-		`{"id":%d,"type":"wireguard","tag":"managed-awg","system":false,"address":["10.0.0.2/32"],"private_key":%q,"peers":[{"public_key":%q,"allowed_ips":["10.77.0.2/32"]}],"mtu":1408}`,
-		endpoint.Id, testWireguardKey, testWireguardKey))
+		`{"id":%d,"type":"wireguard","tag":"managed-awg","system":false,"address":["10.77.0.1/24"],"private_key":%q,"listen_port":51820,"ext":%s,"peers":[{"public_key":%q,"allowed_ips":["10.77.0.2/32"]}],"mtu":1408}`,
+		endpoint.Id, testWireguardKey, managedExt, testWireguardKey))
 	configService := NewConfigServiceWithRuntime(NewRuntimeWithCoreProvider(nil))
 	_, err := configService.Save("endpoints", "edit", changedPeers, "", "admin", "example.com")
 	if err == nil || !strings.Contains(err.Error(), "peers are controlled") {
 		t.Fatalf("managed peer edit error = %v", err)
 	}
-	if _, err := configService.Save("endpoints", "edit", endpointPayload(endpoint.Id, "managed-awg", 1400), "", "admin", "example.com"); err != nil {
+	unchanged := json.RawMessage(fmt.Sprintf(
+		`{"id":%d,"type":"wireguard","tag":"managed-awg","system":false,"address":["10.77.0.1/24"],"private_key":%q,"listen_port":51820,"ext":%s,"peers":[],"mtu":1400}`,
+		endpoint.Id, testWireguardKey, managedExt))
+	if _, err := configService.Save("endpoints", "edit", unchanged, "", "admin", "example.com"); err != nil {
 		t.Fatalf("non-peer managed endpoint edit was blocked: %v", err)
 	}
 	all, err := (&EndpointService{}).GetAll()

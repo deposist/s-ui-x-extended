@@ -136,17 +136,6 @@ func (p *awgProvisioner) runWithIPC(ctx context.Context, fn func(core.WireGuardI
 		return errAWGIPCUnavailable
 	}
 	endpointTag := p.endpointTag
-	// The legacy global manager is constructed before the admin enables AWG,
-	// so an empty tag must resolve against the live awgEndpointTag setting.
-	// A non-empty tag (endpoint-scoped managers pass the managed endpoint's
-	// own tag) is authoritative: overriding it with the legacy setting would
-	// send every scoped reconcile to the wrong endpoint, or to none when the
-	// legacy scheme is disabled.
-	if endpointTag == "" && p.runtime != nil {
-		if settings, err := (&SettingService{}).GetAWGSettings(); err == nil {
-			endpointTag = settings.EndpointTag
-		}
-	}
 	if endpointTag == "" {
 		return errAWGIPCUnavailable
 	}

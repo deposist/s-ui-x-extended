@@ -214,6 +214,17 @@ func (s *AWGEndpointManager) CollectStatsAll(ctx context.Context) error {
 	return result
 }
 
+// SuspendClients and ResumeClient intentionally reuse full reconciliation:
+// eligibility is derived from committed client state, and each endpoint worker
+// serializes the live changes with create/rotate/stats.
+func (s *AWGEndpointManager) SuspendClients(ctx context.Context, _ []uint) error {
+	return s.ReconcileAll(ctx)
+}
+
+func (s *AWGEndpointManager) ResumeClient(ctx context.Context, _ uint) error {
+	return s.ReconcileAll(ctx)
+}
+
 // StopAll closes admission before canceling every worker. Holding mu while the
 // snapshot is stopped prevents Start or a racing lazy manager creation from
 // publishing a worker after shutdown has begun.

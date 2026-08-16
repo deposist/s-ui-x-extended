@@ -11,8 +11,6 @@ import (
 	"testing"
 
 	"github.com/deposist/s-ui-x-extended/core"
-	"github.com/deposist/s-ui-x-extended/database"
-	"github.com/deposist/s-ui-x-extended/database/model"
 )
 
 type fakeAWGIPC struct {
@@ -274,25 +272,12 @@ func TestAWGProvisionerEndpointTagWinsOverGlobalSettings(t *testing.T) {
 	}
 }
 
-// The legacy global manager is built before the admin enables AWG, so an empty
-// constructed tag must still resolve against the live awgEndpointTag setting.
-func TestAWGProvisionerEmptyTagFallsBackToGlobalSettings(t *testing.T) {
-	initSettingTestDB(t)
-	if err := database.GetDB().Create(&model.Setting{Key: "awgEndpointTag", Value: "legacy-awg"}).Error; err != nil {
-		t.Fatal(err)
-	}
-	runtime := NewRuntime(nil)
-	provisioner := NewAWGProvisioner(runtime, "")
-	var gotTag string
-	provisioner.(*awgProvisioner).withIPC = func(_ context.Context, tag string, fn func(core.WireGuardIPC) error) error {
-		gotTag = tag
-		return fn(&fakeAWGIPC{})
-	}
-	if _, err := provisioner.Snapshot(context.Background()); err != nil {
-		t.Fatalf("Snapshot() error = %v", err)
-	}
-	if gotTag != "legacy-awg" {
-		t.Fatalf("IPC endpoint tag = %q, want legacy settings tag %q", gotTag, "legacy-awg")
+// An endpoint-scoped provisioner always carries its endpoint tag; an empty tag
+// can only mean a misconstructed manager and must fail closed.
+func TestAWGProvisionerEmptyTagFailsClosed(t *testing.T) {
+	provisioner := NewAWGProvisioner(NewRuntime(nil), "")
+	if _, err := provisioner.Snapshot(context.Background()); err == nil {
+		t.Fatal("empty endpoint tag must not reach the IPC layer")
 	}
 }
 

@@ -29,7 +29,6 @@ type APP struct {
 	cronJob            *cronjob.CronJob
 	core               *core.Core
 	runtime            *service.Runtime
-	awgManager         *service.AWGManager
 	awgEndpointManager *service.AWGEndpointManager
 	awgMu              sync.Mutex
 	awgRun             *awgLoopRun
@@ -142,18 +141,24 @@ func (a *APP) Init() error {
 	if err := paidsub.EnsureSchema(database.GetDB()); err != nil {
 		return err
 	}
-	// Keep the legacy single-endpoint manager for existing installations, while
-	// the endpoint-scoped manager powers newly assigned AWG endpoints.
-	if awgSettings, awgErr := a.SettingService.GetAWGSettings(); awgErr != nil {
-		logger.Warning("failed to load AWG settings: ", awgErr)
-	} else {
-		a.awgManager = service.NewAWGManager(a.runtime, service.NewAWGProvisioner(a.runtime, awgSettings.EndpointTag), 128)
-		a.runtime.SetAWGClientStateHook(a.awgManager)
-		a.runtime.SetAWGDeviceService(a.awgManager)
+	// Provision the AWG device-key encryption key before any component can
+	// need it: web-panel self-updates swap the binary without running
+	// install.sh, so startup is the one path every update shares.
+	if err := service.EnsureAWGEncryptionKey(); err != nil {
+		logger.Warning("AWG device encryption unavailable: ", err)
+	}
+	// Convert the removed settings-based managed-AWG mode into endpoint
+	// metadata before the managers come up; failures leave the panel running
+	// but loudly logged so the admin can fix the named endpoint and restart.
+	if migrated, err := service.MigrateLegacyAWGSettings(database.GetDB()); err != nil {
+		logger.Warning("legacy managed AWG migration failed: ", err)
+	} else if migrated {
+		logger.Info("migrated legacy managed AWG settings to endpoint metadata")
 	}
 	a.awgEndpointManager = service.NewAWGEndpointManager(a.runtime)
 	a.runtime.SetAWGEndpointDeviceService(a.awgEndpointManager)
 	a.runtime.SetAWGReconcileHook(a.awgEndpointManager.ReconcileAll)
+	a.runtime.SetAWGClientStateHook(a.awgEndpointManager)
 	// Outbound failover observability table (non-authoritative; idempotent).
 	if err := service.EnsureFailoverSchema(database.GetDB()); err != nil {
 		logger.Warning("failed to ensure failover_state schema: ", err)
@@ -194,21 +199,6 @@ func (a *APP) Start() error {
 		return err
 	}
 	if err := runStartLifecycle([]lifecycleStep{
-		{name: "awg", start: func() error {
-			if a.awgManager == nil {
-				return nil
-			}
-			return a.awgManager.Start()
-		}, stop: func() {
-			if a.awgManager == nil {
-				return
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			if err := a.awgManager.Stop(ctx); err != nil {
-				logger.Warning("rollback AWG manager err: ", err)
-			}
-		}},
 		{name: "awg endpoints", start: func() error {
 			if a.awgEndpointManager == nil {
 				return nil
@@ -286,13 +276,6 @@ func (a *APP) Stop() {
 		logger.Warning("stop AWG loops err:", err)
 	}
 	awgLoopCancel()
-	if a.awgManager != nil {
-		awgCtx, awgCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		if err := a.awgManager.Stop(awgCtx); err != nil {
-			logger.Warning("stop AWG manager err:", err)
-		}
-		awgCancel()
-	}
 	if a.awgEndpointManager != nil {
 		awgCtx, awgCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		if err := a.awgEndpointManager.StopAll(awgCtx); err != nil {
@@ -344,12 +327,6 @@ func (a *APP) startAWGLoops() {
 		}
 	}
 	reconcileInterval, statsInterval := awgLoopIntervals()
-	legacyEnabled := false
-	if settings, err := a.SettingService.GetAWGSettings(); err == nil && settings.Enabled {
-		legacyEnabled = true
-		reconcileInterval = time.Duration(settings.ReconcileIntervalSec) * time.Second
-		statsInterval = time.Duration(settings.StatsIntervalSec) * time.Second
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	run := &awgLoopRun{cancel: cancel, done: make(chan struct{})}
 	a.awgRun = run
@@ -364,22 +341,12 @@ func (a *APP) startAWGLoops() {
 			case <-ctx.Done():
 				return
 			case <-reconcileTicker.C:
-				if legacyEnabled && a.awgManager != nil {
-					if _, err := a.awgManager.Reconcile(ctx); err != nil && ctx.Err() == nil {
-						logger.Warning("periodic AWG reconcile failed: ", err)
-					}
-				}
 				if a.awgEndpointManager != nil {
 					if err := a.awgEndpointManager.ReconcileAll(ctx); err != nil && ctx.Err() == nil {
 						logger.Warning("periodic endpoint AWG reconcile failed: ", err)
 					}
 				}
 			case <-statsTicker.C:
-				if legacyEnabled && a.awgManager != nil {
-					if _, err := a.awgManager.CollectStats(ctx); err != nil && ctx.Err() == nil {
-						logger.Warning("periodic AWG stats failed: ", err)
-					}
-				}
 				if a.awgEndpointManager != nil {
 					if err := a.awgEndpointManager.CollectStatsAll(ctx); err != nil && ctx.Err() == nil {
 						logger.Warning("periodic endpoint AWG stats failed: ", err)

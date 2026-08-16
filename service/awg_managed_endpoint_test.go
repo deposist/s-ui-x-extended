@@ -14,10 +14,7 @@ import (
 func TestLoadAWGManagedEndpoint(t *testing.T) {
 	initSettingTestDB(t)
 	db := database.GetDB()
-	settings, err := parseAWGSettings(validAWGSettingValues())
-	if err != nil {
-		t.Fatal(err)
-	}
+	settings := managedTestAWGSettings()
 	privateKey, err := wgtypes.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
@@ -67,10 +64,7 @@ func TestLoadAWGManagedEndpointRejectsInvalidEndpointWithoutLeakingOptions(t *te
 		t.Run(test.name, func(t *testing.T) {
 			initSettingTestDB(t)
 			db := database.GetDB()
-			settings, err := parseAWGSettings(validAWGSettingValues())
-			if err != nil {
-				t.Fatal(err)
-			}
+			settings := managedTestAWGSettings()
 			if test.mutate != nil {
 				test.mutate(&settings)
 			}
@@ -80,7 +74,7 @@ func TestLoadAWGManagedEndpointRejectsInvalidEndpointWithoutLeakingOptions(t *te
 					t.Fatal(err)
 				}
 			}
-			_, err = LoadAWGManagedEndpoint(db, settings)
+			_, err := LoadAWGManagedEndpoint(db, settings)
 			if err == nil || !strings.Contains(err.Error(), test.wantMessage) {
 				t.Fatalf("error = %v, want message containing %q", err, test.wantMessage)
 			}

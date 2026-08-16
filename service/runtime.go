@@ -59,7 +59,6 @@ type Runtime struct {
 	telegramNotifier   *telegramNotifier
 	tokenUse           *tokenUseDebouncer
 	awgClientState     AWGClientStateHook
-	awgDevices         AWGDeviceService
 	awgEndpointDevices AWGEndpointDeviceService
 	awgReconcile       func(context.Context) error
 
@@ -72,15 +71,6 @@ type Runtime struct {
 type AWGClientStateHook interface {
 	SuspendClients(ctx context.Context, clientIDs []uint) error
 	ResumeClient(ctx context.Context, clientID uint) error
-}
-
-type AWGDeviceService interface {
-	CreateDevice(context.Context, uint, string, string, int, int64) (AWGDeviceInfo, error)
-	ListDevices(uint) ([]AWGDeviceInfo, error)
-	GetOwnedDevice(uint, uint) (AWGDeviceInfo, error)
-	RenderOwnedConfig(context.Context, uint, uint) ([]byte, error)
-	RotateOwnedDevice(context.Context, uint, uint, string) (AWGDeviceInfo, error)
-	RevokeOwnedDevice(context.Context, uint, uint) error
 }
 
 func (r *Runtime) SetAWGClientStateHook(hook AWGClientStateHook) {
@@ -109,25 +99,6 @@ type AWGEndpointDeviceService interface {
 	RenderOwnedConfig(context.Context, uint, uint, uint) ([]byte, error)
 	RotateOwnedDevice(context.Context, uint, uint, uint, string) (AWGDeviceInfo, error)
 	RevokeOwnedDevice(context.Context, uint, uint, uint) error
-}
-
-func (r *Runtime) SetAWGDeviceService(devices AWGDeviceService) {
-	if r == nil {
-		return
-	}
-	r.mu.Lock()
-	r.awgDevices = devices
-	r.mu.Unlock()
-}
-
-func (r *Runtime) AWGDeviceService() AWGDeviceService {
-	if r == nil {
-		return nil
-	}
-	r.mu.RLock()
-	devices := r.awgDevices
-	r.mu.RUnlock()
-	return devices
 }
 
 func (r *Runtime) SetAWGEndpointDeviceService(devices AWGEndpointDeviceService) {
