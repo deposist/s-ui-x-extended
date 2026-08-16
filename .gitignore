@@ -66,9 +66,66 @@ test-db/
 
 # Windows reserved device-name files accidentally created by shell probes
 frontend/src/**/nul
+
+# Agent session shell-probe scratch output (ig* = ingest probes, b_pv*/b_preview* = preview dumps)
+ig*.txt
+b_pv*.txt
+b_preview*.txt
+b1_*.diff
+b1_*.txt
+probe*.txt
+ls_probe.txt
+py2.txt
+t_ig.txt
+
+# Local code-review reports (kept out of releases, same convention as AUDIT*.md)
+CODE_REVIEW_FINDINGS_*.md
+
+# Local API-test workspaces
+.omp/
+.postman/
+postman/
+
 # Local agent/audit/release scratch files - not useful to end users
 .hermes/
 .tools-bin/
+
+# --- Protection mirrored from local .git/info/exclude (must hold in EVERY clone) ---
+
+# Generated admin credentials (SECRETS - must never reach any remote)
+initial-admin.txt
+**/initial-admin.txt
+
+# Local AI-assistant instructions/state and agent tooling dirs
+CLAUDE.md
+AGENTS.md
+.claude/
+.codegraph/
+.specify/
+.kiro/
+.continue/
+.agents/
+.pi/
+.zcode/
+.crew/
+.codex_deps/
+.tmp/
+
+# Local editor dirs
+.idea
+.vscode
+
+# Local planning notes, specs, and internal handoff docs (not for public repo)
+specs/
+docs/plans/
+docs/superpowers/
+docs/UPGRADE-*.md
+docs/NODES-EXPERIMENTAL-PLAN.md
+docs/code-map.md
+docs/remediation-plan-v1.0.7.md
+
+# Local Semgrep runtime config
+.semgrepignore
 .ci-artifacts-*/
 .ci-release-*/
 .ci-v107-*/

@@ -1,0 +1,84 @@
+diff --git a/protocol/wireguard/endpoint.go b/protocol/wireguard/endpoint.go
+index b20f4580..f40e7a2b 100644
+--- a/protocol/wireguard/endpoint.go
++++ b/protocol/wireguard/endpoint.go
+@@ -4,0 +5 @@ import (
++	"errors"
+@@ -166,0 +168,14 @@ func (w *Endpoint) Close() error {
++func (w *Endpoint) IpcGet() (string, error) {
++	if w.endpoint == nil {
++		return "", errors.New("wireguard endpoint is not initialized")
++	}
++	return w.endpoint.IpcGet()
++}
++
++func (w *Endpoint) IpcSet(config string) error {
++	if w.endpoint == nil {
++		return errors.New("wireguard endpoint is not initialized")
++	}
++	return w.endpoint.IpcSet(config)
++}
++
+diff --git a/protocol/wireguard/endpoint_ipc_test.go b/protocol/wireguard/endpoint_ipc_test.go
+new file mode 100644
+index 00000000..73272308
+--- /dev/null
++++ b/protocol/wireguard/endpoint_ipc_test.go
+@@ -0,0 +1,15 @@
++package wireguard
++
++import (
++	"testing"
++
++	"github.com/stretchr/testify/require"
++)
++
++func TestEndpointIPCBeforeInitialization(t *testing.T) {
++	endpoint := new(Endpoint)
++
++	_, err := endpoint.IpcGet()
++	require.EqualError(t, err, "wireguard endpoint is not initialized")
++	require.EqualError(t, endpoint.IpcSet(""), "wireguard endpoint is not initialized")
++}
+diff --git a/transport/wireguard/endpoint.go b/transport/wireguard/endpoint.go
+index a875cf64..ec35ea16 100644
+--- a/transport/wireguard/endpoint.go
++++ b/transport/wireguard/endpoint.go
+@@ -6,0 +7 @@ import (
++	"errors"
+@@ -294,0 +296,14 @@ func (e *Endpoint) Close() error {
++func (e *Endpoint) IpcGet() (string, error) {
++	if e.device == nil {
++		return "", errors.New("wireguard device is not started")
++	}
++	return e.device.IpcGet()
++}
++
++func (e *Endpoint) IpcSet(config string) error {
++	if e.device == nil {
++		return errors.New("wireguard device is not started")
++	}
++	return e.device.IpcSet(config)
++}
++
+diff --git a/transport/wireguard/endpoint_ipc_test.go b/transport/wireguard/endpoint_ipc_test.go
+new file mode 100644
+index 00000000..5c316332
+--- /dev/null
++++ b/transport/wireguard/endpoint_ipc_test.go
+@@ -0,0 +1,15 @@
++package wireguard
++
++import (
++	"testing"
++
++	"github.com/stretchr/testify/require"
++)
++
++func TestEndpointIPCBeforeStart(t *testing.T) {
++	endpoint := new(Endpoint)
++
++	_, err := endpoint.IpcGet()
++	require.EqualError(t, err, "wireguard device is not started")
++	require.EqualError(t, endpoint.IpcSet(""), "wireguard device is not started")
++}
