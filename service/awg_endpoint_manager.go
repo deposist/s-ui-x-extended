@@ -15,10 +15,10 @@ import (
 // AWGEndpointManager routes device operations to an isolated manager per
 // endpoint. This keeps UAPI commands serialized without sharing endpoint state.
 type AWGEndpointManager struct {
-	runtime  *Runtime
-	mu       sync.Mutex
+	runtime   *Runtime
+	mu        sync.Mutex
 	accepting bool
-	managers map[uint]*AWGManager
+	managers  map[uint]*AWGManager
 }
 
 func NewAWGEndpointManager(runtime *Runtime) *AWGEndpointManager {

@@ -1,9 +1,9 @@
 package middleware
 
 import (
+	"github.com/gin-gonic/gin"
 	"os"
 	"strings"
-	"github.com/gin-gonic/gin"
 )
 
 const (

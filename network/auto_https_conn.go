@@ -3,9 +3,9 @@ package network
 import (
 	"bufio"
 	"bytes"
-	"net/url"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 )

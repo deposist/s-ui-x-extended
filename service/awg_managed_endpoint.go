@@ -34,22 +34,22 @@ type awgManagedEndpointOptions struct {
 		PersistentKeepaliveInterval uint32   `json:"persistent_keepalive_interval,omitempty"`
 	} `json:"peers"`
 	Amnezia *struct {
-		JC    int    `json:"jc"`
-		JMin  int    `json:"jmin"`
-		JMax  int    `json:"jmax"`
-		S1    int    `json:"s1"`
-		S2    int    `json:"s2"`
-		S3    int    `json:"s3"`
-		S4    int    `json:"s4"`
-		H1    any    `json:"h1"`
-		H2    any    `json:"h2"`
-		H3    any    `json:"h3"`
-		H4    any    `json:"h4"`
-		I1    string `json:"i1"`
-		I2    string `json:"i2"`
-		I3    string `json:"i3"`
-		I4    string `json:"i4"`
-		I5    string `json:"i5"`
+		JC   int    `json:"jc"`
+		JMin int    `json:"jmin"`
+		JMax int    `json:"jmax"`
+		S1   int    `json:"s1"`
+		S2   int    `json:"s2"`
+		S3   int    `json:"s3"`
+		S4   int    `json:"s4"`
+		H1   any    `json:"h1"`
+		H2   any    `json:"h2"`
+		H3   any    `json:"h3"`
+		H4   any    `json:"h4"`
+		I1   string `json:"i1"`
+		I2   string `json:"i2"`
+		I3   string `json:"i3"`
+		I4   string `json:"i4"`
+		I5   string `json:"i5"`
 
 		HeaderProtectionKey    string `json:"header_protection_key"`
 		ContentPaddingAddition any    `json:"content_padding_addition"`

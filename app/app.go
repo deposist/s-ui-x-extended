@@ -39,10 +39,10 @@ type awgLoopRun struct {
 	cancel context.CancelFunc
 	done   chan struct{}
 }
+
 var awgLoopIntervals = func() (time.Duration, time.Duration) {
 	return 30 * time.Second, 60 * time.Second
 }
-
 
 func NewApp() *APP {
 	return &APP{}
