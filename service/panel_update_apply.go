@@ -90,13 +90,29 @@ type panelUpdateDeps struct {
 	execPath string
 }
 
+// panelUpdateHTTPClient is the downloader used for release artifacts,
+// checksums, and manifests. Redirects are followed only within https: the
+// initial URL scheme is pinned, but without this hook a redirect response
+// could otherwise downgrade the transfer to plain http.
+func panelUpdateHTTPClient() *http.Client {
+	return &http.Client{
+		Timeout: downloadTimeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if req.URL.Scheme != "https" {
+				return fmt.Errorf("refusing redirect to non-https url")
+			}
+			return nil
+		},
+	}
+}
+
 func defaultPanelUpdateDeps() panelUpdateDeps {
 	exe, err := os.Executable()
 	if err != nil {
 		exe = ""
 	}
 	return panelUpdateDeps{
-		client:   &http.Client{Timeout: downloadTimeout},
+		client:   panelUpdateHTTPClient(),
 		execPath: exe,
 	}
 }

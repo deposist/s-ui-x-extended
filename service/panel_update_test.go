@@ -1219,3 +1219,57 @@ func TestApplySuccessRecordsAppliedAuditBeforeExit(t *testing.T) {
 		t.Fatalf("rollback pending-marker not written: %v", err)
 	}
 }
+
+// The download client must refuse a redirect that downgrades the transfer to
+// plain http even though the initial artifact URL is https (SR-003/SR-004).
+func TestDownloadToFileRefusesNonHTTPSRedirect(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/artifact" {
+			w.Header().Set("Location", "http://127.0.0.1:1/evil")
+			w.WriteHeader(http.StatusFound)
+			return
+		}
+		_, _ = w.Write([]byte("payload"))
+	}))
+	defer server.Close()
+
+	client := panelUpdateHTTPClient()
+	client.Transport = server.Client().Transport
+
+	dest := filepath.Join(t.TempDir(), "artifact")
+	err := downloadToFile(context.Background(), client, server.URL+"/artifact", dest)
+	if err == nil {
+		t.Fatal("redirect to non-https url must fail the download")
+	}
+	if _, statErr := os.Stat(dest); !os.IsNotExist(statErr) {
+		t.Fatalf("failed download must not leave a partial artifact: %v", statErr)
+	}
+}
+
+func TestDownloadToFileFollowsHTTPSRedirect(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/redirect":
+			// Relative Location keeps the https origin of the test server.
+			w.Header().Set("Location", "/final")
+			w.WriteHeader(http.StatusFound)
+		case "/final":
+			_, _ = w.Write([]byte("payload"))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := panelUpdateHTTPClient()
+	client.Transport = server.Client().Transport
+
+	dest := filepath.Join(t.TempDir(), "artifact")
+	if err := downloadToFile(context.Background(), client, server.URL+"/redirect", dest); err != nil {
+		t.Fatalf("https redirect must be followed: %v", err)
+	}
+	got, err := os.ReadFile(dest)
+	if err != nil || string(got) != "payload" {
+		t.Fatalf("artifact content = %q, %v", got, err)
+	}
+}

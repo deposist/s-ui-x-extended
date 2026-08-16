@@ -203,6 +203,41 @@ func TestResolveReleaseRequiresManifestAndChecksum(t *testing.T) {
 	}
 }
 
+// A tag that does not normalize to a valid release version must never reach
+// the download URL template (defense in depth against a hostile/compromised
+// API response): resolveRelease reports the release as absent instead.
+func TestResolveReleaseRejectsInvalidTags(t *testing.T) {
+	setArtifactPlatformForTest(t)
+	assets := []ghAsset{
+		{Name: "s-ui-linux-amd64.tar.gz"},
+		{Name: "s-ui-linux-amd64.tar.gz.sha256"},
+		{Name: "s-ui-linux-amd64.tar.gz.manifest.json"},
+	}
+	for _, tag := range []string{
+		"../../other-repo",
+		"..%2F..%2Fother-repo",
+		"not-a-version",
+		"1.2.3+build",
+		"1.2.3-Beta1",
+	} {
+		if resolved := resolveRelease(&ghRelease{TagName: tag, Assets: assets}); resolved != nil {
+			t.Fatalf("tag %q must be rejected, got %#v", tag, resolved)
+		}
+	}
+}
+
+func TestResolveReleaseAcceptsVPrefixedSemverTags(t *testing.T) {
+	setArtifactPlatformForTest(t)
+	resolved := resolveRelease(&ghRelease{TagName: "v1.0.9-beta4", Assets: []ghAsset{
+		{Name: "s-ui-linux-amd64.tar.gz"},
+		{Name: "s-ui-linux-amd64.tar.gz.sha256"},
+		{Name: "s-ui-linux-amd64.tar.gz.manifest.json"},
+	}})
+	if resolved == nil || resolved.version != "1.0.9-beta4" || !resolved.assetAvailable {
+		t.Fatalf("v-prefixed semver tag must resolve, got %#v", resolved)
+	}
+}
+
 // T010: beta channel over HTTP surfaces the graduated stable as the latest.
 func TestCheckForChannelBetaGraduationOverHTTP(t *testing.T) {
 	setArtifactPlatformForTest(t)

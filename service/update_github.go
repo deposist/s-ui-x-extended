@@ -128,7 +128,10 @@ func selectBetaRelease(releases []ghRelease) *ghRelease {
 
 // resolveRelease builds the cached release view, computing the artifact URLs from
 // a fixed template (SR-004) and whether an installable asset exists for this
-// platform.
+// platform. A tag that does not normalize to a valid release version is
+// rejected outright (nil): the tag comes from the GitHub API response, and
+// letting arbitrary bytes flow into the download URL template would only be
+// exploitable with repo access — this is defense in depth, not a primary control.
 func resolveRelease(release *ghRelease) *resolvedRelease {
 	if release == nil {
 		return nil
@@ -137,10 +140,14 @@ func resolveRelease(release *ghRelease) *resolvedRelease {
 	if tag == "" {
 		return nil
 	}
+	version := config.NormalizeVersion(tag)
+	if version == "" || config.ValidateReleaseVersion(version) != nil {
+		return nil
+	}
 	platform := config.ResolveArtifactPlatform()
 	resolved := &resolvedRelease{
 		tag:        tag,
-		version:    config.NormalizeVersion(tag),
+		version:    version,
 		prerelease: release.Prerelease || isPrereleaseTag(tag),
 		notes:      strings.TrimSpace(release.Body),
 		htmlURL:    strings.TrimSpace(release.HTMLURL),
