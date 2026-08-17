@@ -8,6 +8,17 @@
 
 - 暂无未发布变更。
 
+## [1.1.0] - 2026-08-17 - 面板内置受管 AWG、call 与备份修复、面板启动与自更新修复
+
+- 受管 AmneziaWG 从付费订阅页面移至面板设置中的新「AmneziaWG 3.0」标签页，状态由 `api/awg/status` 提供。面板启动时若缺少设备加密密钥（`AWG_KEY_ENC`）会自动补齐，旧的单端点模式（「Enable managed AWG devices」开关）会在升级后首次启动时自动转换为受管端点。
+- 带设备的受管 AWG 端点重新可以编辑：peers 按集合比较，常规修改（MTU、DNS、公网地址）不再被拦截。端点表单 Amnezia 区块新增两个混淆预设按钮（「Recommended」与「Hardened (randomized)」），公网地址为空时会根据面板主机名和监听端口给出建议。
+- call outbound 不再能让内核崩溃重启：表单不再保存内核没有的 `server` 字段，并将 `join_link` 标为必填，面板也会在服务端拒绝这两类错误并说明原因。如果内核已在重启循环，请在 Outbounds 页删除该 call outbound。
+- 当旧值无法解密时，保存新的 telegram 备份口令不再报 `save: secret setting decrypt failed`：旧值记入警告日志并视为已变更，新口令覆盖它。
+- 面板在阻止存储的浏览器中正常加载（Chrome「阻止所有 Cookie」不再白屏），页面 `lang` 属性跟随界面语言，自更新模块拒绝 HTTPS 到 HTTP 的重定向以及无法归一化为合法版本的标签。
+- 修复内核启动冷却日志打印 `15ns seconds` 的问题。
+
+完整发行说明：[`docs/releases/v1.1.0.md`](docs/releases/v1.1.0.md)。
+
 ## [1.1.0-beta4] - 2026-08-17 - telegram 备份口令恢复、call outbound 的 join_link 守卫
 
 - 修复：当先前保存的 telegram 备份口令无法再解密时（例如用早期面板世代的密钥加密），保存新口令会报 `save: secret setting decrypt failed`。保存路径读取旧值只是为了变更审计，却因此中断，恰恰挡住了修复该密钥的操作。现在无法读取的旧值会以警告记入日志并视为已变更：新口令覆盖损坏的值，无需手工改数据库。

@@ -9,6 +9,17 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.1.0] - 2026-08-17 - managed AWG in panel settings, call and backup fixes, panel startup and self-update fixes
+
+- Managed AmneziaWG moved out of the Paid Subscriptions page to a new "AmneziaWG 3.0" tab in panel Settings, served from `api/awg/status`. The panel provisions the device encryption key (`AWG_KEY_ENC`) automatically on start when it is missing, and the old single-endpoint mode ("Enable managed AWG devices") converts to managed endpoints automatically on the first start after the upgrade.
+- Managed AWG endpoints with devices can be edited again: peers are compared as a set, so normal edits (MTU, DNS, public endpoint) go through. Two new buttons in the Amnezia block of the endpoint form apply obfuscation presets ("Recommended" and "Hardened (randomized)"), and an empty public endpoint field gets a suggestion built from the panel hostname and listen port.
+- Call outbounds can no longer crash-loop the core. The form no longer saves the unsupported `server` field and marks `join_link` required, and the panel rejects both mistakes server-side with an explanatory error. If your core is already restart-looping, delete the call outbound on the Outbounds page.
+- Saving a new telegram backup passphrase no longer fails with `save: secret setting decrypt failed` when the stored value cannot be decrypted: the old value is logged as a warning and treated as changed, so the new passphrase overwrites it.
+- The panel loads in browsers that block storage (Chrome "Block all cookies" no longer shows a blank page), the page `lang` attribute follows the selected interface language, and the self-updater refuses HTTPS-to-HTTP redirects and rejects release tags that do not normalize to a valid version.
+- Fixed the core start cooldown log printing `15ns seconds`.
+
+Full release notes: [`docs/releases/v1.1.0.md`](docs/releases/v1.1.0.md).
+
 ## [1.1.0-beta4] - 2026-08-17 - telegram backup passphrase recovery, call outbound join_link guard
 
 - Fixed: saving a new telegram backup passphrase failed with `save: secret setting decrypt failed` whenever the previously stored value could not be decrypted anymore (for example, sealed under key material from an earlier panel generation). The save path read the old value only for the change audit and aborted on it, which blocked the very action that repairs the secret. An unreadable stored value is now logged as a warning and treated as changed, so the new passphrase overwrites the broken one and manual database surgery is not needed.
