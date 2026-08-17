@@ -479,3 +479,44 @@ func TestSecretboxEnvOverrideCanReadSettingsSecretLegacyCiphertext(t *testing.T)
 		t.Fatalf("unexpected fallback audit details: %s", event.Details)
 	}
 }
+
+// A stored backup passphrase that cannot be decrypted anymore (for example,
+// sealed under key material the process no longer has) must not block saving
+// a new one: that save is the only in-panel recovery for the broken secret.
+func TestSavePassphraseOverwritesUnreadableStoredValue(t *testing.T) {
+	settingService := initSettingTestDB(t)
+	foreignKey := bytes.Repeat([]byte{0xA7}, 32)
+	foreignBox, err := secretbox.NewRawKey(foreignKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unreadable, err := foreignBox.EncryptString("old-passphrase", "telegramBackupPassphrase")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.GetDB().Where("key = ?", "telegramBackupPassphrase").
+		Assign(model.Setting{Value: unreadable}).
+		FirstOrCreate(&model.Setting{Key: "telegramBackupPassphrase", Value: unreadable}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := settingService.GetTelegramBackupPassphraseBytes(); err == nil {
+		t.Fatal("expected the seeded blob to be undecryptable by the panel keys")
+	}
+
+	newPassphrase := "fresh horse battery staple"
+	payload, err := json.Marshal(map[string]string{"telegramBackupPassphrase": newPassphrase})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&ConfigService{}).Save("settings", "set", payload, "", "admin", "localhost"); err != nil {
+		t.Fatalf("saving a new passphrase over an unreadable stored value failed: %v", err)
+	}
+	decrypted, err := settingService.GetTelegramBackupPassphraseBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zeroBytes(decrypted)
+	if string(decrypted) != newPassphrase {
+		t.Fatalf("unexpected stored passphrase %q", string(decrypted))
+	}
+}

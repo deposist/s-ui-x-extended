@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
@@ -12,24 +13,32 @@ import (
 	"gorm.io/gorm"
 )
 
-// rejectUnknownCallOutboundDialFields blocks call outbounds carrying
-// server/server_port before they reach the database. The call outbound schema
-// in the core has no dial fields (it joins a room via join_link), so the core
-// rejects the saved config with "json: unknown field \"server\"" on every
-// start, which crash-loops sing-box until the row is removed by hand.
-func rejectUnknownCallOutboundDialFields(data json.RawMessage) error {
+// rejectInvalidCallOutbound blocks call outbounds that the core would reject
+// at start, before they reach the database. The call outbound schema has no
+// dial fields (it joins a room via join_link) and requires a non-empty
+// join_link; either violation makes every core start fail ("unknown field
+// \"server\"" / "missing join_link"), which crash-loops sing-box until the
+// row is removed by hand.
+func rejectInvalidCallOutbound(data json.RawMessage) error {
 	var fields struct {
 		Type       string  `json:"type"`
+		JoinLink   string  `json:"join_link"`
 		Server     *string `json:"server"`
 		ServerPort *uint16 `json:"server_port"`
 	}
 	if err := json.Unmarshal(data, &fields); err != nil {
 		return nil // malformed payloads fail later in the model unmarshal
 	}
-	if fields.Type != "call" || fields.Server == nil && fields.ServerPort == nil {
+	if fields.Type != "call" {
 		return nil
 	}
-	return fmt.Errorf("call outbounds have no server or port; configure join_link instead (a saved server field makes the core reject the whole config)")
+	if fields.Server != nil || fields.ServerPort != nil {
+		return fmt.Errorf("call outbounds have no server or port; configure join_link instead (a saved server field makes the core reject the whole config)")
+	}
+	if strings.TrimSpace(fields.JoinLink) == "" {
+		return fmt.Errorf("call outbounds require a join_link (the invite link of a call room created by the host side); an empty join_link makes the core reject the whole config")
+	}
+	return nil
 }
 
 type OutboundService struct {
@@ -100,7 +109,7 @@ func (s *OutboundService) Save(tx *gorm.DB, act string, data json.RawMessage) (*
 }
 
 func (s *OutboundService) saveOutboundUpsert(tx *gorm.DB, data json.RawMessage) (*entityCoreChange, error) {
-	if err := rejectUnknownCallOutboundDialFields(data); err != nil {
+	if err := rejectInvalidCallOutbound(data); err != nil {
 		return nil, err
 	}
 	var outbound model.Outbound

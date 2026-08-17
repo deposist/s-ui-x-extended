@@ -8,6 +8,13 @@
 
 - 暂无未发布变更。
 
+## [1.1.0-beta4] - 2026-08-17 - telegram 备份口令恢复、call outbound 的 join_link 守卫
+
+- 修复：当先前保存的 telegram 备份口令无法再解密时（例如用早期面板世代的密钥加密），保存新口令会报 `save: secret setting decrypt failed`。保存路径读取旧值只是为了变更审计，却因此中断，恰恰挡住了修复该密钥的操作。现在无法读取的旧值会以警告记入日志并视为已变更：新口令覆盖损坏的值，无需手工改数据库。
+- 修复：不带 `join_link` 保存的 call outbound 会让每次内核启动都报 `initialize outbound ... missing join_link`，sing-box 反复重启，只能手动删除该行。outbound 表单现在为 call 标记该字段为必填并说明链接来源，面板也会在保存时拒绝并说明原因。如果配置已损坏，在 Outbounds 页删除该 call outbound，内核会在重启冷却后恢复。
+
+完整发行说明：[`docs/releases/v1.1.0-beta4.md`](docs/releases/v1.1.0-beta4.md)。
+
 ## [1.1.0-beta3] - 2026-08-17 - 受管 AWG 端点编辑、混淆预设、call outbound 修复
 
 - 修复：启用 “Managed AWG server” 的端点一旦有了设备就无法保存。任何编辑都报 `managed AWG endpoint peers are controlled by the device manager`，尽管根本没有人改动过 peers：守卫按字节比较，而表单往返会重排键并重排空白。现在按集合比较 peers，常规修改（MTU、DNS、公网地址）可以保存；修改 peers 本身仍会被拒绝。

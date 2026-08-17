@@ -1858,6 +1858,8 @@ export default {
       memoryLimit: "Memory limit",
       joinLink: "Join link",
       joinLinkHint: "Empty creates a new call; paste an existing call link to join it.",
+      joinLinkOutboundHint: "Outbound joins a room hosted elsewhere; the host side logs the link when it creates the room.",
+      joinLinkRequired: "Outbound requires a join link; an empty one makes the core reject the whole config.",
       email: "Email (dion re-auth)",
       password: "Password (dion re-auth)",
       cookies: "Cookies",

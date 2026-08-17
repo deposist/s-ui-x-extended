@@ -33,8 +33,9 @@
         <v-text-field
           hide-details
           :label="$t('types.call.joinLink')"
-          :hint="$t('types.call.joinLinkHint')"
+          :hint="direction === 'out' ? $t('types.call.joinLinkOutboundHint') : $t('types.call.joinLinkHint')"
           persistent-hint
+          :error-messages="direction === 'out' && !data.join_link ? [$t('types.call.joinLinkRequired')] : []"
           v-model="data.join_link"></v-text-field>
       </v-col>
     </v-row>

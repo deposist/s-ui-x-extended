@@ -9,6 +9,13 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 - No unreleased changes.
 
+## [1.1.0-beta4] - 2026-08-17 - telegram backup passphrase recovery, call outbound join_link guard
+
+- Fixed: saving a new telegram backup passphrase failed with `save: secret setting decrypt failed` whenever the previously stored value could not be decrypted anymore (for example, sealed under key material from an earlier panel generation). The save path read the old value only for the change audit and aborted on it, which blocked the very action that repairs the secret. An unreadable stored value is now logged as a warning and treated as changed, so the new passphrase overwrites the broken one and manual database surgery is not needed.
+- Fixed: a call outbound saved without a `join_link` made every core start fail with `initialize outbound ... missing join_link`, and sing-box restart-looped until the row was deleted by hand. The outbound form now marks the field required for call and explains where the link comes from, and the panel rejects such saves server-side with an explanatory error. If your config is already poisoned, delete the call outbound on the Outbounds page and the core recovers after the restart cooldown.
+
+Full release notes: [`docs/releases/v1.1.0-beta4.md`](docs/releases/v1.1.0-beta4.md).
+
 ## [1.1.0-beta3] - 2026-08-17 - managed AWG endpoint editing, obfuscation presets, call outbound fix
 
 - Fixed: an endpoint with "Managed AWG server" enabled could not be saved once it had devices. Every edit failed with `managed AWG endpoint peers are controlled by the device manager` even though the peers were not touched: the guard compared the peers byte by byte, and a form round-trip reorders keys and reformats whitespace. Peers are now compared as a set, so normal edits (MTU, DNS, public endpoint) go through. Editing the peers themselves is still rejected.

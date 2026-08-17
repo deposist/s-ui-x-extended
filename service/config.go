@@ -672,7 +672,12 @@ func (s *ConfigService) telegramBackupPassphraseAuditState(obj string, data json
 	}
 	oldPassphrase, err := s.SettingService.GetTelegramBackupPassphraseBytes()
 	if err != nil {
-		return false, false, err
+		// An unreadable stored value (for example, sealed under key material
+		// the process no longer has) must not block saving a NEW passphrase:
+		// that save is exactly the recovery action. Record it as a change and
+		// let the new value overwrite the broken blob.
+		logger.Warning("stored telegram backup passphrase is unreadable; treating the new value as a change: ", err)
+		return true, newPassphrase != "", nil
 	}
 	defer zeroBytes(oldPassphrase)
 	if string(oldPassphrase) == newPassphrase {
