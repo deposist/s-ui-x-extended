@@ -1,16 +1,14 @@
 # S-UI-X Extended v1.1.1-beta2
 
-This beta fixes a server crash: saving a TrustTunnel inbound without a TLS configuration stopped sing-box from starting and sent the panel into a restart loop. No database migration is required.
+This beta fixes a server crash: saving a TrustTunnel inbound without a TLS config could send the restart watchdog into a loop. No database migration.
 
-The TrustTunnel protocol requires TLS — the core rejects an inbound with `TLS required` when no TLS config is attached. The panel validation did not check this, so a save with no TLS template passed, committed the row, and then sing-box failed to start. The watchdog kept retrying, creating a crash loop.
+The TrustTunnel protocol always requires TLS. When you saved an inbound with no TLS template, the panel committed the row, then sing-box failed with `TLS required`. The watchdog retried every ~30 seconds, creating a crash loop.
 
-The panel now blocks the save before it reaches the database — on the frontend (the protocol picker flags TrustTunnel as TLS-required) and on the backend (the API path rejects the save and returns an error). If you have an affected TrustTunnel inbound from a previous version, edit it, attach a TLS configuration, and save.
+Now the panel rejects these saves before they hit the database. TrustTunnel is flagged as `onlyTls` in the manifest, so the frontend blocks the save, and the backend API returns an error. This covers the UI and the API/import path.
 
-## Fixed
+If you have a broken TrustTunnel inbound from a previous version: edit it, attach a TLS template, save. It starts immediately.
 
-- TrustTunnel inbound saves without a TLS template are now rejected before commit, preventing a core restart loop. The protocol manifest now marks TrustTunnel as `onlyTls`, the frontend blocks the save, and the server-side save path returns an error for API and import callers.
-
-## Upgrade from the console
+## Upgrade
 
 ```sh
 curl -fLsS \
@@ -18,25 +16,21 @@ curl -fLsS \
   | sudo bash -s -- v1.1.1-beta2
 ```
 
-Then verify the installation:
-
+Verify:
 ```sh
-/usr/local/s-ui/sui -v
-systemctl is-active s-ui
-journalctl -u s-ui -n 50 --no-pager
+/usr/local/s-ui/sui -v   # 1.1.1-beta2
+systemctl is-active s-ui  # active
 ```
 
-The installer preserves the panel database and configuration.
+Full notes: [`docs/releases/v1.1.1-beta2.md`](https://github.com/deposist/s-ui-x-extended/blob/v1.1.1-beta2/docs/releases/v1.1.1-beta2.md)
 
-Full release notes: [`docs/releases/v1.1.1-beta2.md`](../docs/releases/v1.1.1-beta2.md).
+## Обновление
 
-## Обновление через консоль
+TrustTunnel всегда требовал TLS. Но при сохранении без TLS-шаблона панель коммитила строку, а sing-box падал с `TLS required`. Watchdog перезапускал ядро каждые ~30 секунд — бесконечный краш-луп.
 
-Эта beta исправляет падение сервера: сохранение inbound TrustTunnel без TLS-конфигурации останавливало sing-box и отправляло панель в цикл перезапусков. Миграция базы не требуется.
+Теперь сохранение отклоняется до базы. Фронтенд блокирует через `onlyTls`, бэкенд через `TLSRequiredTypes()` — защита работает и в UI, и при API/импорте.
 
-Протокол TrustTunnel требует TLS — ядро возвращает `TLS required`, если TLS-конфигурация не привязана. Проверка в панели этого не делала, поэтому сохранение без TLS-шаблона проходило, строка коммитилась, а sing-box не запускался. Watchdog перезапускал ядро снова и снова — получался краш-луп.
-
-Теперь панель блокирует сохранение до базы данных — на фронтенде (TrustTunnel помечен как TLS-обязательный) и на бэкенде (API-путь возвращает ошибку). Если у вас есть затронутый inbound TrustTunnel с предыдущей версии, отредактируйте его, привяжите TLS-конфигурацию и сохраните.
+Пострадавший TrustTunnel inbound лечится просто: отредактируйте, привяжите TLS, сохраните.
 
 ```sh
 curl -fLsS \
@@ -44,14 +38,10 @@ curl -fLsS \
   | sudo bash -s -- v1.1.1-beta2
 ```
 
-После установки проверьте версию и службу:
-
+Проверка:
 ```sh
-/usr/local/s-ui/sui -v
-systemctl is-active s-ui
-journalctl -u s-ui -n 50 --no-pager
+/usr/local/s-ui/sui -v   # 1.1.1-beta2
+systemctl is-active s-ui  # active
 ```
 
-Установщик сохраняет базу и настройки панели.
-
-Полные заметки о релизе: [`docs/releases/v1.1.1-beta2.md`](../docs/releases/v1.1.1-beta2.md).
+Полные заметки: [`docs/releases/v1.1.1-beta2.md`](https://github.com/deposist/s-ui-x-extended/blob/v1.1.1-beta2/docs/releases/v1.1.1-beta2.md)
