@@ -268,6 +268,20 @@ func SkipOutJSONTypes() map[string]struct{} {
 	return m
 }
 
+// TLSRequiredTypes returns the set of inbound types whose protocol implementation
+// requires an enabled TLS configuration at construction time (e.g. trusttunnel,
+// hysteria, hysteria2, tuic, naive, anytls). Used by the save path to reject
+// inbounds missing a TLS template before commit, preventing a core restart loop.
+func TLSRequiredTypes() map[string]struct{} {
+	m := map[string]struct{}{}
+	for _, in := range loaded.Inbounds {
+		if in.OnlyTLS {
+			m[in.Type] = struct{}{}
+		}
+	}
+	return m
+}
+
 // CredentialMap returns the per-user credential field mapping for an inbound type
 // (client.config field -> outbound field), or nil if none. Used by the subscription
 // builders to map e.g. name->username / name->user.

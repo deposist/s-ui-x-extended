@@ -21,7 +21,9 @@ const legacyInboundWithUsers = ['mixed', 'socks', 'http', 'shadowsocks', 'vmess'
 const legacyHasInData = ['socks', 'http', 'mixed', 'shadowsocks', 'vmess', 'shadowtls', 'trojan', 'hysteria', 'vless', 'anytls', 'tuic', 'hysteria2', 'naive', 'mieru', 'sudoku', 'trusttunnel', 'ssh']
 const legacyHasTls = ['http', 'vmess', 'trojan', 'naive', 'hysteria', 'tuic', 'hysteria2', 'vless', 'anytls', 'trusttunnel']
 const legacyMuxAvailable = ['vless', 'vmess', 'trojan', 'shadowsocks']
-const legacyOnlyTLS = ['hysteria', 'hysteria2', 'tuic', 'naive', 'anytls']
+// Phase 1 added mieru/sudoku/trusttunnel/ssh; trusttunnel is now onlyTls too
+// (extended core requires TLS at construction), so it joins the OnlyTLS set.
+const legacyOnlyTLS = ['hysteria', 'hysteria2', 'tuic', 'naive', 'anytls', 'trusttunnel']
 
 const asSet = (a: string[]) => [...a].sort()
 

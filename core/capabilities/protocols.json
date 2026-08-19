@@ -196,6 +196,7 @@
       "outJsonBuilder": "trusttunnel",
       "hasInData": true,
       "hasTlsTemplate": true,
+      "onlyTls": true,
       "credentialMap": {
         "name": "username",
         "password": "password"

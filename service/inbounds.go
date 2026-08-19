@@ -209,6 +209,14 @@ func (s *InboundService) saveInboundUpsert(tx *gorm.DB, act string, data json.Ra
 			return nil, err
 		}
 	}
+	// Server-side guard: protocols that require an enabled TLS config at construction
+	// time (trusttunnel, hysteria, tuic, etc.) must not be saved without a TLS template.
+	// The frontend blocks this too, but API/import paths bypass the UI, and the core's
+	// TLS-required check fires only at core start — which would otherwise commit a bad
+	// row and crash-loop the restart watchdog. Validate before commit.
+	if _, required := capabilities.TLSRequiredTypes()[inbound.Type]; required && inbound.TlsId == 0 {
+		return nil, common.NewErrorf("protocol %q requires a TLS configuration; none selected", inbound.Type)
+	}
 	var oldTag string
 	if act == "edit" {
 		if err := tx.Model(model.Inbound{}).Select("tag").Where("id = ?", inbound.Id).First(&oldTag).Error; err != nil {

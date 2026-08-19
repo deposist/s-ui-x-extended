@@ -17,7 +17,7 @@ export const inboundAssignable: string[] = ['socks', 'http', 'mixed', 'shadowsoc
 export const HasInData: string[] = ['socks', 'http', 'mixed', 'shadowsocks', 'vmess', 'vless', 'trojan', 'naive', 'hysteria', 'hysteria2', 'tuic', 'anytls', 'shadowtls', 'mieru', 'sudoku', 'trusttunnel', 'ssh']
 export const HasTls: string[] = ['http', 'vmess', 'vless', 'trojan', 'naive', 'hysteria', 'hysteria2', 'tuic', 'anytls', 'trusttunnel']
 export const MuxAvailable: string[] = ['shadowsocks', 'vmess', 'vless', 'trojan']
-export const OnlyTLS: string[] = ['naive', 'hysteria', 'hysteria2', 'tuic', 'anytls']
+export const OnlyTLS: string[] = ['naive', 'hysteria', 'hysteria2', 'tuic', 'anytls', 'trusttunnel']
 export const outboundGroupCapabilities: OutboundGroupCapability[] = [
   {
     "type": "selector",

@@ -309,6 +309,47 @@ func TestInboundSaveRejectsUnknownFieldBeforeDBCommit(t *testing.T) {
 	}
 }
 
+// TestInboundSaveRejectsTrustTunnelWithoutTLS reproduces the server crash-loop
+// regression: saving a trusttunnel inbound with no TLS template committed the row
+// and the running core rejected it at start with "TLS required", forcing the
+// restart watchdog into a loop. The server-side guard in saveInboundUpsert now
+// rejects before commit, so the save fails cleanly and nothing is persisted.
+func TestInboundSaveRejectsTrustTunnelWithoutTLS(t *testing.T) {
+	initSettingTestDB(t)
+	coreInstance := startTestCore(t)
+
+	recorder := &inboundOpsRecorder{}
+	recorder.stubInboundHooks(t)
+
+	payload := json.RawMessage(`{"type":"trusttunnel","tag":"tt-no-tls","listen":"127.0.0.1","listen_port":1,"tls_id":0}`)
+	configService := NewConfigServiceWithRuntime(NewRuntime(coreInstance))
+	before := coreInstance.GetInstance()
+	_, err := configService.Save("inbounds", "new", payload, "", "admin", "example.com")
+	if err == nil {
+		t.Fatal("expected trusttunnel save without TLS to be rejected")
+	} else if !strings.Contains(err.Error(), "TLS") && !strings.Contains(err.Error(), "tls") {
+		t.Fatalf("trusttunnel save error = %v, want TLS-required rejection", err)
+	}
+
+	db := database.GetDB()
+	var count int64
+	if err := db.Model(model.Inbound{}).Where("tag = ?", "tt-no-tls").Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("rejected trusttunnel inbound persisted: %d rows", count)
+	}
+	if len(recorder.ops) != 0 {
+		t.Fatalf("post-commit inbound hooks fired after rejection: %v", recorder.ops)
+	}
+	if coreInstance.GetInstance() != before {
+		t.Fatal("rejected trusttunnel save restarted the core")
+	}
+	if !coreInstance.IsRunning() {
+		t.Fatal("core stopped after rejected trusttunnel save")
+	}
+}
+
 func TestInboundSaveRejectsUnknownUserFieldAfterClientAssignment(t *testing.T) {
 	initSettingTestDB(t)
 	recorder := &inboundOpsRecorder{}
