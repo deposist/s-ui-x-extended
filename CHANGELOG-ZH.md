@@ -4,7 +4,9 @@
 
 这是中文版更新日志。英文版请见 `CHANGELOG-EN.md`，俄文版请见 `CHANGELOG-RU.md`。
 
-## [Unreleased]
+## [1.1.1-beta2] - 2026-08-19 - TrustTunnel TLS 必需检查
+
+- 修复服务器崩溃：保存没有 TLS 配置的 TrustTunnel 入站会提交该行，然后 sing-box 因 `TLS required` 失败，watchdog 陷入重启循环。协议清单现在将 TrustTunnel 标记为 `onlyTls`，前端阻止无 TLS 模板的保存，服务端保存路径也拒绝提交。
 
 ## [1.1.1-beta1] - 2026-08-19 - TrustTunnel/mieru 凭据修复、入站保存加固
 

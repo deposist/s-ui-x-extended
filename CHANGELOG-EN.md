@@ -5,7 +5,10 @@ All notable changes to this project are documented in this file.
 This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 `CHANGELOG-ZH.md` for Simplified Chinese.
 
-## [Unreleased]
+## [1.1.1-beta2] - 2026-08-19 - TrustTunnel TLS-required guard
+
+- Fixed a server crash: saving a TrustTunnel inbound without a TLS configuration committed the row and then sing-box failed with `TLS required`, sending the restart watchdog into a loop. The protocol manifest now marks TrustTunnel as `onlyTls`, the frontend blocks saves without a TLS template, and the server-side save path rejects them before commit.
+
 
 ## [1.1.1-beta1] - 2026-08-19 - TrustTunnel/mieru credential fix, inbound save hardening
 
