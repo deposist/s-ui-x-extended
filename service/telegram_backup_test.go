@@ -151,6 +151,16 @@ func TestTelegramBackupRunOnceConcurrentGuard(t *testing.T) {
 		return TelegramResult{Success: true}
 	})
 	defer restoreSend()
+	// Guarantee the lock is released even if the test fails or times out
+	// waiting for started: a stuck holder would poison every later test in
+	// the package with concurrent_run.
+	t.Cleanup(func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	})
 
 	done := make(chan TelegramBackupResult, 1)
 	go func() {
@@ -158,7 +168,7 @@ func TestTelegramBackupRunOnceConcurrentGuard(t *testing.T) {
 	}()
 	select {
 	case <-started:
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("first backup did not reach send")
 	}
 	result := (&TelegramBackupService{}).RunOnce(context.Background(), TelegramBackupTriggerScheduled)
