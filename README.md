@@ -219,7 +219,7 @@ and tokens. Database migrations run on the first start after an upgrade.
 | Channel | Version | Notes |
 | --- | --- | --- |
 | Stable | [`v1.1.0`](docs/releases/v1.1.0.md) | Recommended for production. Includes the full 1.1.0 beta series: managed AmneziaWG in panel settings with automatic device keys and obfuscation presets, call outbound and telegram backup fixes, and panel startup and self-update fixes. |
-| Beta | [`v1.1.0-beta4`](docs/releases/v1.1.0-beta4.md) | Telegram backup passphrase recovery and a call outbound join_link guard. |
+| Beta | [`v1.1.1-beta1`](docs/releases/v1.1.1-beta1.md) | TrustTunnel/mieru subscription password fix, inbound save hardening with pre-commit validation. |
 
 ### Upgrade to the current stable release
 
@@ -233,12 +233,12 @@ curl -fLsS \
 
 ### Upgrade to the current beta release
 
-This command installs or upgrades the server to `v1.1.0-beta4`:
+This command installs or upgrades the server to `v1.1.1-beta1`:
 
 ```sh
 curl -fLsS \
-  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.0-beta4/install.sh \
-  | sudo bash -s -- v1.1.0-beta4
+  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.1-beta1/install.sh \
+  | sudo bash -s -- v1.1.1-beta1
 ```
 
 The version argument matters. If you run a tagged `install.sh` without an
@@ -249,8 +249,8 @@ If you are already running as `root`, the equivalent short form is:
 
 ```sh
 bash <(curl -fLsS \
-  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.0-beta4/install.sh) \
-  v1.1.0-beta4
+  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.1-beta1/install.sh) \
+  v1.1.1-beta1
 ```
 
 After the upgrade, check the installed version and service state:
@@ -274,7 +274,7 @@ sudo bash install.sh v1.1.0
 ### Windows
 
 - Stable: download [`v1.1.0`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.0), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
-- Beta: download [`v1.1.0-beta4`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.0-beta4), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
+- Beta: download [`v1.1.1-beta1`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.1-beta1), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
 
 Upgrade and rollback notes are in the changelogs:
 [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), and [中文](CHANGELOG-ZH.md).
