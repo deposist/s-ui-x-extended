@@ -12,7 +12,7 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 - Fixed subscriptions for TrustTunnel and Mieru clients missing the password: the credential backfill created the per-client config block with the client name only, and the subscription builder drops empty credential fields. The official TrustTunnel client still showed Connected (the TLS handshake succeeds before the first authorized request) while the server rejected every request with `authorization failed`. A random password is now generated when the block is created, and an empty password is filled in when the block already exists; re-saving the inbound repairs affected clients.
 - Fixed inbound saves that could crash-loop sing-box with `json: unknown field`: TrustTunnel no longer emits the outbound-only `quic` switch, Trojan no longer emits `network`, Sudoku keeps HTTP-mask settings in the inbound schema, and Call omits listen fields. Existing affected rows are cleaned when the core config is generated.
 - The panel now validates the exact generated inbound before committing a save. A database restore also validates the full generated core config before the restore is finalized or sing-box is restarted; an invalid restore rolls back to the previous database.
-- Updated `github.com/pion/dtls/v3` from 3.1.2 to 3.1.4 (GO-2026-6165). The panel does not call the affected symbols.
+- Updated `github.com/pion/stun/v3` from 3.1.1 to 3.1.5 (GO-2026-6163, a panic on a malformed XOR-MAPPED-ADDRESS attribute). The panel does not call the affected symbols.
 
 ## [1.1.0] - 2026-08-17 - managed AWG in panel settings, call and backup fixes, panel startup and self-update fixes
 

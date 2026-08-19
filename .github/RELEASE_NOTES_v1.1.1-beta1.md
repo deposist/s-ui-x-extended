@@ -4,7 +4,7 @@ This beta fixes two problems reported against 1.1.0: TrustTunnel clients that st
 
 Clients assigned to a TrustTunnel or Mieru inbound received a subscription with a username but no password, so the official TrustTunnel client connected, showed Connected, and then every request failed server-side with `authorization failed`. The panel now generates the missing password when it creates the client credentials block, and fills in an empty password when the block already exists. To repair a client hit by the old behavior, open the inbound in the panel, save it once, and re-download the subscription.
 
-Saving certain inbounds could make sing-box restart in a loop with `json: unknown field`. The panel no longer emits fields the inbound option struct does not declare, validates the generated inbound before committing a save, and validates a restored core config before restarting sing-box. The `github.com/pion/dtls/v3` dependency was also updated from 3.1.2 to 3.1.4 (GO-2026-6165); the panel does not call the affected symbols.
+Saving certain inbounds could make sing-box restart in a loop with `json: unknown field`. The panel no longer emits fields the inbound option struct does not declare, validates the generated inbound before committing a save, and validates a restored core config before restarting sing-box. The `github.com/pion/dtls/v3` dependency was updated from 3.1.2 to 3.1.4 (GO-2026-6165) and `github.com/pion/stun/v3` from 3.1.1 to 3.1.5 (GO-2026-6163); the panel does not call the affected symbols.
 
 ## Upgrade from the console
 
@@ -32,7 +32,7 @@ Full release notes: [`docs/releases/v1.1.1-beta1.md`](../docs/releases/v1.1.1-be
 
 Клиенты на inbound TrustTunnel или Mieru получали подписку с именем пользователя, но без пароля: официальный клиент подключался, показывал Connected, и каждый запрос падал на сервере с `authorization failed`. Теперь панель генерирует недостающий пароль при создании блока credentials и заполняет пустой пароль, если блок уже существует. Чтобы починить клиента, откройте inbound в панели, сохраните его один раз и заново скачайте подписку.
 
-Сохранение некоторых inbound'ов могло заставить sing-box перезапускаться по кругу с `json: unknown field`. Панель больше не передаёт лишние поля, проверяет сгенерированный inbound до коммита и конфиг ядра до перезапуска. Зависимость `github.com/pion/dtls/v3` обновлена с 3.1.2 до 3.1.4 (GO-2026-6165); панель затронутые символы не вызывает.
+Сохранение некоторых inbound'ов могло заставить sing-box перезапускаться по кругу с `json: unknown field`. Панель больше не передаёт лишние поля, проверяет сгенерированный inbound до коммита и конфиг ядра до перезапуска. Зависимость `github.com/pion/dtls/v3` обновлена с 3.1.2 до 3.1.4 (GO-2026-6165), `github.com/pion/stun/v3` с 3.1.1 до 3.1.5 (GO-2026-6163); панель затронутые символы не вызывает.
 
 ```sh
 curl -fLsS \
