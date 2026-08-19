@@ -3,7 +3,6 @@ package database
 import (
 	"bytes"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -144,7 +143,7 @@ func TestImportDBDrainsActiveOperationAndBlocksNewOperation(t *testing.T) {
 
 	restoreDone := make(chan error, 1)
 	go func() {
-		restoreDone <- ImportDB(memMultipartFile{Reader: bytes.NewReader(backup)})
+		restoreDone <- ImportDB(memMultipartFile{Reader: bytes.NewReader(backup)}, func() error { return nil })
 	}()
 	select {
 	case <-restoreStarted:
@@ -222,14 +221,15 @@ func TestImportDBRunsResetHooks(t *testing.T) {
 
 	var calls atomic.Int32
 	const hookName = "test.import_db_reset_hooks"
-	RegisterResetHook(hookName, func() {
+	RegisterResetHook(hookName, func() error {
 		calls.Add(1)
+		return nil
 	})
 	t.Cleanup(func() {
 		RegisterResetHook(hookName, nil)
 	})
 
-	if err := ImportDB(memMultipartFile{Reader: bytes.NewReader(backupBytes)}); err != nil {
+	if err := ImportDB(memMultipartFile{Reader: bytes.NewReader(backupBytes)}, func() error { return nil }); err != nil {
 		t.Fatalf("ImportDB returned error: %v", err)
 	}
 	if got := calls.Load(); got != 1 {
@@ -295,7 +295,7 @@ func TestImportDBPreservesConfigDNSAndRouteRules(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ImportDB(memMultipartFile{Reader: bytes.NewReader(backupBytes)}); err != nil {
+	if err := ImportDB(memMultipartFile{Reader: bytes.NewReader(backupBytes)}, func() error { return nil }); err != nil {
 		t.Fatalf("ImportDB returned error: %v", err)
 	}
 
@@ -351,7 +351,7 @@ func TestImportDBAdaptsLegacyBackup(t *testing.T) {
 	legacyBytes := newLegacyBackup(t)
 
 	// Hand it to ImportDB through the multipart.File interface.
-	if err := ImportDB(memMultipartFile{Reader: bytes.NewReader(legacyBytes)}); err != nil {
+	if err := ImportDB(memMultipartFile{Reader: bytes.NewReader(legacyBytes)}, func() error { return nil }); err != nil {
 		t.Fatalf("ImportDB returned error: %v", err)
 	}
 
@@ -415,7 +415,7 @@ func TestImportDBRejectsCorruptSQLiteBackup(t *testing.T) {
 		}
 	})
 	corrupt := append([]byte("SQLite format 3\x00"), bytes.Repeat([]byte{0xff}, 256)...)
-	if err := ImportDB(memMultipartFile{Reader: bytes.NewReader(corrupt)}); err == nil {
+	if err := ImportDB(memMultipartFile{Reader: bytes.NewReader(corrupt)}, func() error { return nil }); err == nil {
 		t.Fatal("corrupt sqlite backup should be rejected")
 	}
 }
@@ -443,7 +443,7 @@ func TestImportDBAcceptsVersionedBackupWithoutConfigIssue12(t *testing.T) {
 	SetSendSighupHook(func() error { return nil })
 	t.Cleanup(func() { SetSendSighupHook(nil) })
 
-	err := ImportDB(memMultipartFile{Reader: bytes.NewReader(newVersionedBackupWithoutConfig(t))})
+	err := ImportDB(memMultipartFile{Reader: bytes.NewReader(newVersionedBackupWithoutConfig(t))}, func() error { return nil })
 	// Post-fix #12: missing settings.config no longer aborts the import. The
 	// import may still fail for unrelated reasons (e.g. fixture migration
 	// gaps), but never because settings.config is absent.
@@ -484,7 +484,7 @@ func TestImportDBRollsBackForeignKeyFailureAndReopensLiveDB(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err := ImportDB(memMultipartFile{Reader: bytes.NewReader(newForeignKeyBrokenBackup(t))})
+	err := ImportDB(memMultipartFile{Reader: bytes.NewReader(newForeignKeyBrokenBackup(t))}, func() error { return nil })
 	if err == nil || !strings.Contains(err.Error(), "foreign key check failed") {
 		t.Fatalf("expected foreign key import failure, got %v", err)
 	}
@@ -565,5 +565,244 @@ func newVersionedBackupWithoutConfig(t *testing.T) []byte {
 	return data
 }
 
-// _ keeps io referenced when nothing else uses it.
-var _ = io.EOF
+func TestImportDBRequiresValidatorBeforeRestore(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("SUI_DB_FOLDER", dbDir)
+	livePath := filepath.Join(dbDir, "s-ui.db")
+	if err := InitDB(livePath); err != nil {
+		if strings.Contains(err.Error(), "go-sqlite3 requires cgo") {
+			t.Skip(err)
+		}
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeMainDB(t) })
+	if err := GetDB().Create(&model.Setting{Key: "restore_marker", Value: "live-before-import"}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	var sighupCalls atomic.Int32
+	previousSighupHook := sendSighupHook
+	sendSighupHook = func() error {
+		sighupCalls.Add(1)
+		return nil
+	}
+	t.Cleanup(func() { sendSighupHook = previousSighupHook })
+
+	err := ImportDB(memMultipartFile{Reader: bytes.NewReader(nil)}, nil)
+	if err == nil || !strings.Contains(err.Error(), "validator") {
+		t.Fatalf("ImportDB(nil validator) error = %v, want required validator error", err)
+	}
+	if sighupCalls.Load() != 0 {
+		t.Fatalf("nil validator triggered SIGHUP %d times", sighupCalls.Load())
+	}
+	var marker string
+	if err := GetDB().Model(&model.Setting{}).Select("value").Where("key = ?", "restore_marker").Scan(&marker).Error; err != nil {
+		t.Fatal(err)
+	}
+	if marker != "live-before-import" {
+		t.Fatalf("nil validator changed live marker to %q", marker)
+	}
+	if _, err := os.Stat(livePath + ".backup"); !os.IsNotExist(err) {
+		t.Fatalf("nil validator created fallback sidecar, stat error = %v", err)
+	}
+}
+
+func TestImportDBValidatorFailureRollsBackDatabaseAndCaches(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("SUI_DB_FOLDER", dbDir)
+	livePath := filepath.Join(dbDir, "s-ui.db")
+	if err := InitDB(livePath); err != nil {
+		if strings.Contains(err.Error(), "go-sqlite3 requires cgo") {
+			t.Skip(err)
+		}
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeMainDB(t) })
+
+	if err := GetDB().Create(&model.Setting{Key: "restore_marker", Value: "live-before-import"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := GetDB().Model(&model.Setting{}).Where("key = ?", "restore_marker").Update("value", "restored-database").Error; err != nil {
+		t.Fatal(err)
+	}
+	backup, err := GetDb("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := GetDB().Model(&model.Setting{}).Where("key = ?", "restore_marker").Update("value", "live-before-import").Error; err != nil {
+		t.Fatal(err)
+	}
+
+	var resetMarkers []string
+	const hookName = "test.import_db_validator_rollback"
+	RegisterResetHook(hookName, func() error {
+		var marker string
+		if db := GetDB(); db != nil {
+			_ = db.Model(&model.Setting{}).Select("value").Where("key = ?", "restore_marker").Scan(&marker).Error
+		}
+		resetMarkers = append(resetMarkers, marker)
+		return nil
+	})
+	t.Cleanup(func() { RegisterResetHook(hookName, nil) })
+
+	var sighupCalls atomic.Int32
+	previousSighupHook := sendSighupHook
+	sendSighupHook = func() error {
+		sighupCalls.Add(1)
+		return nil
+	}
+	t.Cleanup(func() { sendSighupHook = previousSighupHook })
+
+	var validateCalls atomic.Int32
+	var validatorMarker string
+	var fallbackVisible bool
+	validationErr := errors.New("sentinel restored database validation failure")
+	validate := func() error {
+		validateCalls.Add(1)
+		if db := GetDB(); db != nil {
+			_ = db.Model(&model.Setting{}).Select("value").Where("key = ?", "restore_marker").Scan(&validatorMarker).Error
+		}
+		_, fallbackErr := os.Stat(livePath + ".backup")
+		fallbackVisible = fallbackErr == nil
+		return validationErr
+	}
+
+	err = ImportDB(memMultipartFile{Reader: bytes.NewReader(backup)}, validate)
+	if err == nil || !strings.Contains(err.Error(), "validating restored database") {
+		t.Fatalf("validator failure = %v, want validation-stage error", err)
+	}
+	if !strings.Contains(err.Error(), validationErr.Error()) {
+		t.Fatalf("validator failure = %v, want sentinel cause", err)
+	}
+	if validateCalls.Load() != 1 {
+		t.Fatalf("validator calls = %d, want 1", validateCalls.Load())
+	}
+	if validatorMarker != "restored-database" {
+		t.Fatalf("validator observed marker %q, want restored-database", validatorMarker)
+	}
+	if !fallbackVisible {
+		t.Fatal("validator did not observe the fallback while it was still available")
+	}
+	if sighupCalls.Load() != 0 {
+		t.Fatalf("rejected restore triggered SIGHUP %d times", sighupCalls.Load())
+	}
+
+	var marker string
+	if err := GetDB().Model(&model.Setting{}).Select("value").Where("key = ?", "restore_marker").Scan(&marker).Error; err != nil {
+		t.Fatal(err)
+	}
+	if marker != "live-before-import" {
+		t.Fatalf("rollback marker = %q, want live-before-import", marker)
+	}
+	if len(resetMarkers) != 2 || resetMarkers[0] != "restored-database" || resetMarkers[1] != "live-before-import" {
+		t.Fatalf("reset hook markers = %#v, want imported then fallback markers", resetMarkers)
+	}
+}
+
+func TestImportDBValidatorFailureRestoresInitialAdminPassword(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("SUI_DB_FOLDER", dbDir)
+	livePath := filepath.Join(dbDir, "s-ui.db")
+	if err := InitDB(livePath); err != nil {
+		if strings.Contains(err.Error(), "go-sqlite3 requires cgo") {
+			t.Skip(err)
+		}
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeMainDB(t) })
+
+	sidecarPath := initialAdminPasswordPath(livePath)
+	secret := "pre-restore-bootstrap-secret"
+	original := []byte(secret + "\nbyte-for-byte\x00-suffix")
+	if err := os.WriteFile(sidecarPath, original, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(sidecarPath, 0o640); err != nil {
+		t.Fatal(err)
+	}
+
+	previousSighupHook := sendSighupHook
+	sendSighupHook = func() error { return nil }
+	t.Cleanup(func() { sendSighupHook = previousSighupHook })
+
+	validationErr := errors.New("sentinel sidecar validation failure")
+	var importedContents []byte
+	err := ImportDB(memMultipartFile{Reader: bytes.NewReader(newVersionedBackupWithoutConfig(t))}, func() error {
+		var readErr error
+		importedContents, readErr = os.ReadFile(sidecarPath)
+		if readErr != nil {
+			t.Errorf("read imported initial-admin sidecar: %v", readErr)
+		}
+		return validationErr
+	})
+	if err == nil || !strings.Contains(err.Error(), "validating restored database") {
+		t.Fatalf("validator failure = %v, want validation-stage error", err)
+	}
+	if len(importedContents) == 0 {
+		t.Fatal("validator did not observe an imported initial-admin sidecar")
+	}
+	if bytes.Equal(importedContents, original) {
+		t.Fatal("validator observed the pre-restore initial-admin sidecar instead of imported state")
+	}
+	restored, readErr := os.ReadFile(sidecarPath)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if !bytes.Equal(restored, original) {
+		t.Fatalf("restored initial-admin sidecar = %q, want exact pre-restore bytes %q", restored, original)
+	}
+	if runtime.GOOS != "windows" {
+		info, statErr := os.Stat(sidecarPath)
+		if statErr != nil {
+			t.Fatal(statErr)
+		}
+		if info.Mode().Perm()&0o077 != 0 {
+			t.Fatalf("restored initial-admin sidecar permissions = %o, broader than 0600", info.Mode().Perm())
+		}
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Fatalf("rollback error leaked bootstrap credential: %q", err)
+	}
+}
+
+func TestImportDBValidatorFailureRemovesGeneratedInitialAdminPassword(t *testing.T) {
+	dbDir := t.TempDir()
+	t.Setenv("SUI_DB_FOLDER", dbDir)
+	livePath := filepath.Join(dbDir, "s-ui.db")
+	if err := InitDB(livePath); err != nil {
+		if strings.Contains(err.Error(), "go-sqlite3 requires cgo") {
+			t.Skip(err)
+		}
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { closeMainDB(t) })
+
+	sidecarPath := initialAdminPasswordPath(livePath)
+	if err := os.Remove(sidecarPath); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(sidecarPath); !os.IsNotExist(err) {
+		t.Fatalf("initial-admin sidecar setup stat error = %v, want absent", err)
+	}
+
+	previousSighupHook := sendSighupHook
+	sendSighupHook = func() error { return nil }
+	t.Cleanup(func() { sendSighupHook = previousSighupHook })
+
+	validationErr := errors.New("sentinel absent-sidecar validation failure")
+	var importedSidecarExists bool
+	err := ImportDB(memMultipartFile{Reader: bytes.NewReader(newVersionedBackupWithoutConfig(t))}, func() error {
+		_, statErr := os.Stat(sidecarPath)
+		importedSidecarExists = statErr == nil
+		return validationErr
+	})
+	if err == nil || !strings.Contains(err.Error(), "validating restored database") {
+		t.Fatalf("validator failure = %v, want validation-stage error", err)
+	}
+	if !importedSidecarExists {
+		t.Fatal("validator did not observe generated imported initial-admin sidecar")
+	}
+	if _, statErr := os.Stat(sidecarPath); !os.IsNotExist(statErr) {
+		t.Fatalf("initial-admin sidecar after rollback stat error = %v, want absent", statErr)
+	}
+}

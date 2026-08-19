@@ -69,7 +69,7 @@ func TestIntegrationBackupEnvelopeRestorePreservesBackupTableCounts(t *testing.T
 	database.SetSendSighupHook(func() error { return nil })
 	t.Cleanup(func() { database.SetSendSighupHook(nil) })
 
-	if err := database.ImportDB(integrationMemMultipartFile{Reader: bytes.NewReader(plaintext)}); err != nil {
+	if err := database.ImportDB(integrationMemMultipartFile{Reader: bytes.NewReader(plaintext)}, func() error { return nil }); err != nil {
 		t.Fatalf("ImportDB returned error: %v", err)
 	}
 	after := integrationBackupTableCounts(t)
@@ -124,7 +124,7 @@ func TestIntegrationImportDBMigrationFailureRestoresFallback(t *testing.T) {
 	database.SetSendSighupHook(func() error { return nil })
 	t.Cleanup(func() { database.SetSendSighupHook(nil) })
 
-	err := database.ImportDB(integrationMemMultipartFile{Reader: bytes.NewReader(newIntegrationForeignKeyBrokenBackup(t))})
+	err := database.ImportDB(integrationMemMultipartFile{Reader: bytes.NewReader(newIntegrationForeignKeyBrokenBackup(t))}, func() error { return nil })
 	if err == nil || !strings.Contains(err.Error(), "foreign key check failed") {
 		t.Fatalf("expected migration foreign key failure after rename, got %v", err)
 	}

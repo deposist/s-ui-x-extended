@@ -105,7 +105,10 @@ var ipPrivacySettings = struct {
 }{}
 
 func init() {
-	database.RegisterResetHook("ipmonitor", ResetCaches)
+	database.RegisterResetHook("ipmonitor", func() error {
+		ResetCaches()
+		return nil
+	})
 }
 
 func ResetCaches() {

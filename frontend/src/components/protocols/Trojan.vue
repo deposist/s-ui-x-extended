@@ -4,7 +4,7 @@
       <v-col cols="12" sm="6" md="4" v-if="direction != 'in'">
         <v-text-field v-model="data.password" :label="$t('types.pw')" hide-details></v-text-field>
       </v-col>
-      <v-col cols="12" sm="6" md="4">
+      <v-col cols="12" sm="6" md="4" v-if="direction != 'in'">
         <Network :data="data" :field-hints="fieldHints" />
       </v-col>
     </v-row>

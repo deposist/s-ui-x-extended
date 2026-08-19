@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -145,5 +146,22 @@ func TestAPIV2BearerTokenAcceptedAfterLegacySunsetIssue34(t *testing.T) {
 	}
 	if !msg.Success {
 		t.Fatalf("bearer token request failed after legacy sunset: %s", msg.Msg)
+	}
+}
+
+func TestAPIV2ResetCachesDropsRemovedTokens(t *testing.T) {
+	router := newAPIV2TokenTestRouter(t)
+
+	if recorder := performAPIV2TokenRequest(router, "Authorization", "Bearer legacy-token"); recorder.Code != http.StatusOK {
+		t.Fatalf("token request before removal returned %d", recorder.Code)
+	}
+	if err := database.GetDB().Where("desc = ?", "legacy").Delete(&model.Tokens{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.ResetCaches(context.Background()); err != nil {
+		t.Fatalf("ResetCaches returned error: %v", err)
+	}
+	if recorder := performAPIV2TokenRequest(router, "Authorization", "Bearer legacy-token"); recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("removed token request returned %d, want %d", recorder.Code, http.StatusUnauthorized)
 	}
 }

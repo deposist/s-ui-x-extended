@@ -474,13 +474,7 @@ func (s *ConfigService) dispatchSave(tx *gorm.DB, obj string, act string, data j
 		}
 		return objs, plan, false, nil
 	case "config":
-		if err := validateConfigLogOutput(data); err != nil {
-			return nil, plan, false, err
-		}
-		if err := validateConfigRuleConditions(data); err != nil {
-			return nil, plan, false, err
-		}
-		if err := validateConfigLocalRuleSets(data); err != nil {
+		if err := ValidateCoreConfigPolicy(data); err != nil {
 			return nil, plan, false, err
 		}
 		changed, err := s.SettingService.ConfigBlobChanged(tx, data)
@@ -503,6 +497,22 @@ func (s *ConfigService) dispatchSave(tx *gorm.DB, obj string, act string, data j
 	default:
 		return nil, plan, false, common.NewError("unknown object: ", obj)
 	}
+}
+
+// ValidateCoreConfigPolicy applies application-level safety checks that must
+// hold for every core configuration, whether it came from the config editor
+// or was assembled from a restored database. The caller still owns strict
+// core parsing; this policy only rejects values the application must never
+// persist or start.
+func ValidateCoreConfigPolicy(data []byte) error {
+	raw := json.RawMessage(data)
+	if err := validateConfigLogOutput(raw); err != nil {
+		return err
+	}
+	if err := validateConfigRuleConditions(raw); err != nil {
+		return err
+	}
+	return validateConfigLocalRuleSets(raw)
 }
 
 // entityIdentityField reports the JSON field used to reference an entity from

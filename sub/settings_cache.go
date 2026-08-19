@@ -58,9 +58,13 @@ func cachedSubDisplaySettings(ss *service.SettingService, now time.Time) subDisp
 	return v
 }
 
-func resetSubDisplaySettingsCacheForTest() {
+func clearSubDisplaySettingsCache() {
 	subDisplaySettingsCache.Lock()
 	defer subDisplaySettingsCache.Unlock()
 	subDisplaySettingsCache.value = subDisplaySettings{}
 	subDisplaySettingsCache.expiresAt = time.Time{}
+}
+
+func resetSubDisplaySettingsCacheForTest() {
+	clearSubDisplaySettingsCache()
 }

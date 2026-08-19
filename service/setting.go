@@ -1,6 +1,7 @@
 package service
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"net"
 	"net/netip"
@@ -558,6 +559,179 @@ func (s *SettingService) RotateSessionGeneration() (string, error) {
 
 func (s *SettingService) GetTrafficAge() (int, error) {
 	return s.getInt("trafficAge")
+}
+
+// ValidateStartupSettings checks the settings read before the application
+// declares a restored database healthy. It deliberately uses the same typed
+// getters and path/domain/certificate validators as the startup servers, but
+// never calls a getter that seeds or rewrites a setting.
+func (s *SettingService) ValidateStartupSettings() error {
+	if _, err := s.GetTimeLocation(); err != nil {
+		return common.NewError("invalid timeLocation setting")
+	}
+	if _, err := s.GetTrafficAge(); err != nil {
+		return common.NewError("invalid trafficAge setting")
+	}
+
+	webPath, err := s.GetWebPath()
+	if err != nil {
+		return common.NewError("invalid webPath setting")
+	}
+	if _, err := normalizeAndValidatePathSetting("webPath", webPath); err != nil {
+		return common.NewError("invalid webPath setting")
+	}
+	if webDomain, getErr := s.GetWebDomain(); getErr != nil || util.ValidateHostname(webDomain) != nil {
+		return common.NewError("invalid webDomain setting")
+	}
+	if err := s.validateCookieKeysForStartup(); err != nil {
+		return common.NewError("invalid cookie key settings")
+	}
+
+	webCert, err := s.GetCertFile()
+	if err != nil {
+		return common.NewError("invalid web certificate setting")
+	}
+	webKey, err := s.GetKeyFile()
+	if err != nil {
+		return common.NewError("invalid web certificate setting")
+	}
+	if err := s.validateCertificatePair(webCert, webKey); err != nil {
+		return common.NewError("invalid web certificate setting")
+	}
+	webListener, err := validateStartupListener(s.GetListen, s.GetPort)
+	if err != nil {
+		return common.NewError("invalid web listener setting")
+	}
+
+	subPath, err := s.GetSubPath()
+	if err != nil {
+		return common.NewError("invalid subPath setting")
+	}
+	subJsonPath, err := s.GetSubJsonPath()
+	if err != nil {
+		return common.NewError("invalid subJsonPath setting")
+	}
+	subClashPath, err := s.GetSubClashPath()
+	if err != nil {
+		return common.NewError("invalid subClashPath setting")
+	}
+	if _, err := normalizeAndValidatePathSetting("subPath", subPath); err != nil {
+		return common.NewError("invalid subPath setting")
+	}
+	if _, err := normalizeAndValidatePathSetting("subJsonPath", subJsonPath); err != nil {
+		return common.NewError("invalid subJsonPath setting")
+	}
+	if _, err := normalizeAndValidatePathSetting("subClashPath", subClashPath); err != nil {
+		return common.NewError("invalid subClashPath setting")
+	}
+	subDomain, err := s.GetSubDomain()
+	if err != nil || util.ValidateHostname(subDomain) != nil {
+		return common.NewError("invalid subDomain setting")
+	}
+	if err := s.validateSubscriptionPathSettings(map[string]string{
+		"subPath":      subPath,
+		"subJsonPath":  subJsonPath,
+		"subClashPath": subClashPath,
+	}); err != nil {
+		return common.NewError("invalid subscription path settings")
+	}
+
+	subCert, err := s.GetSubCertFile()
+	if err != nil {
+		return common.NewError("invalid subscription certificate setting")
+	}
+	subKey, err := s.GetSubKeyFile()
+	if err != nil {
+		return common.NewError("invalid subscription certificate setting")
+	}
+	if err := s.validateCertificatePair(subCert, subKey); err != nil {
+		return common.NewError("invalid subscription certificate setting")
+	}
+	subListener, err := validateStartupListener(s.GetSubListen, s.GetSubPort)
+	if err != nil {
+		return common.NewError("invalid subscription listener setting")
+	}
+	if startupListenersOverlap(webListener, subListener) {
+		return common.NewError("web and subscription listeners overlap")
+	}
+	return nil
+}
+
+func (s *SettingService) validateCookieKeysForStartup() error {
+	if raw := strings.TrimSpace(os.Getenv("SUI_COOKIE_KEY")); raw != "" {
+		if _, err := parseEnvKeyList(raw, 32); err == nil {
+			return nil
+		}
+	}
+	secret, err := s.getString("secret")
+	if err != nil {
+		return err
+	}
+	if _, err := deriveHKDFKey([]byte(secret), nil, cookieKeyHKDFInfo); err != nil {
+		return err
+	}
+	_, err = deriveHKDFKey([]byte(secret), legacyCookieKeyHKDFSalt, legacyCookieKeyHKDFInfo)
+	return err
+}
+
+func (s *SettingService) validateCertificatePair(certFile, keyFile string) error {
+	if (certFile == "") != (keyFile == "") {
+		return common.NewError("certificate and key must be configured together")
+	}
+	if certFile == "" {
+		return nil
+	}
+	if err := s.fileExists(certFile); err != nil {
+		return err
+	}
+	if err := s.fileExists(keyFile); err != nil {
+		return err
+	}
+	_, err := tls.LoadX509KeyPair(certFile, keyFile)
+	return err
+}
+
+type startupListener struct {
+	host string
+	port int
+}
+
+func validateStartupListener(getListen func() (string, error), getPort func() (int, error)) (startupListener, error) {
+	host, err := getListen()
+	if err != nil {
+		return startupListener{}, err
+	}
+	if host != strings.TrimSpace(host) {
+		return startupListener{}, common.NewError("listener address contains surrounding whitespace")
+	}
+	port, err := getPort()
+	if err != nil {
+		return startupListener{}, err
+	}
+	if port < 1 || port > 65535 {
+		return startupListener{}, common.NewError("listener port out of range")
+	}
+	return startupListener{host: host, port: port}, nil
+}
+
+func startupListenersOverlap(left, right startupListener) bool {
+	if left.port != right.port {
+		return false
+	}
+	leftHost, leftWildcard := normalizeStartupListenerHost(left.host)
+	rightHost, rightWildcard := normalizeStartupListenerHost(right.host)
+	return leftWildcard || rightWildcard || leftHost == rightHost
+}
+
+func normalizeStartupListenerHost(host string) (string, bool) {
+	if host == "" {
+		return "", true
+	}
+	if addr, err := netip.ParseAddr(host); err == nil {
+		addr = addr.Unmap()
+		return addr.String(), addr.IsUnspecified()
+	}
+	return strings.TrimSuffix(strings.ToLower(host), "."), false
 }
 
 func (s *SettingService) LoadPanelSettingsForData(host string) (PanelLoadSettings, error) {

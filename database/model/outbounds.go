@@ -2,6 +2,14 @@ package model
 
 import "encoding/json"
 
+// No outbound option struct declares these legacy inbound rule fields;
+// option/outbound.go DialerOptions (lines 72-95) does not include them.
+var legacyOutboundOptionFields = map[string]struct{}{
+	"proxy_protocol":                  {},
+	"proxy_protocol_accept_no_header": {},
+	"udp_disable_domain_unmapping":    {},
+}
+
 type Outbound struct {
 	Id      uint            `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
 	Type    string          `json:"type" form:"type"`
@@ -45,6 +53,9 @@ func (o Outbound) MarshalJSON() ([]byte, error) {
 		}
 
 		for k, v := range restFields {
+			if _, legacy := legacyOutboundOptionFields[k]; legacy {
+				continue
+			}
 			combined[k] = v
 		}
 	}

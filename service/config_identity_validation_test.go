@@ -67,6 +67,14 @@ func TestDispatchSaveRejectsBlankTagBeforeTouchingDB(t *testing.T) {
 	}
 }
 
+func TestDispatchSaveRejectsUnsafeLogOutputThroughCorePolicy(t *testing.T) {
+	s := &ConfigService{}
+	_, _, _, err := s.dispatchSave(nil, "config", "set", json.RawMessage(`{"log":{"output":"../../etc/passwd"}}`), "", "")
+	if err == nil {
+		t.Fatal("dispatchSave accepted an unsafe log.output path")
+	}
+}
+
 func TestEntityIdentityField(t *testing.T) {
 	cases := []struct {
 		obj       string

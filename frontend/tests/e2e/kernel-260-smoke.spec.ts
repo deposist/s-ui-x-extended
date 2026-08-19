@@ -33,7 +33,94 @@ test('call inbound is selectable and renders its form', async ({ page }) => {
   await pickType(page, drawer, 'Call')
   await expect(fieldWithText(drawer, 'Platform')).toBeVisible()
   await expect(fieldWithText(drawer, 'Join link')).toBeVisible()
-  await expect(drawer.getByText('Cookies')).toBeVisible()
+  await expect(drawer.locator('.v-card-subtitle').filter({ hasText: /^Cookies$/ })).toBeVisible()
+  await expect(drawer.locator('.v-card-subtitle').filter({ hasText: /^Listen$/ })).toHaveCount(0)
+  await expect(fieldWithText(drawer, 'Address')).toHaveCount(0)
+  await expect(fieldWithText(drawer, 'Port')).toHaveCount(0)
+})
+
+test('trusttunnel inbound shows inbound controls only', async ({ page }) => {
+  test.setTimeout(60_000)
+
+  await login(page)
+  await page.goto('inbounds')
+  await page.getByRole('button', { name: 'Add', exact: true }).first().click()
+
+  const drawer = page.getByRole('dialog')
+  await expect(drawer).toContainText('Add Inbound')
+
+  await pickType(page, drawer, 'TrustTunnel')
+  await expect(fieldWithText(drawer, 'Network')).toBeVisible()
+  await expect(fieldWithText(drawer, 'Congestion controller')).toBeVisible()
+  await expect(fieldWithText(drawer, 'CWND')).toBeVisible()
+  await expect(drawer.getByRole('checkbox', { name: 'QUIC', exact: true })).toHaveCount(0)
+  await expect(drawer.getByRole('checkbox', { name: 'Health check', exact: true })).toHaveCount(0)
+  await expect(drawer.locator('.v-card-subtitle').filter({ hasText: /^Multiplex$/ })).toHaveCount(0)
+})
+
+test('trojan inbound keeps fallback controls and hides outbound controls', async ({ page }) => {
+  test.setTimeout(60_000)
+
+  await login(page)
+  await page.goto('inbounds')
+  await page.getByRole('button', { name: 'Add', exact: true }).first().click()
+
+  const drawer = page.getByRole('dialog')
+  await expect(drawer).toContainText('Add Inbound')
+
+  await pickType(page, drawer, 'Trojan')
+  await expect(fieldWithText(drawer, 'Password')).toHaveCount(0)
+  await expect(fieldWithText(drawer, 'Network')).toHaveCount(0)
+  await expect(fieldWithText(drawer, 'Fallback server')).toBeVisible()
+  await expect(fieldWithText(drawer, 'Fallback port')).toBeVisible()
+  await expect(drawer.locator('.v-alert').filter({ hasText: 'Fallback redirects' })).toBeVisible()
+})
+
+test('sudoku inbound save sends flat HTTP mask fields', async ({ page }) => {
+  test.setTimeout(60_000)
+
+  await login(page)
+  await page.goto('inbounds')
+  await page.getByRole('button', { name: 'Add', exact: true }).first().click()
+
+  const drawer = page.getByRole('dialog')
+  await expect(drawer).toContainText('Add Inbound')
+
+  await pickType(page, drawer, 'Sudoku')
+  await expect(drawer.getByRole('button', { name: 'Apply inbound recommendations', exact: true })).toBeVisible()
+  await drawer.getByRole('button', { name: 'Apply inbound recommendations', exact: true }).click()
+  const tag = `sudoku-e2e-${Date.now()}`
+  await fieldWithText(drawer, 'Tag').locator('input').fill(tag)
+  await fieldWithText(drawer, 'Path root').locator('input').fill('/sudoku-e2e')
+  await fieldWithText(drawer, 'Fallback').locator('input').fill('127.0.0.1:8080')
+  await drawer.getByRole('checkbox', { name: 'Disable HTTP mask', exact: true }).check()
+
+  const saveButton = drawer.getByRole('button', { name: 'Save', exact: true })
+  await expect(saveButton).toBeEnabled()
+  const saveRequestPromise = page.waitForRequest((request) => (
+    request.method() === 'POST'
+    && request.url().endsWith('/api/save')
+    && new URLSearchParams(request.postData() ?? '').get('object') === 'inbounds'
+  ))
+  await saveButton.click()
+  const saveRequest = await saveRequestPromise
+  const form = new URLSearchParams(saveRequest.postData() ?? '')
+  const data = JSON.parse(form.get('data') ?? '{}') as Record<string, unknown>
+
+  expect(data).toMatchObject({
+    tag,
+    type: 'sudoku',
+    aead_method: 'chacha20-poly1305',
+    padding_min: 10,
+    padding_max: 30,
+    handshake_timeout: 5,
+    enable_pure_downlink: true,
+    http_mask_mode: 'legacy',
+    fallback: '127.0.0.1:8080',
+    path_root: '/sudoku-e2e',
+    disable_http_mask: true,
+  })
+  expect(Object.hasOwn(data, 'http_mask')).toBe(false)
 })
 
 test('call outbound is selectable and renders its form', async ({ page }) => {

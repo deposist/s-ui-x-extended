@@ -73,7 +73,10 @@ var observabilityHistory = newObservabilityStore()
 var observabilityMemoryCapCache = newObservabilityMemoryCapCache(time.Now)
 
 func init() {
-	database.RegisterResetHook("service.observability", resetObservabilityCaches)
+	database.RegisterResetHook("service.observability", func() error {
+		resetObservabilityCaches()
+		return nil
+	})
 }
 
 type observabilityMemoryCapCacheState struct {

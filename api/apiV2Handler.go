@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/logger"
 	"github.com/deposist/s-ui-x-extended/service"
 	"github.com/deposist/s-ui-x-extended/util/common"
@@ -49,6 +50,7 @@ func NewAPIv2Handler(g *gin.RouterGroup, options ...Option) *APIv2Handler {
 		ApiService: NewApiService(options...),
 		tokens:     map[string]TokenInMemory{},
 	}
+	database.RegisterResetHook("api.apiv2_tokens", a.reloadTokens)
 	a.ReloadTokens()
 	a.initRouter(g)
 	return a
@@ -256,16 +258,20 @@ func (a *APIv2Handler) checkToken(c *gin.Context) {
 }
 
 func (a *APIv2Handler) ReloadTokens() {
+	if err := a.reloadTokens(); err != nil {
+		logger.Error("unable to load tokens: ", err)
+	}
+}
+
+func (a *APIv2Handler) reloadTokens() error {
 	tokens, err := a.ApiService.LoadTokens()
 	if err != nil {
-		logger.Error("unable to load tokens: ", err)
-		return
+		return err
 	}
 	var loaded []TokenInMemory
 	if len(tokens) > 0 {
 		if err := json.Unmarshal(tokens, &loaded); err != nil {
-			logger.Error("unable to load tokens: ", err)
-			return
+			return err
 		}
 	}
 	newMap := make(map[string]TokenInMemory, len(loaded))
@@ -275,6 +281,7 @@ func (a *APIv2Handler) ReloadTokens() {
 	a.tokensMu.Lock()
 	a.tokens = newMap
 	a.tokensMu.Unlock()
+	return nil
 }
 
 func apiTokenFromRequest(c *gin.Context) (string, bool) {

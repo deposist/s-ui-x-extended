@@ -24,8 +24,9 @@ func initSessionTestDB(t *testing.T) *service.SettingService {
 	prevAuditSync := service.AuditSyncForTest
 	service.AuditSyncForTest = true
 	t.Cleanup(func() { service.AuditSyncForTest = prevAuditSync })
-	t.Setenv("SUI_DB_FOLDER", t.TempDir())
-	initAPITestDB(t, filepath.Join(t.TempDir(), "s-ui.db"))
+	dbDir := t.TempDir()
+	t.Setenv("SUI_DB_FOLDER", dbDir)
+	initAPITestDB(t, filepath.Join(dbDir, "s-ui.db"))
 	if err := (&service.UserService{}).UpdateFirstUser("admin", "test-admin-password"); err != nil {
 		t.Fatal(err)
 	}

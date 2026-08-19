@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -222,7 +223,7 @@ func TestAddUsersDropsTrojanTopLevelPassword(t *testing.T) {
 	inbound := model.Inbound{
 		Type:    "trojan",
 		Tag:     "trojan-1",
-		Options: json.RawMessage(`{"listen":"0.0.0.0","listen_port":443,"password":"hello"}`),
+		Options: json.RawMessage(`{"listen":"0.0.0.0","listen_port":443,"password":"hello","network":["tcp"]}`),
 	}
 	if err := database.GetDB().Create(&inbound).Error; err != nil {
 		t.Fatal(err)
@@ -236,7 +237,7 @@ func TestAddUsersDropsTrojanTopLevelPassword(t *testing.T) {
 
 	inboundJSON, err := json.Marshal(map[string]any{
 		"type": "trojan", "tag": "trojan-1",
-		"listen": "0.0.0.0", "listen_port": 443, "password": "hello",
+		"listen": "0.0.0.0", "listen_port": 443, "password": "hello", "network": []string{"tcp"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -249,13 +250,131 @@ func TestAddUsersDropsTrojanTopLevelPassword(t *testing.T) {
 	if err := json.Unmarshal(out, &got); err != nil {
 		t.Fatal(err)
 	}
-	// sing-box's Trojan inbound has no top-level "password" (only "users") and
-	// rejects the whole config if one is present.
-	if _, has := got["password"]; has {
-		t.Errorf("trojan inbound must not keep a top-level password: %s", out)
+	// sing-box's Trojan inbound has no top-level "password" or "network"
+	// fields (only "users"), and rejects the whole config if either is present.
+	for _, key := range []string{"password", "network"} {
+		if _, has := got[key]; has {
+			t.Errorf("trojan inbound must not keep top-level %s: %s", key, out)
+		}
 	}
 	if _, has := got["users"]; !has {
 		t.Errorf("trojan inbound should have users injected: %s", out)
+	}
+}
+
+// TestAddUsersStripsOutboundOnlyTrustTunnelKeys is the regression guard for the
+// inbound core-start crash: the pre-fix TrustTunnel UI exposed an unguarded
+// QUIC switch and initialized multiplex unconditionally, so an inbound save
+// could emit `quic` or `multiplex` at top level. Username/password/health_check
+// were already out-gated; stripping them too is defensive cleanup for legacy
+// or outbound-shaped payloads. The fork's TrustTunnel inbound struct rejects
+// these fields, while network/congestion_controller/cwnd remain valid.
+func TestAddUsersStripsOutboundOnlyTrustTunnelKeys(t *testing.T) {
+	initSettingTestDB(t)
+
+	inbound := model.Inbound{
+		Type:    "trusttunnel",
+		Tag:     "tt",
+		Options: json.RawMessage(`{"listen":"0.0.0.0","listen_port":443}`),
+	}
+	if err := database.GetDB().Create(&inbound).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.GetDB().Create(&model.Client{
+		Enable:   true,
+		Name:     "alice",
+		Config:   json.RawMessage(`{"trusttunnel":{"name":"alice","password":"pw1"}}`),
+		Inbounds: json.RawMessage(fmt.Sprintf("[%d]", inbound.Id)),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	inboundJSON := []byte(`{"type":"trusttunnel","tag":"tt","listen":"0.0.0.0","listen_port":443,"quic":true,"health_check":true,"username":"u","password":"p","multiplex":{},"network":["tcp","udp"],"congestion_controller":"bbr","cwnd":32}`)
+	out, err := (&InboundService{}).addUsers(database.GetDB(), inboundJSON, inbound.Id, "trusttunnel")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"quic", "health_check", "username", "password", "multiplex"} {
+		if _, has := got[key]; has {
+			t.Errorf("trusttunnel inbound must not keep outbound-only key %q: %s", key, out)
+		}
+	}
+	for _, key := range []string{"network", "congestion_controller", "cwnd"} {
+		if _, has := got[key]; !has {
+			t.Errorf("trusttunnel inbound must keep inbound key %q: %s", key, out)
+		}
+	}
+	users, _ := got["users"].([]any)
+	if len(users) == 0 {
+		t.Fatalf("trusttunnel inbound should have users injected: %s", out)
+	}
+}
+
+func TestInboundCoreJSONStripsKeylessInboundOnlyOptions(t *testing.T) {
+	initSettingTestDB(t)
+
+	for _, tc := range []struct {
+		name        string
+		inboundType string
+		options     string
+		forbidden   []string
+		preserved   []string
+	}{
+		{
+			name:        "sudoku",
+			inboundType: "sudoku",
+			options:     `{"listen_port":443,"key":"public","master_key":"secret","http_mask":{},"disable_http_mask":false,"http_mask_mode":"auto","path_root":"/mask","fallback":"https://example.com"}`,
+			forbidden:   []string{"master_key", "http_mask"},
+			preserved:   []string{"listen_port", "key", "disable_http_mask", "http_mask_mode", "path_root", "fallback"},
+		},
+		{
+			name:        "call",
+			inboundType: "call",
+			options:     `{"listen":"0.0.0.0","listen_port":443,"udp_timeout":30,"proxy_protocol":true,"proxy_protocol_accept_no_header":true,"join_link":"https://example.com/join","platform":"dion","cookies":[{"name":"sid","value":"x"}]}`,
+			forbidden:   []string{"listen", "listen_port", "udp_timeout", "proxy_protocol", "proxy_protocol_accept_no_header"},
+			preserved:   []string{"join_link", "platform", "cookies"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			row := model.Inbound{
+				Type:    tc.inboundType,
+				Tag:     tc.name + "-core",
+				Options: json.RawMessage(tc.options),
+			}
+			data, err := inboundCoreJSON(&InboundService{}, database.GetDB(), row)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got map[string]any
+			if err := json.Unmarshal(data, &got); err != nil {
+				t.Fatal(err)
+			}
+			for _, key := range tc.forbidden {
+				if _, ok := got[key]; ok {
+					t.Errorf("%s inbound leaked core-incompatible key %q: %s", tc.inboundType, key, data)
+				}
+			}
+			for _, key := range tc.preserved {
+				if _, ok := got[key]; !ok {
+					t.Errorf("%s inbound dropped valid key %q: %s", tc.inboundType, key, data)
+				}
+			}
+		})
+	}
+}
+
+func TestSanitizeInboundJSONForCorePreservesUntouchedBytes(t *testing.T) {
+	input := []byte(`{"type":"call","tag":"plain","join_link":"https://example.com/join"}`)
+	output, err := sanitizeInboundJSONForCore("call", input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(output, input) {
+		t.Fatalf("untouched inbound JSON was rewritten: got %s, want %s", output, input)
 	}
 }
 

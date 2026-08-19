@@ -289,7 +289,14 @@ func walCheckpointWithFallback(db *gorm.DB) error {
 	return nil
 }
 
-func ImportDB(file multipart.File) error {
+// ValidateRestoredDatabase validates the fully initialized database while the
+// restore maintenance barrier is still held and the fallback remains on disk.
+type ValidateRestoredDatabase func() error
+
+func ImportDB(file multipart.File, validate ValidateRestoredDatabase) error {
+	if validate == nil {
+		return common.NewError("restored database validator is required")
+	}
 	leaveMaintenance, err := beginRestore()
 	if err != nil {
 		return err
@@ -311,6 +318,13 @@ func ImportDB(file multipart.File) error {
 	}
 
 	dbPath := config.GetDBPath()
+	initialAdminPath := initialAdminPasswordPath(dbPath)
+	initialAdminSnapshot, err := snapshotInitialAdminPassword(initialAdminPath)
+	if err != nil {
+		return common.NewError("Error snapshotting initial admin credential")
+	}
+	defer clearInitialAdminPasswordSnapshot(&initialAdminSnapshot)
+
 	tempPath := dbPath + ".temp"
 	fallbackPath := dbPath + ".backup"
 
@@ -354,17 +368,17 @@ func ImportDB(file multipart.File) error {
 	fallbackReady := false
 	if _, statErr := os.Stat(dbPath); statErr == nil {
 		if err := os.Rename(dbPath, fallbackPath); err != nil {
-			return reopenLiveDBAfterImportError(dbPath, "backing up live db file", err)
+			return reopenLiveDBAfterImportErrorWithSidecar(dbPath, "backing up live db file", err, initialAdminPath, initialAdminSnapshot)
 		}
 		fallbackReady = true
 	} else if !os.IsNotExist(statErr) {
-		return reopenLiveDBAfterImportError(dbPath, "checking live db file", statErr)
+		return reopenLiveDBAfterImportErrorWithSidecar(dbPath, "checking live db file", statErr, initialAdminPath, initialAdminSnapshot)
 	}
 	cleanupSidecars(dbPath)
 
 	// Move the staged file into place.
 	if err := os.Rename(tempPath, dbPath); err != nil {
-		return rollbackImportedDB(dbPath, fallbackPath, fallbackReady, "installing imported db file", err)
+		return rollbackImportedDB(dbPath, fallbackPath, fallbackReady, initialAdminPath, initialAdminSnapshot, "installing imported db file", err)
 	}
 	cleanupSidecars(dbPath) // imported file may have brought its own .db-wal/.db-shm if user uploaded a hot copy
 
@@ -372,7 +386,7 @@ func ImportDB(file multipart.File) error {
 	// the panel keeps running on the previous data set instead of dying
 	// without a database.
 	rollback := func(stage string, cause error) error {
-		return rollbackImportedDB(dbPath, fallbackPath, fallbackReady, stage, cause)
+		return rollbackImportedDB(dbPath, fallbackPath, fallbackReady, initialAdminPath, initialAdminSnapshot, stage, cause)
 	}
 
 	// Schema migrations + post-migration adapter for legacy backups.
@@ -384,6 +398,9 @@ func ImportDB(file multipart.File) error {
 	}
 	if err := ResetCaches(context.Background()); err != nil {
 		return rollback("resetting in-memory caches", err)
+	}
+	if err := validate(); err != nil {
+		return rollback("validating restored database", err)
 	}
 
 	// Imported db is healthy and live; drop the on-disk fallback.
@@ -398,6 +415,63 @@ func ImportDB(file multipart.File) error {
 		return common.NewErrorf("Error restarting app: %v", err)
 	}
 	return nil
+}
+
+type initialAdminPasswordSnapshot struct {
+	exists   bool
+	contents []byte
+}
+
+func snapshotInitialAdminPassword(path string) (initialAdminPasswordSnapshot, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return initialAdminPasswordSnapshot{}, nil
+		}
+		return initialAdminPasswordSnapshot{}, err
+	}
+	if !info.Mode().IsRegular() {
+		return initialAdminPasswordSnapshot{}, os.ErrInvalid
+	}
+	// #nosec G304 -- path is the fixed initial-admin sidecar beside config.GetDBPath().
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return initialAdminPasswordSnapshot{}, err
+	}
+	return initialAdminPasswordSnapshot{exists: true, contents: contents}, nil
+}
+
+func clearInitialAdminPasswordSnapshot(snapshot *initialAdminPasswordSnapshot) {
+	for i := range snapshot.contents {
+		snapshot.contents[i] = 0
+	}
+	snapshot.contents = nil
+}
+
+func restoreInitialAdminPassword(path string, snapshot initialAdminPasswordSnapshot) error {
+	if !snapshot.exists {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	return writeSecureFileAtomic(path, snapshot.contents)
+}
+
+func combineInitialAdminPasswordRollbackError(rollbackErr error, sidecarErr error) error {
+	if sidecarErr == nil {
+		return rollbackErr
+	}
+	const sidecarMessage = "restoring initial admin password sidecar failed"
+	if rollbackErr == nil {
+		return common.NewError(sidecarMessage)
+	}
+	return common.NewErrorf("%v; %s", rollbackErr, sidecarMessage)
+}
+
+func reopenLiveDBAfterImportErrorWithSidecar(dbPath string, stage string, cause error, sidecarPath string, snapshot initialAdminPasswordSnapshot) error {
+	rollbackErr := reopenLiveDBAfterImportError(dbPath, stage, cause)
+	return combineInitialAdminPasswordRollbackError(rollbackErr, restoreInitialAdminPassword(sidecarPath, snapshot))
 }
 
 func closeLiveDB() {
@@ -417,22 +491,27 @@ func closeLiveDB() {
 	}
 }
 
-func rollbackImportedDB(dbPath string, fallbackPath string, fallbackReady bool, stage string, cause error) error {
+func rollbackImportedDB(dbPath string, fallbackPath string, fallbackReady bool, sidecarPath string, snapshot initialAdminPasswordSnapshot, stage string, cause error) error {
 	closeLiveDB()
 	_ = os.Remove(dbPath)
 	cleanupBackupSidecars(dbPath)
+	var rollbackErr error
 	if !fallbackReady {
-		return common.NewErrorf("Error %s: %v", stage, cause)
+		rollbackErr = common.NewErrorf("Error %s: %v", stage, cause)
+	} else if err := os.Rename(fallbackPath, dbPath); err != nil {
+		rollbackErr = common.NewErrorf("Error %s (%v) and restoring fallback failed: %v", stage, cause, err)
+	} else {
+		rollbackErr = reopenLiveDBAfterImportError(dbPath, stage, cause)
 	}
-	if err := os.Rename(fallbackPath, dbPath); err != nil {
-		return common.NewErrorf("Error %s (%v) and restoring fallback failed: %v", stage, cause, err)
-	}
-	return reopenLiveDBAfterImportError(dbPath, stage, cause)
+	return combineInitialAdminPasswordRollbackError(rollbackErr, restoreInitialAdminPassword(sidecarPath, snapshot))
 }
 
 func reopenLiveDBAfterImportError(dbPath string, stage string, cause error) error {
 	if err := InitDB(dbPath); err != nil {
 		return common.NewErrorf("Error %s (%v) and reopening live db failed: %v", stage, cause, err)
+	}
+	if err := ResetCaches(context.Background()); err != nil {
+		return common.NewErrorf("Error %s (%v) and resetting fallback caches failed: %v", stage, cause, err)
 	}
 	return common.NewErrorf("Error %s: %v", stage, cause)
 }

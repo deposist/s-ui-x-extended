@@ -340,8 +340,9 @@ var (
 )
 
 func init() {
-	database.RegisterResetHook("service.token_use_debouncer", func() {
+	database.RegisterResetHook("service.token_use_debouncer", func() error {
 		DefaultRuntime().resetTokenUseDebouncer()
+		return nil
 	})
 }
 

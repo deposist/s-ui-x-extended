@@ -349,6 +349,31 @@ func TestImportXuiCorruptFileAuditsFailure(t *testing.T) {
 	}
 }
 
+func TestXuiImportErrorRedactsRollbackDetails(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	const absolutePath = `C:\var\lib\s-ui\restore.db`
+	const token = `123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk`
+	xuiImportError(c, errors.New("rollback restore failed: open "+absolutePath+": sqlite3: token="+token))
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("rollback error status=%d, want %d", recorder.Code, http.StatusBadRequest)
+	}
+	var msg Msg
+	if err := json.Unmarshal(recorder.Body.Bytes(), &msg); err != nil {
+		t.Fatalf("decode rollback error response: %v", err)
+	}
+	if !strings.Contains(msg.Msg, "import-xui: not_sqlite") {
+		t.Fatalf("rollback error lost stable classification: %s", recorder.Body.String())
+	}
+	if strings.Contains(msg.Msg, absolutePath) {
+		t.Fatalf("rollback error leaked absolute path: %s", recorder.Body.String())
+	}
+	if strings.Contains(msg.Msg, token) {
+		t.Fatalf("rollback error leaked token-like value: %s", recorder.Body.String())
+	}
+}
+
 func TestImportXuiDryRunReturnsReportWithoutMutation(t *testing.T) {
 	settingService, src := setupXuiAPITestDB(t)
 	before := apiTableCounts(t, "inbounds", "endpoints", "tls", "clients")

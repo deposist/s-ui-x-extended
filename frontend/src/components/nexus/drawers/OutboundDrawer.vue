@@ -96,7 +96,7 @@
       <Fallback v-if="outbound.type == outTypes.Fallback" :data="outbound" :tags="tags" />
       <Transport v-if="Object.hasOwn(outbound,'transport')" :data="outbound" :field-hints="currentFieldHints" />
       <OutTLS v-if="Object.hasOwn(outbound,'tls')" :outbound="outbound" :field-hints="currentFieldHints" />
-      <Multiplex v-if="Object.hasOwn(outbound,'multiplex')" direction="out" :data="outbound" :field-hints="currentFieldHints" />
+      <Multiplex v-if="Object.hasOwn(outbound,'multiplex') && outbound.type != outTypes.TrustTunnel" direction="out" :data="outbound" :field-hints="currentFieldHints" />
       <Dial v-if="!NoDial.includes(outbound.type)" :dial="outbound" :field-hints="currentFieldHints" />
     </form-section>
 

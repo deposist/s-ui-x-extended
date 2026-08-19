@@ -42,7 +42,7 @@ func TestDatabaseOperationMiddlewareAllowsImportXuiRollbackToAcquireRestoreLease
 	router := gin.New()
 	router.Use(databaseOperationMiddleware())
 	router.POST("/api/import-xui/rollback", func(c *gin.Context) {
-		if err := database.ImportDB(maintenanceBarrierFile{Reader: bytes.NewReader(backup)}); err != nil {
+		if err := database.ImportDB(maintenanceBarrierFile{Reader: bytes.NewReader(backup)}, func() error { return nil }); err != nil {
 			t.Errorf("rollback restore failed: %v", err)
 			c.Status(http.StatusInternalServerError)
 			return
@@ -123,7 +123,7 @@ func TestDatabaseOperationMiddlewareDrainsActiveRequestAndBlocksNewRequestDuring
 
 	restoreDone := make(chan error, 1)
 	go func() {
-		restoreDone <- database.ImportDB(maintenanceBarrierFile{Reader: bytes.NewReader(backup)})
+		restoreDone <- database.ImportDB(maintenanceBarrierFile{Reader: bytes.NewReader(backup)}, func() error { return nil })
 	}()
 	time.Sleep(50 * time.Millisecond) // allow restore to queue its exclusive barrier
 

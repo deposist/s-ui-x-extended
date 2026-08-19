@@ -43,7 +43,7 @@ func TestDatabaseMaintenanceJobDoesNotStartWhileRestoreIsQueued(t *testing.T) {
 	activeDone := database.EnterDBOperation()
 	restoreDone := make(chan error, 1)
 	go func() {
-		restoreDone <- database.ImportDB(maintenanceMultipartFile{Reader: bytes.NewReader(backup)})
+		restoreDone <- database.ImportDB(maintenanceMultipartFile{Reader: bytes.NewReader(backup)}, func() error { return nil })
 	}()
 	time.Sleep(50 * time.Millisecond) // allow restore to queue its exclusive barrier
 

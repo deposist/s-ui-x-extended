@@ -23,13 +23,13 @@
         </v-select>
       </v-col>
       <v-col cols="6" sm="3" md="2">
-        <v-switch color="primary" hide-details label="QUIC" v-model="data.quic"></v-switch>
+        <v-switch v-if="direction == 'out'" color="primary" hide-details label="QUIC" v-model="data.quic"></v-switch>
       </v-col>
       <v-col cols="6" sm="3" md="3" v-if="direction == 'out'">
         <v-switch color="primary" hide-details :label="$t('types.trusttunnel.healthCheck')" v-model="data.health_check"></v-switch>
       </v-col>
     </v-row>
-    <v-row v-if="data.quic">
+    <v-row v-if="direction == 'out' ? data.quic : true">
       <v-col cols="12" sm="6" md="4">
         <v-select
           clearable
@@ -87,7 +87,7 @@ export default {
     }
   },
   created() {
-    if (!this.$props.data.multiplex) this.$props.data.multiplex = {}
+    if (this.$props.direction !== 'in' && !this.$props.data.multiplex) this.$props.data.multiplex = {}
   },
   computed: {
     mux(): any {

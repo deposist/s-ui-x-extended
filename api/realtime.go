@@ -90,8 +90,9 @@ var wsTokens = struct {
 var legacyWSProtocolAuditWarned stdatomic.Bool
 
 func init() {
-	database.RegisterResetHook("api.ws_tokens", func() {
-		_ = sweepAllWSTokens()
+	database.RegisterResetHook("api.ws_tokens", func() error {
+		sweepAllWSTokens()
+		return nil
 	})
 	service.RegisterWSTokenInvalidationHook("api.ws_tokens", sweepAllWSTokens)
 }

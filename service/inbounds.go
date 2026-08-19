@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/deposist/s-ui-x-extended/core"
 	"github.com/deposist/s-ui-x-extended/core/capabilities"
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/migrateutil"
@@ -243,15 +244,23 @@ func (s *InboundService) saveInboundUpsert(tx *gorm.DB, act string, data json.Ra
 	if err := migrateutil.MigrateLegacyInboundRuleActionFields(tx); err != nil {
 		return nil, err
 	}
-	var err error
 	switch act {
 	case "new":
-		err = s.ClientService.UpdateClientsOnInboundAdd(tx, initUserIds, inbound.Id, hostname)
+		if err := s.ClientService.UpdateClientsOnInboundAdd(tx, initUserIds, inbound.Id, hostname); err != nil {
+			return nil, err
+		}
 	case "edit":
-		err = s.ClientService.UpdateLinksByInboundChange(tx, &[]model.Inbound{inbound}, hostname, oldTag)
+		if err := s.ClientService.UpdateLinksByInboundChange(tx, &[]model.Inbound{inbound}, hostname, oldTag); err != nil {
+			return nil, err
+		}
 	}
+
+	candidate, err := inboundCoreJSON(s, tx, inbound)
 	if err != nil {
 		return nil, err
+	}
+	if err := core.ValidateInboundJSON(candidate); err != nil {
+		return nil, common.NewErrorf("inbound %q rejected by sing-box schema: %v", inbound.Tag, err)
 	}
 
 	change := &entityCoreChange{reloadIds: []uint{inbound.Id}}
@@ -391,6 +400,66 @@ var allowedUserJSONFields = map[string]struct{}{
 	"mtproxy":     {},
 }
 
+// inboundCoreRejectedOptionKeys lists panel fields rejected by each inbound's
+// fork option struct. The fork's option/trojan.go TrojanInboundOptions has no
+// network field; option/sudoku.go SudokuInboundOptions uses flat
+// disable_http_mask/http_mask_mode/path_root/fallback fields instead of a
+// nested http_mask object; and option/call.go CallInboundOptions embeds
+// DialerOptions, not ListenOptions.
+//
+// The pre-fix TrustTunnel UI exposed an unguarded quic switch and initialized
+// multiplex unconditionally. Its username/password/health_check controls were
+// already out-gated, so those three removals are defensive cleanup for legacy
+// or outbound-shaped payloads. TrustTunnel inbound network,
+// congestion_controller, and cwnd fields remain valid.
+var inboundCoreRejectedOptionKeys = map[string][]string{
+	"trojan":      {"password", "network"},
+	"trusttunnel": {"quic", "health_check", "multiplex", "username", "password"},
+	"sudoku":      {"http_mask"},
+	"call":        {"listen", "listen_port", "udp_timeout", "proxy_protocol", "proxy_protocol_accept_no_header"},
+}
+
+// sanitizeInboundOptionsForCore removes fields that the inbound option struct
+// does not declare. It returns whether the map changed so JSON callers can
+// preserve the original bytes when no field needed removal.
+func sanitizeInboundOptionsForCore(inboundType string, inbound map[string]interface{}) bool {
+	changed := false
+	for _, key := range inboundCoreRejectedOptionKeys[inboundType] {
+		if _, exists := inbound[key]; exists {
+			delete(inbound, key)
+			changed = true
+		}
+	}
+	return changed
+}
+
+// sanitizeInboundJSONForCore applies the shared option sanitizer and the
+// existing Sudoku master-key removal while keeping byte identity when no
+// field needed removal.
+func sanitizeInboundJSONForCore(inboundType string, inboundJSON []byte) ([]byte, error) {
+	if inboundType != "sudoku" && len(inboundCoreRejectedOptionKeys[inboundType]) == 0 {
+		return inboundJSON, nil
+	}
+	var inbound map[string]interface{}
+	if err := json.Unmarshal(inboundJSON, &inbound); err != nil {
+		return nil, err
+	}
+	changed := false
+	if inboundType == "sudoku" {
+		if _, exists := inbound["master_key"]; exists {
+			delete(inbound, "master_key")
+			changed = true
+		}
+	}
+	if sanitizeInboundOptionsForCore(inboundType, inbound) {
+		changed = true
+	}
+	if !changed {
+		return inboundJSON, nil
+	}
+	return json.Marshal(inbound)
+}
+
 func (s *InboundService) addUsers(db *gorm.DB, inboundJson []byte, inboundId uint, inboundType string) ([]byte, error) {
 	if !s.hasUser(inboundType) {
 		return inboundJson, nil
@@ -402,13 +471,7 @@ func (s *InboundService) addUsers(db *gorm.DB, inboundJson []byte, inboundId uin
 		return nil, err
 	}
 
-	// A Trojan inbound authenticates per user; sing-box has no top-level
-	// "password" field for it (only "users") and rejects the whole config
-	// (`unknown field "password"`) if one is present. The inbound editor used to
-	// write one for inbounds, so drop any leftover before emitting.
-	if inboundType == "trojan" {
-		delete(inbound, "password")
-	}
+	sanitizeInboundOptionsForCore(inboundType, inbound)
 
 	condition := "? IN (SELECT json_each.value FROM json_each(clients.inbounds))"
 	inbound["users"], err = s.fetchUsersByCondition(db, inboundType, condition, inbound, inboundId)
@@ -526,11 +589,7 @@ func (s *InboundService) RestartInbounds(tx *gorm.DB, ids []uint) error {
 			}
 		}
 
-		inboundConfig, err := inbound.MarshalJSON()
-		if err != nil {
-			return err
-		}
-		inboundConfig, err = s.addUsers(tx, inboundConfig, inbound.Id, inbound.Type)
+		inboundConfig, err := inboundCoreJSON(s, tx, *inbound)
 		if err != nil {
 			return err
 		}

@@ -7,7 +7,8 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 ## [Unreleased]
 
-- No unreleased changes.
+- Fixed inbound saves that could crash-loop sing-box with `json: unknown field`: TrustTunnel no longer emits the outbound-only `quic` switch, Trojan no longer emits `network`, Sudoku keeps HTTP-mask settings in the inbound schema, and Call omits listen fields. Existing affected rows are cleaned when the core config is generated.
+- The panel now validates the exact generated inbound before committing a save. A database restore also validates the full generated core config before the restore is finalized or sing-box is restarted; an invalid restore rolls back to the previous database.
 
 ## [1.1.0] - 2026-08-17 - managed AWG in panel settings, call and backup fixes, panel startup and self-update fixes
 

@@ -90,7 +90,7 @@
           </v-tabs>
           <v-window v-model="side" style="margin-top: 10px;">
             <v-window-item value="s">
-              <Listen :data="inbound" :inTags="inTags" :field-hints="currentFieldHints" v-if="inbound.type != inTypes.Tun" />
+              <Listen :data="inbound" :inTags="inTags" :field-hints="currentFieldHints" v-if="inbound.type != inTypes.Tun && inbound.type != inTypes.Call" />
               <Direct v-if="inbound.type == inTypes.Direct" :data="inbound" :field-hints="currentFieldHints" />
               <Shadowsocks v-if="inbound.type == inTypes.Shadowsocks" direction="in" :data="inbound" :field-hints="currentFieldHints" />
               <Hysteria v-if="inbound.type == inTypes.Hysteria" direction="in" :data="inbound" :field-hints="currentFieldHints" />
@@ -281,13 +281,16 @@ export default {
       applyInboundRecommendedValues(this.inbound)
     },
     changeType() {
-      if (!this.inbound.listen_port) this.inbound.listen_port = RandomUtil.randomIntRange(10000, 60000)
+      const listenPort = this.inbound.listen_port || RandomUtil.randomIntRange(10000, 60000)
       // Tag change only in add inbound
-      const tag = this.$props.id > 0 ? this.inbound.tag : this.inbound.type + "-" + this.inbound.listen_port
-      // Use previous data
-      const prevConfig: any = { id: this.inbound.id, tag: tag, listen_port: this.inbound.listen_port }
-      if (this.inbound.listen != null) prevConfig.listen = this.inbound.listen
-      else if (this.$props.id == 0) prevConfig.listen = "::"
+      const tag = this.$props.id > 0 ? this.inbound.tag : this.inbound.type + "-" + listenPort
+      // Use previous data, except Call inbounds which do not support listen fields.
+      const prevConfig: any = { id: this.inbound.id, tag: tag }
+      if (this.inbound.type != this.inTypes.Call) {
+        prevConfig.listen_port = listenPort
+        if (this.inbound.listen != null) prevConfig.listen = this.inbound.listen
+        else if (this.$props.id == 0) prevConfig.listen = "::"
+      }
       this.inbound = createInbound(this.inbound.type, this.inbound.type != this.inTypes.Tun ? prevConfig : { tag: tag })
       if (this.HasInData.includes(this.inbound.type)){
         this.inbound.addrs = []

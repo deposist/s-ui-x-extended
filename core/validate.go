@@ -5,6 +5,7 @@ import (
 
 	sb "github.com/sagernet/sing-box"
 	"github.com/sagernet/sing-box/option"
+	"github.com/sagernet/sing/service"
 )
 
 // registryContext returns a context carrying every registry sing-box needs to
@@ -17,6 +18,19 @@ import (
 // way a full validation does.
 func registryContext(ctx context.Context) context.Context {
 	return sb.Context(ctx, InboundRegistry(), OutboundRegistry(), EndpointRegistry(), ProviderRegistry(), DNSTransportRegistry(), ServiceRegistry())
+}
+
+func inboundRegistryContext(ctx context.Context) context.Context {
+	registry := InboundRegistry()
+	return service.ContextWith[option.InboundOptionsRegistry](ctx, registry)
+}
+
+// ValidateInboundJSON performs the exact strict inbound parse used by AddInbound.
+// It is parse-only: it does not construct adapters, bind listeners, access the
+// live core, or mutate the database.
+func ValidateInboundJSON(config []byte) error {
+	var inbound option.Inbound
+	return inbound.UnmarshalJSONContext(inboundRegistryContext(context.Background()), config)
 }
 
 // ValidateConfig builds a sing-box instance from the supplied config without

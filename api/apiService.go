@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deposist/s-ui-x-extended/core"
 	"github.com/deposist/s-ui-x-extended/core/capabilities"
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/logger"
@@ -868,6 +869,28 @@ func (a *ApiService) SubConvert(c *gin.Context) {
 	jsonObj(c, result, err)
 }
 
+func (a *ApiService) validateRestoredCoreConfig() error {
+	rawConfig, err := a.ConfigService.GetConfig("")
+	if err != nil {
+		return common.NewErrorf("restored core config generation failed: %s", redact.String(err.Error()))
+	}
+	if rawConfig == nil {
+		return common.NewError("restored core config generation failed: empty config")
+	}
+	if err := service.ValidateCoreConfigPolicy(*rawConfig); err != nil {
+		logger.Warning("restored core config policy rejected: ", redact.String(err.Error()))
+		return common.NewError("restored core config policy rejected")
+	}
+	if err := core.ValidateConfig(*rawConfig); err != nil {
+		return common.NewErrorf("restored core config validation failed: %s", redact.String(err.Error()))
+	}
+	if err := a.SettingService.ValidateStartupSettings(); err != nil {
+		logger.Warning("restored startup settings rejected: ", redact.String(err.Error()))
+		return common.NewError("restored startup settings rejected")
+	}
+	return nil
+}
+
 func (a *ApiService) ImportDb(c *gin.Context) {
 	if !a.requireTokenScopeAny(c, "database", "admin") {
 		return
@@ -889,7 +912,7 @@ func (a *ApiService) ImportDb(c *gin.Context) {
 	if !ok {
 		return
 	}
-	err = database.ImportDB(importFile)
+	err = database.ImportDB(importFile, a.validateRestoredCoreConfig)
 	if err != nil {
 		a.recordAudit(c, requestActor(c), "db_import_failed", "database", service.AuditSeverityWarn, map[string]any{
 			"reason": databaseImportErrorClass(err),

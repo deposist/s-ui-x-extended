@@ -227,6 +227,38 @@ func TestLoadPanelSettingsForDataMatchesFinalSubURI(t *testing.T) {
 	}
 }
 
+func TestValidateStartupSettingsAllowsDisabledTrafficHistory(t *testing.T) {
+	settingService := initSettingTestDB(t)
+	if err := database.GetDB().Model(&model.Setting{}).Where("key = ?", "trafficAge").Update("value", "0").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := settingService.ValidateStartupSettings(); err != nil {
+		t.Fatalf("trafficAge=0 must remain a valid disabled state: %v", err)
+	}
+}
+
+func TestStartupListenersOverlap(t *testing.T) {
+	tests := []struct {
+		name  string
+		left  startupListener
+		right startupListener
+		want  bool
+	}{
+		{name: "wildcard covers specific", left: startupListener{host: "", port: 2095}, right: startupListener{host: "127.0.0.1", port: 2095}, want: true},
+		{name: "ipv4 wildcard covers specific", left: startupListener{host: "0.0.0.0", port: 2095}, right: startupListener{host: "192.0.2.1", port: 2095}, want: true},
+		{name: "mapped ipv4 matches ipv4", left: startupListener{host: "::ffff:127.0.0.1", port: 2095}, right: startupListener{host: "127.0.0.1", port: 2095}, want: true},
+		{name: "hostname comparison ignores case and root dot", left: startupListener{host: "LOCALHOST.", port: 2095}, right: startupListener{host: "localhost", port: 2095}, want: true},
+		{name: "different specific addresses", left: startupListener{host: "127.0.0.1", port: 2095}, right: startupListener{host: "127.0.0.2", port: 2095}, want: false},
+		{name: "different ports", left: startupListener{host: "", port: 2095}, right: startupListener{host: "", port: 2096}, want: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := startupListenersOverlap(tc.left, tc.right); got != tc.want {
+				t.Fatalf("startupListenersOverlap(%#v, %#v) = %v, want %v", tc.left, tc.right, got, tc.want)
+			}
+		})
+	}
+}
 func TestGetFinalSubURIOmitsDefaultPorts(t *testing.T) {
 	t.Setenv("SUI_DB_FOLDER", t.TempDir())
 	if err := database.InitDB("file::memory:?cache=shared"); err != nil {

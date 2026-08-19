@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/service"
 )
 
@@ -29,6 +30,12 @@ func newSubscriptionOutputCache(ttl time.Duration) *subscriptionOutputCacheStore
 }
 
 func init() {
+	database.RegisterResetHook("sub.output_cache", func() error {
+		ClearSubscriptionOutputCache()
+		clearSubDisplaySettingsCache()
+		clearRateLimitSettingCache()
+		return nil
+	})
 	service.RegisterSubscriptionCacheInvalidator(ClearSubscriptionOutputCache)
 	service.RegisterClientSubscriptionCacheInvalidator(InvalidateClientSubscriptionOutputCache)
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/deposist/s-ui-x-extended/config"
@@ -34,6 +35,10 @@ func sqliteDataPath(dbPath string) string {
 }
 
 func writeInitialAdminPassword(path string, password string) error {
+	return writeSecureFileAtomic(path, []byte(password+"\n"))
+}
+
+func writeSecureFileAtomic(path string, content []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
@@ -48,7 +53,11 @@ func writeInitialAdminPassword(path string, password string) error {
 		_ = tmp.Close()
 		return err
 	}
-	if _, err := tmp.WriteString(password + "\n"); err != nil {
+	if _, err := tmp.Write(content); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
 		_ = tmp.Close()
 		return err
 	}
@@ -58,11 +67,18 @@ func writeInitialAdminPassword(path string, password string) error {
 	if err := os.Chmod(tmpPath, 0o600); err != nil {
 		return err
 	}
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return err
-	}
 	if err := os.Rename(tmpPath, path); err != nil {
-		return err
+		// Windows does not replace an existing destination. The temporary file
+		// is complete and mode-restricted before this fallback removes it.
+		if runtime.GOOS != "windows" {
+			return err
+		}
+		if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
+			return err
+		}
+		if err := os.Rename(tmpPath, path); err != nil {
+			return err
+		}
 	}
 	return os.Chmod(path, 0o600)
 }

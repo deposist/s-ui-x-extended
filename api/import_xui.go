@@ -77,7 +77,10 @@ var (
 )
 
 func init() {
-	database.RegisterResetHook("api.xui_rates", resetXUIRateLimitCache)
+	database.RegisterResetHook("api.xui_rates", func() error {
+		resetXUIRateLimitCache()
+		return nil
+	})
 }
 
 func resetXUIRateLimitCache() {
@@ -295,7 +298,7 @@ func (a *ApiService) ImportXuiRollback(c *gin.Context) {
 		return
 	}
 	defer file.Close()
-	if err := database.ImportDB(multipart.File(file)); err != nil {
+	if err := database.ImportDB(multipart.File(file), a.validateRestoredCoreConfig); err != nil {
 		a.recordXuiImportFailure(c, err, "")
 		xuiImportError(c, err)
 		return
@@ -615,8 +618,27 @@ func xuiImportError(c *gin.Context, err error) {
 	}
 	c.JSON(status, Msg{
 		Success: false,
-		Msg:     "import-xui: " + err.Error(),
+		Msg:     "import-xui: " + xuiImportErrorDetail(err),
 	})
+}
+
+func xuiImportErrorDetail(err error) string {
+	class := xuiImportErrorClass(err)
+	if class != "payload_too_large" {
+		return class
+	}
+
+	var fieldTooLargeErr *xuiFieldTooLargeError
+	if !errors.As(err, &fieldTooLargeErr) {
+		return class
+	}
+	field := fieldTooLargeErr.Field
+	switch field {
+	case "db", "plan", "dryRun", "strategy", "adminMode", "includeSettings", "includeHistory", "includeRouting":
+	default:
+		field = "field"
+	}
+	return "payload_too_large: field " + field + " exceeds " + strconv.FormatInt(fieldTooLargeErr.Limit, 10) + " bytes"
 }
 
 func xuiImportErrorClass(err error) string {

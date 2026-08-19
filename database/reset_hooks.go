@@ -2,18 +2,19 @@ package database
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"sync"
 )
 
 var resetHooks = struct {
 	sync.Mutex
-	byName map[string]func()
+	byName map[string]func() error
 }{
-	byName: map[string]func(){},
+	byName: map[string]func() error{},
 }
 
-func RegisterResetHook(name string, fn func()) {
+func RegisterResetHook(name string, fn func() error) {
 	if name == "" {
 		return
 	}
@@ -36,17 +37,23 @@ func ResetCaches(ctx context.Context) error {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	hooks := make([]func(), 0, len(names))
+	hooks := make([]func() error, 0, len(names))
 	for _, name := range names {
 		hooks = append(hooks, resetHooks.byName[name])
 	}
 	resetHooks.Unlock()
 
+	var hookErrs []error
 	for _, hook := range hooks {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		hook()
+		if err := hook(); err != nil {
+			hookErrs = append(hookErrs, err)
+		}
 	}
-	return ctx.Err()
+	if err := ctx.Err(); err != nil {
+		hookErrs = append(hookErrs, err)
+	}
+	return errors.Join(hookErrs...)
 }

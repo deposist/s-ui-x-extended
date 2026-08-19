@@ -118,7 +118,7 @@ export default {
     }
   },
   created() {
-    if (!this.$props.data.http_mask) this.$props.data.http_mask = {}
+    if (this.$props.direction !== 'in' && !this.$props.data.http_mask) this.$props.data.http_mask = {}
   },
   computed: {
     httpMask(): any {

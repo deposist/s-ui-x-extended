@@ -85,15 +85,19 @@ func canonicalClientIP(value string) string {
 	return addr.Unmap().String()
 }
 
-func resetRateLimitBucketsForTest() {
-	rateLimitMu.Lock()
-	defer rateLimitMu.Unlock()
-	rateLimitBuckets = map[string]rateBucket{}
-	rateLimitGC = time.Time{}
+func clearRateLimitSettingCache() {
 	rateLimitSettingMu.Lock()
 	defer rateLimitSettingMu.Unlock()
 	rateLimitSetting.limit = 0
 	rateLimitSetting.expiresAt = time.Time{}
+}
+
+func resetRateLimitBucketsForTest() {
+	rateLimitMu.Lock()
+	rateLimitBuckets = map[string]rateBucket{}
+	rateLimitGC = time.Time{}
+	rateLimitMu.Unlock()
+	clearRateLimitSettingCache()
 }
 
 func gcRateLimitBucketsLocked(now time.Time) {

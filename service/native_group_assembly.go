@@ -78,16 +78,9 @@ func inboundCoreJSON(s *InboundService, db *gorm.DB, row model.Inbound) (json.Ra
 	if err != nil {
 		return nil, err
 	}
-	if row.Type == "sudoku" {
-		var core map[string]any
-		if err := json.Unmarshal(inboundJSON, &core); err != nil {
-			return nil, err
-		}
-		delete(core, "master_key")
-		inboundJSON, err = json.Marshal(core)
-		if err != nil {
-			return nil, err
-		}
+	inboundJSON, err = sanitizeInboundJSONForCore(row.Type, inboundJSON)
+	if err != nil {
+		return nil, err
 	}
 	return s.addUsers(db, inboundJSON, row.Id, row.Type)
 }

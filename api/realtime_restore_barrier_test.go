@@ -84,7 +84,7 @@ func TestOpenRealtimeWebSocketDoesNotBlockDatabaseRestore(t *testing.T) {
 
 	restoreDone := make(chan error, 1)
 	go func() {
-		restoreDone <- database.ImportDB(maintenanceBarrierFile{Reader: bytes.NewReader(backup)})
+		restoreDone <- database.ImportDB(maintenanceBarrierFile{Reader: bytes.NewReader(backup)}, func() error { return nil })
 	}()
 	select {
 	case err := <-restoreDone:

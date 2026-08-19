@@ -266,3 +266,106 @@ func TestConfigSaveInboundsEditAppliesToRunningCoreRealReload(t *testing.T) {
 		t.Fatalf("inbound missing from running core after real hot reload: %v", err)
 	}
 }
+
+func TestInboundSaveRejectsUnknownFieldBeforeDBCommit(t *testing.T) {
+	initSettingTestDB(t)
+	coreInstance := startTestCore(t)
+
+	recorder := &inboundOpsRecorder{}
+	recorder.stubInboundHooks(t)
+
+	payload := json.RawMessage(`{"type":"mixed","tag":"inb-unknown-field","listen":"127.0.0.1","listen_port":1,"bogus_top_level":true}`)
+	configService := NewConfigServiceWithRuntime(NewRuntime(coreInstance))
+	before := coreInstance.GetInstance()
+	if _, err := configService.Save("inbounds", "new", payload, "", "admin", "example.com"); err == nil {
+		t.Fatal("expected inbound save to reject unknown field")
+	} else if !strings.Contains(err.Error(), "unknown field") || !strings.Contains(err.Error(), "bogus_top_level") {
+		t.Fatalf("inbound save error = %v, want unknown field bogus_top_level", err)
+	}
+
+	db := database.GetDB()
+	var count int64
+	if err := db.Model(model.Inbound{}).Where("tag = ?", "inb-unknown-field").Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("rejected inbound persisted: %d rows", count)
+	}
+	if len(recorder.ops) != 0 {
+		t.Fatalf("post-commit inbound hooks fired after rejection: %v", recorder.ops)
+	}
+	if coreInstance.GetInstance() != before {
+		t.Fatal("rejected inbound save restarted the core")
+	}
+	if !coreInstance.IsRunning() {
+		t.Fatal("core stopped after rejected inbound save")
+	}
+	var changes int64
+	if err := db.Model(model.Changes{}).Count(&changes).Error; err != nil {
+		t.Fatal(err)
+	}
+	if changes != 0 {
+		t.Fatalf("audit Changes row committed after rejection: %d rows", changes)
+	}
+}
+
+func TestInboundSaveRejectsUnknownUserFieldAfterClientAssignment(t *testing.T) {
+	initSettingTestDB(t)
+	recorder := &inboundOpsRecorder{}
+	recorder.stubInboundHooks(t)
+
+	db := database.GetDB()
+	client := model.Client{
+		Enable:   true,
+		Name:     "trojan-client",
+		Inbounds: json.RawMessage(`[]`),
+		Config:   json.RawMessage(`{"trojan":{"password":"pw","bogus_user_field":true}}`),
+		Links:    json.RawMessage(`[]`),
+	}
+	if err := db.Create(&client).Error; err != nil {
+		t.Fatal(err)
+	}
+	initialConfig := string(client.Config)
+
+	payload := json.RawMessage(`{"type":"trojan","tag":"trojan-final-invalid","listen":"127.0.0.1","listen_port":1}`)
+	configService := NewConfigServiceWithRuntime(NewRuntimeWithCoreProvider(nil))
+	_, err := configService.Save("inbounds", "new", payload, fmt.Sprintf("%d", client.Id), "admin", "example.com")
+	if err == nil {
+		t.Fatal("expected inbound save to reject an unknown final user field")
+	} else if !strings.Contains(err.Error(), "unknown field") || !strings.Contains(err.Error(), "bogus_user_field") {
+		t.Fatalf("inbound save error = %v, want unknown user field bogus_user_field", err)
+	}
+
+	var inboundCount int64
+	if err := db.Model(model.Inbound{}).Where("tag = ?", "trojan-final-invalid").Count(&inboundCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if inboundCount != 0 {
+		t.Fatalf("rejected inbound persisted: %d rows", inboundCount)
+	}
+
+	var got model.Client
+	if err := db.First(&got, client.Id).Error; err != nil {
+		t.Fatal(err)
+	}
+	if string(got.Inbounds) != "[]" {
+		t.Fatalf("client inbound assignment was not rolled back: %s", got.Inbounds)
+	}
+	if string(got.Config) != initialConfig {
+		t.Fatalf("client config changed after rejected save: %s", got.Config)
+	}
+	if string(got.Links) != "[]" {
+		t.Fatalf("client links changed after rejected save: %s", got.Links)
+	}
+
+	if len(recorder.ops) != 0 {
+		t.Fatalf("post-commit inbound hooks fired after rejection: %v", recorder.ops)
+	}
+	var changes int64
+	if err := db.Model(model.Changes{}).Count(&changes).Error; err != nil {
+		t.Fatal(err)
+	}
+	if changes != 0 {
+		t.Fatalf("audit Changes row committed after rejection: %d rows", changes)
+	}
+}

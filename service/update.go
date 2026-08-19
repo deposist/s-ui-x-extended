@@ -78,7 +78,10 @@ var versionCheckState = struct {
 }
 
 func init() {
-	database.RegisterResetHook("service.version_check", resetVersionCheckCache)
+	database.RegisterResetHook("service.version_check", func() error {
+		resetVersionCheckCache()
+		return nil
+	})
 }
 
 func resetVersionCheckCache() {
