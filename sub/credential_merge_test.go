@@ -3,9 +3,12 @@ package sub
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
+	"github.com/deposist/s-ui-x-extended/service"
 	"github.com/deposist/s-ui-x-extended/util"
 )
 
@@ -179,5 +182,67 @@ func TestMtproxyExcludedFromJsonSubscription(t *testing.T) {
 	}
 	if len(*outs) != 0 || findOutbound(*outs, "mtproxy") != nil {
 		t.Errorf("mtproxy must be excluded from the JSON subscription, got %v", *outs)
+	}
+}
+
+// TestTrustTunnelSubscriptionCarriesGeneratedPassword reproduces issue #7 end to
+// end: a legacy client.config.trusttunnel block had name but NO password, so the
+// generated subscription outbound omitted password and the official client
+// connected but every tunneled request failed with authorization failed.
+//
+// The backfill path must now generate a password and the subscription builder
+// must carry it through to the outbound.
+func TestTrustTunnelSubscriptionCarriesGeneratedPassword(t *testing.T) {
+	initSubTestDB(t)
+
+	// Legacy block: name only, no password — exactly the broken shape.
+	client := model.Client{
+		Name:      "issue7",
+		Enable:    true,
+		SubSecret: "issue7sub",
+		Inbounds:  json.RawMessage(`[]`),
+		Config:    json.RawMessage(`{"trusttunnel":{"name":"issue7"}}`),
+	}
+	if err := database.GetDB().Create(&client).Error; err != nil {
+		t.Fatal(err)
+	}
+	inbound := model.Inbound{Type: "trusttunnel", Tag: "tt-issue7"}
+	if err := database.GetDB().Create(&inbound).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := (&service.ClientService{}).UpdateClientsOnInboundAdd(database.GetDB(), fmt.Sprintf("%d", client.Id), inbound.Id, "host"); err != nil {
+		t.Fatal(err)
+	}
+
+	var gotClient model.Client
+	if err := database.GetDB().First(&gotClient, client.Id).Error; err != nil {
+		t.Fatal(err)
+	}
+	cfg := map[string]map[string]any{}
+	if err := json.Unmarshal(gotClient.Config, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	pw, ok := cfg["trusttunnel"]["password"].(string)
+	if !ok || strings.TrimSpace(pw) == "" {
+		t.Fatalf("backfill did not generate trusttunnel password: %s", gotClient.Config)
+	}
+
+	// Now prove the subscription builder carries it to the outbound.
+	tt := deliveredInbound(t, "trusttunnel", map[string]interface{}{
+		"network": []interface{}{"tcp"}, "quic": true, "congestion_controller": "bbr",
+	})
+	outs, _, err := (&JsonService{}).getOutbounds(gotClient.Config, []*model.Inbound{tt})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tto := findOutbound(*outs, "trusttunnel")
+	if tto == nil {
+		t.Fatal("no trusttunnel outbound in subscription")
+	}
+	if tto["username"] != "issue7" {
+		t.Errorf("trusttunnel username not mapped: %v", tto)
+	}
+	if opw, ok := tto["password"].(string); !ok || strings.TrimSpace(opw) == "" {
+		t.Errorf("trusttunnel subscription outbound missing password: %v", tto)
 	}
 }

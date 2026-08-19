@@ -101,3 +101,64 @@ func TestClientSaveEditBulkBackfillsProtocolConfig(t *testing.T) {
 		t.Fatalf("config was not backfilled: %s", updatedClient.Config)
 	}
 }
+
+func TestTrustTunnelBackfillGeneratesPassword(t *testing.T) {
+	initSettingTestDB(t)
+
+	// Client with an EXISTING trusttunnel block but no password (legacy or
+	// partially-created config). This reproduces issue #7: subscription JSON
+	// had username but no password, so the official client connected but all
+	// tunneled traffic failed with authorization failed.
+	client := model.Client{
+		Name:     "tt-no-pw",
+		Enable:   true,
+		Inbounds: json.RawMessage(`[]`),
+		Config:   json.RawMessage(`{"trusttunnel":{"name":"tt-no-pw"}}`),
+	}
+	if err := database.GetDB().Create(&client).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	inbound := model.Inbound{
+		Type: "trusttunnel",
+		Tag:  "tt-new",
+	}
+	if err := database.GetDB().Create(&inbound).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	// First add: trusttunnel inbound assigned to client.
+	if err := (&ClientService{}).UpdateClientsOnInboundAdd(database.GetDB(), fmt.Sprintf("%d", client.Id), inbound.Id, "host"); err != nil {
+		t.Fatal(err)
+	}
+
+	var afterAdd model.Client
+	if err := database.GetDB().First(&afterAdd, client.Id).Error; err != nil {
+		t.Fatal(err)
+	}
+	cfg := map[string]map[string]any{}
+	if err := json.Unmarshal(afterAdd.Config, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	pw1, ok := cfg["trusttunnel"]["password"].(string)
+	if !ok || strings.TrimSpace(pw1) == "" {
+		t.Fatalf("trusttunnel password not backfilled on add: %s", afterAdd.Config)
+	}
+
+	// Second edit cycle: existing block must keep its password (no regeneration).
+	if err := (&ClientService{}).UpdateLinksByInboundChange(database.GetDB(), &[]model.Inbound{inbound}, "host", "tt-new"); err != nil {
+		t.Fatal(err)
+	}
+	var afterEdit model.Client
+	if err := database.GetDB().First(&afterEdit, client.Id).Error; err != nil {
+		t.Fatal(err)
+	}
+	cfg2 := map[string]map[string]any{}
+	if err := json.Unmarshal(afterEdit.Config, &cfg2); err != nil {
+		t.Fatal(err)
+	}
+	pw2 := cfg2["trusttunnel"]["password"].(string)
+	if pw2 != pw1 {
+		t.Fatalf("trusttunnel password changed on edit: before=%q after=%q", pw1, pw2)
+	}
+}

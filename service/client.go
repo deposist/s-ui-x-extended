@@ -640,7 +640,20 @@ func backfillClientProtocol(config json.RawMessage, inboundType string, clientNa
 		return config, false, nil // Malformed config, skip backfill
 	}
 
-	if _, exists := cfg[field]; exists {
+	if existing, exists := cfg[field]; exists {
+		// Existing block: only supplement a missing/empty password for protocols
+		// whose credential model requires one (trusttunnel, mieru). Other fields
+		// (name, uuid, key) are left untouched to avoid clobbering admin edits.
+		if (inboundType == "trusttunnel" || inboundType == "mieru") {
+			if pw, ok := existing["password"].(string); !ok || strings.TrimSpace(pw) == "" {
+				existing["password"] = common.Random(10)
+				marshaled, err := json.MarshalIndent(cfg, "", "  ")
+				if err != nil {
+					return config, false, err
+				}
+				return marshaled, true, nil
+			}
+		}
 		return config, false, nil
 	}
 
@@ -701,9 +714,12 @@ func backfillClientProtocol(config json.RawMessage, inboundType string, clientNa
 			return config, false, err
 		}
 		newObj = map[string]any{"name": clientName, "secret": mtSecret}
-	default:
+	case "trusttunnel", "mieru":
 		newObj["name"] = clientName
-	}
+		newObj["password"] = common.Random(10)
+ 	default:
+ 		newObj["name"] = clientName
+ 	}
 
 	cfg[field] = newObj
 	marshaled, err := json.MarshalIndent(cfg, "", "  ")
