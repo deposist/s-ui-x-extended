@@ -1,18 +1,25 @@
 <template>
-  <Editor
-    v-model="modal.visible"
-    :visible="modal.visible"
-    :data="modal.data"
-    :title="editorTitle"
-    @close="closeModal"
-    @save="saveModal"
-  />
+  <v-dialog v-model="modal.visible" max-width="1000" scrollable>
+    <v-card :title="title">
+      <v-card-text>
+        <v-form v-if="modal.visible" ref="form" @submit.prevent="saveModal">
+          <v-text-field v-model="modal.data.tag" :label="$t('objects.tag')" :rules="[tagRule]" autofocus />
+          <CertificateProviderForm v-if="kind === 'certificate'" :data="modal.data" />
+          <HTTPClientForm v-else-if="kind === 'http'" :data="modal.data" />
+          <NetworkNamespaceForm v-else :data="modal.data" />
+        </v-form>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer />
+        <v-btn @click="closeModal">{{ $t('actions.close') }}</v-btn>
+        <v-btn color="primary" variant="tonal" @click="saveModal">{{ $t('actions.save') }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
   <v-card-subtitle class="d-flex align-center">
     {{ title }}
     <v-spacer></v-spacer>
-    <v-chip color="primary" density="compact" variant="elevated" @click="showModal(-1)">
-      <v-icon icon="mdi-plus" />
-    </v-chip>
+    <v-btn icon="mdi-plus" size="small" color="primary" :aria-label="$t('actions.add') + ': ' + title" @click="showModal(-1)" />
   </v-card-subtitle>
   <v-row v-if="items.length > 0">
     <v-col cols="12" sm="4" md="3" lg="2" v-for="(item, index) in items" :key="index">
@@ -20,11 +27,11 @@
         <v-card-subtitle style="margin-top: -15px;">{{ item.type || defaultTypeLabel }}</v-card-subtitle>
         <v-divider></v-divider>
         <v-card-actions style="padding: 0;">
-          <v-btn icon="mdi-file-edit" @click="showModal(index)">
+          <v-btn icon="mdi-file-edit" :aria-label="$t('actions.edit')" @click="showModal(index)">
             <v-icon />
             <v-tooltip activator="parent" location="top" :text="$t('actions.edit')"></v-tooltip>
           </v-btn>
-          <v-btn icon="mdi-file-remove" style="margin-inline-start:0;" color="warning" @click="delOverlay[index] = true">
+          <v-btn icon="mdi-file-remove" :aria-label="$t('actions.del')" style="margin-inline-start:0;" color="warning" @click="delOverlay[index] = true">
             <v-icon />
             <v-tooltip activator="parent" location="top" :text="$t('actions.del')"></v-tooltip>
           </v-btn>
@@ -46,15 +53,14 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, reactive } from 'vue'
-import Editor from '@/components/Editor.vue'
-
-// Read-only view of a config-blob collection. All mutations are emitted as
-// events so the parent (Basics.vue) materializes the array only on a real
-// edit; a pure render never dirties the form. Item bodies stay open records so
-// the JSON editor round-trips every core field without loss.
+import { reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import CertificateProviderForm from './collections/CertificateProviderForm.vue'
+import HTTPClientForm from './collections/HTTPClientForm.vue'
+import NetworkNamespaceForm from './collections/NetworkNamespaceForm.vue'
 const props = defineProps<{
   title: string
+  kind: 'certificate' | 'http' | 'namespace'
   items: Record<string, any>[]
   // Template merged into a new item, e.g. { type: 'acme' } for cert providers.
   newItem: () => Record<string, any>
@@ -72,14 +78,19 @@ const delOverlay = reactive<Record<number, boolean>>({})
 const modal = reactive({
   visible: false,
   index: -1,
-  data: '',
+  data: {} as Record<string, any>,
 })
 
-const editorTitle = computed(() => props.title)
+const { t } = useI18n()
+const form = ref<{ validate: () => Promise<{ valid: boolean }> }>()
+const tagRule = (value: unknown) => {
+  if (typeof value !== 'string' || !value.trim()) return t('collectionForms.required')
+  return !props.items.some((item, index) => index !== modal.index && item.tag === value) || t('collectionForms.duplicateTag')
+}
 
 const showModal = (index: number) => {
   modal.index = index
-  modal.data = index == -1 ? JSON.stringify(props.newItem(), null, 2) : JSON.stringify(props.items[index], null, 2)
+  modal.data = JSON.parse(JSON.stringify(index === -1 ? props.newItem() : props.items[index]))
   modal.visible = true
 }
 
@@ -87,19 +98,11 @@ const closeModal = () => {
   modal.visible = false
 }
 
-const saveModal = (data: string) => {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(data)
-  } catch {
-    return // Leave the modal open so the user can fix invalid JSON instead of losing it.
-  }
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return
-  if (modal.index == -1) {
-    emit('add', parsed as Record<string, any>)
-  } else {
-    emit('update', modal.index, parsed as Record<string, any>)
-  }
+const saveModal = async () => {
+  if (!(await form.value?.validate())?.valid) return
+  const item = JSON.parse(JSON.stringify(modal.data))
+  if (modal.index === -1) emit('add', item)
+  else emit('update', modal.index, item)
   modal.visible = false
 }
 

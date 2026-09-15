@@ -124,10 +124,17 @@ export default {
     data: { type: Object, required: true },
     fieldHints: { type: Object, default: () => ({}) },
   },
+  data() {
+    return { expanded: false }
+  },
+  watch: {
+    data() { this.expanded = false },
+  },
   computed: {
     optionQuic: {
-      get(): boolean { return quicFields.some((field) => this.$props.data[field] != undefined) },
+      get(): boolean { return this.expanded || quicFields.some((field) => this.$props.data[field] != undefined) },
       set(v: boolean) {
+        this.expanded = v
         if (v) return
         for (const field of quicFields) delete this.$props.data[field]
       },

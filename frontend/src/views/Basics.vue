@@ -376,6 +376,7 @@
     <v-expansion-panel :title="$t('basic.collections.title')">
       <v-expansion-panel-text>
         <ConfigCollection
+          kind="certificate"
           :title="$t('basic.collections.certProviders')"
           :items="appConfig.certificate_providers ?? []"
           :new-item="() => ({ type: 'acme' })"
@@ -386,6 +387,7 @@
         />
         <v-divider class="my-4"></v-divider>
         <ConfigCollection
+          kind="http"
           :title="$t('basic.collections.httpClients')"
           :items="appConfig.http_clients ?? []"
           :new-item="() => ({})"
@@ -395,6 +397,7 @@
         />
         <v-divider class="my-4"></v-divider>
         <ConfigCollection
+          kind="namespace"
           :title="$t('basic.collections.netNamespaces')"
           :items="appConfig.network_namespaces ?? []"
           :new-item="() => ({ type: 'unshare' })"
