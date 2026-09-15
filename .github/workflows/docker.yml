@@ -119,6 +119,7 @@ jobs:
           ignore-unfixed: true
           severity: HIGH,CRITICAL
           version: v0.72.0
+          cache-dir: /var/tmp/trivy-cache
 
       - name: Runtime smoke immutable platform image
         env:
