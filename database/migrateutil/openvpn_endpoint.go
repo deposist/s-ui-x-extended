@@ -220,18 +220,12 @@ func convertOpenVPNOutboundOptions(raw json.RawMessage, tag string) (json.RawMes
 		out["tls"] = tlsOut
 	}
 	// consume the handled control-wrap scalars at the top level
-	if _, ok := consume("tls_auth"); ok {
-	}
-	if _, ok := consume("tls_auth_path"); ok {
-	}
-	if _, ok := consume("tls_crypt"); ok {
-	}
-	if _, ok := consume("tls_crypt_path"); ok {
-	}
-	if _, ok := consume("tls_crypt_v2"); ok {
-	}
-	if _, ok := consume("key_direction"); ok {
-	}
+	consume("tls_auth")
+	consume("tls_auth_path")
+	consume("tls_crypt")
+	consume("tls_crypt_path")
+	consume("tls_crypt_v2")
+	consume("key_direction")
 
 	// Dialer options carry over unchanged (shared embedded struct).
 	dialerKeys := []string{

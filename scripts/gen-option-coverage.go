@@ -577,6 +577,7 @@ func covComposedFields(component string, vueModels map[string][]string, seen map
 	if path == "" {
 		return fields
 	}
+	// #nosec G304 -- path comes from the repository component map, not from user input.
 	src, err := os.ReadFile(path)
 	if err != nil {
 		return fields

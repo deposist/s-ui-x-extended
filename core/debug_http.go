@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
@@ -44,15 +45,19 @@ func startDebugHTTPServer(options option.DebugOptions) (*http.Server, error) {
 
 			encoder := json.NewEncoder(writer)
 			encoder.SetIndent("", "  ")
-			encoder.Encode(&memObject)
+			if err := encoder.Encode(&memObject); err != nil {
+				log.Debug(E.Cause(err, "encode memory stats"))
+			}
 		})
 		r.Route("/pprof", func(r chi.Router) {
 			r.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
 				if !strings.HasSuffix(request.URL.Path, "/") {
-					http.Redirect(writer, request, request.URL.Path+"/", http.StatusMovedPermanently)
-				} else {
-					pprof.Index(writer, request)
+					// pprof resolves its assets relative to a trailing slash. Append it
+					// in place instead of redirecting: a redirect target built from the
+					// request path is an open-redirect surface.
+					request.URL.Path += "/"
 				}
+				pprof.Index(writer, request)
 			})
 			r.HandleFunc("/*", pprof.Index)
 			r.HandleFunc("/cmdline", pprof.Cmdline)
@@ -62,8 +67,9 @@ func startDebugHTTPServer(options option.DebugOptions) (*http.Server, error) {
 		})
 	})
 	server := &http.Server{
-		Addr:    options.Listen,
-		Handler: r,
+		Addr:              options.Listen,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 	listener, err := net.Listen("tcp", options.Listen)
 	if err != nil {
