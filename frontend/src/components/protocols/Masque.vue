@@ -109,6 +109,29 @@
         </v-row>
       </v-card-text>
     </v-card>
+    <v-row>
+      <v-col cols="12" sm="6" md="4">
+        <v-text-field
+          :label="$t('types.masque.address')"
+          hide-details
+          clearable
+          @click:clear="delete data.address"
+          v-model="data.address">
+        </v-text-field>
+      </v-col>
+      <v-col cols="12" sm="6" md="4">
+        <v-text-field
+          :label="$t('types.masque.port')"
+          hide-details
+          type="number"
+          min="0"
+          max="65535"
+          clearable
+          @click:clear="delete data.port"
+          v-model.number="data.port">
+        </v-text-field>
+      </v-col>
+    </v-row>
   </v-card>
 </template>
 

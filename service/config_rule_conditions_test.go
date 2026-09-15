@@ -21,17 +21,14 @@ func TestValidateConfigRuleConditions(t *testing.T) {
 		{"logical rule without branches", `{"route":{"rules":[{"type":"logical","mode":"and","rules":[],"outbound":"direct"}]}}`, true},
 		{"empty logical dns rule", `{"dns":{"rules":[{"type":"logical","mode":"and","rules":[{}],"server":"local"}]}}`, true},
 
-		// The next two were previously expected to be rejected. They are not,
-		// and the old expectation was the bug: core.ValidateConfig builds both
-		// of these configs successfully, so rejecting them here blocked saves
-		// the core would have accepted.
-		//
-		// An empty object beside a real sibling survives decoding as a valid
-		// default rule, and an invert-only rule is valid because validity means
-		// "not deeply equal to the zero value with Invert copied". The old
-		// "meaningful field" heuristic could see neither.
-		{"logical rule with one empty branch", `{"route":{"rules":[{"type":"logical","mode":"and","rules":[{"domain":["a.com"]},{}],"outbound":"direct"}]}}`, false},
-		{"logical rule carrying only invert", `{"route":{"rules":[{"type":"logical","mode":"and","rules":[{"invert":true}],"outbound":"direct"}]}}`, false},
+		// In 1.14 nested (logical-child) rules are headless: they carry only
+		// conditions. An empty branch has no conditions, and invert alone is not
+		// a condition, so the core rejects both with "missing conditions" —
+		// verified against core.ValidateConfig, which fails them identically.
+		{"logical rule with one empty branch", `{"route":{"rules":[{"type":"logical","mode":"and","rules":[{"domain":["a.com"]},{}],"outbound":"direct"}]}}`, true},
+		{"logical rule carrying only invert", `{"route":{"rules":[{"type":"logical","mode":"and","rules":[{"invert":true}],"outbound":"direct"}]}}`, true},
+		// invert beside a real condition is still valid.
+		{"logical rule invert with condition", `{"route":{"rules":[{"type":"logical","mode":"and","rules":[{"invert":true,"domain":["a.com"]}],"outbound":"direct"}]}}`, false},
 		{"valid logical dns rule", `{"dns":{"rules":[{"type":"logical","mode":"and","rules":[{"domain":["a.com"]}],"server":"local"}]}}`, false},
 	}
 	for _, tc := range cases {

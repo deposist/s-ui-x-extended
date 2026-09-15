@@ -43,7 +43,7 @@ type coreRuntime struct {
 
 func NewCore() *Core {
 	ctx := context.Background()
-	ctx = sb.Context(ctx, InboundRegistry(), OutboundRegistry(), EndpointRegistry(), ProviderRegistry(), DNSTransportRegistry(), ServiceRegistry())
+	ctx = sb.Context(ctx, InboundRegistry(), OutboundRegistry(), EndpointRegistry(), ProviderRegistry(), DNSTransportRegistry(), ServiceRegistry(), CertificateProviderRegistry())
 	core := &Core{
 		ctx:                ctx,
 		isRunning:          false,

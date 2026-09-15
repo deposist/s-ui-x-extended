@@ -274,6 +274,62 @@
           <v-switch color="primary" :label="$t('tls.kernelRx')" v-model="tls.kernel_rx" hide-details></v-switch>
         </v-col>
       </v-row>
+      <v-row v-if="optionEngine">
+        <v-col cols="12" sm="6" md="4">
+          <v-select
+            :label="$t('tls.engine')"
+            hide-details
+            clearable
+            :items="['go', 'apple', 'windows']"
+            @click:clear="delete tls.engine"
+            v-model="tls.engine">
+            <template #append-inner>
+              <FieldHint :field-hints="fieldHints" field="engine" />
+            </template>
+          </v-select>
+        </v-col>
+      </v-row>
+      <v-row v-if="optionSpoof">
+        <v-col cols="12" sm="6" md="4">
+          <v-text-field
+            :label="$t('tls.spoof')"
+            hide-details
+            clearable
+            @click:clear="delete tls.spoof"
+            v-model="tls.spoof">
+            <template #append-inner>
+              <FieldHint :field-hints="fieldHints" field="spoof" />
+            </template>
+          </v-text-field>
+        </v-col>
+        <v-col cols="12" sm="6" md="4">
+          <v-select
+            :label="$t('tls.spoofMethod')"
+            hide-details
+            clearable
+            :items="spoofMethods"
+            @click:clear="delete tls.spoof_method"
+            v-model="tls.spoof_method">
+            <template #append-inner>
+              <FieldHint :field-hints="fieldHints" field="spoof_method" />
+            </template>
+          </v-select>
+        </v-col>
+      </v-row>
+      <v-row v-if="optionHandshakeTimeout">
+        <v-col cols="12" sm="6" md="4">
+          <v-text-field
+            :label="$t('tls.handshakeTimeout')"
+            hide-details
+            clearable
+            @click:clear="delete tls.handshake_timeout"
+            v-model="tls.handshake_timeout">
+            <template #append-inner>
+              <FieldHint :field-hints="fieldHints" field="handshake_timeout" />
+            </template>
+          </v-text-field>
+        </v-col>
+      </v-row>
     </template>
     <v-card-actions v-if="tls.enabled">
       <v-spacer></v-spacer>
@@ -325,6 +381,15 @@
               <v-list-item>
                 <v-switch v-model="optionKtls" color="primary" :label="$t('tls.ktls')" hide-details></v-switch>
               </v-list-item>
+              <v-list-item>
+                <v-switch v-model="optionEngine" color="primary" :label="$t('tls.engine')" hide-details></v-switch>
+              </v-list-item>
+              <v-list-item>
+                <v-switch v-model="optionSpoof" color="primary" :label="$t('tls.spoof')" hide-details></v-switch>
+              </v-list-item>
+              <v-list-item>
+                <v-switch v-model="optionHandshakeTimeout" color="primary" :label="$t('tls.handshakeTimeout')" hide-details></v-switch>
+              </v-list-item>
             </v-list>
           </v-card>
         </v-menu>
@@ -352,6 +417,7 @@ export default {
         { title: "Http/1.1", value: 'http/1.1' },
       ],
       tlsVersions: [ '1.0', '1.1', '1.2', '1.3' ],
+      spoofMethods: ['wrong-sequence', 'wrong-checksum', 'wrong-ack', 'wrong-md5', 'wrong-timestamp'],
       curvePreferences: ['P256', 'P384', 'P521', 'X25519', 'X25519MLKEM768'],
       cipher_suites: [
         { title: "RSA-AES128-CBC-SHA", value: "TLS_RSA_WITH_AES_128_CBC_SHA" },
@@ -505,6 +571,25 @@ export default {
           delete this.$props.outbound.tls.kernel_rx
         }
       }
+    },
+    optionEngine: {
+      get(): boolean { return this.tls.engine != undefined },
+      set(v:boolean) { this.$props.outbound.tls.engine = v ? 'go' : undefined }
+    },
+    optionSpoof: {
+      get(): boolean { return this.tls.spoof != undefined || this.tls.spoof_method != undefined },
+      set(v:boolean) {
+        if (v) {
+          this.$props.outbound.tls.spoof = 'wrong-checksum'
+        } else {
+          delete this.$props.outbound.tls.spoof
+          delete this.$props.outbound.tls.spoof_method
+        }
+      }
+    },
+    optionHandshakeTimeout: {
+      get(): boolean { return this.tls.handshake_timeout != undefined },
+      set(v:boolean) { this.$props.outbound.tls.handshake_timeout = v ? '10s' : undefined }
     },
     certificatePublicKeySha256: {
       get(): string { return this.tls.certificate_public_key_sha256?.join('\n') ?? '' },

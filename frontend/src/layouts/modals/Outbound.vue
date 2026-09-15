@@ -21,11 +21,7 @@
                   <v-select
                   hide-details
                   :label="$t('type')"
-                  :items="Object.keys(outTypes).map((key,index) => {
-                    const value = Object.values(outTypes)[index] as string
-                    const unavailable = unavailableOutboundTypes.includes(value)
-                    return { title: unavailable ? key + ' \u2014 not in this build' : key, value, props: { disabled: unavailable } }
-                  })"
+                  :items="outTypeItems"
                   v-model="outbound.type"
                   @update:modelValue="changeType">
                     <template #append-inner>
@@ -93,7 +89,8 @@
               <TrustTunnel v-if="outbound.type == outTypes.TrustTunnel" direction="out" :data="outbound" :field-hints="currentFieldHints" />
               <Call v-if="outbound.type == outTypes.Call" direction="out" :data="outbound" :field-hints="currentFieldHints" />
               <Masque v-if="outbound.type == outTypes.MASQUE" :data="outbound" />
-              <OpenVpn v-if="outbound.type == outTypes.OpenVPN" :data="outbound" :field-hints="currentFieldHints" />
+              <Snell v-if="outbound.type == outTypes.Snell" :data="outbound" />
+              <Bridge v-if="outbound.type == outTypes.Bridge" :data="outbound" />
               <Parser v-if="outbound.type == outTypes.Parser" :data="outbound" />
               <Selector v-if="outbound.type == outTypes.Selector" :data="outbound" :tags="tags" />
               <UrlTest v-if="outbound.type == outTypes.URLTest" :data="outbound" :tags="tags" />
@@ -108,7 +105,7 @@
               <RateLimiter v-if="outbound.type == outTypes.RateLimiter" :data="outbound" :tags="tags" />
 
               <Transport v-if="Object.hasOwn(outbound,'transport')" :data="outbound" :field-hints="currentFieldHints" />
-              <OutTLS v-if="Object.hasOwn(outbound,'tls') && ![outTypes.MASQUE, outTypes.OpenVPN].includes(outbound.type)" :outbound="outbound" :field-hints="currentFieldHints" />
+              <OutTLS v-if="Object.hasOwn(outbound,'tls') && ![outTypes.MASQUE].includes(outbound.type)" :outbound="outbound" :field-hints="currentFieldHints" />
               <Multiplex v-if="Object.hasOwn(outbound,'multiplex') && outbound.type != outTypes.TrustTunnel" direction="out" :data="outbound" :field-hints="currentFieldHints" />
               <Dial v-if="!NoDial.includes(outbound.type)" :dial="outbound" :field-hints="currentFieldHints" />
             </v-window-item>
@@ -175,8 +172,9 @@ import Sudoku from '@/components/protocols/Sudoku.vue'
 import TrustTunnel from '@/components/protocols/TrustTunnel.vue'
 import Masque from '@/components/protocols/Masque.vue'
 import Call from '@/components/protocols/Call.vue'
-import OpenVpn from '@/components/protocols/OpenVPN.vue'
 import Parser from '@/components/protocols/Parser.vue'
+import Snell from '@/components/protocols/Snell.vue'
+import Bridge from '@/components/protocols/Bridge.vue'
 import Selector from '@/components/protocols/Selector.vue'
 import UrlTest from '@/components/protocols/UrlTest.vue'
 import Bond from '@/components/protocols/Bond.vue'
@@ -188,6 +186,7 @@ import BandwidthLimiter from '@/components/protocols/BandwidthLimiter.vue'
 import ConnectionLimiter from '@/components/protocols/ConnectionLimiter.vue'
 import TrafficLimiter from '@/components/protocols/TrafficLimiter.vue'
 import RateLimiter from '@/components/protocols/RateLimiter.vue'
+import { capabilityRows, capabilityTypeItems, unavailableReason, type CapabilityRow } from '@/utils/capabilityTypeItems'
 import HttpUtils from '@/plugins/httputil'
 import AnyTls from '@/components/protocols/AnyTls.vue'
 import Data from '@/store/modules/data'
@@ -204,12 +203,13 @@ export default {
       link: "",
       loading: false,
       outTypes: OutTypes,
-      unavailableOutboundTypes: <string[]>[],
-      NoDial: [OutTypes.Selector, OutTypes.URLTest, OutTypes.Bond, OutTypes.Failover, OutTypes.Block, OutTypes.CoreFailover, OutTypes.Fallback, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter],
+      capabilityRows: <CapabilityRow[]>[],
+      NoDial: [OutTypes.Selector, OutTypes.URLTest, OutTypes.Bond, OutTypes.Failover, OutTypes.Block, OutTypes.CoreFailover, OutTypes.Fallback, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter, OutTypes.Bridge],
       // Call has no server/server_port in the core schema (it joins a room via
       // join_link); the generic fields poisoned saved configs with an unknown
-      // "server" key that the core rejects, leaving it crash-looping.
-      NoServer: [OutTypes.Direct, OutTypes.Selector, OutTypes.URLTest, OutTypes.Tor, OutTypes.OpenVPN, OutTypes.MASQUE, OutTypes.Parser, OutTypes.Bond, OutTypes.Failover, OutTypes.Block, OutTypes.CoreFailover, OutTypes.Fallback, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter, OutTypes.Call],
+      // "server" key that the core rejects, leaving it crash-looping. Bridge is
+      // a local interface bridge with no remote endpoint either.
+      NoServer: [OutTypes.Direct, OutTypes.Selector, OutTypes.URLTest, OutTypes.Tor, OutTypes.MASQUE, OutTypes.Parser, OutTypes.Bond, OutTypes.Failover, OutTypes.Block, OutTypes.CoreFailover, OutTypes.Fallback, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter, OutTypes.Call, OutTypes.Bridge],
     }
   },
   async mounted() {
@@ -218,10 +218,8 @@ export default {
     // outbounds field) leaves every type available.
     try {
       const resp = await HttpUtils.get('api/capabilities')
-      if (resp.success && resp.obj?.outbounds) {
-        this.unavailableOutboundTypes = resp.obj.outbounds
-          .filter((o: any) => o.available === false)
-          .map((o: any) => o.type)
+      if (resp.success) {
+        this.capabilityRows = capabilityRows(resp.obj?.outbounds)
       }
     } catch { /* capabilities endpoint optional */ }
   },
@@ -289,11 +287,14 @@ export default {
     }
   },
   computed: {
+    outTypeItems() {
+      return capabilityTypeItems(this.outTypes, this.capabilityRows)
+    },
     currentFieldHints(): Record<string, string> {
       return outboundFieldHintsForType(this.outbound.type)
     },
     showOutboundRecommendedPreset(): boolean {
-      return this.$props.id == 0 && hasOutboundRecommendedPreset(this.outbound.type) && !this.unavailableOutboundTypes.includes(this.outbound.type)
+      return this.$props.id == 0 && hasOutboundRecommendedPreset(this.outbound.type) && !unavailableReason(this.capabilityRows, this.outbound.type)
     },
   },
   watch: {
@@ -306,7 +307,7 @@ export default {
   components: { SettingInfo, Dial, Multiplex, Transport, OutTLS,
     Direct, Socks, Http, Shadowsocks, Vmess, Trojan,
     Wireguard, Hysteria, Naive, ShadowTls, Vless, Tuic,
-    Hysteria2, AnyTls, Tor, Ssh, Mieru, Sudoku, TrustTunnel, Call, Masque, OpenVpn, Parser, Selector, UrlTest, Bond, Failover, Block, CoreFailover, Fallback,
-    BandwidthLimiter, ConnectionLimiter, TrafficLimiter, RateLimiter }
+    Hysteria2, AnyTls, Tor, Ssh, Mieru, Sudoku, TrustTunnel, Call, Masque, Parser, Selector, UrlTest, Bond, Failover, Block, CoreFailover, Fallback,
+    BandwidthLimiter, ConnectionLimiter, TrafficLimiter, RateLimiter, Snell, Bridge }
 }
 </script>

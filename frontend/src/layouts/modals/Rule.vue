@@ -217,6 +217,23 @@
                 </template>
               </v-text-field>
             </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field v-model="ruleData.tls_spoof" :label="$t('singbox.tlsSpoof')" hide-details clearable @click:clear="delete ruleData.tls_spoof">
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('tls_spoof')" :text="fieldHint('tls_spoof')" />
+                </template>
+              </v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6" md="4" v-if="ruleData.tls_spoof">
+              <v-select
+                v-model="ruleData.tls_spoof_method"
+                :items="tlsSpoofMethods"
+                :label="$t('singbox.tlsSpoofMethod')"
+                clearable
+                @click:clear="delete ruleData.tls_spoof_method"
+                hide-details>
+              </v-select>
+            </v-col>
           </v-row>
         </v-card>
         <v-card :subtitle="$t('rule.action.reject')" v-if="ruleData.action == 'reject'">
@@ -376,6 +393,13 @@ export default {
       networkStrategies: [
         { title: 'Fallback', value: 'fallback' },
         { title: 'Hybrid', value: 'hybrid' },
+      ],
+      tlsSpoofMethods: [
+        { title: 'Wrong sequence', value: 'wrong-sequence' },
+        { title: 'Wrong checksum', value: 'wrong-checksum' },
+        { title: 'Wrong ack', value: 'wrong-ack' },
+        { title: 'Wrong md5', value: 'wrong-md5' },
+        { title: 'Wrong timestamp', value: 'wrong-timestamp' },
       ],
     }
   },
@@ -565,6 +589,8 @@ export default {
       newRule.tls_record_fragment = this.ruleData.tls_record_fragment ? true : undefined
       newRule.tls_fragment = this.ruleData.tls_fragment && !this.ruleData.tls_record_fragment ? true : undefined
       newRule.tls_fragment_fallback_delay = newRule.tls_fragment && this.ruleData.tls_fragment_fallback_delay?.length > 0 ? this.ruleData.tls_fragment_fallback_delay : undefined
+      newRule.tls_spoof = this.ruleData.tls_spoof?.length > 0 ? this.ruleData.tls_spoof : undefined
+      newRule.tls_spoof_method = this.ruleData.tls_spoof && this.ruleData.tls_spoof_method?.length > 0 ? this.ruleData.tls_spoof_method : undefined
     }
   },
   computed: {

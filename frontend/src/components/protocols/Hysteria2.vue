@@ -163,6 +163,72 @@
       </v-menu>
     </v-card-actions>
     <InboundAdvanced :data="data" :field-hints="fieldHints" />
+    <QUICOptions :data="data" :field-hints="fieldHints" />
+    <v-row>
+      <v-col cols="12" sm="6" md="4">
+        <v-select
+          :label="$t('types.hy2.bbrProfile')"
+          hide-details
+          clearable
+          :items="bbrProfiles"
+          @click:clear="delete data.bbr_profile"
+          v-model="data.bbr_profile">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="bbr_profile" />
+          </template>
+        </v-select>
+      </v-col>
+      <v-col cols="12" sm="6" md="4" v-if="direction == 'out'">
+        <v-text-field
+          :label="$t('types.hy2.hopIntervalMax')"
+          hide-details
+          placeholder="30s"
+          clearable
+          @click:clear="delete data.hop_interval_max"
+          v-model="data.hop_interval_max">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="hop_interval_max" />
+          </template>
+        </v-text-field>
+      </v-col>
+      <v-col cols="12" sm="6" md="4" v-if="direction == 'out'">
+        <v-switch
+          color="primary"
+          :label="$t('types.hy2.disableChromeParrot')"
+          hide-details
+          v-model="data.disable_chrome_parrot">
+        </v-switch>
+      </v-col>
+    </v-row>
+    <v-card border density="compact" color="background" class="mb-2" v-if="direction == 'out'">
+      <v-card-subtitle style="padding-top: 8px;">
+        {{ $t('types.hy2.realm') }}
+        <v-switch
+          class="d-inline-block"
+          style="vertical-align: middle; margin-left: 8px;"
+          color="primary"
+          hide-details
+          :label="$t('types.hy2.realmEnable')"
+          v-model="optionRealm">
+        </v-switch>
+      </v-card-subtitle>
+      <v-card-text v-if="optionRealm">
+        <v-row>
+          <v-col cols="12">
+            <v-text-field :label="$t('types.hyRealm.serverUrl')" hide-details v-model="data.realm.server_url"></v-text-field>
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-text-field :label="$t('types.hyRealm.token')" hide-details v-model="data.realm.token"></v-text-field>
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-text-field :label="$t('types.hyRealm.realmId')" hide-details v-model="data.realm.realm_id"></v-text-field>
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-text-field :label="$t('types.hy2.stunServers')" hide-details :model-value="(data.realm.stun_servers || []).join(', ')" @update:model-value="setStunServers(data.realm, $event)"></v-text-field>
+          </v-col>
+        </v-row>
+      </v-card-text>
+    </v-card>
   </v-card>
 </template>
 
@@ -172,11 +238,13 @@ import Headers from '@/components/Headers.vue'
 import { i18n } from '@/locales'
 import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 import FieldHint from '@/components/FieldHint.vue'
+import QUICOptions from '@/components/protocols/QUICOptions.vue'
 
 export default {
   props: ['direction', 'data', 'fieldHints'],
   data() {
     return {
+      bbrProfiles: ['standard', 'conservative', 'aggressive'],
       menu: false,
       masqTypes: [
         { title: i18n.global.t('rule.simple'), value: '' },
@@ -187,6 +255,15 @@ export default {
     }
   },
   computed: {
+    // The realm block is optional in the core options; it is created on demand so
+    // an unused realm never ends up in the saved config.
+    optionRealm: {
+      get(): boolean { return this.data.realm != undefined },
+      set(v: boolean) {
+        if (v) this.$props.data.realm = { server_url: '', realm_id: '', stun_servers: [] }
+        else delete this.$props.data.realm
+      },
+    },
     down_mbps: {
       get() { return this.$props.data.down_mbps?? 0 },
       set(v:number) { this.$props.data.down_mbps = v>0 ? v : undefined }
@@ -236,6 +313,13 @@ export default {
       }
     }
   },
-  components: {Network, Headers, InboundAdvanced, FieldHint}
+  methods: {
+    // Realm STUN servers are edited as a comma-separated list.
+    setStunServers(realm: any, value: string) {
+      realm.stun_servers = (value || '').split(',').map((item: string) => item.trim()).filter((item: string) => item.length > 0)
+    },
+  },
+
+  components: {Network, Headers, InboundAdvanced, FieldHint, QUICOptions }
 }
 </script>

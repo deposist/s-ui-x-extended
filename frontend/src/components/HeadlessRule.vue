@@ -97,6 +97,9 @@
         <v-col cols="12" sm="6" v-if="rule.package_name != undefined">
           <v-textarea v-model="package_name" :label="$t('rule.packageName')" rows="3" no-resize hide-details />
         </v-col>
+        <v-col cols="12" sm="6" v-if="rule.package_name_regex != undefined">
+          <v-textarea v-model="package_name_regex" :label="$t('rule.packageNameRegex')" rows="3" no-resize hide-details />
+        </v-col>
       </v-row>
       <RuleNetworkState v-if="optionNetworkState" :rule="rule" />
       <RuleInterfaceAddress v-if="optionInterface" :rule="rule" :include-interface-address="false" />
@@ -146,7 +149,7 @@ export default {
       menu: false,
       domainKeys: ['domain', 'domain_suffix', 'domain_keyword', 'domain_regex', 'ip_cidr', 'source_ip_cidr'],
       portKeys: ['port', 'port_range', 'source_port', 'source_port_range'],
-      processKeys: ['process_name', 'process_path', 'process_path_regex', 'package_name'],
+      processKeys: ['process_name', 'process_path', 'process_path_regex', 'package_name', 'package_name_regex'],
       domainOption: 'domain',
       portOption: 'port',
       processOption: 'process_name',
@@ -285,6 +288,10 @@ export default {
     package_name: {
       get(): string { return this.$props.rule.package_name?.join('\n') ?? '' },
       set(value: string) { this.$props.rule.package_name = splitStringList(value) },
+    },
+    package_name_regex: {
+      get(): string { return this.$props.rule.package_name_regex?.join('\n') ?? '' },
+      set(value: string) { this.$props.rule.package_name_regex = splitStringList(value) },
     },
   },
   methods: {

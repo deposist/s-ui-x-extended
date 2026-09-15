@@ -107,8 +107,8 @@
             </v-btn>
           </v-col>
         </v-row>
-        <v-card :subtitle="$t('dns.rule.action.route')" v-if="['route', 'route-options'].includes(ruleData.action)">
-          <v-row v-if="ruleData.action == 'route'">
+        <v-card :subtitle="$t('dns.rule.action.route')" v-if="['route', 'route-options', 'evaluate'].includes(ruleData.action)">
+          <v-row v-if="['route', 'evaluate'].includes(ruleData.action)">
             <v-col cols="12" sm="6" md="4">
               <v-select
                 v-model="ruleData.server"
@@ -134,6 +134,14 @@
               </v-select>
             </v-col>
           </v-row>
+          <v-row v-if="ruleData.action == 'evaluate'">
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field v-model="ruleData.tag" :label="$t('objects.tag')" hide-details clearable @click:clear="delete ruleData.tag"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <v-switch v-model="ruleData.speculative" color="primary" :label="$t('dns.rule.action.speculative')" hide-details></v-switch>
+            </v-col>
+          </v-row>
           <v-row>
             <v-col cols="12" sm="6" md="4">
               <div class="d-flex align-center ga-1">
@@ -154,6 +162,33 @@
                   <SettingInfo v-if="fieldHint('client_subnet')" :text="fieldHint('client_subnet')" />
                 </template>
               </v-text-field>
+            </v-col>
+          </v-row>
+          <v-row>
+            <v-col cols="12" sm="6" md="4">
+              <v-text-field v-model="ruleData.timeout" :label="$t('dns.rule.action.timeout')" clearable @click:clear="delete ruleData.timeout" hide-details>
+                <template #append-inner>
+                  <SettingInfo v-if="fieldHint('timeout')" :text="fieldHint('timeout')" />
+                </template>
+              </v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="ruleData.disable_optimistic_cache" :label="$t('dns.rule.action.disableOptimisticCache')" hide-details></v-switch>
+                <SettingInfo v-if="fieldHint('disable_optimistic_cache')" :text="fieldHint('disable_optimistic_cache')" />
+              </div>
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="ruleData.remove_client_subnet" :label="$t('dns.rule.action.removeClientSubnet')" hide-details></v-switch>
+                <SettingInfo v-if="fieldHint('remove_client_subnet')" :text="fieldHint('remove_client_subnet')" />
+              </div>
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="ruleData.race" :label="$t('dns.rule.action.race')" hide-details></v-switch>
+                <SettingInfo v-if="fieldHint('race')" :text="fieldHint('race')" />
+              </div>
             </v-col>
           </v-row>
         </v-card>
@@ -178,6 +213,22 @@
                 <SettingInfo v-if="fieldHint('no_drop')" :text="fieldHint('no_drop')" />
               </div>
             </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="ruleData.race" :label="$t('dns.rule.action.race')" hide-details></v-switch>
+                <SettingInfo v-if="fieldHint('race')" :text="fieldHint('race')" />
+              </div>
+            </v-col>
+          </v-row>
+        </v-card>
+        <v-card :subtitle="$t('dns.rule.action.respond')" v-if="ruleData.action == 'respond'">
+          <v-row>
+            <v-col cols="12" sm="6" md="4">
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="ruleData.race" :label="$t('dns.rule.action.race')" hide-details></v-switch>
+                <SettingInfo v-if="fieldHint('race')" :text="fieldHint('race')" />
+              </div>
+            </v-col>
           </v-row>
         </v-card>
         <v-card :subtitle="$t('dns.rule.action.predefined')" v-if="ruleData.action == 'predefined'">
@@ -194,6 +245,12 @@
                   <SettingInfo v-if="fieldHint('rcode')" :text="fieldHint('rcode')" />
                 </template>
               </v-select>
+            </v-col>
+            <v-col cols="12" sm="6" md="4">
+              <div class="d-flex align-center ga-1">
+                <v-switch v-model="ruleData.race" :label="$t('dns.rule.action.race')" hide-details></v-switch>
+                <SettingInfo v-if="fieldHint('race')" :text="fieldHint('race')" />
+              </div>
             </v-col>
           </v-row>
           <v-row v-if="ruleData.rcode == 'NOERROR'">
@@ -289,6 +346,8 @@ export default {
       actions: [
         { title: i18n.global.t('dns.rule.action.route'), value: 'route'},
         { title: i18n.global.t('dns.rule.action.routeOptions'), value: 'route-options'},
+        { title: i18n.global.t('dns.rule.action.evaluate'), value: 'evaluate'},
+        { title: i18n.global.t('dns.rule.action.respond'), value: 'respond'},
         { title: i18n.global.t('dns.rule.action.reject'), value: 'reject'},
         { title: i18n.global.t('dns.rule.action.predefined'), value: 'predefined'},
       ],
@@ -375,18 +434,47 @@ export default {
           newRule.disable_cache = this.ruleData.disable_cache? true : undefined
           newRule.rewrite_ttl = this.ruleData.rewrite_ttl > 0 ? this.ruleData.rewrite_ttl : undefined
           newRule.client_subnet = this.ruleData.client_subnet?.length > 0 ? this.ruleData.client_subnet : undefined
+          newRule.race = this.ruleData.race ? true : undefined
+          newRule.timeout = this.ruleData.timeout?.length > 0 ? this.ruleData.timeout : undefined
+          newRule.disable_optimistic_cache = this.ruleData.disable_optimistic_cache ? true : undefined
+          newRule.remove_client_subnet = this.ruleData.remove_client_subnet ? true : undefined
+          break
+        case 'evaluate':
+          // evaluate shares the route action options plus a result tag; dropping
+          // server here would silently break migrated evaluate+match_response pairs.
+          newRule.server = this.ruleData.server
+          newRule.tag = this.ruleData.tag?.length > 0 ? this.ruleData.tag : undefined
+          newRule.speculative = this.ruleData.speculative? true : undefined
+          newRule.strategy = this.ruleData.strategy?.length > 0 ? this.ruleData.strategy : undefined
+          newRule.disable_cache = this.ruleData.disable_cache? true : undefined
+          newRule.rewrite_ttl = this.ruleData.rewrite_ttl > 0 ? this.ruleData.rewrite_ttl : undefined
+          newRule.client_subnet = this.ruleData.client_subnet?.length > 0 ? this.ruleData.client_subnet : undefined
+          newRule.race = this.ruleData.race ? true : undefined
+          newRule.timeout = this.ruleData.timeout?.length > 0 ? this.ruleData.timeout : undefined
+          newRule.disable_optimistic_cache = this.ruleData.disable_optimistic_cache ? true : undefined
+          newRule.remove_client_subnet = this.ruleData.remove_client_subnet ? true : undefined
+          break
+        case 'respond':
+          // respond carries no options beyond the shared race flag.
+          newRule.race = this.ruleData.race ? true : undefined
           break
         case 'route-options':
           newRule.disable_cache = this.ruleData.disable_cache? true : undefined
           newRule.rewrite_ttl = this.ruleData.rewrite_ttl > 0 ? this.ruleData.rewrite_ttl : undefined
           newRule.client_subnet = this.ruleData.client_subnet?.length > 0 ? this.ruleData.client_subnet : undefined
+          newRule.race = this.ruleData.race ? true : undefined
+          newRule.timeout = this.ruleData.timeout?.length > 0 ? this.ruleData.timeout : undefined
+          newRule.disable_optimistic_cache = this.ruleData.disable_optimistic_cache ? true : undefined
+          newRule.remove_client_subnet = this.ruleData.remove_client_subnet ? true : undefined
           break
         case 'reject':
           newRule.method = this.ruleData.method?.length > 0 ? this.ruleData.method : undefined
           newRule.no_drop = this.ruleData.no_drop? true : undefined
+          newRule.race = this.ruleData.race ? true : undefined
           break
         case 'predefined':
           newRule.rcode = this.ruleData.rcode?.length > 0 ? this.ruleData.rcode : undefined
+          newRule.race = this.ruleData.race ? true : undefined
           if (this.ruleData.rcode == 'NOERROR') {
             newRule.answer = this.ruleData.answer
             newRule.ns = this.ruleData.ns

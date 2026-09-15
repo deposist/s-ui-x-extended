@@ -11,11 +11,12 @@ import (
 // inbound delivery facts and build-tag / gap notes. Kept in sync by a golden test.
 func RenderMatrix() string {
 	type row struct {
-		typ                                          string
-		in, out, group, endpoint, service            bool
-		tlsTmpl, users                               bool
-		clientDelivery, buildTag, assembledAs, notes string
-		order                                        int
+		typ                                     string
+		in, out, group, endpoint, service       bool
+		tlsTmpl, users                          bool
+		clientDelivery, clashDelivery, buildTag string
+		platforms, assembledAs, notes           string
+		order                                   int
 	}
 	rows := map[string]*row{}
 	order := 0
@@ -48,6 +49,7 @@ func RenderMatrix() string {
 		r.tlsTmpl = in.HasTLSTemplate
 		r.users = in.HasUsers
 		r.clientDelivery = in.ClientDelivery
+		r.platforms = strings.Join(in.Platforms, "/")
 		if in.BuildTag != "" {
 			r.buildTag = in.BuildTag
 		}
@@ -56,6 +58,7 @@ func RenderMatrix() string {
 	for _, o := range loaded.Outbounds {
 		r := get(o.Type)
 		r.out = true
+		r.clashDelivery = o.ClashDelivery
 		if r.buildTag == "" {
 			r.buildTag = o.BuildTag
 		}
@@ -107,8 +110,8 @@ func RenderMatrix() string {
 	sb.WriteString("# Protocol capability matrix\n\n")
 	sb.WriteString("Single source of truth: `core/capabilities/protocols.json`. Derived backend maps, ")
 	sb.WriteString("frontend lists, and this matrix all come from it.\n\n")
-	sb.WriteString("| Type | in | out | group | endpoint | service | tls-tmpl | users | clientDelivery | buildTag | assembledAs | notes/gap |\n")
-	sb.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	sb.WriteString("| Type | in | out | group | endpoint | service | tls-tmpl | users | clientDelivery | clash | buildTag | platforms | assembledAs | notes/gap |\n")
+	sb.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, r := range ordered {
 		delivery := r.clientDelivery
 		if delivery == "" {
@@ -118,6 +121,14 @@ func RenderMatrix() string {
 		if bt == "" {
 			bt = "–"
 		}
+		clash := r.clashDelivery
+		if clash == "" {
+			clash = "–"
+		}
+		platforms := r.platforms
+		if platforms == "" {
+			platforms = "all"
+		}
 		assembledAs := r.assembledAs
 		if assembledAs == "" {
 			assembledAs = "–"
@@ -126,9 +137,9 @@ func RenderMatrix() string {
 		if notes == "" {
 			notes = "—"
 		}
-		sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n",
+		sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n",
 			r.typ, mark(r.in), mark(r.out), mark(r.group), mark(r.endpoint), mark(r.service),
-			mark(r.tlsTmpl), mark(r.users), delivery, bt, assembledAs, notes))
+			mark(r.tlsTmpl), mark(r.users), delivery, clash, bt, platforms, assembledAs, notes))
 	}
 	return sb.String()
 }

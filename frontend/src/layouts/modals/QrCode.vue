@@ -88,6 +88,24 @@
                 </v-btn>
               </div>
             </div>
+            <v-alert
+              v-if="platform.value === 'clash'"
+              density="compact"
+              type="info"
+              variant="tonal"
+              class="delivery-note"
+            >
+              {{ $t('delivery.clashUnsupported', { list: clashUnsupported.join(', ') }) }}
+            </v-alert>
+            <v-alert
+              v-if="platform.value === 'hiddify'"
+              density="compact"
+              type="info"
+              variant="tonal"
+              class="delivery-note"
+            >
+              {{ $t('delivery.noLinkProtocols', { list: noLinkProtocols.join(', ') }) }}
+            </v-alert>
           </v-window-item>
           <v-window-item value="raw">
             <div class="delivery-raw">
@@ -127,6 +145,7 @@
 
 <script lang="ts">
 import QrcodeVue from 'qrcode.vue'
+import { clashUnsupportedInboundTypes, noLinkInboundTypes } from '@/types/capabilities'
 import Data from '@/store/modules/data'
 import Clipboard from 'clipboard'
 import { i18n } from '@/locales'
@@ -246,6 +265,16 @@ export default {
     clientLinks() {
       return this.client.links?? []
     },
+    // Clash/Mihomo cannot express every protocol the panel delivers. Naming them
+    // here is what keeps a node missing from that subscription explained.
+    clashUnsupported() {
+      return clashUnsupportedInboundTypes
+    },
+    // Protocols with no URI link: a link-based subscription carries links only, so
+    // these are absent from it by construction.
+    noLinkProtocols() {
+      return noLinkInboundTypes
+    },
     size() {
       if (window.innerWidth > 640) return 260
       if (window.innerWidth > 380) return 240
@@ -269,6 +298,10 @@ export default {
 </script>
 
 <style scoped>
+.delivery-note {
+  margin-top: 12px;
+}
+
 .delivery-window {
   margin-top: 12px;
 }

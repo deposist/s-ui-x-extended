@@ -15,6 +15,7 @@ export type OutboundGroupCapability = {
 export const inboundWithUsers: string[] = ['socks', 'http', 'mixed', 'shadowsocks', 'vmess', 'vless', 'trojan', 'naive', 'hysteria', 'hysteria2', 'tuic', 'anytls', 'shadowtls', 'mieru', 'trusttunnel', 'ssh', 'mtproxy']
 export const inboundAssignable: string[] = ['socks', 'http', 'mixed', 'shadowsocks', 'vmess', 'vless', 'trojan', 'naive', 'hysteria', 'hysteria2', 'tuic', 'anytls', 'shadowtls', 'mieru', 'sudoku', 'trusttunnel', 'ssh', 'mtproxy']
 export const HasInData: string[] = ['socks', 'http', 'mixed', 'shadowsocks', 'vmess', 'vless', 'trojan', 'naive', 'hysteria', 'hysteria2', 'tuic', 'anytls', 'shadowtls', 'mieru', 'sudoku', 'trusttunnel', 'ssh']
+export const noListenInboundTypes: string[] = ['call', 'cloudflared', 'tun']
 export const HasTls: string[] = ['http', 'vmess', 'vless', 'trojan', 'naive', 'hysteria', 'hysteria2', 'tuic', 'anytls', 'trusttunnel']
 export const MuxAvailable: string[] = ['shadowsocks', 'vmess', 'vless', 'trojan']
 export const OnlyTLS: string[] = ['naive', 'hysteria', 'hysteria2', 'tuic', 'anytls', 'trusttunnel']
@@ -46,3 +47,5 @@ export const outboundGroupCapabilities: OutboundGroupCapability[] = [
   }
 ]
 export const providerTypes: string[] = ['inline', 'local', 'remote']
+export const clashUnsupportedInboundTypes: string[] = ['naive', 'shadowtls', 'mieru', 'sudoku', 'trusttunnel', 'ssh', 'mtproxy']
+export const noLinkInboundTypes: string[] = ['shadowtls', 'mieru', 'sudoku', 'trusttunnel', 'ssh']

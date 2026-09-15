@@ -946,12 +946,12 @@
                       hide-details></v-switch>
                   </v-col>
                   <v-col cols="12" sm="6" md="3" v-if="appConfig.experimental.cache_file">
-                    <v-switch v-model="appConfig.experimental.cache_file.store_rdrc"
+                    <v-switch v-model="appConfig.experimental.cache_file.store_dns"
                       color="primary"
                       :label="$t('singbox.storeRdrc')"
                       hide-details></v-switch>
                   </v-col>
-                  <v-col cols="12" sm="6" md="3" v-if="appConfig.experimental.cache_file?.store_rdrc">
+                  <v-col cols="12" sm="6" md="3" v-if="appConfig.experimental.cache_file?.store_dns">
                     <v-text-field
                       v-model="appConfig.experimental.cache_file.rdrc_timeout"
                       hide-details
@@ -1175,12 +1175,12 @@
                         hide-details></v-switch>
                     </v-col>
                     <v-col cols="12" sm="6" md="3" lg="2" v-if="appConfig.experimental.cache_file">
-                      <v-switch v-model="appConfig.experimental.cache_file.store_rdrc"
+                      <v-switch v-model="appConfig.experimental.cache_file.store_dns"
                         color="primary"
                         :label="$t('singbox.storeRdrc')"
                         hide-details></v-switch>
                     </v-col>
-                    <v-col cols="12" sm="6" md="3" lg="2" v-if="appConfig.experimental.cache_file?.store_rdrc">
+                    <v-col cols="12" sm="6" md="3" lg="2" v-if="appConfig.experimental.cache_file?.store_dns">
                       <v-text-field
                         v-model="appConfig.experimental.cache_file.rdrc_timeout"
                         hide-details

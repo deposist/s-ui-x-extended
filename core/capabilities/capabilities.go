@@ -31,6 +31,7 @@ type InboundCapability struct {
 	LinkScheme     string            `json:"linkScheme"`
 	OutJSONBuilder string            `json:"outJsonBuilder"`
 	SkipOutJSON    bool              `json:"skipOutJson"`
+	NoListen       bool              `json:"noListen"`
 	HasInData      bool              `json:"hasInData"`
 	HasTLSTemplate bool              `json:"hasTlsTemplate"`
 	MuxAvailable   bool              `json:"muxAvailable"`
@@ -38,6 +39,7 @@ type InboundCapability struct {
 	CredentialMap  map[string]string `json:"credentialMap"`
 	UIEditor       string            `json:"uiEditor"`
 	BuildTag       string            `json:"buildTag"`
+	Platforms      []string          `json:"platforms"`
 	Notes          string            `json:"notes"`
 }
 
@@ -47,6 +49,17 @@ type SimpleCapability struct {
 	Type     string `json:"type"`
 	BuildTag string `json:"buildTag"`
 	Notes    string `json:"notes"`
+	// ClashDelivery classifies how a clash/clash-meta subscription can carry a
+	// node of this type: "proxy" (expressible as a mihomo proxy), "unsupported"
+	// (a real client outbound the format cannot represent — it must be omitted
+	// with a logged reason rather than emitted as a broken proxy), "none" (never
+	// a client node at all). Only outbound rows carry it.
+	ClashDelivery string `json:"clashDelivery,omitempty"`
+	// Platforms lists the GOOS values a type actually runs on. Empty means every
+	// platform this project builds for. It exists because a build tag is not the
+	// only availability gate: REDIRECT/TPROXY compile everywhere but the core
+	// rejects them at start outside their platform.
+	Platforms []string `json:"platforms,omitempty"`
 }
 
 // GroupCapability describes panel/core outbound group modes. Some group modes
@@ -83,6 +96,16 @@ var fieldIdent = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 var validClientDelivery = map[string]struct{}{
 	"none": {}, "json": {}, "uri": {}, "telegram": {}, "broken": {},
+}
+
+var validClashDelivery = map[string]struct{}{
+	"proxy": {}, "unsupported": {}, "none": {},
+}
+
+// knownPlatforms mirrors the GOOS values the project builds for. A typo here
+// would silently mark a type unavailable everywhere, so it is validated at init.
+var knownPlatforms = map[string]struct{}{
+	"linux": {}, "darwin": {}, "windows": {}, "freebsd": {}, "android": {}, "ios": {},
 }
 
 func init() {
@@ -129,6 +152,30 @@ func validate() error {
 		if in.ClientDelivery == "none" && in.OutJSONBuilder != "" {
 			return fmt.Errorf("inbound %q is clientDelivery=none but declares outJsonBuilder %q", in.Type, in.OutJSONBuilder)
 		}
+		if err := validatePlatforms(in.Type, in.Platforms); err != nil {
+			return err
+		}
+	}
+
+	// Invariant: every outbound type declares how a clash subscription carries it.
+	// A new outbound type must be classified explicitly instead of silently
+	// landing in one of the two wrong buckets (a broken proxy, or a node that
+	// disappears from the subscription with no explanation).
+	seenOutbounds := map[string]struct{}{}
+	for _, out := range loaded.Outbounds {
+		if out.Type == "" {
+			return fmt.Errorf("outbound entry with empty type")
+		}
+		if _, dup := seenOutbounds[out.Type]; dup {
+			return fmt.Errorf("duplicate outbound type %q", out.Type)
+		}
+		seenOutbounds[out.Type] = struct{}{}
+		if _, ok := validClashDelivery[out.ClashDelivery]; !ok {
+			return fmt.Errorf("outbound %q has invalid clashDelivery %q", out.Type, out.ClashDelivery)
+		}
+		if err := validatePlatforms(out.Type, out.Platforms); err != nil {
+			return err
+		}
 	}
 
 	seenGroups := map[string]struct{}{}
@@ -159,6 +206,30 @@ func validate() error {
 		}
 	}
 	return nil
+}
+
+// validatePlatforms rejects unknown GOOS tokens in a manifest row.
+func validatePlatforms(typ string, platforms []string) error {
+	for _, platform := range platforms {
+		if _, ok := knownPlatforms[platform]; !ok {
+			return fmt.Errorf("type %q declares unknown platform %q", typ, platform)
+		}
+	}
+	return nil
+}
+
+// PlatformSupported reports whether the manifest row's platform list covers the
+// given GOOS. An empty list means every platform.
+func PlatformSupported(platforms []string, goos string) bool {
+	if len(platforms) == 0 {
+		return true
+	}
+	for _, platform := range platforms {
+		if platform == goos {
+			return true
+		}
+	}
+	return false
 }
 
 // Inbounds returns the inbound capability rows in manifest order.
@@ -252,6 +323,49 @@ func OutJSONBuilders() map[string]string {
 			continue
 		}
 		m[in.Type] = in.OutJSONBuilder
+	}
+	return m
+}
+
+// ClashProxyTypes returns the set of outbound types a clash/clash-meta
+// subscription can express as a complete mihomo proxy. The Clash converter must
+// only emit proxies from this set; types marked "unsupported" are skipped with a
+// logged reason so the panel never hands a client a proxy definition the format
+// cannot carry.
+func ClashProxyTypes() map[string]struct{} {
+	m := map[string]struct{}{}
+	for _, out := range loaded.Outbounds {
+		if out.ClashDelivery == "proxy" {
+			m[out.Type] = struct{}{}
+		}
+	}
+	return m
+}
+
+// ClashUnsupportedTypes returns the outbound types that are real client outbounds
+// a clash/clash-meta subscription cannot represent, in manifest order. The panel
+// surfaces this list next to the Clash delivery option, so a node missing from
+// that subscription is explained instead of merely absent.
+func ClashUnsupportedTypes() []string {
+	var out []string
+	for _, o := range loaded.Outbounds {
+		if o.ClashDelivery == "unsupported" {
+			out = append(out, o.Type)
+		}
+	}
+	return out
+}
+
+// NoListenTypes returns inbound types whose core options have no ListenOptions
+// (call, cloudflared, tun). The editors must not render the shared Listen section
+// for them: the core rejects unknown fields, so a stray listen/listen_port turns a
+// save into "rejected by sing-box schema: unknown field".
+func NoListenTypes() map[string]struct{} {
+	m := map[string]struct{}{}
+	for _, in := range loaded.Inbounds {
+		if in.NoListen {
+			m[in.Type] = struct{}{}
+		}
 	}
 	return m
 }

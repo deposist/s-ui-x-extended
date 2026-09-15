@@ -25,6 +25,7 @@ export const InTypes = {
   SSH: 'ssh',
   MTProxy: 'mtproxy',
   Call: 'call',
+  Cloudflared: 'cloudflared',
   Tun: 'tun',
   Redirect: 'redirect',
   TProxy: 'tproxy',
@@ -133,6 +134,13 @@ export interface Hysteria extends InboundBasics {
   recv_window_client?: number
   max_conn_client?: number
   disable_mtu_discovery?: boolean
+  disable_path_mtu_discovery?: boolean
+  idle_timeout?: string
+  keep_alive_period?: string
+  stream_receive_window?: string | number
+  connection_receive_window?: string | number
+  max_concurrent_streams?: number
+  initial_packet_size?: number
   up?: string
   down?: string
   tls?: iTls
@@ -163,11 +171,40 @@ export interface TUIC extends InboundBasics {
   auth_timeout?: string
   zero_rtt_handshake?: boolean
   heartbeat?: string
+  disable_path_mtu_discovery?: boolean
+  idle_timeout?: string
+  keep_alive_period?: string
+  stream_receive_window?: string | number
+  connection_receive_window?: string | number
+  max_concurrent_streams?: number
+  initial_packet_size?: number
   tls?: iTls
+}
+export interface Hysteria2RealmPortMapping {
+  enabled?: boolean
+  timeout?: string
+  lifetime?: string
+}
+export interface Hysteria2Realm {
+  server_url: string
+  token?: string
+  realm_id: string
+  stun_servers: string[]
+  ip_version?: 0 | 4 | 6
+  port_mapping?: Hysteria2RealmPortMapping
 }
 export interface Hysteria2 extends InboundBasics {
   up_mbps?: number
   down_mbps?: number
+  disable_path_mtu_discovery?: boolean
+  idle_timeout?: string
+  keep_alive_period?: string
+  stream_receive_window?: string | number
+  connection_receive_window?: string | number
+  max_concurrent_streams?: number
+  initial_packet_size?: number
+  bbr_profile?: "" | "standard" | "conservative" | "aggressive"
+  realm?: Hysteria2Realm
   obfs?: {
     type?: "salamander"
     password: string
@@ -185,6 +222,22 @@ export interface Hysteria2 extends InboundBasics {
   }
   brutal_debug?: boolean
 }
+// CloudflaredInboundOptions: a Cloudflare tunnel client inbound. The core needs
+// either a tunnel token or the legacy credential fields; the panel keeps the
+// token plus the tunnel tuning knobs.
+export interface Cloudflared extends InboundBasics {
+  token: string
+  ha_connections?: number
+  protocol?: '' | 'auto' | 'quic' | 'http2' | 'h2mux'
+  post_quantum?: boolean
+  edge_ip_version?: 0 | 4 | 6
+  datagram_version?: '' | 'v2' | 'v3'
+  grace_period?: string
+  region?: string
+  control_dialer?: Dial
+  tunnel_dialer?: Dial
+}
+
 export interface Tun extends InboundBasics {
   interface_name?: string
   address?: string[]
@@ -224,6 +277,13 @@ export interface Tun extends InboundBasics {
   include_android_user?: number[]
   include_package?: string[]
   exclude_package?: string[]
+  dns_mode?: "" | "disabled" | "native" | "hijack"
+  dns_address?: string[]
+  include_mac_address?: string[]
+  exclude_mac_address?: string[]
+  udp_mapping?: "" | "endpoint_independent" | "address_dependent" | "address_and_port_dependent"
+  udp_filtering?: "" | "endpoint_independent" | "address_dependent" | "address_and_port_dependent"
+  udp_nat_max?: number
   platform?: {
     http_proxy?: {
       enabled?: boolean
@@ -237,6 +297,9 @@ export interface Tun extends InboundBasics {
 export interface Redirect extends InboundBasics {}
 export interface TProxy extends InboundBasics {
   network?: "udp" | "tcp"
+  udp_mapping?: "" | "endpoint_independent" | "address_dependent" | "address_and_port_dependent"
+  udp_filtering?: "" | "endpoint_independent" | "address_dependent" | "address_and_port_dependent"
+  udp_nat_max?: number
 }
 export interface BondInbound extends InboundBasics {
   inbounds: string[]
@@ -249,6 +312,7 @@ export interface Mieru extends InboundBasics {
   transport?: string
   traffic_pattern?: string
   user_hint_is_mandatory?: boolean
+  mtu?: number
 }
 export interface Sudoku extends InboundBasics {
   key: string
@@ -348,6 +412,7 @@ type InterfaceMap = {
   ssh: SSH
   mtproxy: MTProxy
   call: Call
+  cloudflared: Cloudflared
   tun: Tun
   redirect: Redirect
   tproxy: TProxy
@@ -388,6 +453,7 @@ const defaultValues: Record<InType, Inbound> = {
   ssh: <SSH>{ type: InTypes.SSH },
   mtproxy: <MTProxy>{ type: InTypes.MTProxy, prefer_ip: 'prefer-ipv4' },
   call: <Call>{ type: InTypes.Call, platform: 'dion', read_buffer: 32768 },
+  cloudflared: <Cloudflared>{ type: InTypes.Cloudflared, token: '' },
   tun: <Tun>{ type: InTypes.Tun, mtu: 9000, stack: 'system', udp_timeout: '5m', auto_route: false },
   redirect: <Redirect>{ type: InTypes.Redirect },
   tproxy: <TProxy>{ type: InTypes.TProxy },

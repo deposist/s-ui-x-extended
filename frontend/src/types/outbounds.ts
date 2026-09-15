@@ -24,7 +24,6 @@ export const OutTypes = {
   TrustTunnel: 'trusttunnel',
   Call: 'call',
   MASQUE: 'masque',
-  OpenVPN: 'openvpn',
   Parser: 'parser',
   Selector: 'selector',
   URLTest: 'urltest',
@@ -37,6 +36,8 @@ export const OutTypes = {
   RateLimiter: 'rate-limiter',
   Block: 'block',
   CoreFailover: 'core-failover',
+  Snell: 'snell',
+  Bridge: 'bridge',
 }
 
 type OutType = typeof OutTypes[keyof typeof OutTypes]
@@ -157,6 +158,13 @@ export interface Hysteria extends OutboundBasics, Dial {
   recv_window_conn?: number
   recv_window?: number
   disable_mtu_discovery?: boolean
+  disable_path_mtu_discovery?: boolean
+  idle_timeout?: string
+  keep_alive_period?: string
+  stream_receive_window?: string | number
+  connection_receive_window?: string | number
+  max_concurrent_streams?: number
+  initial_packet_size?: number
   network?: "udp" | "tcp"
   tls: oTls
 }
@@ -192,15 +200,36 @@ export interface TUIC extends OutboundBasics, Dial {
   udp_over_stream?: boolean
   zero_rtt_handshake?: boolean
   heartbeat?: string
+  disable_path_mtu_discovery?: boolean
+  idle_timeout?: string
+  keep_alive_period?: string
+  stream_receive_window?: string | number
+  connection_receive_window?: string | number
+  max_concurrent_streams?: number
+  initial_packet_size?: number
   network?: "udp" | "tcp"
   tls: oTls
 }
 
+export interface Hysteria2RealmPortMapping {
+  enabled?: boolean
+  timeout?: string
+  lifetime?: string
+}
+export interface Hysteria2Realm {
+  server_url: string
+  token?: string
+  realm_id: string
+  stun_servers: string[]
+  ip_version?: 0 | 4 | 6
+  port_mapping?: Hysteria2RealmPortMapping
+}
 export interface Hysteria2 extends OutboundBasics, Dial {
   server: string
   server_port: number
   server_ports?: string[]
   hop_interval: string
+  hop_interval_max?: string
   up_mbps?: number
   down_mbps?: number
   obfs?: {
@@ -208,6 +237,16 @@ export interface Hysteria2 extends OutboundBasics, Dial {
     password: string
   }
   password?: string
+  disable_path_mtu_discovery?: boolean
+  idle_timeout?: string
+  keep_alive_period?: string
+  stream_receive_window?: string | number
+  connection_receive_window?: string | number
+  max_concurrent_streams?: number
+  initial_packet_size?: number
+  bbr_profile?: "" | "standard" | "conservative" | "aggressive"
+  disable_chrome_parrot?: boolean
+  realm?: Hysteria2Realm
   network?: "udp" | "tcp"
   tls: oTls
   brutal_debug?: boolean
@@ -244,6 +283,9 @@ export interface SSH extends OutboundBasics, Dial  {
   host_key?: string[]
   host_key_algorithms?: string[]
   client_version?: string
+  cipher?: string[]
+  kex_algorithm?: string[]
+  mac?: string[]
 }
 
 export interface Mieru extends OutboundBasics, Dial {
@@ -255,6 +297,8 @@ export interface Mieru extends OutboundBasics, Dial {
   password?: string
   multiplexing?: string
   traffic_pattern?: string
+  mtu?: number
+  handshake_mode?: string
 }
 
 export interface Sudoku extends OutboundBasics, Dial {
@@ -337,6 +381,8 @@ export interface MASQUE extends OutboundBasics, Dial {
   use_http2?: boolean
   use_ipv6?: boolean
   profile?: CloudflareProfile
+  address?: string
+  port?: number
   udp_timeout?: string
   udp_keepalive_period?: string
   udp_initial_packet_size?: number
@@ -344,42 +390,6 @@ export interface MASQUE extends OutboundBasics, Dial {
   congestion_controller?: string
   cwnd?: number
   tls?: MasqueTls
-}
-
-export interface OpenVPNTls {
-  certificate?: string
-  certificate_path?: string
-  key?: string
-  key_path?: string
-  ca?: string
-  ca_path?: string
-  cipher_suites?: string[]
-  verify_x509_name?: string
-  verify_x509_name_mode?: string
-  kernel_tx?: boolean
-  kernel_rx?: boolean
-}
-
-export interface OpenVPN extends OutboundBasics, Dial {
-  system?: boolean
-  name?: string
-  allowed_ips?: string[]
-  servers: { server: string; server_port: number }[]
-  proto?: "udp" | "tcp"
-  cipher?: string
-  auth?: string
-  username?: string
-  password?: string
-  tls_crypt?: string
-  tls_crypt_path?: string
-  tls_crypt_v2?: boolean
-  tls_auth?: string
-  tls_auth_path?: string
-  key_direction?: number
-  reconnect_delay?: string
-  ping_interval?: string
-  ping_restart?: string
-  tls?: OpenVPNTls
 }
 
 export interface Parser extends OutboundBasics, Dial {
@@ -464,6 +474,28 @@ export interface CoreFailover extends OutboundBasics {
   outbounds: string[]
   strategy?: string
   delay?: string
+}
+
+// Snell outbound: version 4 uses obfs options, version 6 uses mode.
+export interface Snell extends OutboundBasics, Dial {
+  server: string
+  server_port: number
+  version: 4 | 6
+  psk: string
+  userkey?: string
+  reuse?: boolean
+  network?: string
+  obfs_mode?: 'none' | 'http' | 'tls'
+  obfs_host?: string
+  mode?: 'default' | 'unshaped' | 'unsafe-raw'
+}
+
+// Bridge outbound: Linux/macOS/Windows bridge interface.
+export interface Bridge extends OutboundBasics {
+  interface?: string
+  bridge_name?: string
+  iproute2_table_index?: number
+  iproute2_rule_index?: number
 }
 
 export interface LimiterRoute {
@@ -570,7 +602,6 @@ const defaultValues: Record<OutType, Outbound> = {
   trusttunnel: { type: OutTypes.TrustTunnel, network: ['tcp', 'udp'], congestion_controller: 'bbr', tls: { enabled: true } },
   call: { type: OutTypes.Call, platform: 'dion', join_link: '', read_buffer: 32768 },
   masque: { type: OutTypes.MASQUE, use_http2: false, use_ipv6: false, profile: { detour: 'direct' }, udp_timeout: '5m0s', udp_keepalive_period: '30s', reconnect_delay: '5s', tls: {} },
-  openvpn: { type: OutTypes.OpenVPN, servers: [{ server: '', server_port: 1194 }], proto: 'udp', cipher: 'AES-256-GCM', auth: 'SHA256', tls: {} },
   parser: { type: OutTypes.Parser, link: '' },
   selector: { type: OutTypes.Selector },
   urltest: { type: OutTypes.URLTest },
@@ -583,6 +614,8 @@ const defaultValues: Record<OutType, Outbound> = {
   'rate-limiter': { type: OutTypes.RateLimiter, strategy: 'leaky-bucket', count: 10, interval: '1s', route: { final: 'direct' } },
   block: { type: OutTypes.Block },
   'core-failover': { type: OutTypes.CoreFailover, outbounds: [], strategy: 'sequential', delay: '' },
+  snell: { type: OutTypes.Snell, version: 4, obfs_mode: 'http' },
+  bridge: { type: OutTypes.Bridge },
 }
 
 export function createOutbound<T extends Outbound>(type: string,json?: Partial<T>): Outbound {

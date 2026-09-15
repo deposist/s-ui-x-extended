@@ -5,6 +5,8 @@ export interface Dns {
   strategy?: string
   disable_cache?: boolean,
   disable_expire?: boolean,
+  // 1.14 deprecated this (schema:"omit"); the migration strips it from stored
+  // blobs and the editor no longer offers it. Kept only to read pre-migration.
   independent_cache?: boolean,
   cache_capacity?: number,
   reverse_mapping?: boolean,
@@ -22,10 +24,13 @@ export const DnsTypes = {
   HTTP3: 'h3',
   DHCP: 'dhcp',
   FakeIP: 'fakeip',
+  MDNS: 'mdns',
   Tailscale: 'tailscale',
   Resolved: 'resolved',
   SDNS: 'sdns',
   Fallback: 'fallback',
+  OpenVPN: 'openvpn',
+  OpenConnect: 'openconnect',
 }
 
 export type DnsType = typeof DnsTypes[keyof typeof DnsTypes]
@@ -50,11 +55,14 @@ const defaultValues: Record<DnsType, DnsServer> = {
   h3: { type: 'h3', server_port: 443, tls: { enabled: true }, headers: {} },
   predefined: { type: 'predefined', rcode: 'NOERROR' },
   dhcp: { type: 'dhcp' },
+  mdns: { type: 'mdns' },
   fakeip: { type: 'fakeip', inet4_range: '198.18.0.0/15', inet6_range: 'fc00::/18' },
   tailscale: { type: 'tailscale' },
   resolved: { type: 'resolved' },
   sdns: { type: 'sdns', stamp: '' },
   fallback: { type: 'fallback', servers: [], strategy: 'sequential' },
+  openvpn: { type: 'openvpn' },
+  openconnect: { type: 'openconnect' },
 }
 export function createDnsServer<T extends DnsServer>(type: string, json?: Partial<T>): DnsServer {
   const defaultObject: DnsServer = { ...defaultValues[type], ...(json || {}) }
@@ -63,7 +71,7 @@ export function createDnsServer<T extends DnsServer>(type: string, json?: Partia
 
 interface generalDnsRule {
   invert: boolean
-  action: 'route' | 'route-options' | 'reject' | 'predefined'
+  action: 'route' | 'route-options' | 'reject' | 'predefined' | 'evaluate' | 'respond'
   server?: string
   strategy?: string
   disable_cache?: boolean
@@ -73,8 +81,16 @@ interface generalDnsRule {
   no_drop?: boolean
   rcode?: string
   answer?: string[]
+  // evaluate action options
+  tag?: string
+  speculative?: boolean
   ns?: string[]
   extra?: string[]
+  // shared by every DNS route/evaluate/route-options action
+  race?: boolean
+  timeout?: string
+  disable_optimistic_cache?: boolean
+  remove_client_subnet?: boolean
 }
 
 export const actionDnsRuleKeys = [
@@ -89,13 +105,19 @@ export const actionDnsRuleKeys = [
   'no_drop',
   'rcode',
   'answer',
+  'tag',
+  'speculative',
   'ns',
   'extra',
+  'race',
+  'timeout',
+  'disable_optimistic_cache',
+  'remove_client_subnet',
 ]
 /**
  * Every JSON field of the pinned fork's `option.RawDefaultDNSRule` except
  * `invert`, transcribed from the struct tags of
- * `github.com/deposist/sing-box-extended@v1.13.14-extended-2.5.4`.
+ * `github.com/deposist/sing-box-extended@v1.14.0-extended-2.7.1`.
  *
  * Two entries are easy to get wrong and are the reason this is transcribed from
  * the fork rather than from the `dnsRule` interface below:
@@ -109,6 +131,8 @@ export const dnsDefaultMatchKeys = [
   'inbound',
   'ip_version',
   'query_type',
+  'query_client_subnet',
+  'query_dnssec',
   'network',
   'auth_user',
   'protocol',
@@ -132,6 +156,7 @@ export const dnsDefaultMatchKeys = [
   'process_path',
   'process_path_regex',
   'package_name',
+  'package_name_regex',
   'user',
   'user_id',
   'outbound',
@@ -144,6 +169,14 @@ export const dnsDefaultMatchKeys = [
   'interface_address',
   'network_interface_address',
   'default_interface_address',
+  'source_mac_address',
+  'source_hostname',
+  'preferred_by',
+  'match_response',
+  'response_rcode',
+  'response_answer',
+  'response_ns',
+  'response_extra',
   'rule_set',
   'rule_set_ip_cidr_match_source',
   'rule_set_ip_cidr_accept_empty',
@@ -194,4 +227,15 @@ export interface dnsRule extends generalDnsRule {
   interface_address?: { [interfaceName: string]: string[] }
   network_interface_address?: { wifi?: string[]; cellular?: string[]; ethernet?: string[]; other?: string[] }
   default_interface_address?: string[]
+  query_client_subnet?: string[]
+  query_dnssec?: boolean
+  package_name_regex?: string[]
+  source_mac_address?: string[]
+  source_hostname?: string[]
+  preferred_by?: string[]
+  match_response?: boolean | string
+  response_rcode?: string
+  response_answer?: string[]
+  response_ns?: string[]
+  response_extra?: string[]
 }

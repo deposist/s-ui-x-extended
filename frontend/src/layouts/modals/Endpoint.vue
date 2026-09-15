@@ -12,7 +12,7 @@
             hide-details
             :disabled="endpoint.id > 0"
             :label="$t('type')"
-            :items="Object.keys(epTypes).map((key,index) => ({title: key, value: Object.values(epTypes)[index]}))"
+            :items="epTypeItems"
             v-model="endpoint.type"
             @update:modelValue="changeType">
               <template #append-inner>
@@ -108,6 +108,8 @@
         <TailscaleVue v-if="endpoint.type == epTypes.Tailscale" :data="endpoint" />
         <VpnServer v-if="endpoint.type == epTypes.VpnServer" :data="endpoint" :field-hints="currentFieldHints" />
         <VpnClient v-if="endpoint.type == epTypes.VpnClient" :data="endpoint" :field-hints="currentFieldHints" />
+        <OpenVPNEndpoint v-if="endpoint.type == epTypes.OpenVPNClient || endpoint.type == epTypes.OpenVPNServer" :data="endpoint" :field-hints="currentFieldHints" />
+        <OpenConnect v-if="endpoint.type == epTypes.OpenConnect" :data="endpoint" :field-hints="currentFieldHints" />
         <Dial v-if="!noDial.includes(endpoint.type)" :dial="endpoint" :field-hints="currentFieldHints" />
       </v-card-text>
       <v-card-actions>
@@ -142,6 +144,9 @@ import Warp from '@/components/protocols/Warp.vue'
 import TailscaleVue from '@/components/protocols/Tailscale.vue'
 import VpnServer from '@/components/protocols/VpnServer.vue'
 import VpnClient from '@/components/protocols/VpnClient.vue'
+import OpenVPNEndpoint from '@/components/protocols/OpenVPNEndpoint.vue'
+import OpenConnect from '@/components/protocols/OpenConnect.vue'
+import { capabilityRows, capabilityTypeItems, type CapabilityRow } from '@/utils/capabilityTypeItems'
 import HttpUtils from '@/plugins/httputil'
 import { push } from 'notivue'
 import { i18n } from '@/locales'
@@ -158,6 +163,9 @@ export default {
       title: "add",
       tab: "t1",
       loading: false,
+      // Availability rows from /api/capabilities: types not compiled into this
+      // binary or not implemented on this platform stay visible but disabled.
+      capabilityRows: <CapabilityRow[]>[],
       // Snapshot of the amnezia options at modal open; a change means every
       // provisioned device must re-download its config / rescan the QR
       // (configs render live from endpoint options, so nothing regenerates
@@ -244,6 +252,15 @@ export default {
             key: RandomUtil.randomUUID(),
             outbound: {},
           }
+          break
+        case EpTypes.OpenVPNClient:
+          prevConfig = { tag: tag }
+          break
+        case EpTypes.OpenVPNServer:
+          prevConfig = { tag: tag }
+          break
+        case EpTypes.OpenConnect:
+          prevConfig = { tag: tag }
           break
       }
       this.endpoint = createEndpoint(this.endpoint.type, prevConfig)
@@ -365,7 +382,16 @@ export default {
       this.loading = false
     },
   },
+  async created() {
+    // Best-effort: gate types not compiled into this build. Failure (e.g. older
+    // backend without the section) leaves every type available.
+    const resp = await HttpUtils.get('api/capabilities')
+    this.capabilityRows = capabilityRows(resp?.obj?.endpoints)
+  },
   computed: {
+    epTypeItems() {
+      return capabilityTypeItems(this.epTypes, this.capabilityRows)
+    },
     awgManagedFlag: {
       get(): boolean { return this.endpoint.ext?.managed === true },
       set(v: boolean) {
@@ -520,6 +546,6 @@ export default {
       }
     },
   },
-  components: { SettingInfo, Dial, Wireguard, Warp, TailscaleVue, VpnServer, VpnClient }
+  components: { SettingInfo, Dial, Wireguard, Warp, TailscaleVue, VpnServer, VpnClient, OpenVPNEndpoint, OpenConnect }
 }
 </script>

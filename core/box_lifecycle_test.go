@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"sync"
@@ -8,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/sagernet/sing-box/log"
+	"github.com/sagernet/sing-box/option"
 )
 
 type lifecycleTestLogFactory struct {
@@ -68,5 +70,36 @@ func TestBoxCloseIsConcurrentSafe(t *testing.T) {
 	wg.Wait()
 	if calls := factory.closeCalls.Load(); calls != 1 {
 		t.Fatalf("log factory Close() calls = %d, want 1", calls)
+	}
+}
+
+// TestBoxStartCloseRestartLifecycle exercises the full composed Box — netns,
+// httpclient, certificate-provider, and the reordered Start/Close lifecycle —
+// through a real start, close, and a second start to prove the composition is
+// restartable and does not leak partial state between iterations.
+func TestBoxStartCloseRestartLifecycle(t *testing.T) {
+	cfg := []byte(`{
+		"log":{"disabled":true},
+		"dns":{"servers":[{"type":"local","tag":"local"}]},
+		"inbounds":[{"type":"mixed","tag":"in","listen":"127.0.0.1","listen_port":0}],
+		"outbounds":[{"type":"direct","tag":"direct"}],
+		"route":{"final":"direct"}
+	}`)
+	for i := 0; i < 2; i++ {
+		var opt option.Options
+		ctx := Context(context.Background(), InboundRegistry(), OutboundRegistry(), EndpointRegistry(), ProviderRegistry(), DNSTransportRegistry(), ServiceRegistry(), CertificateProviderRegistry())
+		if err := opt.UnmarshalJSONContext(ctx, cfg); err != nil {
+			t.Fatalf("unmarshal iteration %d: %v", i, err)
+		}
+		box, err := NewBox(Options{Context: ctx, Options: opt})
+		if err != nil {
+			t.Fatalf("NewBox iteration %d: %v", i, err)
+		}
+		if err := box.Start(); err != nil {
+			t.Fatalf("Start iteration %d: %v", i, err)
+		}
+		if err := box.Close(); err != nil {
+			t.Fatalf("Close iteration %d: %v", i, err)
+		}
 	}
 }

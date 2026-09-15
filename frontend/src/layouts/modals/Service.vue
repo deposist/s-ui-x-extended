@@ -11,7 +11,7 @@
             <v-select
             hide-details
             :label="$t('type')"
-            :items="Object.keys(srvTypes).map((key,index) => ({title: key, value: Object.values(srvTypes)[index]}))"
+            :items="srvTypeItems"
             v-model="srv.type"
             @update:modelValue="changeType">
               <template #append-inner>
@@ -44,6 +44,10 @@
         <Ccm v-if="srv.type == srvTypes.CCM" :data="srv" :field-hints="currentFieldHints" />
         <OomKiller v-if="srv.type == srvTypes.OOMKiller" :data="srv" :field-hints="currentFieldHints" />
         <Profiler v-if="srv.type == srvTypes.Profiler" :data="srv" :field-hints="currentFieldHints" />
+        <ServiceAPI v-if="srv.type == srvTypes.API" :data="srv" :field-hints="currentFieldHints" />
+        <HysteriaRealm v-if="srv.type == srvTypes.HysteriaRealm" :data="srv" :field-hints="currentFieldHints" />
+      <UsbipServer v-if="srv.type == srvTypes.USBIPServer" :data="srv" :field-hints="currentFieldHints" />
+      <UsbipClient v-if="srv.type == srvTypes.USBIPClient" :data="srv" :field-hints="currentFieldHints" />
         <InTLS v-if="HasTls.includes(srv.type)"  :inbound="srv" :tlsConfigs="tlsConfigs" :tls_id="srv.tls_id" :field-hints="currentFieldHints" />
       </v-card-text>
       <v-card-actions>
@@ -80,7 +84,13 @@ import OomKiller from '@/components/services/OomKiller.vue'
 import Profiler from '@/components/services/Profiler.vue'
 import InTLS from '@/components/tls/InTLS.vue'
 import SSMapi from '@/components/services/SSMAPI.vue'
+import ServiceAPI from '@/components/services/API.vue'
+import HysteriaRealm from '@/components/services/HysteriaRealm.vue'
+import UsbipServer from '@/components/services/UsbipServer.vue'
+import UsbipClient from '@/components/services/UsbipClient.vue'
 import Data from '@/store/modules/data'
+import { capabilityRows, capabilityTypeItems, type CapabilityRow } from '@/utils/capabilityTypeItems'
+import HttpUtils from '@/plugins/httputil'
 import SettingInfo from '@/components/SettingInfo.vue'
 import { applyServiceRecommendedValues, hasServiceRecommendedPreset, serviceFieldHintsForType } from '@/utils/defaultRecommendations'
 export default {
@@ -92,9 +102,12 @@ export default {
       title: "add",
       tab: "t1",
       loading: false,
+      // Availability rows from /api/capabilities: types not compiled into this
+      // binary or not implemented on this platform stay visible but disabled.
+      capabilityRows: <CapabilityRow[]>[],
       srvTypes: SrvTypes,
-      HasTls: [SrvTypes.DERP, SrvTypes.SSMAPI, SrvTypes.OCM, SrvTypes.CCM],
-      NoListen: [SrvTypes.OOMKiller, SrvTypes.Profiler],
+      HasTls: [SrvTypes.DERP, SrvTypes.SSMAPI, SrvTypes.OCM, SrvTypes.CCM, SrvTypes.API, SrvTypes.HysteriaRealm],
+      NoListen: [SrvTypes.OOMKiller, SrvTypes.Profiler, SrvTypes.USBIPClient],
     }
   },
   methods: {
@@ -127,10 +140,14 @@ export default {
     changeType() {
       // Tag change only in add service
       const tag = this.$props.id > 0 ? this.srv.tag : this.srv.type + "-" + RandomUtil.randomSeq(3)
-      // Use previous data
+      // Use previous data. The USB/IP server keeps its own loopback default
+      // instead of inheriting a previous type's listen address.
+      const listenHost = 'listen' in this.srv ? this.srv.listen : undefined
+      const listenPortValue = 'listen_port' in this.srv ? this.srv.listen_port : undefined
+      const keepListen = listenHost != undefined && this.srv.type != SrvTypes.USBIPServer
       const prevConfig = this.NoListen.includes(this.srv.type)
         ? { id: this.srv.id, tag: tag }
-        : { id: this.srv.id, tag: tag, listen: this.srv.listen, listen_port: this.srv.listen_port }
+        : { id: this.srv.id, tag: tag, ...(keepListen ? { listen: listenHost, listen_port: listenPortValue } : {}) }
       this.srv = createSrv(this.srv.type, prevConfig)
     },
     closeModal() {
@@ -155,7 +172,16 @@ export default {
       }
     },
   },
+  async created() {
+    // Best-effort: gate types not compiled into this build. Failure (e.g. older
+    // backend without the section) leaves every type available.
+    const resp = await HttpUtils.get('api/capabilities')
+    this.capabilityRows = capabilityRows(resp?.obj?.services)
+  },
   computed: {
+    srvTypeItems() {
+      return capabilityTypeItems(this.srvTypes, this.capabilityRows)
+    },
     currentFieldHints(): Record<string, string> {
       return serviceFieldHintsForType(this.srv.type)
     },
@@ -170,6 +196,6 @@ export default {
       }
     },
   },
-  components: { SettingInfo, Listen, InTLS, Derp, Ocm, Ccm, OomKiller, Profiler, SSMapi },
+  components: { SettingInfo, Listen, InTLS, Derp, Ocm, Ccm, OomKiller, Profiler, SSMapi, ServiceAPI, HysteriaRealm, UsbipServer, UsbipClient },
 }
 </script>

@@ -16,7 +16,7 @@
         <v-col cols="12" sm="6">
           <v-select
             hide-details
-            :items="Object.keys(inTypes).map((key,index) => ({title: key, value: Object.values(inTypes)[index]}))"
+            :items="inTypeItems"
             :label="$t('type')"
             v-model="inbound.type"
             @update:modelValue="changeType">
@@ -67,7 +67,7 @@
       </v-tabs>
       <v-window v-model="side" style="margin-top: 10px;">
         <v-window-item value="s">
-          <Listen :data="inbound" :inTags="inTags" :field-hints="currentFieldHints" v-if="inbound.type != inTypes.Tun && inbound.type != inTypes.Call" />
+          <Listen :data="inbound" :inTags="inTags" :field-hints="currentFieldHints" v-if="!noListenInboundTypes.includes(inbound.type)" />
           <Direct v-if="inbound.type == inTypes.Direct" :data="inbound" :field-hints="currentFieldHints" />
           <Socks v-if="inbound.type == inTypes.SOCKS" direction="in" :data="inbound" :field-hints="currentFieldHints" />
           <Http v-if="inbound.type == inTypes.HTTP" direction="in" :data="inbound" :field-hints="currentFieldHints" />
@@ -82,6 +82,7 @@
           <Tun v-if="inbound.type == inTypes.Tun" :data="inbound" :field-hints="currentFieldHints" />
           <AnyTls v-if="inbound.type == inTypes.AnyTls" :data="inbound" direction="in" :field-hints="currentFieldHints" />
           <Redirect v-if="inbound.type == inTypes.Redirect" :data="inbound" />
+          <Cloudflared v-if="inbound.type == inTypes.Cloudflared" :data="inbound" :field-hints="currentFieldHints" />
           <TProxy v-if="inbound.type == inTypes.TProxy" :inbound="inbound" :field-hints="currentFieldHints" />
           <VlessInbound v-if="inbound.type == inTypes.VLESS" :data="inbound" :mode="id == 0 ? 'create' : 'edit'" :field-hints="currentFieldHints" />
           <Vmess v-if="inbound.type == inTypes.VMess" direction="in" :data="inbound" :field-hints="currentFieldHints" />
@@ -123,7 +124,7 @@
 
 <script lang="ts">
 import { InTypes, createInbound, Addr, ShadowTLS } from '@/types/inbounds'
-import { inboundAssignable, HasInData, HasTls, MuxAvailable, OnlyTLS } from '@/types/capabilities'
+import {inboundAssignable, HasInData, HasTls, MuxAvailable, OnlyTLS, noListenInboundTypes } from '@/types/capabilities'
 import RandomUtil from '@/plugins/randomUtil'
 import Dial from '@/components/Dial.vue'
 import DomainResolver from '@/components/DomainResolver.vue'
@@ -153,12 +154,15 @@ import Socks from '@/components/protocols/Socks.vue'
 import Http from '@/components/protocols/Http.vue'
 import Mixed from '@/components/protocols/Mixed.vue'
 import Redirect from '@/components/protocols/Redirect.vue'
+import Cloudflared from '@/components/protocols/Cloudflared.vue'
 import InTls from '@/components/tls/InTLS.vue'
 import TProxy from '@/components/protocols/TProxy.vue'
 import Multiplex from '@/components/Multiplex.vue'
 import Transport from '@/components/Transport.vue'
 import AddrVue from '@/components/Addr.vue'
 import OutJsonVue from '@/components/OutJson.vue'
+import HttpUtils from '@/plugins/httputil'
+import { capabilityRows, capabilityTypeItems, type CapabilityRow } from '@/utils/capabilityTypeItems'
 import Data from '@/store/modules/data'
 import EntityDrawer from './EntityDrawer.vue'
 import FormSection from './FormSection.vue'
@@ -178,6 +182,9 @@ export default {
       inbound: createInbound("direct",{ id:0, "tag": "" }),
       title: "add",
       loading: false,
+      // Availability rows from /api/capabilities: types not compiled into this
+      // binary or not implemented on this platform stay visible but disabled.
+      capabilityRows: <CapabilityRow[]>[],
       side: "s",
       snapshot: "",
       snapshotInitUsers: "",
@@ -190,6 +197,8 @@ export default {
         values: <any>[],
       },
       HasInData,
+      // Inbound types whose options carry no ListenOptions (manifest-derived).
+      noListenInboundTypes,
       HasTls,
       MuxAvailable,
       OnlyTLS,
@@ -245,14 +254,16 @@ export default {
       const listenPort = this.inbound.listen_port || RandomUtil.randomIntRange(10000, 60000)
       // Tag change only in add inbound
       const tag = this.$props.id > 0 ? this.inbound.tag : this.inbound.type + "-" + listenPort
-      // Use previous data, except Call inbounds which do not support listen fields.
+      // Use previous data, except the inbound types that have no listener fields
+      // (manifest-driven: call/cloudflared/tun options carry no ListenOptions).
       const prevConfig: any = { id: this.inbound.id, tag: tag }
-      if (this.inbound.type != this.inTypes.Call) {
+      const hasListen = !noListenInboundTypes.includes(this.inbound.type)
+      if (hasListen) {
         prevConfig.listen_port = listenPort
         if (this.inbound.listen != null) prevConfig.listen = this.inbound.listen
         else if (this.$props.id == 0) prevConfig.listen = "::"
       }
-      this.inbound = createInbound(this.inbound.type, this.inbound.type != this.inTypes.Tun ? prevConfig : { tag: tag })
+      this.inbound = createInbound(this.inbound.type, prevConfig)
       if (this.HasInData.includes(this.inbound.type)){
         this.inbound.addrs = []
         this.inbound.out_json = {}
@@ -301,7 +312,18 @@ export default {
       }
     },
   },
+  async created() {
+    // Best-effort: gate types this build cannot run. Failure (e.g. older backend
+    // without the section) leaves every type available.
+    try {
+      const resp = await HttpUtils.get('api/capabilities')
+      this.capabilityRows = capabilityRows(resp?.obj?.inbounds)
+    } catch { /* capabilities endpoint optional */ }
+  },
   computed: {
+    inTypeItems() {
+      return capabilityTypeItems(this.inTypes, this.capabilityRows)
+    },
     dirty(): boolean {
       return this.snapshot !== "" && (JSON.stringify(this.inbound) !== this.snapshot || JSON.stringify(this.initUsers) !== this.snapshotInitUsers)
     },
@@ -365,7 +387,6 @@ export default {
     Users, Hysteria, ShadowTls, TProxy, Multiplex, Tuic, Tun,
     Trojan, AnyTls, Transport, AddrVue, OutJsonVue, Dial, DomainResolver,
     VlessInbound, Mieru, Sudoku, TrustTunnel, SshInbound, MTProxy, Call, BondInbound, CoreFailoverInbound,
-    Vmess, Socks, Http, Mixed, Redirect,
-  }
+    Vmess, Socks, Http, Mixed, Redirect, Cloudflared }
 }
 </script>

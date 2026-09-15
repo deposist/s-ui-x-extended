@@ -184,7 +184,7 @@
           </v-col>
         </v-row>
       </template>
-      <v-row v-if="optionStore || optionKtls">
+      <v-row v-if="optionStore || optionKtls || optionHandshakeTimeout">
         <v-col cols="12" sm="6" md="4" v-if="optionStore">
           <v-select hide-details :label="$t('tls.store')" :items="storeItems" v-model="inTls.store"></v-select>
         </v-col>
@@ -196,6 +196,11 @@
             <v-switch color="primary" :label="$t('tls.kernelRx')" v-model="inTls.kernel_rx" hide-details></v-switch>
           </v-col>
         </template>
+        <v-col cols="12" sm="6" md="4" v-if="optionHandshakeTimeout">
+          <v-text-field :label="$t('tls.handshakeTimeout')" hide-details clearable @click:clear="delete inTls.handshake_timeout" v-model="inTls.handshake_timeout">
+            <template #append-inner><SettingInfo v-if="fieldHint('handshake_timeout')" :text="fieldHint('handshake_timeout')" /></template>
+          </v-text-field>
+        </v-col>
       </v-row>
       <v-row v-if="outTls.utls != undefined">
         <v-col cols="12" sm="6" md="4">
@@ -223,6 +228,7 @@
                 <v-list-item><v-switch v-model="optionFP" color="primary" label="UTLS" hide-details></v-switch></v-list-item>
                 <v-list-item><v-switch v-model="optionStore" color="primary" :label="$t('tls.store')" hide-details></v-switch></v-list-item>
                 <v-list-item><v-switch v-model="optionKtls" color="primary" :label="$t('tls.ktls')" hide-details></v-switch></v-list-item>
+                <v-list-item><v-switch v-model="optionHandshakeTimeout" color="primary" :label="$t('tls.handshakeTimeout')" hide-details></v-switch></v-list-item>
               </template>
               <template v-else>
                 <v-list-item><v-switch v-model="optionTime" color="primary" label="Max Time Difference" hide-details></v-switch></v-list-item>
@@ -561,6 +567,10 @@ export default {
     optionStore: {
       get(): boolean { return this.inTls.store != undefined },
       set(v:boolean) { this.inTls.store = v ? 'mozilla' : undefined }
+    },
+    optionHandshakeTimeout: {
+      get(): boolean { return this.inTls.handshake_timeout != undefined },
+      set(v:boolean) { this.inTls.handshake_timeout = v ? '10s' : undefined }
     },
     optionKtls: {
       get(): boolean { return this.inTls.kernel_tx != undefined || this.inTls.kernel_rx != undefined },

@@ -106,6 +106,20 @@
               <SettingInfo v-if="fieldHint('prefer_go')" :text="fieldHint('prefer_go')" />
             </div>
           </v-col>
+          <v-col cols="12" sm="6">
+            <v-combobox
+              v-model="neighborDomains"
+              :label="$t('dns.local.neighborDomain')"
+              :hint="$t('dns.local.neighborDomainHint')"
+              persistent-hint
+              multiple
+              chips
+              clearable>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('neighbor_domain')" :text="fieldHint('neighbor_domain')" />
+              </template>
+            </v-combobox>
+          </v-col>
         </v-row>
         <v-row v-if="dnsServer.type == 'dhcp'">
           <v-col cols="12" sm="6" md="4">
@@ -114,6 +128,21 @@
                 <SettingInfo v-if="fieldHint('dhcp_interface')" :text="fieldHint('dhcp_interface')" />
               </template>
             </v-text-field>
+          </v-col>
+        </v-row>
+        <v-row v-if="dnsServer.type == 'mdns'">
+          <v-col cols="12" sm="6">
+            <v-combobox
+              v-model="mdnsInterfaces"
+              :label="$t('types.tun.ifName')"
+              multiple
+              chips
+              clearable
+              hide-details>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('mdns_interface')" :text="fieldHint('mdns_interface')" />
+              </template>
+            </v-combobox>
           </v-col>
         </v-row>
         <v-row v-if="dnsServer.type == 'fakeip'">
@@ -171,9 +200,23 @@
             </v-col>
           </v-row>
         </template>
-        <v-row v-if="dnsServer.type == 'tailscale' || dnsServer.type == 'resolved'">
+        <v-row v-if="['tailscale', 'resolved', 'openvpn', 'openconnect'].includes(dnsServer.type)">
           <v-col cols="12" sm="6" md="4" v-if="dnsServer.type == 'tailscale'">
             <v-select v-model="dnsServer.endpoint" :label="$t('objects.endpoint')" :items="tsTags" hide-details>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('endpoint')" :text="fieldHint('endpoint')" />
+              </template>
+            </v-select>
+          </v-col>
+          <v-col cols="12" sm="6" md="4" v-if="dnsServer.type == 'openvpn'">
+            <v-select v-model="dnsServer.endpoint" :label="$t('objects.endpoint')" :items="ovpnTags" hide-details>
+              <template #append-inner>
+                <SettingInfo v-if="fieldHint('endpoint')" :text="fieldHint('endpoint')" />
+              </template>
+            </v-select>
+          </v-col>
+          <v-col cols="12" sm="6" md="4" v-if="dnsServer.type == 'openconnect'">
+            <v-select v-model="dnsServer.endpoint" :label="$t('objects.endpoint')" :items="ocTags" hide-details>
               <template #append-inner>
                 <SettingInfo v-if="fieldHint('endpoint')" :text="fieldHint('endpoint')" />
               </template>
@@ -190,6 +233,12 @@
             <div class="d-flex align-center ga-1">
               <v-switch v-model="dnsServer.accept_default_resolvers" :label="$t('dns.rule.acceptDefault')" hide-details></v-switch>
               <SettingInfo v-if="fieldHint('accept_default_resolvers')" :text="fieldHint('accept_default_resolvers')" />
+            </div>
+          </v-col>
+          <v-col cols="12" sm="6" md="4" v-if="dnsServer.type != 'resolved'">
+            <div class="d-flex align-center ga-1">
+              <v-switch v-model="dnsServer.accept_search_domain" :label="$t('dns.rule.acceptSearch')" hide-details></v-switch>
+              <SettingInfo v-if="fieldHint('accept_search_domain')" :text="fieldHint('accept_search_domain')" />
             </div>
           </v-col>
         </v-row>
@@ -213,7 +262,7 @@ import { dnsResolvers, dohPaths } from '@/types/recommended'
 import SettingInfo from '@/components/SettingInfo.vue'
 import { applyDnsServerRecommendedValues, dnsServerFieldHintsForType, hasDnsServerRecommendedPreset } from '@/utils/defaultRecommendations'
 export default {
-  props: ['visible', 'data', 'index', 'tsTags', 'rslvdTags'],
+  props: ['visible', 'data', 'index', 'tsTags', 'rslvdTags', 'ovpnTags', 'ocTags'],
   emits: ['close', 'save'],
   data() {
     return {
@@ -223,7 +272,7 @@ export default {
       HasServer: [DnsTypes.TCP, DnsTypes.UDP, DnsTypes.TLS, DnsTypes.QUIC, DnsTypes.HTTPS, DnsTypes.HTTP3],
       HasHeaders: [DnsTypes.HTTPS, DnsTypes.HTTP3],
       HasTls: [DnsTypes.TLS, DnsTypes.QUIC, DnsTypes.HTTPS, DnsTypes.HTTP3],
-      WithoutDial: [DnsTypes.Hosts, DnsTypes.Tailscale, DnsTypes.FakeIP, DnsTypes.Resolved, DnsTypes.Fallback, DnsTypes.SDNS, DnsTypes.DHCP],
+      WithoutDial: [DnsTypes.Hosts, DnsTypes.Tailscale, DnsTypes.FakeIP, DnsTypes.Resolved, DnsTypes.Fallback, DnsTypes.SDNS, DnsTypes.DHCP, DnsTypes.MDNS, DnsTypes.OpenVPN, DnsTypes.OpenConnect],
       dnsResolvers,
       dohPaths,
     }
@@ -316,6 +365,30 @@ export default {
           this.dnsServer.predefined = undefined
         }
       }
+    },
+    // Listable core fields accept either a single string or an array; the
+    // editor always writes an array and drops the key when the list is empty.
+    mdnsInterfaces: {
+      get(): string[] {
+        const v = this.dnsServer.interface
+        if (v == undefined || v === '') return []
+        return Array.isArray(v) ? v : [v]
+      },
+      set(v: string[] | undefined) {
+        if (Array.isArray(v) && v.length > 0) this.dnsServer.interface = v
+        else delete this.dnsServer.interface
+      },
+    },
+    neighborDomains: {
+      get(): string[] {
+        const v = this.dnsServer.neighbor_domain
+        if (v == undefined || v === '') return []
+        return Array.isArray(v) ? v : [v]
+      },
+      set(v: string[] | undefined) {
+        if (Array.isArray(v) && v.length > 0) this.dnsServer.neighbor_domain = v
+        else delete this.dnsServer.neighbor_domain
+      },
     },
   },
   watch: {

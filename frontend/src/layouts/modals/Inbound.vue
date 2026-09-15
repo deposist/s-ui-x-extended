@@ -90,7 +90,7 @@
           </v-tabs>
           <v-window v-model="side" style="margin-top: 10px;">
             <v-window-item value="s">
-              <Listen :data="inbound" :inTags="inTags" :field-hints="currentFieldHints" v-if="inbound.type != inTypes.Tun && inbound.type != inTypes.Call" />
+              <Listen :data="inbound" :inTags="inTags" :field-hints="currentFieldHints" v-if="!noListenInboundTypes.includes(inbound.type)" />
               <Direct v-if="inbound.type == inTypes.Direct" :data="inbound" :field-hints="currentFieldHints" />
               <Shadowsocks v-if="inbound.type == inTypes.Shadowsocks" direction="in" :data="inbound" :field-hints="currentFieldHints" />
               <Hysteria v-if="inbound.type == inTypes.Hysteria" direction="in" :data="inbound" :field-hints="currentFieldHints" />
@@ -111,6 +111,9 @@
               <BondInbound v-if="inbound.type == inTypes.Bond" :data="inbound" :inTags="inTags" />
               <CoreFailoverInbound v-if="inbound.type == inTypes.CoreFailover" :data="inbound" :inTags="inTags" />
               <TProxy v-if="inbound.type == inTypes.TProxy" :inbound="inbound" :field-hints="currentFieldHints" />
+              <Vmess v-if="inbound.type == inTypes.VMess" direction="in" :data="inbound" :field-hints="currentFieldHints" />
+              <Redirect v-if="inbound.type == inTypes.Redirect" :data="inbound" />
+              <Cloudflared v-if="inbound.type == inTypes.Cloudflared" :data="inbound" :field-hints="currentFieldHints" />
               <Transport v-if="Object.hasOwn(inbound,'transport')" :data="inbound" :field-hints="currentFieldHints" />
               <Users v-if="hasUser" :clients="clients" :data="initUsers" :field-hints="currentFieldHints" />
               <InTls v-if="HasTls.includes(inbound.type)"  :inbound="inbound" :tlsConfigs="tlsConfigs" :tls_id="inbound.tls_id" :field-hints="currentFieldHints" :allowed-template-kinds="allowedTlsTemplateKinds" />
@@ -162,7 +165,7 @@
 
 <script lang="ts">
 import { InTypes, createInbound, Addr, ShadowTLS } from '@/types/inbounds'
-import { inboundAssignable, HasInData, HasTls, MuxAvailable, OnlyTLS } from '@/types/capabilities'
+import {inboundAssignable, HasInData, HasTls, MuxAvailable, OnlyTLS, noListenInboundTypes } from '@/types/capabilities'
 import HttpUtils from '@/plugins/httputil'
 import RandomUtil from '@/plugins/randomUtil'
 import Dial from '@/components/Dial.vue'
@@ -190,10 +193,14 @@ import BondInbound from '@/components/protocols/BondInbound.vue'
 import CoreFailoverInbound from '@/components/protocols/CoreFailoverInbound.vue'
 import InTls from '@/components/tls/InTLS.vue'
 import TProxy from '@/components/protocols/TProxy.vue'
+import Vmess from '@/components/protocols/Vmess.vue'
+import Redirect from '@/components/protocols/Redirect.vue'
+import Cloudflared from '@/components/protocols/Cloudflared.vue'
 import Multiplex from '@/components/Multiplex.vue'
 import Transport from '@/components/Transport.vue'
 import AddrVue from '@/components/Addr.vue'
 import OutJsonVue from '@/components/OutJson.vue'
+import { capabilityRows, capabilityTypeItems, type CapabilityRow } from '@/utils/capabilityTypeItems'
 import Data from '@/store/modules/data'
 import { push } from 'notivue'
 import SettingInfo from '@/components/SettingInfo.vue'
@@ -217,12 +224,14 @@ export default {
         values: <any>[],
       },
       HasInData,
+      // Inbound types whose options carry no ListenOptions (manifest-derived).
+      noListenInboundTypes,
       HasTls,
       MuxAvailable,
       OnlyTLS,
-      // Inbound types whose build tag is not compiled into the running binary
-      // (from /api/capabilities). Such types are shown disabled in the picker.
-      unavailableTypes: <string[]>[],
+      // Availability rows from /api/capabilities: types not compiled into this
+      // binary or not implemented on this platform stay visible but disabled.
+      capabilityRows: <CapabilityRow[]>[],
       requiredInitialUsers: [InTypes.Mieru, InTypes.TrustTunnel, InTypes.SSH, InTypes.MTProxy],
       editHadOutJson: true,
     }
@@ -231,10 +240,7 @@ export default {
     // Best-effort: gate inbound types not compiled into this build. Failure
     // (e.g. older backend without the endpoint) leaves every type available.
     const resp = await HttpUtils.get('api/capabilities')
-    const inbounds = resp?.obj?.inbounds
-    if (Array.isArray(inbounds)) {
-      this.unavailableTypes = inbounds.filter((i: any) => i.available === false).map((i: any) => i.type)
-    }
+    this.capabilityRows = capabilityRows(resp?.obj?.inbounds)
   },
   methods: {
     itemProps(item: any) {
@@ -284,14 +290,16 @@ export default {
       const listenPort = this.inbound.listen_port || RandomUtil.randomIntRange(10000, 60000)
       // Tag change only in add inbound
       const tag = this.$props.id > 0 ? this.inbound.tag : this.inbound.type + "-" + listenPort
-      // Use previous data, except Call inbounds which do not support listen fields.
+      // Use previous data, except the inbound types that have no listener fields
+      // (manifest-driven: call/cloudflared/tun options carry no ListenOptions).
       const prevConfig: any = { id: this.inbound.id, tag: tag }
-      if (this.inbound.type != this.inTypes.Call) {
+      const hasListen = !noListenInboundTypes.includes(this.inbound.type)
+      if (hasListen) {
         prevConfig.listen_port = listenPort
         if (this.inbound.listen != null) prevConfig.listen = this.inbound.listen
         else if (this.$props.id == 0) prevConfig.listen = "::"
       }
-      this.inbound = createInbound(this.inbound.type, this.inbound.type != this.inTypes.Tun ? prevConfig : { tag: tag })
+      this.inbound = createInbound(this.inbound.type, prevConfig)
       if (this.HasInData.includes(this.inbound.type)){
         this.inbound.addrs = []
         this.inbound.out_json = {}
@@ -375,16 +383,7 @@ export default {
       return Data().clients?? []
     },
     inTypeItems() {
-      const values = Object.values(this.inTypes)
-      return Object.keys(this.inTypes).map((key, index) => {
-        const value = values[index]
-        const unavailable = this.unavailableTypes.includes(value)
-        return {
-          title: unavailable ? `${key} — not in this build` : key,
-          value,
-          props: { disabled: unavailable },
-        }
-      })
+      return capabilityTypeItems(this.inTypes, this.capabilityRows)
     },
     hasUser() {
       if (this.$props.id > 0) return false
@@ -435,7 +434,6 @@ export default {
     Users, Hysteria, ShadowTls, TProxy, Multiplex, Tuic, Tun,
     Trojan, AnyTls, Transport, AddrVue, OutJsonVue, Dial, DomainResolver,
     Mieru, Sudoku, TrustTunnel, SshInbound, MTProxy, Call, BondInbound, CoreFailoverInbound, VlessInbound,
-    SettingInfo
-  }
+    SettingInfo, Vmess, Redirect, Cloudflared }
 }
 </script>

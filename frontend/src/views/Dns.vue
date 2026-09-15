@@ -6,6 +6,8 @@
     :data="dnsModal.data"
     :tsTags="tsTags"
     :rslvdTags="rslvdTags"
+    :ovpnTags="ovpnTags"
+    :ocTags="ocTags"
     @close="closeDnsModal"
     @save="saveDnsModal"
   />
@@ -98,9 +100,6 @@
         </v-col>
         <v-col cols="auto">
           <v-checkbox v-model="dns.disable_expire" hide-details :label="$t('dns.disableExpire')" />
-        </v-col>
-        <v-col cols="auto">
-          <v-checkbox v-model="dns.independent_cache" hide-details :label="$t('dns.independentCache')" />
         </v-col>
         <v-col cols="auto">
           <v-checkbox v-model="dns.reverse_mapping" hide-details :label="$t('dns.reverseMapping')" />
@@ -354,6 +353,16 @@ const tsTags = computed((): string[] => {
 
 const rslvdTags = computed((): string[] => {
   return Data().services?.filter((e:any) => e.type == "resolved").map((e:any) => e.tag)
+})
+
+// The openvpn / openconnect DNS transports take DNS from a running VPN
+// endpoint of the matching type, so the picker offers only those tags.
+const ovpnTags = computed((): string[] => {
+  return Data().endpoints?.filter((e:any) => e.type == "openvpn-client").map((e:any) => e.tag)
+})
+
+const ocTags = computed((): string[] => {
+  return Data().endpoints?.filter((e:any) => e.type == "openconnect").map((e:any) => e.tag)
 })
 
 const clients = computed((): string[] => {

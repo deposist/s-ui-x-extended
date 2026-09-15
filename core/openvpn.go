@@ -3,10 +3,15 @@
 package core
 
 import (
-	"github.com/sagernet/sing-box/adapter/outbound"
+	"github.com/sagernet/sing-box/adapter/endpoint"
+	"github.com/sagernet/sing-box/dns"
 	"github.com/sagernet/sing-box/protocol/openvpn"
 )
 
-func registerOpenVPNOutbound(registry *outbound.Registry) {
-	openvpn.RegisterOutbound(registry)
+func registerOpenVPNEndpoints(registry *endpoint.Registry) {
+	openvpn.RegisterEndpoint(registry)
+}
+
+func registerOpenVPNDNSTransport(registry *dns.TransportRegistry) {
+	openvpn.RegisterDNSTransport(registry)
 }

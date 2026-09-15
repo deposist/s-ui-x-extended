@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/deposist/s-ui-x-extended/core/capabilities"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -305,50 +306,16 @@ type covMapping struct {
 	Context     string // "in", "out", "ep", "prov"
 }
 
+// covMappings adapts the shared option/TS inventory (core/capabilities) to this
+// test's local shape, so the field-coverage gate and the UI coverage matrix can
+// never disagree about which types are covered.
 func covMappings() []covMapping {
-	return []covMapping{
-		// Inbounds
-		{"DirectInboundOptions", "Direct", "in"}, {"SocksInboundOptions", "SOCKS", "in"},
-		{"HTTPMixedInboundOptions", "Mixed", "in"}, {"ShadowsocksInboundOptions", "Shadowsocks", "in"},
-		{"VMessInboundOptions", "VMess", "in"}, {"VLESSInboundOptions", "VLESS", "in"},
-		{"TrojanInboundOptions", "Trojan", "in"}, {"NaiveInboundOptions", "Naive", "in"},
-		{"HysteriaInboundOptions", "Hysteria", "in"}, {"Hysteria2InboundOptions", "Hysteria2", "in"},
-		{"TUICInboundOptions", "TUIC", "in"}, {"AnyTLSInboundOptions", "AnyTls", "in"},
-		{"ShadowTLSInboundOptions", "ShadowTLS", "in"}, {"MieruInboundOptions", "Mieru", "in"},
-		{"SudokuInboundOptions", "Sudoku", "in"}, {"TrustTunnelInboundOptions", "TrustTunnel", "in"},
-		{"CallInboundOptions", "Call", "in"},
-		{"SSHInboundOptions", "SSH", "in"}, {"MTProxyInboundOptions", "MTProxy", "in"},
-		{"TunInboundOptions", "Tun", "in"}, {"RedirectInboundOptions", "Redirect", "in"},
-		{"TProxyInboundOptions", "TProxy", "in"}, {"BondInboundOptions", "BondInbound", "in"},
-		{"FailoverInboundOptions", "CoreFailoverInbound", "in"},
-		// Outbounds
-		{"_DirectOutboundOptions", "Direct", "out"}, {"SOCKSOutboundOptions", "SOCKS", "out"},
-		{"HTTPOutboundOptions", "HTTP", "out"}, {"ShadowsocksOutboundOptions", "Shadowsocks", "out"},
-		{"VMessOutboundOptions", "VMESS", "out"}, {"VLESSOutboundOptions", "VLESS", "out"},
-		{"TrojanOutboundOptions", "Trojan", "out"}, {"NaiveOutboundOptions", "Naive", "out"},
-		{"HysteriaOutboundOptions", "Hysteria", "out"}, {"Hysteria2OutboundOptions", "Hysteria2", "out"},
-		{"TUICOutboundOptions", "TUIC", "out"}, {"AnyTLSOutboundOptions", "AnyTls", "out"},
-		{"ShadowTLSOutboundOptions", "ShadowTLS", "out"}, {"MieruOutboundOptions", "Mieru", "out"},
-		{"SudokuOutboundOptions", "Sudoku", "out"}, {"TrustTunnelOutboundOptions", "TrustTunnel", "out"},
-		{"CallOutboundOptions", "Call", "out"},
-		{"SSHOutboundOptions", "SSH", "out"}, {"TorOutboundOptions", "Tor", "out"},
-		{"MASQUEOutboundOptions", "MASQUE", "out"}, {"OpenVPNOutboundOptions", "OpenVPN", "out"},
-		{"ParserOutboundOptions", "Parser", "out"}, {"SelectorOutboundOptions", "Selector", "out"},
-		{"URLTestOutboundOptions", "URLTest", "out"}, {"FallbackOutboundOptions", "Fallback", "out"},
-		{"BondOutboundOptions", "Bond", "out"}, {"BandwidthLimiterOutboundOptions", "BandwidthLimiter", "out"},
-		{"ConnectionLimiterOutboundOptions", "ConnectionLimiter", "out"},
-		{"TrafficLimiterOutboundOptions", "TrafficLimiter", "out"},
-		{"RateLimiterOutboundOptions", "RateLimiter", "out"},
-		{"FailoverOutboundOptions", "CoreFailover", "out"}, {"StubOptions", "Block", "out"},
-		// Endpoints
-		{"WireGuardEndpointOptions", "WireGuard", "ep"}, {"WARPEndpointOptions", "Warp", "ep"},
-		{"TailscaleEndpointOptions", "Tailscale", "ep"}, {"VPNServerEndpointOptions", "VpnServer", "ep"},
-		{"VPNClientEndpointOptions", "VpnClient", "ep"},
-		// Providers
-		{"ProviderInlineOptions", "ProviderInline", "prov"},
-		{"ProviderLocalOptions", "ProviderLocal", "prov"},
-		{"ProviderRemoteOptions", "ProviderRemote", "prov"},
+	mappings := capabilities.OptionCoverageMappings()
+	out := make([]covMapping, 0, len(mappings))
+	for _, m := range mappings {
+		out = append(out, covMapping{m.GoStruct, m.TSInterface, m.Context})
 	}
+	return out
 }
 
 var covPanelEntityFields = map[string]bool{
@@ -403,6 +370,11 @@ func TestOptionCoverageNoMissingFields(t *testing.T) {
 	outboundTS := covMergeTS(sharedTS, "../frontend/src/types/outbounds.ts")
 	endpointTS := covMergeTS(sharedTS, "../frontend/src/types/endpoints.ts")
 	providerTS := covMergeTS(covMergeTS(sharedTS, "../frontend/src/types/outbounds.ts"), "../frontend/src/types/providers.ts")
+	// Services have their own editor family; without this context a service option
+	// (api, hysteria-realm, usbip-*) could miss its TS field unnoticed.
+	// services.ts imports the Listen shape from inbounds.ts, so the service context
+	// has to carry it too - otherwise every inherited listen field looks missing.
+	serviceTS := covMergeTS(covMergeTS(sharedTS, "../frontend/src/types/inbounds.ts"), "../frontend/src/types/services.ts")
 
 	// Load allowlist.
 	allowlist, err := covLoadAllowlist("capabilities/intentionally-hidden.json")
@@ -423,6 +395,8 @@ func TestOptionCoverageNoMissingFields(t *testing.T) {
 			tsInterfaces = endpointTS
 		case "prov":
 			tsInterfaces = providerTS
+		case "svc":
+			tsInterfaces = serviceTS
 		}
 		goFields := covFlatFields(m.GoStruct, goStructs)
 		tsFields := covFlatTS(m.TSInterface, tsInterfaces, map[string]bool{})

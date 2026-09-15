@@ -161,7 +161,7 @@
 </template>
 
 <script lang="ts">
-import { acme } from '@/types/tls'
+import { certificateProvider } from '@/types/tls'
 
 export default {
   props: ['tls'],
@@ -181,12 +181,16 @@ export default {
     }
   },
   computed: {
+    // The editor reads/writes tls.certificate_provider (the 1.14 inline acme
+    // form). The deprecated tls.acme must never be written back: the core
+    // rejects acme+certificate_provider together, and stored blobs are already
+    // migrated at startup.
     acme() {
-      return <acme>this.$props.tls.acme
+      return <certificateProvider>this.$props.tls.certificate_provider
     },
     enabled: {
       get() { return this.acme != undefined },
-      set(v: boolean) { this.$props.tls.acme = v ? { domain: [] } : undefined }
+      set(v: boolean) { this.$props.tls.certificate_provider = v ? { type: 'acme', domain: [] } : undefined }
     },
     domains: {
       get() { return this.acme?.domain ? this.acme.domain.join(',') : "" },

@@ -241,15 +241,27 @@
       "type": "call",
       "hasUsers": false,
       "clientDelivery": "none",
+      "noListen": true,
       "skipOutJson": true,
       "buildTag": "with_call",
       "uiEditor": "Call",
       "notes": "server-side WebRTC bridge (dion/telemost/vk/wbstream); inbound creates a call room, clients join via join_link. No per-user credentials or subscription outbound."
     },
     {
+      "type": "cloudflared",
+      "hasUsers": false,
+      "clientDelivery": "none",
+      "noListen": true,
+      "skipOutJson": true,
+      "uiEditor": "Cloudflared",
+      "buildTag": "with_cloudflared",
+      "notes": "Cloudflare tunnel client inbound (token based); it carries edge traffic into the core, so it has no client outbound and no subscription delivery."
+    },
+    {
       "type": "tun",
       "hasUsers": false,
       "clientDelivery": "none",
+      "noListen": true,
       "skipOutJson": true,
       "uiEditor": "Tun"
     },
@@ -258,14 +270,23 @@
       "hasUsers": false,
       "clientDelivery": "none",
       "skipOutJson": true,
-      "uiEditor": "Redirect"
+      "uiEditor": "Redirect",
+      "platforms": [
+        "linux",
+        "darwin"
+      ],
+      "notes": "REDIRECT is implemented on linux/darwin only; on other platforms the core returns os.ErrInvalid at start"
     },
     {
       "type": "tproxy",
       "hasUsers": false,
       "clientDelivery": "none",
       "skipOutJson": true,
-      "uiEditor": "TProxy"
+      "uiEditor": "TProxy",
+      "platforms": [
+        "linux"
+      ],
+      "notes": "TPROXY is linux only; other platforms get os.ErrInvalid from the core at start"
     },
     {
       "type": "bond",
@@ -286,84 +307,141 @@
   ],
   "outbounds": [
     {
-      "type": "direct"
+      "type": "direct",
+      "clashDelivery": "none"
     },
     {
-      "type": "block"
+      "type": "block",
+      "clashDelivery": "none"
     },
     {
-      "type": "socks"
+      "type": "socks",
+      "clashDelivery": "proxy"
     },
     {
-      "type": "http"
+      "type": "http",
+      "clashDelivery": "proxy"
     },
     {
-      "type": "shadowsocks"
+      "type": "shadowsocks",
+      "clashDelivery": "proxy"
     },
     {
-      "type": "vmess"
+      "type": "vmess",
+      "clashDelivery": "proxy"
     },
     {
-      "type": "vless"
+      "type": "vless",
+      "clashDelivery": "proxy"
     },
     {
-      "type": "trojan"
+      "type": "trojan",
+      "clashDelivery": "proxy"
     },
     {
       "type": "naive",
-      "buildTag": "with_naive_outbound"
+      "buildTag": "with_naive_outbound",
+      "clashDelivery": "unsupported"
     },
     {
-      "type": "tor"
+      "type": "tor",
+      "clashDelivery": "unsupported"
     },
     {
-      "type": "ssh"
+      "type": "ssh",
+      "clashDelivery": "unsupported"
     },
     {
-      "type": "shadowtls"
+      "type": "shadowtls",
+      "clashDelivery": "unsupported"
     },
     {
-      "type": "anytls"
+      "type": "anytls",
+      "clashDelivery": "proxy"
     },
     {
-      "type": "mieru"
+      "type": "mieru",
+      "clashDelivery": "unsupported"
     },
     {
       "type": "trusttunnel",
-      "buildTag": "with_trusttunnel"
+      "buildTag": "with_trusttunnel",
+      "clashDelivery": "unsupported"
     },
     {
       "type": "sudoku",
-      "buildTag": "with_sudoku"
+      "buildTag": "with_sudoku",
+      "clashDelivery": "unsupported"
     },
     {
       "type": "call",
       "buildTag": "with_call",
-      "notes": "client-side WebRTC bridge; requires join_link (empty = create a new call on the platform)"
+      "notes": "client-side WebRTC bridge; requires join_link (empty = create a new call on the platform)",
+      "clashDelivery": "unsupported"
     },
     {
       "type": "masque",
-      "buildTag": "with_masque"
-    },
-    {
-      "type": "openvpn",
-      "buildTag": "with_openvpn"
+      "buildTag": "with_masque",
+      "clashDelivery": "unsupported"
     },
     {
       "type": "hysteria",
-      "buildTag": "with_quic"
+      "buildTag": "with_quic",
+      "clashDelivery": "proxy"
     },
     {
       "type": "hysteria2",
-      "buildTag": "with_quic"
+      "buildTag": "with_quic",
+      "clashDelivery": "proxy"
     },
     {
       "type": "tuic",
-      "buildTag": "with_quic"
+      "buildTag": "with_quic",
+      "clashDelivery": "proxy"
     },
     {
       "type": "core-failover",
-      "notes": "native core failover outbound (dial-time)"
+      "notes": "native core failover outbound (dial-time)",
+      "clashDelivery": "none"
+    },
+    {
+      "type": "snell",
+      "notes": "snell proxy (v4 obfs / v6 mode); the core also registers a snell inbound, the panel exposes the outbound only",
+      "clashDelivery": "unsupported"
+    },
+    {
+      "type": "bridge",
+      "clashDelivery": "none"
+    },
+    {
+      "type": "bond",
+      "notes": "panel bond outbound aggregating member outbounds",
+      "clashDelivery": "none"
+    },
+    {
+      "type": "parser",
+      "notes": "panel parser outbound wrapping a detour with protocol parsing",
+      "clashDelivery": "none"
+    },
+    {
+      "type": "bandwidth-limiter",
+      "notes": "panel bandwidth limiter outbound",
+      "clashDelivery": "none"
+    },
+    {
+      "type": "connection-limiter",
+      "notes": "panel connection limiter outbound",
+      "clashDelivery": "none"
+    },
+    {
+      "type": "traffic-limiter",
+      "notes": "panel traffic limiter outbound",
+      "clashDelivery": "none"
+    },
+    {
+      "type": "rate-limiter",
+      "notes": "panel rate limiter outbound",
+      "clashDelivery": "none"
     }
   ],
   "groups": [
@@ -404,8 +482,29 @@
       "buildTag": "with_tailscale"
     },
     {
-      "type": "vpn",
-      "notes": "warp/vpn client+server endpoint"
+      "type": "warp",
+      "buildTag": "with_wireguard",
+      "notes": "warp maps to a wireguard endpoint"
+    },
+    {
+      "type": "vpn-server",
+      "notes": "panel VPN server endpoint (core type vpn-server); assembled from server users"
+    },
+    {
+      "type": "vpn-client",
+      "notes": "panel VPN client endpoint (core type vpn-client); assembled from the selected outbound"
+    },
+    {
+      "type": "openvpn-client",
+      "buildTag": "with_openvpn"
+    },
+    {
+      "type": "openvpn-server",
+      "buildTag": "with_openvpn"
+    },
+    {
+      "type": "openconnect",
+      "buildTag": "with_openconnect"
     }
   ],
   "providers": [
@@ -445,6 +544,31 @@
       "type": "profiler",
       "buildTag": "with_profiler",
       "notes": "dev-only"
+    },
+    {
+      "type": "usbip-server",
+      "buildTag": "with_usbip",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "notes": "Local USB/IP device server; the core registers it for linux/windows (and darwin with cgo), so it is not offered elsewhere. Defaults to a loopback listen."
+    },
+    {
+      "type": "usbip-client",
+      "buildTag": "with_usbip",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "notes": "Dials a remote USB/IP server and re-exports the selected devices; same platform limits as usbip-server."
+    },
+    {
+      "type": "hysteria-realm",
+      "buildTag": "with_quic"
+    },
+    {
+      "type": "api"
     }
   ]
 }

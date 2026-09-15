@@ -17,7 +17,7 @@ import (
 // registries. Tag-gated (sudoku/trusttunnel need their build tags); runs in the
 // tagged CI build, not the bare local run.
 func TestExtendedDeliveryOutboundsUnmarshal(t *testing.T) {
-	ctx := Context(context.Background(), InboundRegistry(), OutboundRegistry(), EndpointRegistry(), ProviderRegistry(), DNSTransportRegistry(), ServiceRegistry())
+	ctx := Context(context.Background(), InboundRegistry(), OutboundRegistry(), EndpointRegistry(), ProviderRegistry(), DNSTransportRegistry(), ServiceRegistry(), CertificateProviderRegistry())
 	config := []byte(`{
   "outbounds": [
     {

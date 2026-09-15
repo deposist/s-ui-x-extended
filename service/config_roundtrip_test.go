@@ -205,25 +205,118 @@ func TestConfigRoundTripNewNativeTypesProduceCoreConfig(t *testing.T) {
 	}
 }
 
+// TestConfigRoundTripProtocolSpecificFields saves one entity per protocol and
+// re-reads it through the assembled core config. It asserts what the test name
+// claims: the protocol-specific field the operator set is still there after the
+// save/reload cycle, AND a neighbouring field of the same payload survived it -
+// a save path that rebuilt the entity from a partial whitelist would keep the
+// first field and silently drop the rest.
 func TestConfigRoundTripProtocolSpecificFields(t *testing.T) {
 	initSettingTestDB(t)
 	configService := NewConfigServiceWithRuntime(NewRuntimeWithCoreProvider(nil))
 	cases := []struct {
-		name   string
-		obj    string
-		field  string
-		want   any
-		entity string
+		name          string
+		obj           string
+		section       string
+		field         string
+		want          any
+		neighbour     string
+		neighbourWant any
 	}{
-		{"outbound direct override", `{"type":"direct","tag":"direct-override","override_address":"127.0.0.1","override_port":443,"proxy_protocol":true}`, "override_address", "127.0.0.1", "outbounds"},
-		{"outbound vmess padding", `{"type":"vmess","tag":"vmess-extra","server":"example.com","server_port":443,"uuid":"00000000-0000-0000-0000-000000000000","security":"auto","alter_id":0,"global_padding":true,"authenticated_length":true}`, "global_padding", true, "outbounds"},
-		{"inbound shadowtls strict", `{"type":"shadowtls","tag":"shadowtls-extra","listen":"127.0.0.1","listen_port":0,"version":3,"password":"pw","handshake":{"server":"example.com","server_port":443},"strict_mode":true,"wildcard_sni":"authed"}`, "strict_mode", true, "inbounds"},
+		{
+			name: "outbound direct override", section: "outbounds",
+			obj:   `{"type":"direct","tag":"direct-override","override_address":"127.0.0.1","override_port":443,"proxy_protocol":true}`,
+			field: "override_address", want: "127.0.0.1",
+			neighbour: "override_port", neighbourWant: float64(443),
+		},
+		{
+			name: "outbound vmess padding", section: "outbounds",
+			obj:   `{"type":"vmess","tag":"vmess-extra","server":"example.com","server_port":443,"uuid":"00000000-0000-0000-0000-000000000000","security":"auto","alter_id":0,"global_padding":true,"authenticated_length":true}`,
+			field: "global_padding", want: true,
+			neighbour: "authenticated_length", neighbourWant: true,
+		},
+		{
+			name: "inbound shadowtls strict", section: "inbounds",
+			obj:   `{"type":"shadowtls","tag":"shadowtls-extra","listen":"127.0.0.1","listen_port":0,"version":3,"password":"pw","handshake":{"server":"example.com","server_port":443},"strict_mode":true,"wildcard_sni":"authed"}`,
+			field: "strict_mode", want: true,
+			neighbour: "wildcard_sni", neighbourWant: "authed",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := configService.Save(tc.entity, "new", json.RawMessage(tc.obj), "", "admin", "example.com"); err != nil {
-				t.Fatalf("save %s: %v", tc.entity, err)
+			if _, err := configService.Save(tc.section, "new", json.RawMessage(tc.obj), "", "admin", "example.com"); err != nil {
+				t.Fatalf("save %s: %v", tc.section, err)
+			}
+
+			rawConfig, err := configService.GetConfig("")
+			if err != nil {
+				t.Fatalf("get config: %v", err)
+			}
+			var payload struct {
+				Tag string `json:"tag"`
+			}
+			if err := json.Unmarshal([]byte(tc.obj), &payload); err != nil {
+				t.Fatal(err)
+			}
+			var saved map[string]any
+			for _, entity := range decodedConfigArray(t, *rawConfig, tc.section) {
+				if entity["tag"] == payload.Tag {
+					saved = entity
+					break
+				}
+			}
+			if saved == nil {
+				t.Fatalf("%s %q missing from the assembled config", tc.section, payload.Tag)
+			}
+			if got := saved[tc.field]; got != tc.want {
+				t.Errorf("%s = %#v, want %#v", tc.field, got, tc.want)
+			}
+			if got := saved[tc.neighbour]; got != tc.neighbourWant {
+				t.Errorf("neighbouring %s = %#v, want %#v (saving the entity must not drop it)", tc.neighbour, got, tc.neighbourWant)
 			}
 		})
+	}
+}
+
+// TestConfigRoundTripTopLevelCollectionsSurvive guards the 1.14 top-level
+// collections (certificate_providers, http_clients, network_namespaces): the
+// config blob is stored and reassembled through map[string]json.RawMessage, so
+// they must survive a save → GetConfig round-trip untouched and still validate
+// against the core.
+func TestConfigRoundTripTopLevelCollectionsSurvive(t *testing.T) {
+	initSettingTestDB(t)
+	configService := NewConfigServiceWithRuntime(NewRuntimeWithCoreProvider(nil))
+	blob := json.RawMessage(`{
+		"log":{"disabled":true},
+		"dns":{"servers":[{"type":"local","tag":"local"}]},
+		"certificate_providers":[{"type":"acme","tag":"le","domain":["example.com"],"email":"[email protected]"}],
+		"http_clients":[{"tag":"hc"}],
+		"network_namespaces":[{"tag":"ns","type":"default","path":"/var/run/netns/ns"}],
+		"route":{"final":"direct"}
+	}`)
+	if _, err := configService.Save("config", "save", blob, "", "admin", "example.com"); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+	rawConfig, err := configService.GetConfig("")
+	if err != nil {
+		t.Fatalf("get config: %v", err)
+	}
+	text := string(*rawConfig)
+	for _, key := range []string{"certificate_providers", "http_clients", "network_namespaces"} {
+		if !strings.Contains(text, `"`+key+`"`) {
+			t.Fatalf("top-level collection %s lost in round-trip:\n%s", key, text)
+		}
+	}
+	// network_namespaces is Linux-only and the acme certificate provider needs
+	// the with_acme build tag, so neither is core-validated in the default test
+	// build; their survival is already proven above. Strict-validate the blob
+	// subset that is platform- and tag-independent (http_clients).
+	if err := core.ValidateConfig([]byte(`{
+		"log":{"disabled":true},
+		"dns":{"servers":[{"type":"local","tag":"local"}]},
+		"http_clients":[{"tag":"hc"}],
+		"route":{"final":"direct"}
+	}`)); err != nil {
+		t.Fatalf("config with http_clients must validate: %v", err)
 	}
 }

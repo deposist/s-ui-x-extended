@@ -15,12 +15,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/deposist/s-ui-x-extended/core/capabilities"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -348,25 +350,18 @@ func parseVueModels(dir string) (map[string][]string, error) {
 		base := filepath.Base(path)
 		var models []string
 		// Match v-model="..." patterns
-		for _, m := range allMatches(`v-model="([^"]+)"`, text) {
-			field := extractVModelField(m)
-			if field != "" {
-				models = append(models, field)
-			}
+		// v-model and its modifiers (v-model.number="data.port") bind the same field;
+		// the modifier form is common on numeric inputs.
+		for _, m := range covVModelRegexp.FindAllStringSubmatch(text, -1) {
+			models = append(models, extractVModelFields(m[1])...)
 		}
 		// Also match v-model:prop="..." patterns
 		for _, m := range allMatches(`v-model:[\w-]+="([^"]+)"`, text) {
-			field := extractVModelField(m)
-			if field != "" {
-				models = append(models, field)
-			}
+			models = append(models, extractVModelFields(m)...)
 		}
 		// Match :value="..." or :model-value="..." as fallback
 		for _, m := range allMatches(`:(?:model-)?value="([^"]+)"`, text) {
-			field := extractVModelField(m)
-			if field != "" {
-				models = append(models, field)
-			}
+			models = append(models, extractVModelFields(m)...)
 		}
 		result[base] = uniqueStrings(models)
 	}
@@ -421,15 +416,30 @@ func regexpFindAll(pattern, text string) []string {
 	return out
 }
 
-func extractVModelField(expr string) string {
-	// v-model="data.field_name" → field_name
-	// v-model="someComputed" → someComputed
-	// v-model="$props.outbound.server" → server
+// extractVModelFields returns every object path segment of a v-model expression
+// below the root object, because a nested bind (`data.token.mode`) still means the
+// top-level option `token` is editable. Array indices collapse to the collection
+// name (`data.servers[i].server` → servers, server).
+func extractVModelFields(expr string) []string {
 	parts := strings.Split(expr, ".")
-	if len(parts) == 0 {
-		return ""
+	var out []string
+	for i, part := range parts {
+		if idx := strings.Index(part, "["); idx >= 0 {
+			part = part[:idx]
+		}
+		part = strings.TrimSpace(part)
+		if part == "" || part == "data" || part == "$props" || part == "this" || part == "$data" {
+			continue
+		}
+		if i == 0 {
+			// A computed/setter expression such as `optionTls` is itself a field-ish
+			// name; keep it so the field behind the computed is still attributed.
+			out = append(out, part)
+			continue
+		}
+		out = append(out, part)
 	}
-	return parts[len(parts)-1]
+	return out
 }
 
 func uniqueStrings(in []string) []string {
@@ -452,94 +462,23 @@ func uniqueStrings(in []string) []string {
 type StructMapping struct {
 	GoStruct    string
 	TSInterface string
-	Context     string // "in", "out", "ep", "prov"
+	Context     string // "in", "out", "ep", "prov", "svc"
+	// UIComponent is the editor file name when it cannot be derived from the TS
+	// interface name (shared editors such as OpenVPNEndpoint.vue). Empty means
+	// "match by name".
+	UIComponent string
 }
 
+// buildStructMappings adapts the shared option/TS inventory (core/capabilities)
+// to this generator's shape. The field-coverage test reads the same list, so the
+// UI matrix and the gate can never disagree about which types are covered.
 func buildStructMappings() []StructMapping {
-	var m []StructMapping
-	// Inbounds
-	for gs, ts := range map[string]string{
-		"DirectInboundOptions":      "Direct",
-		"SocksInboundOptions":       "SOCKS",
-		"HTTPMixedInboundOptions":   "Mixed",
-		"ShadowsocksInboundOptions": "Shadowsocks",
-		"VMessInboundOptions":       "VMess",
-		"VLESSInboundOptions":       "VLESS",
-		"TrojanInboundOptions":      "Trojan",
-		"NaiveInboundOptions":       "Naive",
-		"HysteriaInboundOptions":    "Hysteria",
-		"Hysteria2InboundOptions":   "Hysteria2",
-		"TUICInboundOptions":        "TUIC",
-		"AnyTLSInboundOptions":      "AnyTls",
-		"ShadowTLSInboundOptions":   "ShadowTLS",
-		"MieruInboundOptions":       "Mieru",
-		"SudokuInboundOptions":      "Sudoku",
-		"TrustTunnelInboundOptions": "TrustTunnel",
-		"SSHInboundOptions":         "SSH",
-		"MTProxyInboundOptions":     "MTProxy",
-		"TunInboundOptions":         "Tun",
-		"RedirectInboundOptions":    "Redirect",
-		"TProxyInboundOptions":      "TProxy",
-		"BondInboundOptions":        "BondInbound",
-		"FailoverInboundOptions":    "CoreFailoverInbound",
-	} {
-		m = append(m, StructMapping{gs, ts, "in"})
+	mappings := capabilities.OptionCoverageMappings()
+	out := make([]StructMapping, 0, len(mappings))
+	for _, m := range mappings {
+		out = append(out, StructMapping{GoStruct: m.GoStruct, TSInterface: m.TSInterface, Context: m.Context, UIComponent: m.UIComponent})
 	}
-	// Outbounds
-	for gs, ts := range map[string]string{
-		"_DirectOutboundOptions":           "Direct",
-		"SOCKSOutboundOptions":             "SOCKS",
-		"HTTPOutboundOptions":              "HTTP",
-		"ShadowsocksOutboundOptions":       "Shadowsocks",
-		"VMessOutboundOptions":             "VMESS",
-		"VLESSOutboundOptions":             "VLESS",
-		"TrojanOutboundOptions":            "Trojan",
-		"NaiveOutboundOptions":             "Naive",
-		"HysteriaOutboundOptions":          "Hysteria",
-		"Hysteria2OutboundOptions":         "Hysteria2",
-		"TUICOutboundOptions":              "TUIC",
-		"AnyTLSOutboundOptions":            "AnyTls",
-		"ShadowTLSOutboundOptions":         "ShadowTLS",
-		"MieruOutboundOptions":             "Mieru",
-		"SudokuOutboundOptions":            "Sudoku",
-		"TrustTunnelOutboundOptions":       "TrustTunnel",
-		"SSHOutboundOptions":               "SSH",
-		"TorOutboundOptions":               "Tor",
-		"MASQUEOutboundOptions":            "MASQUE",
-		"OpenVPNOutboundOptions":           "OpenVPN",
-		"ParserOutboundOptions":            "Parser",
-		"SelectorOutboundOptions":          "Selector",
-		"URLTestOutboundOptions":           "URLTest",
-		"FallbackOutboundOptions":          "Fallback",
-		"BondOutboundOptions":              "Bond",
-		"BandwidthLimiterOutboundOptions":  "BandwidthLimiter",
-		"ConnectionLimiterOutboundOptions": "ConnectionLimiter",
-		"TrafficLimiterOutboundOptions":    "TrafficLimiter",
-		"RateLimiterOutboundOptions":       "RateLimiter",
-		"FailoverOutboundOptions":          "CoreFailover",
-		"StubOptions":                      "Block",
-	} {
-		m = append(m, StructMapping{gs, ts, "out"})
-	}
-	// Endpoints
-	for gs, ts := range map[string]string{
-		"WireGuardEndpointOptions": "WireGuard",
-		"WARPEndpointOptions":      "Warp",
-		"TailscaleEndpointOptions": "Tailscale",
-		"VPNServerEndpointOptions": "VpnServer",
-		"VPNClientEndpointOptions": "VpnClient",
-	} {
-		m = append(m, StructMapping{gs, ts, "ep"})
-	}
-	// Providers
-	for gs, ts := range map[string]string{
-		"ProviderInlineOptions": "ProviderInline",
-		"ProviderLocalOptions":  "ProviderLocal",
-		"ProviderRemoteOptions": "ProviderRemote",
-	} {
-		m = append(m, StructMapping{gs, ts, "prov"})
-	}
-	return m
+	return out
 }
 
 // ---------------------------------------------------------------------------
@@ -606,22 +545,96 @@ func mustMergeTS(base map[string]TSInterface, paths ...string) (map[string]TSInt
 	return out, nil
 }
 
-func vueComponentForTS(tsName string) string {
-	// Try to find a Vue component that matches the TS interface name
-	// by checking files in frontend/src/components/protocols/
-	componentsDir := "frontend/src/components/protocols"
-	files, err := os.ReadDir(componentsDir)
-	if err != nil {
-		return ""
+// covSameName compares an editor file name with a TS interface name ignoring case
+// and separators (UsbipServer == USBIPServer, Provider_Inline == ProviderInline).
+func covSameName(a, b string) bool {
+	normalize := func(s string) string {
+		var sb strings.Builder
+		for _, r := range strings.ToLower(s) {
+			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+				sb.WriteRune(r)
+			}
+		}
+		return sb.String()
 	}
-	for _, f := range files {
-		if f.IsDir() || !strings.HasSuffix(f.Name(), ".vue") {
+	return normalize(a) == normalize(b)
+}
+
+// vueComponentForTS maps a TS interface to the Vue editor that binds it. The
+// panel keeps protocol editors in components/protocols and service editors in
+// components/services; both are searched, otherwise every service field would be
+// reported as "typed-only" merely because its editor lives in the other folder.
+// covComposedFields returns the fields bound by a component and by every editor
+// component it renders (depth-limited), so the matrix reflects what an operator
+// can actually edit rather than only the top-level template.
+func covComposedFields(component string, vueModels map[string][]string, seen map[string]bool, depth int) []string {
+	if component == "" || depth > 4 || seen[component] {
+		return nil
+	}
+	seen[component] = true
+	fields := append([]string{}, vueModels[component]...)
+	path := covComponentPath(component)
+	if path == "" {
+		return fields
+	}
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return fields
+	}
+	for _, tag := range covTagRegexp.FindAllStringSubmatch(string(src), -1) {
+		if len(tag) < 2 {
 			continue
 		}
-		base := strings.TrimSuffix(f.Name(), ".vue")
-		// Match by uiEditor convention from manifest, or by name similarity
-		if base == tsName || base == tsName+"Inbound" {
-			return f.Name()
+		for name := range vueModels {
+			if covSameName(strings.TrimSuffix(name, ".vue"), tag[1]) {
+				fields = append(fields, covComposedFields(name, vueModels, seen, depth+1)...)
+				break
+			}
+		}
+	}
+	return fields
+}
+
+// covVModelRegexp captures the bound expression of v-model with any modifiers.
+var covVModelRegexp = regexp.MustCompile(`v-model(?:\.[a-zA-Z]+)*="([^"]+)"`)
+
+// covTagRegexp matches the opening tag of a PascalCase component, which is how an
+// editor renders the section components below it.
+var covTagRegexp = regexp.MustCompile(`<([A-Z][A-Za-z0-9]*)`)
+
+// covComponentPath locates the .vue file for a component file name.
+func covComponentPath(component string) string {
+	for _, dir := range []string{
+		"frontend/src/components/protocols",
+		"frontend/src/components/services",
+		"frontend/src/components",
+		"frontend/src/components/tls",
+	} {
+		path := filepath.Join(dir, component)
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return ""
+}
+
+func vueComponentForTS(tsName string) string {
+	for _, componentsDir := range []string{"frontend/src/components/protocols", "frontend/src/components/services"} {
+		files, err := os.ReadDir(componentsDir)
+		if err != nil {
+			continue
+		}
+		for _, f := range files {
+			if f.IsDir() || !strings.HasSuffix(f.Name(), ".vue") {
+				continue
+			}
+			base := strings.TrimSuffix(f.Name(), ".vue")
+			// Match by uiEditor convention from manifest, or by name similarity. The
+			// panel spells acronym names differently (TS USBIPServer vs editor
+			// UsbipServer), so the comparison ignores case and separators.
+			if base == tsName || base == tsName+"Inbound" || covSameName(base, tsName) {
+				return f.Name()
+			}
 		}
 	}
 	return ""
@@ -681,15 +694,46 @@ func main() {
 		fmt.Fprintf(os.Stderr, "parse provider ts: %v\n", err)
 		os.Exit(1)
 	}
+	// services.ts imports the Listen shape from inbounds.ts, so the service
+	// context has to carry it too - otherwise every inherited listen field would
+	// be reported as if the panel never modeled it.
+	serviceTS, err := mustMergeTS(sharedTS, "frontend/src/types/inbounds.ts", "frontend/src/types/services.ts")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "parse service ts: %v\n", err)
+		os.Exit(1)
+	}
 	tsByContext := map[string]map[string]TSInterface{
 		"in":   inboundTS,
 		"out":  outboundTS,
 		"ep":   endpointTS,
 		"prov": providerTS,
+		"svc":  serviceTS,
 	}
 
 	// 3. Parse Vue components
 	vueModels, err := parseVueModels("frontend/src/components/protocols")
+	if err == nil {
+		// Editors compose each other: a protocol section is rendered by the
+		// inbound/outbound editor, and shared blocks (Listen, Dial, TLS, Transport,
+		// Multiplex) are rendered by nearly all of them. Collect every editor's own
+		// bindings first and resolve the composition below, otherwise a field bound
+		// one level down looks unbound.
+		for _, dir := range []string{
+			"frontend/src/components/services",
+			"frontend/src/components",
+			"frontend/src/components/tls",
+		} {
+			extra, parseErr := parseVueModels(dir)
+			if parseErr != nil {
+				continue
+			}
+			for name, fields := range extra {
+				if _, exists := vueModels[name]; !exists {
+					vueModels[name] = fields
+				}
+			}
+		}
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "parse vue models: %v\n", err)
 		os.Exit(1)
@@ -708,10 +752,13 @@ func main() {
 	for _, m := range mappings {
 		goFields := flatFields(m.GoStruct, goStructs)
 		tsFields := flatTSFields(m.TSInterface, tsByContext[m.Context], map[string]bool{})
-		uiComp := vueComponentForTS(m.TSInterface)
+		uiComp := m.UIComponent
+		if uiComp == "" {
+			uiComp = vueComponentForTS(m.TSInterface)
+		}
 		uiFieldSet := map[string]bool{}
 		if uiComp != "" {
-			for _, f := range vueModels[uiComp] {
+			for _, f := range covComposedFields(uiComp, vueModels, map[string]bool{}, 0) {
 				uiFieldSet[f] = true
 			}
 		}
@@ -760,6 +807,14 @@ func main() {
 	var md strings.Builder
 	md.WriteString("# Option Coverage Matrix\n\n")
 	md.WriteString("Generated by `scripts/gen-option-coverage.go`. Do not edit by hand.\n\n")
+	// How to read the status column. Without this the large typed-only count reads
+	// as "the panel cannot edit these fields", which is not what it measures.
+	md.WriteString("Statuses: **covered** - the option field is bound in the mapped editor (including the editors it renders);\n")
+	md.WriteString("**typed-only** - the field exists in the panel TypeScript types but the static detector found no binding;\n")
+	md.WriteString("this is a *review* signal, not proof of a missing editor, because bindings built through computed setters,\n")
+	md.WriteString("helper methods or shared blocks reached indirectly are not visible to it;\n")
+	md.WriteString("**intentionally-hidden** - deliberately not exposed, with the reason in the last column;\n")
+	md.WriteString("**missing** - the field is in neither the types nor the allowlist, and fails `TestOptionCoverageNoMissingFields`.\n\n")
 
 	// Group by struct
 	byStruct := map[string][]MatrixEntry{}

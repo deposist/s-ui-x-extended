@@ -10,6 +10,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -184,16 +185,41 @@ func GetExternalSub(url string) ([]map[string]interface{}, error) {
 	}
 	// if data is a text
 	links := strings.Split(data, "\n")
+	skipReasons := make(map[string]struct{})
+	skipped := 0
 	for _, link := range links {
 		linkToJson, _, err := GetOutbound(link, 0)
-		if err == nil {
-			result = append(result, *linkToJson)
+		if err != nil {
+			// Report why a link was dropped. A link the operator pasted and that
+			// vanished from the subscription without a word is indistinguishable
+			// from one the panel never received.
+			skipped++
+			skipReasons[err.Error()] = struct{}{}
+			continue
 		}
+		result = append(result, *linkToJson)
 	}
 	if len(result) == 0 {
+		if skipped > 0 {
+			return nil, common.NewErrorf("no result: %s", strings.Join(sortedKeys(skipReasons), "; "))
+		}
 		return nil, common.NewError("no result")
 	}
+	if skipped > 0 {
+		logger.Warningf("sub: skipped %d external link(s): %s", skipped, strings.Join(sortedKeys(skipReasons), "; "))
+	}
 	return result, nil
+}
+
+// sortedKeys returns the map keys in a stable order so the reported reasons (and
+// the tests asserting them) do not depend on map iteration order.
+func sortedKeys(m map[string]struct{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func validateExternalURL(rawURL string) error {

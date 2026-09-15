@@ -23,20 +23,29 @@ export interface iTls {
   client_certificate?: string[]
   client_certificate_path?: string[]
   client_certificate_public_key_sha256?: string[]
-  acme?: acme
+  // 1.14 replaced the inline acme block with certificate_provider; the core
+  // rejects acme and certificate_provider together, and the startup migration
+  // rewrites stored blobs. The editor only writes certificate_provider.
+  certificate_provider?: certificateProvider
   ech?: ech
   reality?: reality
   store?: 'mozilla' | 'chrome'
   kernel_tx?: boolean
   kernel_rx?: boolean
+  handshake_timeout?: string
 }
 
-export interface acme {
+export interface certificateProvider {
+  type: 'acme'
+  tag?: string
   domain: string[]
   data_directory?: string
   default_server_name?: string
   email?: string
   provider?: string
+  account_key?: string
+  key_type?: 'ed25519' | 'p256' | 'p384' | 'rsa2048' | 'rsa4096'
+  profile?: string
   disable_http_challenge?: boolean
   disable_tls_alpn_challenge?: boolean
   alternative_http_port?: number
@@ -79,6 +88,7 @@ export const defaultInTls: iTls = {
 
 export interface oTls {
   enabled?: boolean
+  engine?: 'go' | 'apple' | 'windows'
   disable_sni?: boolean
   server_name?: string
   insecure?: boolean
@@ -97,8 +107,11 @@ export interface oTls {
   fragment?: boolean
   fragment_fallback_delay?: string
   record_fragment?: boolean
+  spoof?: string
+  spoof_method?: string
   kernel_tx?: boolean
   kernel_rx?: boolean
+  handshake_timeout?: string
   ech?: {
     enabled: boolean
     pq_signature_schemes_enabled?: boolean

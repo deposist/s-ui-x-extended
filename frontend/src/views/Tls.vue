@@ -47,7 +47,7 @@
             <v-row>
               <v-col>ACME</v-col>
               <v-col>
-                {{ $t(item.server?.acme == undefined ? 'no' : 'yes') }}
+                {{ $t(item.server?.certificate_provider == undefined ? 'no' : 'yes') }}
               </v-col>
             </v-row>
             <v-row>

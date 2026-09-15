@@ -13,7 +13,7 @@ import (
 // and the failover-assembled-as-selector pattern, plus inline/local/remote
 // provider definitions.
 func TestGroupAndProviderConfigsUnmarshal(t *testing.T) {
-	ctx := Context(context.Background(), InboundRegistry(), OutboundRegistry(), EndpointRegistry(), ProviderRegistry(), DNSTransportRegistry(), ServiceRegistry())
+	ctx := Context(context.Background(), InboundRegistry(), OutboundRegistry(), EndpointRegistry(), ProviderRegistry(), DNSTransportRegistry(), ServiceRegistry(), CertificateProviderRegistry())
 
 	configs := map[string][]byte{
 		"selector_with_providers": []byte(`{

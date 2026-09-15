@@ -93,7 +93,9 @@ interface CacheFile {
   path?: string
   cache_id?: string
   store_fakeip?: boolean
-  store_rdrc?: boolean
+  // 1.14 renamed store_rdrc -> store_dns (full DNS cache). The migration
+  // rewrites stored blobs; the editor reads/writes the new field.
+  store_dns?: boolean
   rdrc_timeout?: string
 }
 
@@ -139,6 +141,31 @@ export interface Config {
   outbounds: Outbound[]
   route: Route
   experimental: Experimental
+  certificate_providers?: CertificateProvider[]
+  http_clients?: HttpClient[]
+  network_namespaces?: NetworkNamespace[]
+}
+
+// Advanced config-blob collections. Item bodies are kept as open records so
+// the JSON editor round-trips every core field (including nested challenge /
+// dialer / TLS blocks) without loss; `type` and `tag` are surfaced for the list.
+export interface CertificateProvider {
+  type: string
+  tag?: string
+  [key: string]: any
+}
+
+export interface HttpClient {
+  tag?: string
+  engine?: string
+  version?: number
+  [key: string]: any
+}
+
+export interface NetworkNamespace {
+  type?: string
+  tag: string
+  [key: string]: any
 }
 
 export interface Certificate {

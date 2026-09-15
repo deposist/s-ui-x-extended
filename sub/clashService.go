@@ -1,9 +1,11 @@
 package sub
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
+	"github.com/deposist/s-ui-x-extended/core/capabilities"
 	"github.com/deposist/s-ui-x-extended/logger"
 	"github.com/deposist/s-ui-x-extended/service"
 	"github.com/deposist/s-ui-x-extended/util"
@@ -79,6 +81,23 @@ const ProxyGroups = `- name: Proxy
 
 var proxyGroupsConfig = ProxyGroups
 
+// clashProxyTypes is the set of outbound types ConvertToClashMeta expresses as
+// complete mihomo/clash-meta proxies, derived from the capability manifest
+// (outbound rows with clashDelivery=proxy) so the converter and the generated
+// frontend list cannot drift apart. Types outside this set (mieru, sudoku, ssh,
+// trusttunnel, naive, shadowtls, ...) are deliberately skipped with a logged
+// reason: the panel must not hand a client a proxy definition the format cannot
+// actually carry.
+var clashProxyTypes = capabilities.ClashProxyTypes()
+
+// ClashRepresentable reports whether the clash/clash-meta subscription can carry
+// the given outbound type. The panel surfaces the complement of this set in the
+// delivery dialog, so an operator sees which nodes a format drops.
+func ClashRepresentable(protocol string) bool {
+	_, ok := clashProxyTypes[protocol]
+	return ok
+}
+
 func (s *ClashService) GetClash(subId string) (*string, []string, error) {
 	now := time.Now()
 	cacheKey := "clash:" + subId
@@ -107,10 +126,18 @@ func (s *ClashService) GetClash(subId string) (*string, []string, error) {
 	}
 	for index, link := range links {
 		json, tag, err := util.GetOutbound(link, (index+1)*tagNumEnable)
-		if err == nil && len(tag) > 0 {
-			*outbounds = append(*outbounds, *json)
-			*outTags = append(*outTags, tag)
+		if err != nil {
+			// The link itself carries the client's credentials, so only its
+			// position and the reason are logged.
+			logger.Warningf("subscription: clash format skipped external link #%d: %v", index+1, err)
+			continue
 		}
+		if len(tag) == 0 {
+			logger.Warningf("subscription: clash format skipped external link #%d: outbound has no tag", index+1)
+			continue
+		}
+		*outbounds = append(*outbounds, *json)
+		*outTags = append(*outTags, tag)
 	}
 
 	basicConfig, err := s.getClashConfig()
@@ -141,10 +168,23 @@ func (s *ClashService) getClashConfig() (string, error) {
 func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, basicConfig string) (string, error) {
 	var proxies []interface{}
 	proxyTags := make([]string, 0)
+	// Nodes this format cannot carry. They are reported in the rendered config so
+	// the omission is visible where the operator downloads it, not only in the
+	// server log.
+	var omitted []string
 	for _, obMap := range *outbounds {
 
 		t, _ := obMap["type"].(string)
 		if t == "selector" || t == "urltest" || t == "direct" {
+			continue
+		}
+		// A proxy the converter cannot fully express (credentials, transport,
+		// obfuscation) must not be emitted at all: mihomo would reject the config
+		// or dial a node without its secret. Skip it and say why, so a node
+		// missing from the subscription is explained instead of unexplained.
+		if _, representable := clashProxyTypes[t]; !representable {
+			logger.Warningf("subscription: clash format cannot represent outbound %q (type %q), skipping it", obMap["tag"], t)
+			omitted = append(omitted, fmt.Sprintf("%s (%s)", asString(obMap["tag"]), t))
 			continue
 		}
 
@@ -238,6 +278,7 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 				proxy["udp-over-tcp"] = true
 			}
 		default:
+			logger.Error("subscription: clash converter has no field mapping for outbound ", obMap["tag"], " (type ", t, "), skipping it")
 			continue
 		}
 
@@ -458,6 +499,11 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 	result, err := yaml.Marshal(output)
 	if err != nil {
 		return "", err
+	}
+	if len(omitted) > 0 {
+		note := fmt.Sprintf("# This Clash/Mihomo subscription omits %d node(s): the format cannot carry them.\n# %s\n# Use the sing-box or link subscription for these nodes.\n",
+			len(omitted), strings.Join(omitted, ", "))
+		return note + string(result), nil
 	}
 	return string(result), nil
 }

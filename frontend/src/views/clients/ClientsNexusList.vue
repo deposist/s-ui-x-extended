@@ -264,7 +264,7 @@ const expiryColor = (c: ClientRow) => (c.expiry === 0 ? 'success' : c.expiry <= 
 
 const clientActions = (): RowAction[] => [
   { key: 'edit', labelKey: 'actions.edit', icon: 'lucide:pencil', inline: true },
-  { key: 'qr', labelKey: 'objects.config', icon: 'lucide:qr-code', inline: true },
+  { key: 'qr', labelKey: 'delivery.title', icon: 'lucide:qr-code', inline: true },
   { key: 'diagnose', labelKey: 'actions.diagnose', icon: 'lucide:activity', inline: true },
   { key: 'stats', labelKey: 'stats.graphTitle', icon: 'lucide:line-chart', inline: true, hidden: !props.enableTraffic },
   { key: 'del', labelKey: 'actions.del', icon: 'lucide:trash-2', tone: 'error', divider: true },

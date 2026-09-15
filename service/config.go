@@ -33,16 +33,19 @@ type ConfigService struct {
 }
 
 type SingBoxConfig struct {
-	Log          json.RawMessage   `json:"log"`
-	Dns          json.RawMessage   `json:"dns"`
-	Ntp          json.RawMessage   `json:"ntp"`
-	Inbounds     []json.RawMessage `json:"inbounds"`
-	Outbounds    []json.RawMessage `json:"outbounds"`
-	Services     []json.RawMessage `json:"services"`
-	Endpoints    []json.RawMessage `json:"endpoints"`
-	Providers    []json.RawMessage `json:"providers"`
-	Route        json.RawMessage   `json:"route"`
-	Experimental json.RawMessage   `json:"experimental"`
+	Log                  json.RawMessage   `json:"log"`
+	Dns                  json.RawMessage   `json:"dns"`
+	Ntp                  json.RawMessage   `json:"ntp"`
+	Inbounds             []json.RawMessage `json:"inbounds"`
+	Outbounds            []json.RawMessage `json:"outbounds"`
+	Services             []json.RawMessage `json:"services"`
+	Endpoints            []json.RawMessage `json:"endpoints"`
+	Providers            []json.RawMessage `json:"providers"`
+	Route                json.RawMessage   `json:"route"`
+	Experimental         json.RawMessage   `json:"experimental"`
+	CertificateProviders []json.RawMessage `json:"certificate_providers,omitempty"`
+	HTTPClients          []json.RawMessage `json:"http_clients,omitempty"`
+	NetworkNamespaces    []json.RawMessage `json:"network_namespaces,omitempty"`
 }
 
 var restartInboundsAfterSave = func(s *ConfigService, inboundIds []uint) error {

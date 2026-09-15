@@ -173,6 +173,11 @@ func (f *defaultFactory) UnSubscribe(sub observable.Subscription[log.Entry]) {
 	f.observer.UnSubscribe(sub)
 }
 
+// AttachPlatformWriter is a no-op: the panel is a server daemon and never
+// supplies a mobile-style platform log writer.
+func (f *defaultFactory) AttachPlatformWriter(writer log.PlatformWriter) {
+}
+
 type observableLogger struct {
 	*defaultFactory
 	tag string

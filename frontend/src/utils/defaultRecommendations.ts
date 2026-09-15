@@ -456,11 +456,6 @@ export function applyOutboundRecommendedValues(outbound: Record<string, any>): v
       target.network = ['tcp', 'udp']
       target.congestion_controller = RECOMMENDED.trustTunnelCongestion
       break
-    case OutTypes.OpenVPN:
-      target.proto = target.proto || 'udp'
-      target.cipher = RECOMMENDED.openvpnCipher
-      target.auth = RECOMMENDED.openvpnAuth
-      break
   }
 }
 
@@ -498,6 +493,19 @@ export const commonServiceFieldHintKeys: Record<string, string> = {
   profiler_listen: 'types.service.hint.profiler_listen',
   read_timeout: 'types.service.hint.read_timeout',
   write_timeout: 'types.service.hint.write_timeout',
+  secret: 'types.service.hint.secret',
+  access_control_allow_origin: 'types.service.hint.access_control_allow_origin',
+  access_control_allow_private_network: 'types.service.hint.access_control_allow_private_network',
+  dashboard_path: 'types.service.hint.dashboard_path',
+  dashboard_download_url: 'types.service.hint.dashboard_download_url',
+  dashboard_http_client: 'types.service.hint.dashboard_http_client',
+  dashboard_update_interval: 'types.service.hint.dashboard_update_interval',
+  max_realms: 'types.service.hint.max_realms',
+  idle_timeout: 'types.service.hint.idle_timeout',
+  keep_alive_period: 'types.service.hint.keep_alive_period',
+  stream_receive_window: 'types.service.hint.stream_receive_window',
+  connection_receive_window: 'types.service.hint.connection_receive_window',
+  max_concurrent_streams: 'types.service.hint.max_concurrent_streams',
 }
 
 const serviceTypesWithoutPreset = new Set<string>([
@@ -578,6 +586,13 @@ export function applyEndpointRecommendedValues(endpoint: Record<string, any>): v
         target.users[0].address = '10.0.0.2'
       }
       break
+    case EpTypes.OpenVPNClient:
+      target.network = target.network || 'udp'
+      if (!Array.isArray(target.data_ciphers) || target.data_ciphers.length === 0) {
+        target.data_ciphers = [RECOMMENDED.openvpnCipher]
+      }
+      target.auth = target.auth || RECOMMENDED.openvpnAuth
+      break
   }
 }
 
@@ -611,6 +626,10 @@ export const tlsFieldHintKeys: Record<string, string> = {
   reality_public_key: 'types.tls.hint.reality_public_key',
   reality_short_id: 'types.tls.hint.reality_short_id',
   reality_max_time_difference: 'types.tls.hint.reality_max_time_difference',
+  engine: 'types.tls.hint.engine',
+  spoof: 'types.tls.hint.spoof',
+  spoof_method: 'types.tls.hint.spoof_method',
+  handshake_timeout: 'types.tls.hint.handshake_timeout',
 }
 
 export function tlsFieldHintsForType(_type: string): Record<string, string> {
@@ -679,6 +698,9 @@ export const dnsServerFieldHintKeys: Record<string, string> = {
   endpoint: 'types.dns.hint.endpoint',
   service: 'types.dns.hint.service',
   accept_default_resolvers: 'types.dns.hint.accept_default_resolvers',
+  accept_search_domain: 'types.dns.hint.accept_search_domain',
+  mdns_interface: 'types.dns.hint.mdns_interface',
+  neighbor_domain: 'types.dns.hint.neighbor_domain',
 }
 
 const dnsServerTypesWithPreset = new Set<string>([
@@ -743,6 +765,12 @@ export const dnsRuleFieldHintKeys: Record<string, string> = {
   rcode: 'types.dnsRule.hint.rcode',
   answer: 'types.dnsRule.hint.answer',
   match_fields: 'types.dnsRule.hint.match_fields',
+  race: 'types.dnsRule.hint.race',
+  timeout: 'types.dnsRule.hint.timeout',
+  disable_optimistic_cache: 'types.dnsRule.hint.disable_optimistic_cache',
+  remove_client_subnet: 'types.dnsRule.hint.remove_client_subnet',
+  preferred_by: 'types.dnsRule.hint.preferred_by',
+  match_response: 'types.dnsRule.hint.match_response',
 }
 
 export function dnsRuleFieldHints(): Record<string, string> {

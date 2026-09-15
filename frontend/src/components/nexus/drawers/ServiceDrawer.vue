@@ -17,7 +17,7 @@
           <v-select
             hide-details
             :label="$t('type')"
-            :items="Object.keys(srvTypes).map((key,index) => ({title: key, value: Object.values(srvTypes)[index]}))"
+            :items="srvTypeItems"
             v-model="srv.type"
             @update:modelValue="changeType">
             <template #append-inner>
@@ -50,6 +50,10 @@
       <Ccm v-if="srv.type == srvTypes.CCM" :data="srv" :field-hints="currentFieldHints" />
       <OomKiller v-if="srv.type == srvTypes.OOMKiller" :data="srv" :field-hints="currentFieldHints" />
       <Profiler v-if="srv.type == srvTypes.Profiler" :data="srv" :field-hints="currentFieldHints" />
+      <ServiceAPI v-if="srv.type == srvTypes.API" :data="srv" :field-hints="currentFieldHints" />
+      <HysteriaRealm v-if="srv.type == srvTypes.HysteriaRealm" :data="srv" :field-hints="currentFieldHints" />
+      <UsbipServer v-if="srv.type == srvTypes.USBIPServer" :data="srv" :field-hints="currentFieldHints" />
+      <UsbipClient v-if="srv.type == srvTypes.USBIPClient" :data="srv" :field-hints="currentFieldHints" />
       <div v-if="srv.type == srvTypes.Resolved" style="margin-top: 8px;">
         <v-alert type="info" variant="tonal" density="compact">
           Resolved DNS service has no type-specific settings beyond Listen.
@@ -62,6 +66,8 @@
 
 <script lang="ts">
 import { SrvTypes, createSrv } from '@/types/services'
+import { capabilityRows, capabilityTypeItems, type CapabilityRow } from '@/utils/capabilityTypeItems'
+import HttpUtils from '@/plugins/httputil'
 import RandomUtil from '@/plugins/randomUtil'
 import Listen from '@/components/Listen.vue'
 import Derp from '@/components/services/Derp.vue'
@@ -71,6 +77,10 @@ import OomKiller from '@/components/services/OomKiller.vue'
 import Profiler from '@/components/services/Profiler.vue'
 import InTLS from '@/components/tls/InTLS.vue'
 import SSMapi from '@/components/services/SSMAPI.vue'
+import ServiceAPI from '@/components/services/API.vue'
+import HysteriaRealm from '@/components/services/HysteriaRealm.vue'
+import UsbipServer from '@/components/services/UsbipServer.vue'
+import UsbipClient from '@/components/services/UsbipClient.vue'
 import Data from '@/store/modules/data'
 import EntityDrawer from './EntityDrawer.vue'
 import FormSection from './FormSection.vue'
@@ -88,9 +98,18 @@ export default {
       loading: false,
       snapshot: "",
       srvTypes: SrvTypes,
-      HasTls: [SrvTypes.DERP, SrvTypes.SSMAPI, SrvTypes.OCM, SrvTypes.CCM],
-      NoListen: [SrvTypes.OOMKiller, SrvTypes.Profiler],
+      HasTls: [SrvTypes.DERP, SrvTypes.SSMAPI, SrvTypes.OCM, SrvTypes.CCM, SrvTypes.API, SrvTypes.HysteriaRealm],
+      NoListen: [SrvTypes.OOMKiller, SrvTypes.Profiler, SrvTypes.USBIPClient],
+      // Availability rows from /api/capabilities: types not compiled into this
+      // binary or not implemented on this platform stay visible but disabled.
+      capabilityRows: <CapabilityRow[]>[],
     }
+  },
+  async created() {
+    // Best-effort: gate types not compiled into this build. Failure (e.g. older
+    // backend without the section) leaves every type available.
+    const resp = await HttpUtils.get('api/capabilities')
+    this.capabilityRows = capabilityRows(resp?.obj?.services)
   },
   methods: {
     // Exposed so the tag field's error state uses the same blank rule as Save.
@@ -125,9 +144,16 @@ export default {
       // Tag change only in add service
       const tag = this.$props.id > 0 ? this.srv.tag : this.srv.type + "-" + RandomUtil.randomSeq(3)
       // Use previous data
+      // The listen address is inherited when switching between listening services
+      // (convenience for port changes), except for the USB/IP server: its default is
+      // the loopback address, and inheriting a previous "::" would put a device
+      // server on every interface without the operator asking for it.
+      const listenHost = 'listen' in this.srv ? this.srv.listen : undefined
+      const listenPortValue = 'listen_port' in this.srv ? this.srv.listen_port : undefined
+      const keepListen = listenHost != undefined && this.srv.type != SrvTypes.USBIPServer
       const prevConfig = this.srv.type == SrvTypes.OOMKiller
         ? { id: this.srv.id, tag: tag }
-        : { id: this.srv.id, tag: tag, listen: this.srv.listen, listen_port: this.srv.listen_port }
+        : { id: this.srv.id, tag: tag, ...(keepListen ? { listen: listenHost, listen_port: listenPortValue } : {}) }
       this.srv = createSrv(this.srv.type, prevConfig)
     },
     closeModal() {
@@ -153,6 +179,9 @@ export default {
     },
   },
   computed: {
+    srvTypeItems() {
+      return capabilityTypeItems(this.srvTypes, this.capabilityRows)
+    },
     dirty(): boolean {
       return this.snapshot !== "" && JSON.stringify(this.srv) !== this.snapshot
     },
@@ -162,7 +191,8 @@ export default {
       if (this.srv == undefined) return this.$t('error.invalidData')
       if (isBlankIdentity(this.srv.tag)) return this.$t('form.cannotSave.tagRequired')
       // OOMKiller/Profiler have no listen_port; only check when present.
-      if (this.srv.listen_port != null && (this.srv.listen_port > 65535 || this.srv.listen_port < 1)) {
+      const listenPort = 'listen_port' in this.srv ? this.srv.listen_port : undefined
+      if (listenPort != null && (listenPort > 65535 || listenPort < 1)) {
         return this.$t('form.cannotSave.portRange')
       }
       return ''
@@ -181,6 +211,6 @@ export default {
       }
     },
   },
-  components: { EntityDrawer, FormSection, SettingInfo, Listen, InTLS, Derp, Ocm, Ccm, OomKiller, Profiler, SSMapi },
+  components: { EntityDrawer, FormSection, SettingInfo, Listen, InTLS, Derp, Ocm, Ccm, OomKiller, Profiler, SSMapi, ServiceAPI, HysteriaRealm, UsbipServer, UsbipClient },
 }
 </script>

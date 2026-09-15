@@ -12,6 +12,8 @@ interface generalRule {
   tls_fragment?: boolean
   tls_fragment_fallback_delay?: string
   tls_record_fragment?: boolean
+  tls_spoof?: string
+  tls_spoof_method?: string
   method?: string
   no_drop?: boolean
   sniffer: string[]
@@ -34,6 +36,8 @@ export const actionKeys = [
   'tls_fragment',
   'tls_fragment_fallback_delay',
   'tls_record_fragment',
+  'tls_spoof',
+  'tls_spoof_method',
   'method',
   'no_drop',
   'sniffer',
@@ -101,7 +105,7 @@ export const isRouteActionKey = (key: string, action: unknown): boolean =>
  * which is owned by the node shape control rather than by the match editor.
  *
  * Transcribed from the struct tags of
- * `github.com/deposist/sing-box-extended@v1.13.14-extended-2.5.4`, not from the
+ * `github.com/deposist/sing-box-extended@v1.14.0-extended-2.7.1`, not from the
  * `rule` interface below, because the decoder also accepts deprecated aliases
  * that the interface never modelled: `geosite`, `geoip`, `source_geoip`, and
  * `rule_set_ipcidr_match_source`. A default -> logical conversion deletes exactly
@@ -134,6 +138,7 @@ export const routeDefaultMatchKeys = [
   'process_path',
   'process_path_regex',
   'package_name',
+  'package_name_regex',
   'user',
   'user_id',
   'clash_mode',
@@ -145,6 +150,8 @@ export const routeDefaultMatchKeys = [
   'interface_address',
   'network_interface_address',
   'default_interface_address',
+  'source_mac_address',
+  'source_hostname',
   'preferred_by',
   'rule_set',
   'rule_set_ip_cidr_match_source',
@@ -180,6 +187,9 @@ export interface rule extends generalRule {
   process_path?: string[]
   process_path_regex?: string[]
   package_name?: string[]
+  package_name_regex?: string[]
+  source_mac_address?: string[]
+  source_hostname?: string[]
   user?: string[]
   user_id?: number[]
   clash_mode?: string
@@ -228,6 +238,7 @@ export interface headlessRule {
   process_path?: string[]
   process_path_regex?: string[]
   package_name?: string[]
+  package_name_regex?: string[]
   network_type?: ('wifi' | 'cellular' | 'ethernet' | 'other')[]
   network_is_expensive?: boolean
   network_is_constrained?: boolean

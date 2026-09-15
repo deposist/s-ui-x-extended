@@ -39,6 +39,10 @@ function loadManifest() {
  *  deterministic for the --check / drift test. */
 function derive(manifest) {
   const inbounds = manifest.inbounds
+  const outboundClashDelivery = {}
+  for (const out of manifest.outbounds || []) {
+    outboundClashDelivery[out.type] = out.clashDelivery
+  }
   const pick = (pred) => inbounds.filter(pred).map((i) => i.type)
   return {
     inboundWithUsers: pick((i) => i.hasUsers && !i.alias),
@@ -46,11 +50,32 @@ function derive(manifest) {
     // (sudoku). Differs from inboundWithUsers only by including sudoku.
     inboundAssignable: pick((i) => !i.alias && (i.hasUsers || i.clientDelivery === 'json')),
     HasInData: pick((i) => i.hasInData),
+    // Inbound types whose core options carry no ListenOptions: the editors must
+    // not render the shared Listen section for them (the core rejects the field).
+    noListenInboundTypes: pick((i) => i.noListen),
     HasTls: pick((i) => i.hasTlsTemplate),
     MuxAvailable: pick((i) => i.muxAvailable),
     OnlyTLS: pick((i) => i.onlyTls),
     outboundGroupCapabilities: manifest.groups,
     providerTypes: (manifest.providers || []).map((p) => p.type),
+    // Protocols a Clash/Mihomo subscription cannot carry. Derived from the
+    // outbound rows' clashDelivery (shared with the Go converter gate) plus the
+    // deliveries that have no clash proxy at all: telegram-only (mtproxy) and
+    // broken (shadowtls). The panel shows this next to the Clash option so a
+    // node missing from that subscription is explained instead of unexplained.
+    // Protocols with no URI link at all: they are delivered only through the JSON
+    // subscription, so a link-based subscription (Hiddify, raw links) cannot
+    // carry them. Derived, like the clash list, so the panel note cannot drift.
+    noLinkInboundTypes: pick(
+      (i) => i.clientDelivery !== 'none' && i.clientDelivery !== 'uri' && i.clientDelivery !== 'telegram',
+    ),
+    clashUnsupportedInboundTypes: pick(
+      (i) =>
+        i.clientDelivery !== 'none' &&
+        (i.clientDelivery === 'telegram' ||
+          i.clientDelivery === 'broken' ||
+          outboundClashDelivery[i.type] === 'unsupported'),
+    ),
   }
 }
 
@@ -76,11 +101,14 @@ function render(lists) {
     `${arrayLiteral('inboundWithUsers', lists.inboundWithUsers)}\n` +
     `${arrayLiteral('inboundAssignable', lists.inboundAssignable)}\n` +
     `${arrayLiteral('HasInData', lists.HasInData)}\n` +
+    `${arrayLiteral('noListenInboundTypes', lists.noListenInboundTypes)}\n` +
     `${arrayLiteral('HasTls', lists.HasTls)}\n` +
     `${arrayLiteral('MuxAvailable', lists.MuxAvailable)}\n` +
     `${arrayLiteral('OnlyTLS', lists.OnlyTLS)}\n` +
     `export const outboundGroupCapabilities: OutboundGroupCapability[] = ${JSON.stringify(lists.outboundGroupCapabilities, null, 2)}\n` +
-    `${arrayLiteral('providerTypes', lists.providerTypes)}\n`
+    `${arrayLiteral('providerTypes', lists.providerTypes)}\n` +
+    `${arrayLiteral('clashUnsupportedInboundTypes', lists.clashUnsupportedInboundTypes)}\n` +
+    `${arrayLiteral('noLinkInboundTypes', lists.noLinkInboundTypes)}\n`
   )
 }
 

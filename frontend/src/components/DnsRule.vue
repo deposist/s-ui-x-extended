@@ -39,6 +39,12 @@
           hide-details>
         </v-combobox>
       </v-col>
+      <v-col cols="12" sm="6" md="4" v-if="optionQueryType">
+        <v-textarea v-model="query_client_subnet" :label="$t('dns.rule.queryClientSubnet')" rows="2" no-resize hide-details density="compact" />
+      </v-col>
+      <v-col cols="12" sm="6" md="4" v-if="optionQueryType">
+        <v-switch v-model="rule.query_dnssec" color="primary" :label="$t('dns.rule.queryDnssec')" hide-details></v-switch>
+      </v-col>
       <v-col cols="12" sm="6" md="4" v-if="optionNetwork">
         <v-select
           hide-details
@@ -187,6 +193,77 @@
         <v-switch v-model="rule.rule_set_ip_cidr_accept_empty" color="primary" :label="$t('dns.rule.rulesetAcceptEmpty')" hide-details></v-switch>
       </v-col>
     </v-row>
+    <v-row v-if="optionProcess">
+      <v-col cols="12" sm="6" md="4">
+        <v-select v-model="processOption" :items="processKeys" hide-details @update:model-value="updateProcessOption($event)" />
+      </v-col>
+      <v-col cols="12" sm="6" v-if="rule.process_name != undefined">
+        <v-textarea v-model="process_name" :label="$t('rule.processName')" rows="2" no-resize hide-details density="compact" />
+      </v-col>
+      <v-col cols="12" sm="6" v-if="rule.process_path != undefined">
+        <v-textarea v-model="process_path" :label="$t('rule.processPath')" rows="2" no-resize hide-details density="compact" />
+      </v-col>
+      <v-col cols="12" sm="6" v-if="rule.process_path_regex != undefined">
+        <v-textarea v-model="process_path_regex" :label="$t('rule.processPathRegex')" rows="2" no-resize hide-details density="compact" />
+      </v-col>
+      <v-col cols="12" sm="6" v-if="rule.package_name != undefined">
+        <v-textarea v-model="package_name" :label="$t('rule.packageName')" rows="2" no-resize hide-details density="compact" />
+      </v-col>
+      <v-col cols="12" sm="6" v-if="rule.package_name_regex != undefined">
+        <v-textarea v-model="package_name_regex" :label="$t('rule.packageNameRegex')" rows="2" no-resize hide-details density="compact" />
+      </v-col>
+    </v-row>
+    <v-row v-if="optionDevice">
+      <v-col cols="12" sm="6" v-if="rule.source_mac_address != undefined">
+        <v-textarea v-model="source_mac_address" :label="$t('rule.srcMacAddress')" rows="2" no-resize hide-details density="compact" />
+      </v-col>
+      <v-col cols="12" sm="6" v-if="rule.source_hostname != undefined">
+        <v-textarea v-model="source_hostname" :label="$t('rule.srcHostname')" rows="2" no-resize hide-details density="compact" />
+      </v-col>
+      <v-col cols="12" sm="6">
+        <v-combobox
+          v-model="rule.preferred_by"
+          :items="[]"
+          :label="$t('rule.preferredBy')"
+          multiple
+          chips
+          clearable
+          hide-details>
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="preferred_by" />
+          </template>
+        </v-combobox>
+      </v-col>
+    </v-row>
+    <v-row v-if="optionResponse">
+      <v-col cols="12" sm="6" md="4">
+        <div class="d-flex align-center ga-1">
+          <v-switch v-model="matchResponseEnabled" color="primary" :label="$t('dns.rule.matchResponse')" hide-details></v-switch>
+          <FieldHint :field-hints="fieldHints" field="match_response" />
+        </div>
+      </v-col>
+      <v-col cols="12" sm="6" md="4" v-if="matchResponseEnabled">
+        <v-text-field v-model="matchResponseTag" :label="$t('objects.tag')" hide-details clearable />
+      </v-col>
+      <v-col cols="12" sm="6" md="4">
+        <v-select
+          v-model="rule.response_rcode"
+          :items="responseRcodes"
+          :label="$t('dns.rule.responseRcode')"
+          clearable
+          @click:clear="delete rule.response_rcode"
+          hide-details />
+      </v-col>
+      <v-col cols="12" sm="6">
+        <v-textarea v-model="response_answer" :label="$t('dns.rule.responseAnswer')" rows="2" no-resize hide-details density="compact" />
+      </v-col>
+      <v-col cols="12" sm="6">
+        <v-textarea v-model="response_ns" :label="$t('dns.rule.responseNs')" rows="2" no-resize hide-details density="compact" />
+      </v-col>
+      <v-col cols="12" sm="6">
+        <v-textarea v-model="response_extra" :label="$t('dns.rule.responseExtra')" rows="2" no-resize hide-details density="compact" />
+      </v-col>
+    </v-row>
     <RuleNetworkState v-if="optionNetworkState" :rule="rule" />
     <RuleInterfaceAddress v-if="optionInterface" :rule="rule" />
     <v-card-actions>
@@ -239,6 +316,15 @@
             <v-list-item>
               <v-switch v-model="optionRuleSet" color="primary" :label="$t('rule.ruleset')" hide-details></v-switch>
             </v-list-item>
+            <v-list-item>
+              <v-switch v-model="optionProcess" color="primary" :label="$t('rule.process')" hide-details></v-switch>
+            </v-list-item>
+            <v-list-item>
+              <v-switch v-model="optionDevice" color="primary" :label="$t('rule.deviceIdentity')" hide-details></v-switch>
+            </v-list-item>
+            <v-list-item>
+              <v-switch v-model="optionResponse" color="primary" :label="$t('dns.rule.responseMatch')" hide-details></v-switch>
+            </v-list-item>
           </v-list>
         </v-card>
       </v-menu>
@@ -265,6 +351,9 @@ export default {
       portOption: 'port',
       srcIPOption: 'source_ip_cidr',
       srcPortOption: 'source_port',
+      processKeys: ['process_name', 'process_path', 'process_path_regex', 'package_name', 'package_name_regex'],
+      processOption: 'process_name',
+      responseRcodes: ['NOERROR', 'FORMERR', 'SERVFAIL', 'NXDOMAIN', 'NOTIMP', 'REFUSED'],
       queryTypes: ['A', 'AAAA', 'CNAME', 'MX', 'NS', 'PTR', 'HTTPS', 'SVCB', 'TXT'],
     }
   },
@@ -285,6 +374,10 @@ export default {
       this.srcPortKeys.forEach(k => delete this.$props.rule[k])
       this.$props.rule[option] = []
     },
+    updateProcessOption(option:string) {
+      this.processKeys.forEach(k => delete this.$props.rule[k])
+      this.$props.rule[option] = []
+    },
   },
   computed: {
     optionInbound: {
@@ -300,8 +393,20 @@ export default {
       set(v:boolean) { this.$props.rule.ip_version = v ? 4 : undefined }
     },
     optionQueryType: {
-      get() { return this.$props.rule.query_type != undefined },
-      set(v:boolean) { this.$props.rule.query_type = v ? [] : undefined }
+      get() {
+        return this.$props.rule.query_type != undefined ||
+               this.$props.rule.query_client_subnet != undefined ||
+               this.$props.rule.query_dnssec != undefined
+      },
+      set(v:boolean) {
+        if (v) {
+          this.$props.rule.query_type = []
+        } else {
+          delete this.$props.rule.query_type
+          delete this.$props.rule.query_client_subnet
+          delete this.$props.rule.query_dnssec
+        }
+      }
     },
     optionNetwork: {
       get() { return this.$props.rule.network != undefined },
@@ -403,6 +508,106 @@ export default {
         }
       }
     },
+    optionProcess: {
+      get() { return this.processKeys.some((key) => this.$props.rule[key] != undefined) },
+      set(v:boolean) {
+        if (v) this.$props.rule[this.processOption] = []
+        else this.processKeys.forEach((key) => delete this.$props.rule[key])
+      }
+    },
+    optionDevice: {
+      get() {
+        return this.$props.rule.source_mac_address != undefined ||
+               this.$props.rule.source_hostname != undefined ||
+               this.$props.rule.preferred_by != undefined
+      },
+      set(v:boolean) {
+        if (v) {
+          if (this.$props.rule.source_mac_address == undefined) this.$props.rule.source_mac_address = []
+          if (this.$props.rule.source_hostname == undefined) this.$props.rule.source_hostname = []
+        } else {
+          delete this.$props.rule.source_mac_address
+          delete this.$props.rule.source_hostname
+          delete this.$props.rule.preferred_by
+        }
+      }
+    },
+    optionResponse: {
+      get() {
+        return this.$props.rule.match_response != undefined ||
+               this.$props.rule.response_rcode != undefined ||
+               this.$props.rule.response_answer != undefined ||
+               this.$props.rule.response_ns != undefined ||
+               this.$props.rule.response_extra != undefined
+      },
+      set(v:boolean) {
+        if (v) {
+          this.$props.rule.match_response = true
+        } else {
+          delete this.$props.rule.match_response
+          delete this.$props.rule.response_rcode
+          delete this.$props.rule.response_answer
+          delete this.$props.rule.response_ns
+          delete this.$props.rule.response_extra
+        }
+      }
+    },
+    // `match_response` is bool (match any response) or a string tag.
+    matchResponseEnabled: {
+      get() { return this.$props.rule.match_response != undefined && this.$props.rule.match_response !== false },
+      set(v:boolean) {
+        if (v) this.$props.rule.match_response = typeof this.$props.rule.match_response === 'string' ? this.$props.rule.match_response : true
+        else delete this.$props.rule.match_response
+      }
+    },
+    matchResponseTag: {
+      get() { return typeof this.$props.rule.match_response === 'string' ? this.$props.rule.match_response : '' },
+      set(v:string) { this.$props.rule.match_response = v.length > 0 ? v : true }
+    },
+    query_client_subnet: {
+      get() { return this.$props.rule.query_client_subnet?.join('\n') ?? '' },
+      set(v:string) { this.$props.rule.query_client_subnet = v.length > 0 ? v.split('\n').map((s:string) => s.trim()).filter((s:string) => s.length > 0) : [] }
+    },
+    process_name: {
+      get() { return this.$props.rule.process_name?.join('\n') ?? '' },
+      set(v:string) { this.$props.rule.process_name = v.length > 0 ? v.split('\n').map((s:string) => s.trim()).filter((s:string) => s.length > 0) : [] }
+    },
+    process_path: {
+      get() { return this.$props.rule.process_path?.join('\n') ?? '' },
+      set(v:string) { this.$props.rule.process_path = v.length > 0 ? v.split('\n').map((s:string) => s.trim()).filter((s:string) => s.length > 0) : [] }
+    },
+    process_path_regex: {
+      get() { return this.$props.rule.process_path_regex?.join('\n') ?? '' },
+      set(v:string) { this.$props.rule.process_path_regex = v.length > 0 ? v.split('\n').map((s:string) => s.trim()).filter((s:string) => s.length > 0) : [] }
+    },
+    package_name: {
+      get() { return this.$props.rule.package_name?.join('\n') ?? '' },
+      set(v:string) { this.$props.rule.package_name = v.length > 0 ? v.split('\n').map((s:string) => s.trim()).filter((s:string) => s.length > 0) : [] }
+    },
+    package_name_regex: {
+      get() { return this.$props.rule.package_name_regex?.join('\n') ?? '' },
+      set(v:string) { this.$props.rule.package_name_regex = v.length > 0 ? v.split('\n').map((s:string) => s.trim()).filter((s:string) => s.length > 0) : [] }
+    },
+    source_mac_address: {
+      get() { return this.$props.rule.source_mac_address?.join('\n') ?? '' },
+      set(v:string) { this.$props.rule.source_mac_address = v.length > 0 ? v.split('\n').map((s:string) => s.trim()).filter((s:string) => s.length > 0) : [] }
+    },
+    source_hostname: {
+      get() { return this.$props.rule.source_hostname?.join('\n') ?? '' },
+      set(v:string) { this.$props.rule.source_hostname = v.length > 0 ? v.split('\n').map((s:string) => s.trim()).filter((s:string) => s.length > 0) : [] }
+    },
+    response_answer: {
+      get() { return this.$props.rule.response_answer?.join('\n') ?? '' },
+      set(v:string) { this.$props.rule.response_answer = v.length > 0 ? v.split('\n').map((s:string) => s.trim()).filter((s:string) => s.length > 0) : [] }
+    },
+    response_ns: {
+      get() { return this.$props.rule.response_ns?.join('\n') ?? '' },
+      set(v:string) { this.$props.rule.response_ns = v.length > 0 ? v.split('\n').map((s:string) => s.trim()).filter((s:string) => s.length > 0) : [] }
+    },
+    response_extra: {
+      get() { return this.$props.rule.response_extra?.join('\n') ?? '' },
+      set(v:string) { this.$props.rule.response_extra = v.length > 0 ? v.split('\n').map((s:string) => s.trim()).filter((s:string) => s.length > 0) : [] }
+    },
     domain: {
       get() { return this.$props.rule.domain?.join(',') },
       set(v:string) { this.$props.rule.domain = v.length>0 ? v.split(',') : [] }
@@ -469,6 +674,10 @@ export default {
     if (this.optionSrcPort) {
       const enabledOption = this.srcPortKeys.filter(k => ruleKeys.includes(k))
       this.srcPortOption = enabledOption.length>0 ? enabledOption[0] : 'source_port'
+    }
+    if (this.optionProcess) {
+      const enabledOption = this.processKeys.filter(k => ruleKeys.includes(k))
+      this.processOption = enabledOption.length>0 ? enabledOption[0] : 'process_name'
     }
   }
 }

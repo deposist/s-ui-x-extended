@@ -35,11 +35,109 @@ func GetOutbound(uri string, i int) (*map[string]interface{}, string, error) {
 		return tuic(u, i)
 	case "ss", "shadowsocks":
 		return ss(u, i)
+	case "socks", "socks5", "socks4", "socks4a":
+		return socks(u, i)
+	case "http", "https":
+		return httpOut(u, i)
 	case "naive+https", "naive+quic", "http2":
 		return parseNaiveLink(u, i)
 	default:
-		return nil, "", common.NewError("Unsupported link format")
+		// Name the scheme: a silently-dropped link is indistinguishable from a
+		// link the client never had, and the operator needs to know which of
+		// their external links the subscription could not carry.
+		return nil, "", common.NewError("Unsupported link format: " + u.Scheme)
 	}
+}
+
+// socks turns a socks/socks5 link into a SOCKS outbound. The link generator
+// emits these for socks inbounds, so the round-trip has to survive.
+func socks(u *url.URL, i int) (*map[string]interface{}, string, error) {
+	query, _ := url.ParseQuery(u.RawQuery)
+	host, port, err := parseURLServer(u, 1080)
+	if err != nil {
+		return nil, "", err
+	}
+	version := "5"
+	switch u.Scheme {
+	case "socks4":
+		version = "4"
+	case "socks4a":
+		version = "4a"
+	}
+	tag := u.Fragment
+	if i > 0 {
+		tag = fmt.Sprintf("%d.%s", i, u.Fragment)
+	}
+	out := map[string]interface{}{
+		"type":        "socks",
+		"tag":         tag,
+		"server":      host,
+		"server_port": port,
+		"version":     version,
+	}
+	if username, password, ok := urlUserCredentials(u); ok {
+		out["username"] = username
+		out["password"] = password
+	}
+	if security := query.Get("security"); security != "" {
+		out["tls"] = getTls(security, &query)
+	}
+	return &out, tag, nil
+}
+
+// httpOut turns an http/https link into an HTTP outbound. The link generator
+// emits https links for TLS-enabled http inbounds.
+func httpOut(u *url.URL, i int) (*map[string]interface{}, string, error) {
+	query, _ := url.ParseQuery(u.RawQuery)
+	defaultPort := 80
+	if u.Scheme == "https" {
+		defaultPort = 443
+	}
+	host, port, err := parseURLServer(u, defaultPort)
+	if err != nil {
+		return nil, "", err
+	}
+	tag := u.Fragment
+	if i > 0 {
+		tag = fmt.Sprintf("%d.%s", i, u.Fragment)
+	}
+	out := map[string]interface{}{
+		"type":        "http",
+		"tag":         tag,
+		"server":      host,
+		"server_port": port,
+	}
+	if username, password, ok := urlUserCredentials(u); ok {
+		out["username"] = username
+		out["password"] = password
+	}
+	security := query.Get("security")
+	if u.Scheme == "https" && security == "" {
+		security = "tls"
+	}
+	if security != "" {
+		tls := getTls(security, &query)
+		if _, ok := tls["server_name"]; !ok {
+			tls["server_name"] = host
+		}
+		out["tls"] = tls
+	}
+	return &out, tag, nil
+}
+
+// urlUserCredentials returns the userinfo as a username/password pair. A link
+// without credentials is valid for socks/http, unlike the protocols that require
+// a secret-bearing userinfo.
+func urlUserCredentials(u *url.URL) (string, string, bool) {
+	if u.User == nil {
+		return "", "", false
+	}
+	username := u.User.Username()
+	password, ok := u.User.Password()
+	if username == "" && !ok {
+		return "", "", false
+	}
+	return username, password, true
 }
 
 func vmess(data string, i int) (*map[string]interface{}, string, error) {

@@ -101,6 +101,17 @@
         </v-select>
       </v-col>
     </v-row>
+    <v-row v-if="data.udp_mapping != undefined">
+      <v-col cols="12" sm="6" md="4">
+        <v-select v-model="data.udp_mapping" :items="udpNatBehaviors" clearable :label="$t('types.wg.udpMapping')" hide-details></v-select>
+      </v-col>
+      <v-col cols="12" sm="6" md="4">
+        <v-select v-model="data.udp_filtering" :items="udpNatBehaviors" clearable :label="$t('types.wg.udpFiltering')" hide-details></v-select>
+      </v-col>
+      <v-col cols="12" sm="6" md="4">
+        <v-text-field v-model.number="data.udp_nat_max" type="number" min="0" :label="$t('types.wg.udpNatMax')" hide-details></v-text-field>
+      </v-col>
+    </v-row>
     <v-row>
       <v-col cols="12" sm="6" md="4">
         <div class="d-flex align-center ga-1">
@@ -147,6 +158,9 @@
                 <v-switch v-model="optionDomainStrategy" color="primary" :label="$t('types.wg.domainStrategy')" hide-details></v-switch>
                 <FieldHint :field-hints="fieldHints" field="domain_strategy" />
               </div>
+            </v-list-item>
+            <v-list-item>
+              <v-switch v-model="optionUdpNat" color="primary" :label="$t('types.wg.udpNat')" hide-details></v-switch>
             </v-list-item>
           </v-list>
         </v-card>
@@ -211,6 +225,7 @@ export default {
   },
   computed: {
     domainStrategies() { return ['prefer_ipv4', 'prefer_ipv6', 'ipv4_only', 'ipv6_only'] },
+    udpNatBehaviors() { return ['endpoint_independent', 'address_dependent', 'address_and_port_dependent'] },
     optionUdp: {
       get(): boolean { return this.$props.data.udp_timeout != undefined },
       set(v:boolean) { this.$props.data.udp_timeout = v ? "5m" : undefined }
@@ -238,6 +253,19 @@ export default {
     optionDomainStrategy: {
       get(): boolean { return this.$props.data.domain_strategy != undefined },
       set(v:boolean) { v ? this.$props.data.domain_strategy = 'prefer_ipv4' : delete this.$props.data.domain_strategy }
+    },
+    optionUdpNat: {
+      get(): boolean { return this.$props.data.udp_mapping != undefined },
+      set(v:boolean) {
+        if (v) {
+          this.$props.data.udp_mapping = 'endpoint_independent'
+          this.$props.data.udp_filtering = 'endpoint_independent'
+        } else {
+          delete this.$props.data.udp_mapping
+          delete this.$props.data.udp_filtering
+          delete this.$props.data.udp_nat_max
+        }
+      }
     },
     ifName: {
       get() { return this.$props.data.name?? '' },

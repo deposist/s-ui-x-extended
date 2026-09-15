@@ -123,6 +123,17 @@
       "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
       "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
       "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
+    },
+    "OpenVPNServerEndpointOptions": {
+      "sniff": "deprecated sing-box legacy inbound listen field embedded via ListenOptions; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box legacy inbound listen field embedded via ListenOptions; no route-action equivalent, do not expose on endpoint UI",
+      "sniff_timeout": "deprecated sing-box legacy inbound listen field embedded via ListenOptions; configure timeout through route.rules action=sniff",
+      "udp_disable_domain_unmapping": "deprecated sing-box legacy inbound listen field embedded via ListenOptions; not applicable to endpoint UI"
+    },
+    "_USBIPServerServiceOptions": {
+      "sniff": "deprecated sing-box 1.11+ inbound field; configure sniffing through route.rules action=sniff",
+      "sniff_override_destination": "deprecated sing-box 1.11+ inbound field; no route-action equivalent, do not expose on inbound UI",
+      "sniff_timeout": "deprecated sing-box 1.11+ inbound field; configure timeout through route.rules action=sniff"
     }
   }
 }

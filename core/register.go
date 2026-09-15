@@ -16,6 +16,7 @@ import (
 	"context"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/adapter/certificate"
 	"github.com/sagernet/sing-box/adapter/endpoint"
 	"github.com/sagernet/sing-box/adapter/inbound"
 	"github.com/sagernet/sing-box/adapter/outbound"
@@ -28,11 +29,13 @@ import (
 	"github.com/sagernet/sing-box/dns/transport/fallback"
 	"github.com/sagernet/sing-box/dns/transport/hosts"
 	"github.com/sagernet/sing-box/dns/transport/local"
+	"github.com/sagernet/sing-box/dns/transport/mdns"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/protocol/anytls"
 	"github.com/sagernet/sing-box/protocol/block"
 	"github.com/sagernet/sing-box/protocol/bond"
+	"github.com/sagernet/sing-box/protocol/bridge"
 	"github.com/sagernet/sing-box/protocol/direct"
 	"github.com/sagernet/sing-box/protocol/failover"
 	"github.com/sagernet/sing-box/protocol/group"
@@ -48,6 +51,7 @@ import (
 	"github.com/sagernet/sing-box/protocol/redirect"
 	"github.com/sagernet/sing-box/protocol/shadowsocks"
 	"github.com/sagernet/sing-box/protocol/shadowtls"
+	"github.com/sagernet/sing-box/protocol/snell"
 	"github.com/sagernet/sing-box/protocol/socks"
 	"github.com/sagernet/sing-box/protocol/ssh"
 	"github.com/sagernet/sing-box/protocol/tor"
@@ -58,6 +62,8 @@ import (
 	"github.com/sagernet/sing-box/protocol/vpn"
 	localProvider "github.com/sagernet/sing-box/provider/local"
 	remoteProvider "github.com/sagernet/sing-box/provider/remote"
+	"github.com/sagernet/sing-box/service/api"
+	originca "github.com/sagernet/sing-box/service/origin_ca"
 	"github.com/sagernet/sing-box/service/resolved"
 	"github.com/sagernet/sing-box/service/ssmapi"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -76,6 +82,7 @@ func InboundRegistry() *inbound.Registry {
 	mixed.RegisterInbound(registry)
 
 	shadowsocks.RegisterInbound(registry)
+	snell.RegisterInbound(registry)
 	vmess.RegisterInbound(registry)
 	trojan.RegisterInbound(registry)
 	naive.RegisterInbound(registry)
@@ -90,6 +97,7 @@ func InboundRegistry() *inbound.Registry {
 	registerTrustTunnelInbound(registry)
 
 	registerQUICInbounds(registry)
+	registerCloudflaredInbound(registry)
 	registerStubForRemovedInbounds(registry)
 	registerMTProxyInbound(registry)
 	registerSudokuInbound(registry)
@@ -102,6 +110,7 @@ func OutboundRegistry() *outbound.Registry {
 	registry := outbound.NewRegistry()
 
 	direct.RegisterOutbound(registry)
+	bridge.RegisterOutbound(registry)
 
 	block.RegisterOutbound(registry)
 
@@ -112,6 +121,7 @@ func OutboundRegistry() *outbound.Registry {
 	socks.RegisterOutbound(registry)
 	http.RegisterOutbound(registry)
 	shadowsocks.RegisterOutbound(registry)
+	snell.RegisterOutbound(registry)
 	vmess.RegisterOutbound(registry)
 	trojan.RegisterOutbound(registry)
 	registerNaiveOutbound(registry)
@@ -122,7 +132,6 @@ func OutboundRegistry() *outbound.Registry {
 	mieru.RegisterOutbound(registry)
 	anytls.RegisterOutbound(registry)
 	registerMASQUEOutbound(registry)
-	registerOpenVPNOutbound(registry)
 
 	bond.RegisterOutbound(registry)
 	failover.RegisterOutbound(registry)
@@ -150,6 +159,8 @@ func EndpointRegistry() *endpoint.Registry {
 	vpn.RegisterClientEndpoint(registry)
 
 	registerWireGuardEndpoint(registry)
+	registerOpenConnectEndpoint(registry)
+	registerOpenVPNEndpoints(registry)
 	registerTailscaleEndpoint(registry)
 
 	return registry
@@ -175,6 +186,7 @@ func DNSTransportRegistry() *dns.TransportRegistry {
 	transport.RegisterSDNS(registry)
 	hosts.RegisterTransport(registry)
 	local.RegisterTransport(registry)
+	mdns.RegisterTransport(registry)
 	fakeip.RegisterTransport(registry)
 	fallback.RegisterTransport(registry)
 	resolved.RegisterTransport(registry)
@@ -182,6 +194,8 @@ func DNSTransportRegistry() *dns.TransportRegistry {
 	registerQUICTransports(registry)
 	registerDHCPTransport(registry)
 	registerTailscaleTransport(registry)
+	registerOpenConnectDNSTransport(registry)
+	registerOpenVPNDNSTransport(registry)
 
 	return registry
 }
@@ -192,14 +206,27 @@ func ServiceRegistry() *service.Registry {
 	// NOTE: admin_panel / manager / manager_api / node / node_manager_api are
 	// intentionally NOT registered (centralized fleet management overlaps with
 	// s-ui-x's own panel/auth/DB). See PLAN-s-ui-x-extended.md.
+	api.RegisterService(registry)
 	resolved.RegisterService(registry)
 	ssmapi.RegisterService(registry)
 
+	registerQUICServices(registry)
 	registerDERPService(registry)
 	registerCCMService(registry)
 	registerOCMService(registry)
 	registerOOMKillerService(registry)
 	registerProfilerService(registry)
+	registerUSBIPServices(registry)
+
+	return registry
+}
+
+func CertificateProviderRegistry() *certificate.Registry {
+	registry := certificate.NewRegistry()
+
+	registerACMECertificateProvider(registry)
+	registerTailscaleCertificateProvider(registry)
+	originca.RegisterCertificateProvider(registry)
 
 	return registry
 }

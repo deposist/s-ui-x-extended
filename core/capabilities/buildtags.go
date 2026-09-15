@@ -1,6 +1,9 @@
 package capabilities
 
-import "sort"
+import (
+	"runtime"
+	"sort"
+)
 
 // compiledBuildTags is populated by the per-tag buildtag_with_*.go files: each is
 // constrained to `//go:build with_X` and flips its entry true at init when that tag
@@ -16,7 +19,8 @@ var knownBuildTags = []string{
 	"with_quic", "with_grpc", "with_utls", "with_acme", "with_gvisor",
 	"with_tailscale", "with_dhcp", "with_wireguard", "with_masque", "with_mtproxy",
 	"with_openvpn", "with_sudoku", "with_trusttunnel", "with_call", "with_ccm", "with_ocm",
-	"with_oomkiller", "with_naive_outbound", "with_profiler",
+	"with_oomkiller", "with_naive_outbound", "with_profiler", "with_cloudflared",
+	"with_openconnect", "with_usbip",
 }
 
 // BuildTags reports every known build tag with whether it was compiled into this
@@ -52,7 +56,10 @@ type APIInbound struct {
 	MuxAvailable   bool   `json:"muxAvailable"`
 	OnlyTLS        bool   `json:"onlyTls"`
 	BuildTag       string `json:"buildTag,omitempty"`
-	Available      bool   `json:"available"`
+	// Platforms is the GOOS list a type runs on (empty = every platform this
+	// project builds for). The UI explains an unavailable type with it.
+	Platforms []string `json:"platforms,omitempty"`
+	Available bool     `json:"available"`
 }
 
 // APIView is the response body for the admin-only /api/capabilities endpoint: the
@@ -64,12 +71,35 @@ type APIView struct {
 	Outbounds []APIOutbound   `json:"outbounds"`
 	Groups    []APIGroup      `json:"groups"`
 	Providers []APIProvider   `json:"providers"`
+	Endpoints []APIEndpoint   `json:"endpoints"`
+	Services  []APIService    `json:"services"`
+}
+
+// APIEndpoint is the admin-safe per-endpoint capability view. Endpoint editors
+// need the same build-availability gate as inbound/outbound editors: an endpoint
+// type whose tag is not compiled into the running binary must be shown as
+// unavailable instead of being offered and then failing to start the core.
+type APIEndpoint struct {
+	Type      string   `json:"type"`
+	BuildTag  string   `json:"buildTag,omitempty"`
+	Platforms []string `json:"platforms,omitempty"`
+	Available bool     `json:"available"`
+}
+
+// APIService is the admin-safe per-service capability view (same contract as
+// APIEndpoint).
+type APIService struct {
+	Type      string   `json:"type"`
+	BuildTag  string   `json:"buildTag,omitempty"`
+	Platforms []string `json:"platforms,omitempty"`
+	Available bool     `json:"available"`
 }
 
 type APIOutbound struct {
-	Type      string `json:"type"`
-	BuildTag  string `json:"buildTag"`
-	Available bool   `json:"available"`
+	Type      string   `json:"type"`
+	BuildTag  string   `json:"buildTag"`
+	Platforms []string `json:"platforms,omitempty"`
+	Available bool     `json:"available"`
 }
 
 type APIGroup struct {
@@ -103,14 +133,16 @@ func BuildAPIView() APIView {
 			MuxAvailable:   in.MuxAvailable,
 			OnlyTLS:        in.OnlyTLS,
 			BuildTag:       in.BuildTag,
-			Available:      tagCompiled(in.BuildTag),
+			Platforms:      in.Platforms,
+			Available:      tagCompiled(in.BuildTag) && PlatformSupported(in.Platforms, runtime.GOOS),
 		})
 	}
 	for _, o := range loaded.Outbounds {
 		view.Outbounds = append(view.Outbounds, APIOutbound{
 			Type:      o.Type,
 			BuildTag:  o.BuildTag,
-			Available: tagCompiled(o.BuildTag),
+			Platforms: o.Platforms,
+			Available: tagCompiled(o.BuildTag) && PlatformSupported(o.Platforms, runtime.GOOS),
 		})
 	}
 	for _, g := range loaded.Groups {
@@ -129,9 +161,27 @@ func BuildAPIView() APIView {
 			Available: tagCompiled(p.BuildTag),
 		})
 	}
+	for _, e := range loaded.Endpoints {
+		view.Endpoints = append(view.Endpoints, APIEndpoint{
+			Type:      e.Type,
+			BuildTag:  e.BuildTag,
+			Platforms: e.Platforms,
+			Available: tagCompiled(e.BuildTag) && PlatformSupported(e.Platforms, runtime.GOOS),
+		})
+	}
+	for _, srv := range loaded.Services {
+		view.Services = append(view.Services, APIService{
+			Type:      srv.Type,
+			BuildTag:  srv.BuildTag,
+			Platforms: srv.Platforms,
+			Available: tagCompiled(srv.BuildTag) && PlatformSupported(srv.Platforms, runtime.GOOS),
+		})
+	}
 	sort.SliceStable(view.Inbounds, func(i, j int) bool { return view.Inbounds[i].Type < view.Inbounds[j].Type })
 	sort.SliceStable(view.Outbounds, func(i, j int) bool { return view.Outbounds[i].Type < view.Outbounds[j].Type })
 	sort.SliceStable(view.Groups, func(i, j int) bool { return view.Groups[i].Type < view.Groups[j].Type })
 	sort.SliceStable(view.Providers, func(i, j int) bool { return view.Providers[i].Type < view.Providers[j].Type })
+	sort.SliceStable(view.Endpoints, func(i, j int) bool { return view.Endpoints[i].Type < view.Endpoints[j].Type })
+	sort.SliceStable(view.Services, func(i, j int) bool { return view.Services[i].Type < view.Services[j].Type })
 	return view
 }

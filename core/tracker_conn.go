@@ -9,6 +9,7 @@ import (
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common/buf"
 	M "github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/common/network"
@@ -18,8 +19,9 @@ type ConnectionInfo struct {
 	ID         string
 	Conn       net.Conn
 	PacketConn network.PacketConn
+	Flow       *trackedFlow
 	Inbound    string
-	Type       string // "tcp" or "udp"
+	Type       string // "tcp", "udp" or "flow"
 }
 
 type ConnTracker struct {
@@ -38,6 +40,7 @@ func NewConnTracker() *ConnTracker {
 
 func (c *ConnTracker) Reset() {
 	c.access.Lock()
+	var flows []*trackedFlow
 	for _, connInfo := range c.connections {
 		if connInfo.Conn != nil {
 			_ = connInfo.Conn.Close()
@@ -45,12 +48,20 @@ func (c *ConnTracker) Reset() {
 		if connInfo.PacketConn != nil {
 			_ = connInfo.PacketConn.Close()
 		}
+		if connInfo.Flow != nil {
+			flows = append(flows, connInfo.Flow)
+		}
 	}
 	c.connections = make(map[string]*ConnectionInfo)
 	c.epoch++
 	waitGroup := c.inflight
 	c.inflight = newTrackerWaitGroup()
 	c.access.Unlock()
+	// Flow handles re-enter untrackConnection (which takes c.access) via the
+	// dispatcher's synchronous CloseFlow callback, so close them after unlocking.
+	for _, flow := range flows {
+		_ = flow.Close()
+	}
 	waitForTrackerIdle("connection tracker", waitGroup, trackerResetWaitTimeout)
 }
 
@@ -86,10 +97,68 @@ func (c *ConnTracker) RoutedPacketConnection(ctx context.Context, conn network.P
 	return c.createWrappedPacketConn(conn, connID, epoch, waitGroup)
 }
 
+// RoutedFlow tracks TUN-level flows (sing-tun FlowTracker) so that
+// CloseConnByInbound can also terminate flow-based connections via their
+// FlowHandle. Flows carry no net.Conn/PacketConn, so the tracked
+// ConnectionInfo stores the handle for forced close.
+func (c *ConnTracker) RoutedFlow(ctx context.Context, metadata adapter.InboundContext, matchedRule adapter.Rule, matchOutbound adapter.Outbound) tun.FlowTracker {
+	connID := c.generateConnectionID()
+	connInfo := &ConnectionInfo{
+		ID:      connID,
+		Inbound: metadata.Inbound,
+		Type:    "flow",
+	}
+	epoch, waitGroup := c.trackConnection(connID, connInfo)
+	flow := &trackedFlow{
+		tracker:   c,
+		connID:    connID,
+		epoch:     epoch,
+		waitGroup: waitGroup,
+	}
+	connInfo.Flow = flow
+	return flow
+}
+
+type trackedFlow struct {
+	tracker     *ConnTracker
+	connID      string
+	epoch       uint64
+	waitGroup   *trackerWaitGroup
+	handle      tun.FlowHandle
+	untrackOnce sync.Once
+}
+
+func (t *trackedFlow) AttachFlow(handle tun.FlowHandle) {
+	t.handle = handle
+}
+
+func (t *trackedFlow) CountForward(n int) {}
+func (t *trackedFlow) CountReverse(n int) {}
+func (t *trackedFlow) FlowEstablished()   {}
+
+func (t *trackedFlow) CloseFlow(reason tun.FlowCloseReason) {
+	t.doUntrack()
+}
+
+func (t *trackedFlow) doUntrack() {
+	t.untrackOnce.Do(func() {
+		t.tracker.untrackConnection(t.connID, t.epoch)
+		t.waitGroup.Done()
+	})
+}
+
+// Close terminates the underlying flow, used by CloseConnByInbound/Reset.
+func (t *trackedFlow) Close() error {
+	if t.handle != nil {
+		t.handle.CloseFlow()
+	}
+	t.doUntrack()
+	return nil
+}
+
 func (c *ConnTracker) CloseConnByInbound(inbound string) int {
 	c.access.Lock()
-	defer c.access.Unlock()
-
+	var flows []*trackedFlow
 	closedCount := 0
 	for connID, connInfo := range c.connections {
 		if connInfo.Inbound == inbound {
@@ -99,9 +168,18 @@ func (c *ConnTracker) CloseConnByInbound(inbound string) int {
 			if connInfo.PacketConn != nil {
 				_ = connInfo.PacketConn.Close()
 			}
+			if connInfo.Flow != nil {
+				flows = append(flows, connInfo.Flow)
+			}
 			delete(c.connections, connID)
 			closedCount++
 		}
+	}
+	c.access.Unlock()
+	// Flow handles re-enter untrackConnection (which takes c.access) via the
+	// dispatcher's synchronous CloseFlow callback, so close them after unlocking.
+	for _, flow := range flows {
+		_ = flow.Close()
 	}
 	return closedCount
 }

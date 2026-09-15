@@ -11,6 +11,7 @@ import (
 	"github.com/deposist/s-ui-x-extended/ipmonitor"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio"
 	M "github.com/sagernet/sing/common/metadata"
@@ -124,6 +125,74 @@ func (c *StatsTracker) RoutedPacketConnection(ctx context.Context, conn network.
 	}
 	readCounter, writeCounter, waitGroup := c.getTrackedReadCounters(metadata.Inbound, matchOutbound.Tag(), metadata.User)
 	return newStatsTrackedPacketConn(bufio.NewInt64CounterPacketConn(conn, readCounter, nil, writeCounter, nil), waitGroup)
+}
+
+// RoutedFlow tracks TUN-level flows (sing-tun FlowTracker). The panel counts
+// forward (client→server) bytes as upload and reverse (server→client) bytes as
+// download, matching the connection-path read/write counter semantics.
+// ipmonitor enforcement is preserved by closing disallowed flows at attach.
+func (c *StatsTracker) RoutedFlow(ctx context.Context, metadata adapter.InboundContext, matchedRule adapter.Rule, matchOutbound adapter.Outbound) tun.FlowTracker {
+	sourceIP := sourceIPFromMetadata(metadata)
+	if !ipmonitor.ObserveAndAllowContext(ctx, metadata.User, sourceIP) {
+		return rejectFlowTracker{}
+	}
+	readCounter, writeCounter := c.getReadCounters(metadata.Inbound, matchOutbound.Tag(), metadata.User)
+	return &statsFlowTracker{
+		tracker:      c,
+		readCounter:  readCounter,
+		writeCounter: writeCounter,
+	}
+}
+
+// rejectFlowTracker kills a flow that failed the ipmonitor policy check as soon
+// as the dispatcher attaches it.
+type rejectFlowTracker struct{}
+
+func (rejectFlowTracker) AttachFlow(handle tun.FlowHandle)     { handle.CloseFlow() }
+func (rejectFlowTracker) CountForward(n int)                   {}
+func (rejectFlowTracker) CountReverse(n int)                   {}
+func (rejectFlowTracker) FlowEstablished()                     {}
+func (rejectFlowTracker) CloseFlow(reason tun.FlowCloseReason) {}
+
+type statsFlowTracker struct {
+	tracker      *StatsTracker
+	readCounter  []*atomic.Int64
+	writeCounter []*atomic.Int64
+	waitGroup    *trackerWaitGroup
+	attachOnce   sync.Once
+	doneOnce     sync.Once
+}
+
+func (t *statsFlowTracker) AttachFlow(handle tun.FlowHandle) {
+	t.attachOnce.Do(func() {
+		t.tracker.access.Lock()
+		waitGroup := t.tracker.inflight
+		waitGroup.Add()
+		t.tracker.access.Unlock()
+		t.waitGroup = waitGroup
+	})
+}
+
+func (t *statsFlowTracker) CountForward(n int) {
+	for _, counter := range t.readCounter {
+		counter.Add(int64(n))
+	}
+}
+
+func (t *statsFlowTracker) CountReverse(n int) {
+	for _, counter := range t.writeCounter {
+		counter.Add(int64(n))
+	}
+}
+
+func (t *statsFlowTracker) FlowEstablished() {}
+
+func (t *statsFlowTracker) CloseFlow(reason tun.FlowCloseReason) {
+	t.doneOnce.Do(func() {
+		if t.waitGroup != nil {
+			t.waitGroup.Done()
+		}
+	})
 }
 
 func newStatsTrackedConn(conn net.Conn, waitGroup *trackerWaitGroup) net.Conn {

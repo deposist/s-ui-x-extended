@@ -150,6 +150,7 @@
       </v-menu>
     </v-card-actions>
     <InboundAdvanced :data="data" :field-hints="fieldHints" />
+    <QUICOptions :data="data" :field-hints="fieldHints" />
   </v-card>
 </template>
 
@@ -157,6 +158,7 @@
 import Network from '@/components/Network.vue'
 import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
 import FieldHint from '@/components/FieldHint.vue'
+import QUICOptions from '@/components/protocols/QUICOptions.vue'
 
 export default {
   props: ['direction','data', 'fieldHints'],
@@ -229,6 +231,6 @@ export default {
       set(newValue:number) { this.$props.data.up_mbps = newValue > 0 ? newValue : 0 }
     },
   },
-  components: {Network, InboundAdvanced, FieldHint}
+  components: {Network, InboundAdvanced, FieldHint, QUICOptions }
 }
 </script>

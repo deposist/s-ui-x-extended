@@ -81,37 +81,77 @@ func requirePaths(t *testing.T, issues []RuleConditionIssue, want ...string) {
 	}
 }
 
-// TestRuleConditionsDecodedThinShapesAreValid pins the most counter-intuitive
-// part of the contract: an action-only branch and an invert-only branch both
-// satisfy the core, because decoding defaults the action to "route" and
+// TestRuleConditionsTopLevelThinShapesAreValid pins the most counter-intuitive
+// part of the top-level contract: an action-only rule and an invert-only rule
+// both satisfy the core, because decoding defaults the action to "route" and
 // validity is "not deeply equal to the zero value with Invert copied". A
 // panel-side heuristic that looks for a "meaningful field" rejects both.
-func TestRuleConditionsDecodedThinShapesAreValid(t *testing.T) {
+func TestRuleConditionsTopLevelThinShapesAreValid(t *testing.T) {
 	for _, shape := range []string{`{"action":"reject"}`, `{"invert":true}`} {
 		t.Run("route"+shape, func(t *testing.T) {
 			if decoded := decodeRouteRule(t, shape); !decoded.IsValid() {
 				t.Fatalf("fork reports decoded route %s invalid; contract changed", shape)
 			}
-			issues, err := RuleConditionIssues([]byte(`{"route":{"rules":[{"type":"logical","mode":"and","rules":[` + shape + `]}]}}`))
+			issues, err := RuleConditionIssues([]byte(`{"route":{"rules":[` + shape + `]}}`))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			if len(issues) != 0 {
-				t.Fatalf("expected no issues for nested %s, got %v", shape, issuePaths(issues))
+				t.Fatalf("expected no issues for top-level %s, got %v", shape, issuePaths(issues))
 			}
 		})
 		t.Run("dns"+shape, func(t *testing.T) {
 			if decoded := decodeDNSRule(t, shape); !decoded.IsValid() {
 				t.Fatalf("fork reports decoded dns %s invalid; contract changed", shape)
 			}
-			issues, err := RuleConditionIssues([]byte(`{"dns":{"rules":[{"type":"logical","mode":"and","rules":[` + shape + `]}]}}`))
+			issues, err := RuleConditionIssues([]byte(`{"dns":{"rules":[` + shape + `]}}`))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			if len(issues) != 0 {
-				t.Fatalf("expected no issues for nested %s, got %v", shape, issuePaths(issues))
+				t.Fatalf("expected no issues for top-level %s, got %v", shape, issuePaths(issues))
 			}
 		})
+	}
+}
+
+// TestRuleConditionsNestedShapesAreHeadless pins the 1.14 nested-rule model:
+// nested (logical child) rules carry conditions only. The fork rejects an
+// action key in a nested rule at decode time, and an invert-only nested rule
+// has no conditions and is invalid. The helper mirrors the fork exactly, so
+// the panel never offers a nested shape the core would refuse to start.
+func TestRuleConditionsNestedShapesAreHeadless(t *testing.T) {
+	// An action key in a nested rule is a hard decode error, not a soft issue:
+	// the panel surfaces it as a rejection rather than a repairable warning.
+	for _, kind := range []string{RuleKindRoute, RuleKindDNS} {
+		document := `{"` + kind + `":{"rules":[{"type":"logical","mode":"and","rules":[{"action":"reject"}]}]}}`
+		if _, err := RuleConditionIssues([]byte(document)); err == nil {
+			t.Fatalf("expected a nested-action decode error for %s", kind)
+		}
+	}
+	// An invert-only nested rule decodes but has no conditions, so it is
+	// reported invalid at the exact nested path, matching the core's verdict.
+	for _, kind := range []string{RuleKindRoute, RuleKindDNS} {
+		document := `{"` + kind + `":{"rules":[{"type":"logical","mode":"and","rules":[{"invert":true}]}]}}`
+		issues, err := RuleConditionIssues([]byte(document))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		requirePaths(t, issues, kind+".rules[0].rules[0]")
+		if issues[0].Code != RuleConditionCodeInvalidRule {
+			t.Fatalf("expected invalid-rule for nested invert-only %s, got %q", kind, issues[0].Code)
+		}
+	}
+	// A nested rule with a real condition stays valid.
+	for _, kind := range []string{RuleKindRoute, RuleKindDNS} {
+		document := `{"` + kind + `":{"rules":[{"type":"logical","mode":"and","rules":[{"invert":true,"domain":["a.example"]}]}]}}`
+		issues, err := RuleConditionIssues([]byte(document))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(issues) != 0 {
+			t.Fatalf("expected no issues for nested conditioned %s, got %v", kind, issuePaths(issues))
+		}
 	}
 }
 
@@ -362,13 +402,13 @@ func TestRuleConditionsDistinctFromValidateConfig(t *testing.T) {
 		t.Fatal("expected ValidateConfig to reject a duplicate outbound tag")
 	}
 
-	// Complete config whose logical rule wraps an invert-only sub-rule: valid on
-	// both checks, even though the sub-rule matches nothing in particular. This
-	// is the shape a "meaningful field" heuristic would wrongly reject.
+	// Complete config whose logical rule wraps an inverted conditioned sub-rule:
+	// valid on both checks. (1.14 nested rules are headless, so a bare
+	// invert-only child would be invalid; invert must accompany a condition.)
 	complete := `{
 		"log":{"disabled":true},
 		"outbounds":[{"type":"direct","tag":"direct"}],
-		"route":{"rules":[{"type":"logical","mode":"and","rules":[{"invert":true}],"outbound":"direct"}]}
+		"route":{"rules":[{"type":"logical","mode":"and","rules":[{"invert":true,"domain":["a.example"]}],"outbound":"direct"}]}
 	}`
 	issues, err = RuleConditionIssues([]byte(complete))
 	if err != nil {

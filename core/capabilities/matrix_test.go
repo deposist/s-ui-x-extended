@@ -63,7 +63,7 @@ func TestRenderMatrixIncludesGroupTypes(t *testing.T) {
 // matrix includes provider-relevant outbound types and all endpoint types.
 func TestRenderMatrixIncludesProviderAndEndpointTypes(t *testing.T) {
 	matrix := RenderMatrix()
-	for _, endpointType := range []string{"wireguard", "tailscale", "vpn"} {
+	for _, endpointType := range []string{"wireguard", "warp", "tailscale", "vpn-server", "vpn-client", "openvpn-client", "openvpn-server", "openconnect"} {
 		if !strings.Contains(matrix, "| "+endpointType+" |") {
 			t.Fatalf("matrix does not include endpoint type %q", endpointType)
 		}

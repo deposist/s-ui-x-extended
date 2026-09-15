@@ -8,6 +8,8 @@ import {
   OnlyTLS,
   outboundGroupCapabilities,
   providerTypes,
+  clashUnsupportedInboundTypes,
+  noListenInboundTypes,
 } from './capabilities'
 
 // Frozen copies of the hand-maintained lists that lived inline in
@@ -45,6 +47,7 @@ type InboundRow = {
   hasTlsTemplate?: boolean
   muxAvailable?: boolean
   onlyTls?: boolean
+  noListen?: boolean
 }
 
 type GroupRow = {
@@ -59,6 +62,11 @@ type GroupRow = {
 type ProviderRow = {
   type: string
   buildTag?: string
+}
+
+type OutboundRow = {
+  type: string
+  clashDelivery?: string
 }
 
 describe('capabilities generated from protocols.json', () => {
@@ -85,6 +93,36 @@ describe('capabilities generated from protocols.json', () => {
     expect(asSet(HasTls)).toEqual(asSet(pick((i) => i.hasTlsTemplate)))
     expect(asSet(MuxAvailable)).toEqual(asSet(pick((i) => i.muxAvailable)))
     expect(asSet(OnlyTLS)).toEqual(asSet(pick((i) => i.onlyTls)))
+    // Types without ListenOptions: the inbound editors must not render the shared
+    // Listen section for them, or the save is rejected by the core schema.
+    expect(asSet(noListenInboundTypes)).toEqual(asSet(pick((i) => i.noListen)))
+  })
+
+  it('derives the clash-unsupported protocols from the manifest', () => {
+    const entries = Object.values(rawManifest)
+    expect(entries.length, 'manifest must be readable from the test').toBe(1)
+    const manifest = JSON.parse(entries[0]) as { inbounds: InboundRow[]; outbounds: OutboundRow[] }
+    const outboundDelivery = new Map(manifest.outbounds.map((o) => [o.type, o.clashDelivery]))
+    const expected = manifest.inbounds
+      .filter(
+        (i) =>
+          !i.alias &&
+          i.clientDelivery !== 'none' &&
+          (i.clientDelivery === 'telegram' ||
+            i.clientDelivery === 'broken' ||
+            outboundDelivery.get(i.type) === 'unsupported'),
+      )
+      .map((i) => i.type)
+
+    expect(asSet(clashUnsupportedInboundTypes)).toEqual(asSet(expected))
+    // Every listed protocol must be a real client-deliverable inbound: a stale
+    // name here would show a permanent, wrong "not supported" note in the panel.
+    for (const typ of clashUnsupportedInboundTypes) {
+      expect(
+        manifest.inbounds.some((i) => i.type === typ && !i.alias && i.clientDelivery !== 'none'),
+        `${typ} is not a client-deliverable inbound type`,
+      ).toBe(true)
+    }
   })
 
   it('keeps provider types in sync with the manifest', () => {

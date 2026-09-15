@@ -167,12 +167,12 @@
               hide-details></v-switch>
           </v-col>
           <v-col cols="12" sm="6" md="3" lg="2" v-if="appConfig.experimental.cache_file">
-            <v-switch v-model="appConfig.experimental.cache_file.store_rdrc"
+            <v-switch v-model="appConfig.experimental.cache_file.store_dns"
               color="primary"
               :label="$t('singbox.storeRdrc')"
               hide-details></v-switch>
           </v-col>
-          <v-col cols="12" sm="6" md="3" lg="2" v-if="appConfig.experimental.cache_file?.store_rdrc">
+          <v-col cols="12" sm="6" md="3" lg="2" v-if="appConfig.experimental.cache_file?.store_dns">
             <v-text-field
               v-model="appConfig.experimental.cache_file.rdrc_timeout"
               hide-details
@@ -373,6 +373,38 @@
         </v-row>
       </v-expansion-panel-text>
     </v-expansion-panel>
+    <v-expansion-panel :title="$t('basic.collections.title')">
+      <v-expansion-panel-text>
+        <ConfigCollection
+          :title="$t('basic.collections.certProviders')"
+          :items="appConfig.certificate_providers ?? []"
+          :new-item="() => ({ type: 'acme' })"
+          default-type-label="acme"
+          @add="collectionAdd('certificate_providers', $event)"
+          @update="(i, item) => collectionUpdate('certificate_providers', i, item)"
+          @remove="collectionRemove('certificate_providers', $event)"
+        />
+        <v-divider class="my-4"></v-divider>
+        <ConfigCollection
+          :title="$t('basic.collections.httpClients')"
+          :items="appConfig.http_clients ?? []"
+          :new-item="() => ({})"
+          @add="collectionAdd('http_clients', $event)"
+          @update="(i, item) => collectionUpdate('http_clients', i, item)"
+          @remove="collectionRemove('http_clients', $event)"
+        />
+        <v-divider class="my-4"></v-divider>
+        <ConfigCollection
+          :title="$t('basic.collections.netNamespaces')"
+          :items="appConfig.network_namespaces ?? []"
+          :new-item="() => ({ type: 'unshare' })"
+          default-type-label="default"
+          @add="collectionAdd('network_namespaces', $event)"
+          @update="(i, item) => collectionUpdate('network_namespaces', i, item)"
+          @remove="collectionRemove('network_namespaces', $event)"
+        />
+      </v-expansion-panel-text>
+    </v-expansion-panel>
   </v-expansion-panels>
 </template>
 
@@ -380,6 +412,7 @@
 import Data from '@/store/modules/data'
 import Dial from '@/components/Dial.vue'
 import SettingInfo from '@/components/SettingInfo.vue'
+import ConfigCollection from '@/components/ConfigCollection.vue'
 import { computed, ref, onBeforeMount } from 'vue'
 import { i18n } from '@/locales'
 import { Config, Ntp } from '@/types/config'
@@ -433,6 +466,28 @@ const clientNames = computed((): string[] => {
 const outboundTags = computed((): string[] => {
   return [...Data().outbounds?.map((o:any) => o.tag), ...Data().endpoints?.map((e:any) => e.tag)]
 })
+
+// Config-blob collection mutators. The array is materialized only on a real
+// edit, so simply rendering the panel never dirties the form. On empty-after-
+// remove the key is dropped to keep the blob clean (matches omitempty).
+type CollectionKey = 'certificate_providers' | 'http_clients' | 'network_namespaces'
+const collectionArr = (key: CollectionKey): Record<string, any>[] => {
+  if (!Array.isArray(appConfig.value[key])) appConfig.value[key] = []
+  return appConfig.value[key] as Record<string, any>[]
+}
+const collectionAdd = (key: CollectionKey, item: Record<string, any>) => {
+  collectionArr(key).push(item)
+}
+const collectionUpdate = (key: CollectionKey, index: number, item: Record<string, any>) => {
+  const arr = collectionArr(key)
+  if (index >= 0 && index < arr.length) arr[index] = item
+}
+const collectionRemove = (key: CollectionKey, index: number) => {
+  const arr = collectionArr(key)
+  if (index < 0 || index >= arr.length) return
+  arr.splice(index, 1)
+  if (arr.length == 0) delete appConfig.value[key]
+}
 
 const levels = ["trace", "debug", "info", "warn", "error", "fatal", "panic"]
 const certificateModes = [

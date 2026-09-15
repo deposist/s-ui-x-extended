@@ -17,7 +17,7 @@ import (
 // rule-condition helpers, so a condition-only check decodes rules exactly the
 // way a full validation does.
 func registryContext(ctx context.Context) context.Context {
-	return sb.Context(ctx, InboundRegistry(), OutboundRegistry(), EndpointRegistry(), ProviderRegistry(), DNSTransportRegistry(), ServiceRegistry())
+	return sb.Context(ctx, InboundRegistry(), OutboundRegistry(), EndpointRegistry(), ProviderRegistry(), DNSTransportRegistry(), ServiceRegistry(), CertificateProviderRegistry())
 }
 
 func inboundRegistryContext(ctx context.Context) context.Context {

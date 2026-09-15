@@ -64,16 +64,24 @@ func TestValidateRuleConditionsReportsIssues(t *testing.T) {
 		}
 	})
 
-	// A nested empty branch beside a real sibling survives decoding and is
-	// accepted by the core, so the endpoint must not invent an issue for it.
-	// This is exactly the shape the replaced heuristic used to block.
-	t.Run("nested empty branch beside a sibling is accepted", func(t *testing.T) {
+	// 1.14 nested rules are headless: an empty branch beside a real sibling
+	// decodes but carries no conditions, so the core refuses to start it. The
+	// endpoint must report it at the exact nested path instead of silently
+	// accepting (which is what the 1.13 model did).
+	t.Run("nested empty branch is reported at its exact path", func(t *testing.T) {
 		recorder := postRuleConditions(t, `{"kind":"route","rule":{"type":"logical","mode":"and","rules":[{"domain":["a.example"]},{}],"outbound":"direct"}}`)
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
 		}
-		if issues := decodeIssues(t, recorder.Body.String()); len(issues) != 0 {
-			t.Fatalf("expected no issues, got %+v", issues)
+		issues := decodeIssues(t, recorder.Body.String())
+		if len(issues) != 1 {
+			t.Fatalf("expected one issue, got %d: %+v", len(issues), issues)
+		}
+		if issues[0].Path != "route.rules[0].rules[1]" {
+			t.Fatalf("unexpected path %q", issues[0].Path)
+		}
+		if issues[0].Code != core.RuleConditionCodeInvalidRule {
+			t.Fatalf("unexpected code %q", issues[0].Code)
 		}
 	})
 

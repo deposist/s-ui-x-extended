@@ -55,6 +55,35 @@
       </v-col>
     </v-row>
     <InboundAdvanced :data="data" :field-hints="fieldHints" />
+    <v-row>
+      <v-col cols="12" sm="6" md="4">
+        <v-text-field
+          :label="$t('types.mieru.mtu')"
+          hide-details
+          type="number"
+          min="0"
+          clearable
+          @click:clear="delete data.mtu"
+          v-model.number="data.mtu">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="mtu" />
+          </template>
+        </v-text-field>
+      </v-col>
+      <v-col cols="12" sm="6" md="4" v-if="direction == 'out'">
+        <v-select
+          :label="$t('types.mieru.handshakeMode')"
+          hide-details
+          clearable
+          :items="handshakeModes"
+          @click:clear="delete data.handshake_mode"
+          v-model="data.handshake_mode">
+          <template #append-inner>
+            <FieldHint :field-hints="fieldHints" field="handshake_mode" />
+          </template>
+        </v-select>
+      </v-col>
+    </v-row>
   </v-card>
 </template>
 
@@ -69,6 +98,7 @@ export default {
     return {
       mieruTransport,
       mieruMultiplexing,
+      handshakeModes: ['h1', 'h3'],
     }
   },
   methods: {

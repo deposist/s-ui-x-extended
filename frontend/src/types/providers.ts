@@ -1,4 +1,5 @@
 import { Outbound } from "./outbounds"
+import { Dial } from "./dial"
 
 export const ProviderTypes = {
   Inline: 'inline',
@@ -25,12 +26,14 @@ export interface ProviderInline extends ProviderBasics {
   outbounds: Outbound[]
   remove_emojis?: boolean
   health_check?: ProviderHealthCheck
+  override_dialer_options?: Dial
 }
 
 export interface ProviderLocal extends ProviderBasics {
   path: string
   remove_emojis?: boolean
   health_check?: ProviderHealthCheck
+  override_dialer_options?: Dial
 }
 
 export interface ProviderRemote extends ProviderBasics {
@@ -43,6 +46,7 @@ export interface ProviderRemote extends ProviderBasics {
   include?: string
   remove_emojis?: boolean
   health_check?: ProviderHealthCheck
+  override_dialer_options?: Dial
 }
 
 // Create interfaces dynamically based on ProviderTypes keys

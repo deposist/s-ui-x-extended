@@ -83,10 +83,18 @@ func (j *JsonService) GetJson(subId string, format string) (*string, []string, e
 	}
 	for index, link := range links {
 		json, tag, err := util.GetOutbound(link, (index+1)*tagNumEnable)
-		if err == nil && len(tag) > 0 {
-			*outbounds = append(*outbounds, *json)
-			*outTags = append(*outTags, tag)
+		if err != nil {
+			// The link itself carries the client's credentials, so only its
+			// position and the reason are logged.
+			logger.Warningf("subscription: json format skipped external link #%d: %v", index+1, err)
+			continue
 		}
+		if len(tag) == 0 {
+			logger.Warningf("subscription: json format skipped external link #%d: outbound has no tag", index+1)
+			continue
+		}
+		*outbounds = append(*outbounds, *json)
+		*outTags = append(*outTags, tag)
 	}
 
 	j.addDefaultOutbounds(outbounds, outTags)

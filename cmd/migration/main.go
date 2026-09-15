@@ -55,6 +55,28 @@ func MigrateDbWithOptions(options Options) error {
 		return err
 	}
 
+	currentVersion := config.GetVersion()
+	dbVersion := ""
+	// Read the version outside the migration transaction: a read-only SELECT
+	// needs no tx, and we must know whether a migration will run before opening
+	// one, because the pre-migration file backup (VACUUM INTO) cannot run inside
+	// a transaction.
+	db.Raw("SELECT value FROM settings WHERE key = ?", "version").Scan(&dbVersion)
+
+	// Snapshot the database file before any schema/data change so a binary
+	// downgrade can be paired with restoring the pre-migration database. The
+	// migration transaction alone cannot help there: a rolled-back binary cannot
+	// read the migrated schema, so only a file-level copy is a usable rollback
+	// target. Skip when the DB is already at the current version (data-only
+	// migrations below are idempotent and roll back cleanly on error).
+	if currentVersion != dbVersion {
+		if err := backupDatabaseBeforeMigration(db, path); err != nil {
+			// A failed backup must not block a migration that would itself roll
+			// back cleanly on error; log and continue.
+			fmt.Println("Warning: pre-migration database backup failed:", err)
+		}
+	}
+
 	tx := db.Begin()
 	if tx.Error != nil {
 		return fmt.Errorf("begin migration: %w", tx.Error)
@@ -66,9 +88,6 @@ func MigrateDbWithOptions(options Options) error {
 		}
 	}()
 
-	currentVersion := config.GetVersion()
-	dbVersion := ""
-	tx.Raw("SELECT value FROM settings WHERE key = ?", "version").Find(&dbVersion)
 	fmt.Println("Current version:", currentVersion, "\nDatabase version:", dbVersion)
 
 	if currentVersion == dbVersion {
@@ -82,6 +101,20 @@ func MigrateDbWithOptions(options Options) error {
 		// once every row is migrated.
 		if err = to1_8(tx); err != nil {
 			return fmt.Errorf("migration of AWG 3.0 endpoint options: %w", err)
+		}
+		// OpenVPN outbound→endpoint conversion must also reach already-current
+		// databases, exactly like the two idempotent data migrations above.
+		if err = migrateutil.MigrateOpenVPNOutboundToEndpoint(tx); err != nil {
+			return fmt.Errorf("migration of openvpn outbounds to endpoints: %w", err)
+		}
+		// Deprecated inline tls.acme → inline certificate_provider (type acme).
+		if err = migrateutil.MigrateACMEToCertificateProvider(tx); err != nil {
+			return fmt.Errorf("migration of tls acme to certificate_provider: %w", err)
+		}
+		// 1.14 DNS deprecations: independent_cache removal, store_rdrc→store_dns,
+		// legacy address filter → evaluate/match_response.
+		if err = migrateutil.MigrateDNS114(tx); err != nil {
+			return fmt.Errorf("migration of DNS config to 1.14: %w", err)
 		}
 		if err = tx.Commit().Error; err != nil {
 			return fmt.Errorf("commit migration: %w", err)
@@ -183,6 +216,23 @@ func MigrateDbWithOptions(options Options) error {
 		return fmt.Errorf("migration of legacy inbound fields: %w", err)
 	}
 
+	// The 1.14 core moved OpenVPN from an outbound to an endpoint; convert every
+	// stored legacy row. Idempotent, so safe for already-migrated databases too.
+	if err = migrateutil.MigrateOpenVPNOutboundToEndpoint(tx); err != nil {
+		return fmt.Errorf("migration of openvpn outbounds to endpoints: %w", err)
+	}
+
+	// Deprecated inline tls.acme → inline certificate_provider (type acme).
+	if err = migrateutil.MigrateACMEToCertificateProvider(tx); err != nil {
+		return fmt.Errorf("migration of tls acme to certificate_provider: %w", err)
+	}
+
+	// 1.14 DNS deprecations: independent_cache removal, store_rdrc→store_dns,
+	// legacy address filter → evaluate/match_response.
+	if err = migrateutil.MigrateDNS114(tx); err != nil {
+		return fmt.Errorf("migration of DNS config to 1.14: %w", err)
+	}
+
 	// Persist the new version only if the DB version is from the same major
 	// or semver-lower. A future-version DB (different major, semver-higher)
 	// must not be downgraded.
@@ -232,6 +282,36 @@ func sqliteMigrationDSN(path string) string {
 
 func checkpointWAL(db *gorm.DB) error {
 	return db.Exec("PRAGMA wal_checkpoint(FULL)").Error
+}
+
+// backupDatabaseBeforeMigration writes a consistent file-level snapshot of the
+// database next to the live file, named `<db>.pre-<dbVersion>.bak`. VACUUM INTO
+// produces a transactionally consistent copy without mutating the source and is
+// safe to run while the source is in WAL mode. The snapshot is the rollback
+// target when the operator downgrades the binary after a migration: the
+// downgraded binary cannot read the migrated schema, so the pre-migration file
+// is swapped back into place.
+//
+// The destination must not already exist (VACUUM INTO refuses to overwrite), so
+// any stale snapshot from a previous attempt is removed first.
+func backupDatabaseBeforeMigration(db *gorm.DB, path string) error {
+	versionTag := "unknown"
+	_ = db.Raw("SELECT value FROM settings WHERE key = ?", "version").Scan(&versionTag)
+	if versionTag == "" {
+		versionTag = "noversion"
+	}
+	// Sanitize the tag into a filename-safe token.
+	safe := strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '.' || r == '-' || r == '_' {
+			return r
+		}
+		return '_'
+	}, versionTag)
+	backupPath := path + ".pre-" + safe + ".bak"
+	_ = os.Remove(backupPath)
+	// Escape single quotes for the SQL string literal.
+	escaped := strings.ReplaceAll(backupPath, "'", "''")
+	return db.Exec("VACUUM INTO '" + escaped + "'").Error
 }
 
 type foreignKeyViolation struct {

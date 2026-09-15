@@ -236,6 +236,48 @@
         ></v-combobox>
       </v-col>
     </v-row>
+    <v-row v-if="optionProcess">
+      <v-col cols="12" sm="6" md="4">
+        <v-select v-model="processOption" :items="processKeys" hide-details @update:model-value="updateProcessOption($event)" />
+      </v-col>
+      <v-col cols="12" sm="6" v-if="rule.process_name != undefined">
+        <v-textarea v-model="process_name" :label="$t('rule.processName')" rows="3" no-resize hide-details
+          density="compact" append-icon="mdi-arrow-expand"
+          @click:append="openExpTextarea($t('rule.processName'), 'process_name')" />
+      </v-col>
+      <v-col cols="12" sm="6" v-if="rule.process_path != undefined">
+        <v-textarea v-model="process_path" :label="$t('rule.processPath')" rows="3" no-resize hide-details
+          density="compact" append-icon="mdi-arrow-expand"
+          @click:append="openExpTextarea($t('rule.processPath'), 'process_path')" />
+      </v-col>
+      <v-col cols="12" sm="6" v-if="rule.process_path_regex != undefined">
+        <v-textarea v-model="process_path_regex" :label="$t('rule.processPathRegex')" rows="3" no-resize hide-details
+          density="compact" append-icon="mdi-arrow-expand"
+          @click:append="openExpTextarea($t('rule.processPathRegex'), 'process_path_regex')" />
+      </v-col>
+      <v-col cols="12" sm="6" v-if="rule.package_name != undefined">
+        <v-textarea v-model="package_name" :label="$t('rule.packageName')" rows="3" no-resize hide-details
+          density="compact" append-icon="mdi-arrow-expand"
+          @click:append="openExpTextarea($t('rule.packageName'), 'package_name')" />
+      </v-col>
+      <v-col cols="12" sm="6" v-if="rule.package_name_regex != undefined">
+        <v-textarea v-model="package_name_regex" :label="$t('rule.packageNameRegex')" rows="3" no-resize hide-details
+          density="compact" append-icon="mdi-arrow-expand"
+          @click:append="openExpTextarea($t('rule.packageNameRegex'), 'package_name_regex')" />
+      </v-col>
+    </v-row>
+    <v-row v-if="optionDevice">
+      <v-col cols="12" sm="6" v-if="rule.source_mac_address != undefined">
+        <v-textarea v-model="source_mac_address" :label="$t('rule.srcMacAddress')" rows="3" no-resize hide-details
+          density="compact" append-icon="mdi-arrow-expand"
+          @click:append="openExpTextarea($t('rule.srcMacAddress'), 'source_mac_address')" />
+      </v-col>
+      <v-col cols="12" sm="6" v-if="rule.source_hostname != undefined">
+        <v-textarea v-model="source_hostname" :label="$t('rule.srcHostname')" rows="3" no-resize hide-details
+          density="compact" append-icon="mdi-arrow-expand"
+          @click:append="openExpTextarea($t('rule.srcHostname'), 'source_hostname')" />
+      </v-col>
+    </v-row>
     <RuleNetworkState v-if="optionNetworkState" :rule="rule" />
     <RuleInterfaceAddress v-if="optionInterface" :rule="rule" />
     <v-row v-if="optionRuleSet">
@@ -298,6 +340,12 @@
               <v-switch v-model="optionPreferredBy" color="primary" :label="$t('rule.preferredBy')" hide-details></v-switch>
             </v-list-item>
             <v-list-item>
+              <v-switch v-model="optionProcess" color="primary" :label="$t('rule.process')" hide-details></v-switch>
+            </v-list-item>
+            <v-list-item>
+              <v-switch v-model="optionDevice" color="primary" :label="$t('rule.deviceIdentity')" hide-details></v-switch>
+            </v-list-item>
+            <v-list-item>
               <v-switch v-model="optionNetworkState" color="primary" :label="$t('rule.networkState')" hide-details></v-switch>
             </v-list-item>
             <v-list-item>
@@ -332,6 +380,8 @@ export default {
       portOption: 'port',
       srcIPOption: 'source_ip_cidr',
       srcPortOption: 'source_port',
+      processKeys: ['process_name', 'process_path', 'process_path_regex', 'package_name', 'package_name_regex'],
+      processOption: 'process_name',
       protocols: [
         { title: 'HTTP', value: 'http' },
         { title: 'TLS', value: 'tls' },
@@ -368,6 +418,10 @@ export default {
     },
     updateSrcPortOption(option:string) {
       this.srcPortKeys.forEach(k => delete this.$props.rule[k])
+      this.$props.rule[option] = []
+    },
+    updateProcessOption(option:string) {
+      this.processKeys.forEach(k => delete this.$props.rule[k])
       this.$props.rule[option] = []
     },
     openExpTextarea(title:string, object:string) {
@@ -454,6 +508,53 @@ export default {
     optionPreferredBy: {
       get() { return this.$props.rule.preferred_by != undefined },
       set(v:boolean) { this.$props.rule.preferred_by = v ? [] : undefined }
+    },
+    optionProcess: {
+      get() { return this.processKeys.some((key) => this.$props.rule[key] != undefined) },
+      set(v:boolean) {
+        if (v) this.$props.rule[this.processOption] = []
+        else this.processKeys.forEach((key) => delete this.$props.rule[key])
+      }
+    },
+    optionDevice: {
+      get() { return this.$props.rule.source_mac_address != undefined || this.$props.rule.source_hostname != undefined },
+      set(v:boolean) {
+        if (v) {
+          if (this.$props.rule.source_mac_address == undefined) this.$props.rule.source_mac_address = []
+          if (this.$props.rule.source_hostname == undefined) this.$props.rule.source_hostname = []
+        } else {
+          delete this.$props.rule.source_mac_address
+          delete this.$props.rule.source_hostname
+        }
+      }
+    },
+    process_name: {
+      get() { return this.$props.rule.process_name?.join('\n') ?? '' },
+      set(v:string) { this.$props.rule.process_name = v.length > 0 ? v.split('\n').map((s:string) => s.trim()).filter((s:string) => s.length > 0) : [] }
+    },
+    process_path: {
+      get() { return this.$props.rule.process_path?.join('\n') ?? '' },
+      set(v:string) { this.$props.rule.process_path = v.length > 0 ? v.split('\n').map((s:string) => s.trim()).filter((s:string) => s.length > 0) : [] }
+    },
+    process_path_regex: {
+      get() { return this.$props.rule.process_path_regex?.join('\n') ?? '' },
+      set(v:string) { this.$props.rule.process_path_regex = v.length > 0 ? v.split('\n').map((s:string) => s.trim()).filter((s:string) => s.length > 0) : [] }
+    },
+    package_name: {
+      get() { return this.$props.rule.package_name?.join('\n') ?? '' },
+      set(v:string) { this.$props.rule.package_name = v.length > 0 ? v.split('\n').map((s:string) => s.trim()).filter((s:string) => s.length > 0) : [] }
+    },
+    package_name_regex: {
+      get() { return this.$props.rule.package_name_regex?.join('\n') ?? '' },
+      set(v:string) { this.$props.rule.package_name_regex = v.length > 0 ? v.split('\n').map((s:string) => s.trim()).filter((s:string) => s.length > 0) : [] }
+    },
+    source_mac_address: {
+      get() { return this.$props.rule.source_mac_address?.join('\n') ?? '' },
+      set(v:string) { this.$props.rule.source_mac_address = v.length > 0 ? v.split('\n').map((s:string) => s.trim()).filter((s:string) => s.length > 0) : [] }
+    },
+    source_hostname: {
+      get() { return this.$props.rule.source_hostname?.join('\n') ?? '' },
+      set(v:string) { this.$props.rule.source_hostname = v.length > 0 ? v.split('\n').map((s:string) => s.trim()).filter((s:string) => s.length > 0) : [] }
     },
     optionNetworkState: {
       get() {
@@ -573,6 +674,10 @@ export default {
     if (this.optionSrcPort) {
       const enabledOption = this.srcPortKeys.filter(k => ruleKeys.includes(k))
       this.srcPortOption = enabledOption.length>0 ? enabledOption[0] : 'source_port'
+    }
+    if (this.optionProcess) {
+      const enabledOption = this.processKeys.filter(k => ruleKeys.includes(k))
+      this.processOption = enabledOption.length>0 ? enabledOption[0] : 'process_name'
     }
   }
 }

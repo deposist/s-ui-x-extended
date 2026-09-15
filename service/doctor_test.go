@@ -143,28 +143,50 @@ func TestDoctorRuleConditionDetailsNameDeepDescendant(t *testing.T) {
 	}
 }
 
-// TestDoctorRuleConditionChecksAcceptsDecodedEmptyBranches guards the former
-// false positives. These shapes are all accepted by the core, so the doctor must
-// not raise an error item for them; the old map-walking heuristic flagged every
-// one of them.
-func TestDoctorRuleConditionChecksAcceptsDecodedEmptyBranches(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		config string
-	}{
-		{"empty branch beside a sibling", `{"route":{"rules":[{"type":"logical","mode":"and","rules":[{"domain":["a.com"]},{}],"outbound":"direct"}]}}`},
-		{"invert-only branch", `{"route":{"rules":[{"type":"logical","mode":"and","rules":[{"invert":true}],"outbound":"direct"}]}}`},
-		{"action-only rule", `{"route":{"rules":[{"action":"sniff"}]}}`},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			items := doctorRuleConditionChecks([]byte(tc.config))
-			for _, item := range items {
-				if item.Severity == DoctorSeverityError {
-					t.Fatalf("unexpected error item: %#v", item)
+// TestDoctorRuleConditionChecksNestedHeadlessShapes pins the 1.14 nested-rule
+// model: logical children are headless (conditions only), so an empty branch
+// and an invert-only branch have no conditions and the core rejects them at
+// startup. The doctor must surface an error item for each, matching
+// core.ValidateConfig. A top-level action-only rule stays valid.
+func TestDoctorRuleConditionChecksNestedHeadlessShapes(t *testing.T) {
+	t.Run("condition-less nested shapes produce an error item", func(t *testing.T) {
+		for _, tc := range []struct {
+			name   string
+			config string
+		}{
+			{"empty branch beside a sibling", `{"route":{"rules":[{"type":"logical","mode":"and","rules":[{"domain":["a.com"]},{}],"outbound":"direct"}]}}`},
+			{"invert-only branch", `{"route":{"rules":[{"type":"logical","mode":"and","rules":[{"invert":true}],"outbound":"direct"}]}}`},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				items := doctorRuleConditionChecks([]byte(tc.config))
+				found := false
+				for _, item := range items {
+					if item.Severity == DoctorSeverityError {
+						found = true
+					}
 				}
+				if !found {
+					t.Fatalf("expected an error item for %s, got %#v", tc.name, items)
+				}
+			})
+		}
+	})
+	t.Run("top-level action-only rule stays valid", func(t *testing.T) {
+		items := doctorRuleConditionChecks([]byte(`{"route":{"rules":[{"action":"sniff"}]}}`))
+		for _, item := range items {
+			if item.Severity == DoctorSeverityError {
+				t.Fatalf("unexpected error item: %#v", item)
 			}
-		})
-	}
+		}
+	})
+	t.Run("nested invert beside a condition stays valid", func(t *testing.T) {
+		items := doctorRuleConditionChecks([]byte(`{"route":{"rules":[{"type":"logical","mode":"and","rules":[{"invert":true,"domain":["a.com"]}],"outbound":"direct"}]}}`))
+		for _, item := range items {
+			if item.Severity == DoctorSeverityError {
+				t.Fatalf("unexpected error item: %#v", item)
+			}
+		}
+	})
 }
 
 // TestDoctorRuleConditionChecksWarnsOnDroppedRule keeps the two failure modes

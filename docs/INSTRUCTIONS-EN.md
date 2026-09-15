@@ -394,6 +394,13 @@ Integrates classic client-server VPN tunnels.
 *   **When to use:** When you need to forward specific client profiles through a corporate VPN tunnel.
 *   **Parameters:** Client/Server VPN parameters.
 
+### OpenVPN
+Integrates the OpenVPN protocol as both a client and a server.
+*   **What it does:** `OpenVPN Client` connects this host to an external OpenVPN server; `OpenVPN Server` accepts connections from regular OpenVPN clients (phone apps, routers, corporate hosts).
+*   **When to use:** To route traffic through an existing corporate or commercial VPN, or to give your own devices access without installing a sing-box client.
+*   **Parameters:** mode, transport (`network`: UDP or TCP), server address and port, TLS certificates (in server mode your own certificate and key plus the CA that validates clients), username and password, `data_ciphers` and `auth`, MTU and MSS.
+*   **Notes:** a loopback destination (`127.0.0.1`) is not reachable across the tunnel — use the real interface address.
+
 ---
 
 ## 6. Services (System Processes)
@@ -611,6 +618,11 @@ Decodes external proxy subscription links into outbound configs.
 ### Panel Updates and Database Backups
 *   **Backups:** Database exports are streamed directly from SQLite on the disk to save host memory.
 *   **Updates:** Checks file integrity using SHA-256 signatures, runs diagnostic starts in temporary directories, and rolls back binary installations automatically on failure.
+*   **Updates:** Checks file integrity using SHA-256 signatures, runs diagnostic starts in temporary directories, and rolls back binary installations automatically on failure.
+*   **Configuration migration:** on the first start of a new release the saved configuration is converted to the new core schema in a single transaction: DNS rules with address filters become an `evaluate` + `match_response` pair, a legacy OpenVPN outbound becomes an endpoint, and inline ACME becomes a certificate provider. Nothing to do by hand; when a conversion is impossible the panel reports the path and the reason and leaves the old records untouched.
+*   **Before upgrading:** download a database backup (the DB export button) — that is what a rollback needs.
+*   **Rolling back:** stop the service, restore the previous database file from the backup, then restore the previous binary. Restoring only the binary is not supported: the schema migration is one-way.
+*   **What is new:** OpenVPN endpoints (client and server), the `cloudflared` inbound, `usbip-server`/`usbip-client` services, editors for certificate providers, http clients and network namespaces, and extended QUIC options for Hysteria/Hysteria 2/TUIC.
 
 ---
 

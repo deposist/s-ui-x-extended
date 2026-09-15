@@ -265,7 +265,15 @@ describe('recommendation helpers', () => {
     expect(hasOutboundRecommendedPreset(OutTypes.SSH)).toBe(false)
     expect(hasOutboundRecommendedPreset(OutTypes.VLESS)).toBe(true)
     expect(hasOutboundRecommendedPreset(OutTypes.VMess)).toBe(true)
-    expect(hasOutboundRecommendedPreset(OutTypes.OpenVPN)).toBe(true)
+  })
+
+  it('applies recommended defaults to an openvpn-client endpoint', () => {
+    const ovpn: any = { type: EpTypes.OpenVPNClient }
+    applyEndpointRecommendedValues(ovpn)
+    expect(ovpn.network).toBe('udp')
+    expect(ovpn.data_ciphers).toEqual(['AES-256-GCM'])
+    expect(ovpn.auth).toBe('SHA256')
+    expect(hasEndpointRecommendedPreset(EpTypes.OpenVPNClient)).toBe(true)
   })
 
   it('uses outbound-specific field-hint keys for outbound dial and shared sections', () => {

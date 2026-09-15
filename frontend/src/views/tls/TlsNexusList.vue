@@ -37,7 +37,7 @@
       </template>
 
       <template #col.acme="{ item }">
-        <nexus-badge v-if="item.server?.acme != undefined" :label="$t('yes')" variant="success" />
+        <nexus-badge v-if="item.server?.certificate_provider != undefined" :label="$t('yes')" variant="success" />
         <span v-else class="tls-nexus__muted">—</span>
       </template>
       <template #col.ech="{ item }">
@@ -102,7 +102,7 @@ import { useConfirm } from '@/components/nexus/primitives/useConfirm'
 interface TlsRow {
   id: number
   name: string
-  server?: { server_name?: string; acme?: unknown; ech?: unknown; reality?: unknown }
+  server?: { server_name?: string; certificate_provider?: unknown; ech?: unknown; reality?: unknown }
   [key: string]: unknown
 }
 
@@ -126,7 +126,7 @@ const search = ref('')
 
 const subtitle = computed(() => {
   const total = props.tlsConfigs.length
-  const acme = props.tlsConfigs.filter(c => c.server?.acme != undefined).length
+  const acme = props.tlsConfigs.filter(c => c.server?.certificate_provider != undefined).length
   const reality = props.tlsConfigs.filter(c => c.server?.reality != undefined).length
 
   return t('nexus.summary.tls', { total, acme, reality })

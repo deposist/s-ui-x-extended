@@ -122,7 +122,7 @@ func TestAllowedFieldsAreExactlyUserFieldValues(t *testing.T) {
 // TestSkipOutJSONTypesMatchesLegacy locks FillOutJson's early-return set
 // (formerly the literal switch case in util/outJson.go).
 func TestSkipOutJSONTypesMatchesLegacy(t *testing.T) {
-	want := map[string]struct{}{"direct": {}, "tun": {}, "redirect": {}, "tproxy": {}, "bond": {}, "core-failover": {}, "call": {}}
+	want := map[string]struct{}{"direct": {}, "tun": {}, "redirect": {}, "tproxy": {}, "bond": {}, "core-failover": {}, "call": {}, "cloudflared": {}}
 	if got := SkipOutJSONTypes(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("SkipOutJSONTypes drifted.\n got: %v\nwant: %v", got, want)
 	}
@@ -147,6 +147,9 @@ func TestOutJSONBuildersMatchesLegacy(t *testing.T) {
 		"direct": "", "tun": "", "redirect": "", "tproxy": "",
 		// native core inbound types with no client delivery
 		"bond": "", "core-failover": "", "call": "",
+		// Phase 2: cloudflared carries edge traffic into the core and has no
+		// client outbound, so its out_json is never built.
+		"cloudflared": "",
 	}
 	if got := OutJSONBuilders(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("OutJSONBuilders drifted.\n got: %v\nwant: %v", got, want)
@@ -311,6 +314,14 @@ func manifestProtocolBuildTagSet() map[string]struct{} {
 	for _, provider := range Providers() {
 		if provider.BuildTag != "" {
 			tags[provider.BuildTag] = struct{}{}
+		}
+	}
+	// Services gate their own pickers on the same build tags, so a service type
+	// that needs a tag the release builds do not compile would ship an editor
+	// nobody can use.
+	for _, service := range Services() {
+		if service.BuildTag != "" {
+			tags[service.BuildTag] = struct{}{}
 		}
 	}
 	return tags
