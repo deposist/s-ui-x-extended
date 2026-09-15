@@ -4,6 +4,23 @@
 
 这是中文版更新日志。英文版请见 `CHANGELOG-EN.md`，俄文版请见 `CHANGELOG-RU.md`。
 
+## [1.1.1-beta4] - 2026-09-15 - 核心共享设置表单与 QUIC 编辑器修复
+
+- “其他集合”不再只提供 JSON 编辑器。面板现在为 ACME、Tailscale 和 Cloudflare Origin CA 证书提供者、可复用 HTTP 客户端以及 Linux 网络命名空间提供表单。表单会校验输入；普通编辑会保留未知字段、明确的 false 和零值、列表及密钥。
+- 修复 Hysteria、Hysteria 2 和 TUIC 的 QUIC 设置开关。空配置也能展开设置，展开时不会写入默认值；关闭时只删除 QUIC 字段。
+- 关闭表单而不保存不会改动原对象。重复标签以及无效的数字、时长、电子邮件地址、URL 和 HTTP 标头会在保存前被拒绝。
+
+完整发行说明：[`docs/releases/v1.1.1-beta4.md`](docs/releases/v1.1.1-beta4.md)。
+
+## [1.1.1-beta3] - 2026-09-15 - sing-box 1.14 核心、OpenVPN 端点与配置迁移
+
+- 内置核心升级到 sing-box-extended `v1.14.0-extended-2.7.3`。面板可编辑 OpenVPN 客户端与服务端端点、`cloudflared` 入站、USB/IP 服务，以及 Hysteria、Hysteria 2、TUIC、Mieru、MASQUE 和 WireGuard 的新字段。
+- 已保存的配置会在首次启动时通过一个事务迁移到 1.14 结构。迁移会转换旧 OpenVPN 出站、内联 ACME 和 DNS 响应过滤器。遇到无法转换的值时，迁移停止并报告路径，不会丢弃数据。
+- 订阅格式无法表示某个条目时，输出现在会说明原因。JSON 输出保留所有受支持的条目。
+- `golang.org/x/crypto` 升级到 0.56.0，`google.golang.org/grpc` 升级到 1.83.2，包含发行说明中列出的安全修复。
+
+完整发行说明：[`docs/releases/v1.1.1-beta3.md`](docs/releases/v1.1.1-beta3.md)。
+
 ## [1.1.1-beta2] - 2026-08-19 - TrustTunnel TLS 必需检查
 
 - 修复服务器崩溃：保存没有 TLS 配置的 TrustTunnel 入站会提交该行，然后 sing-box 因 `TLS required` 失败，watchdog 陷入重启循环。协议清单现在将 TrustTunnel 标记为 `onlyTls`，前端阻止无 TLS 模板的保存，服务端保存路径也拒绝提交。

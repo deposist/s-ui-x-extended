@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 `CHANGELOG-ZH.md` for Simplified Chinese.
 
+## [1.1.1-beta4] - 2026-09-15 - structured core setting forms and QUIC editor fix
+
+- Replaced the JSON-only Additional collections editor with forms for ACME, Tailscale and Cloudflare Origin CA certificate providers, reusable HTTP clients and Linux network namespaces. The forms cover the bundled core's current fields, validate input and preserve unknown fields, explicit false and zero values, lists and secrets during normal edits.
+- Fixed the QUIC settings switch for Hysteria, Hysteria 2 and TUIC. It now opens from an empty configuration without writing defaults. Turning it off removes only QUIC fields.
+- Closing a collection form without saving leaves the stored object unchanged. Duplicate tags and invalid numbers, durations, email addresses, URLs and HTTP headers are rejected before save.
+
+Full release notes: [`docs/releases/v1.1.1-beta4.md`](docs/releases/v1.1.1-beta4.md).
+
+## [1.1.1-beta3] - 2026-09-15 - sing-box 1.14 core, OpenVPN endpoints and configuration migration
+
+- Updated the bundled core to sing-box-extended `v1.14.0-extended-2.7.3`. The panel can edit OpenVPN client and server endpoints, the `cloudflared` inbound, USB/IP services and the new fields for Hysteria, Hysteria 2, TUIC, Mieru, MASQUE and WireGuard.
+- Saved configurations move to the 1.14 schema on first start. The migration converts legacy OpenVPN outbounds, inline ACME and DNS response filters in one transaction. An unsupported value stops the migration and identifies its path instead of dropping data.
+- Subscription output now explains when its format cannot represent an entry. JSON output keeps every supported entry.
+- Updated `golang.org/x/crypto` to 0.56.0 and `google.golang.org/grpc` to 1.83.2 for the security fixes listed in the release notes.
+
+Full release notes: [`docs/releases/v1.1.1-beta3.md`](docs/releases/v1.1.1-beta3.md).
+
 ## [1.1.1-beta2] - 2026-08-19 - TrustTunnel TLS-required guard
 
 - Fixed a server crash: saving a TrustTunnel inbound without a TLS configuration committed the row and then sing-box failed with `TLS required`, sending the restart watchdog into a loop. The protocol manifest now marks TrustTunnel as `onlyTls`, the frontend blocks saves without a TLS template, and the server-side save path rejects them before commit.
