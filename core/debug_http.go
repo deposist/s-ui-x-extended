@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -71,7 +72,8 @@ func startDebugHTTPServer(options option.DebugOptions) (*http.Server, error) {
 		Handler:           r,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	listener, err := net.Listen("tcp", options.Listen)
+	var listenConfig net.ListenConfig
+	listener, err := listenConfig.Listen(context.Background(), "tcp", options.Listen)
 	if err != nil {
 		return nil, E.Cause(err, "listen debug HTTP server")
 	}

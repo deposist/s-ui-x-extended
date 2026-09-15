@@ -91,7 +91,7 @@ test('personal ops pack doctor presets delivery and client diagnosis smoke', asy
   await expect(diagnosisReportItem).toBeVisible({ timeout: 30_000 })
   await page.keyboard.press('Escape')
 
-  await row.getByRole('button', { name: 'Config' }).click()
+  await row.getByRole('button', { name: 'Delivery' }).click()
   const delivery = page.getByRole('dialog').filter({ hasText: 'Delivery' })
   await expect(delivery).toBeVisible()
   await expect(delivery.getByRole('tab', { name: 'Sing-box' })).toBeVisible()

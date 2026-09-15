@@ -69,6 +69,25 @@ const turnOn = async (root: Locator) => {
 const ownAddChild = (node: Locator, testId: string) =>
   node.locator(`:scope > .v-card-actions [data-testid="${testId}-add-child"]`)
 
+// Gives a condition-less leaf its first real condition. The leaf editor hides
+// every match field until one is enabled in the Rule Options menu, so the flow
+// is: open the menu, turn on the Domain/IP group, close the menu, fill the
+// domain list. The two hosts differ in the textarea label ("Domains" in the
+// route drawer, "Domains (comma separated)" in the DNS dialog), so both are
+// accepted.
+const addDomainCondition = async (page: Page, leaf: Locator) => {
+  await leaf.getByRole('button', { name: 'Rule Options' }).click()
+  await page
+    .locator('.v-list-item')
+    .filter({ hasText: 'Domain/IP' })
+    .locator('.v-selection-control__input')
+    .click()
+  await page.keyboard.press('Escape')
+  const field = leaf.getByRole('textbox').first()
+  await expect(field).toBeVisible()
+  await field.fill('a.example')
+}
+
 // The delete control for child `index` sits in that child's wrapper header, ahead
 // of the recursive node itself, so `.first()` inside the wrapper is its own.
 const deleteChild = (node: Locator, testId: string, index: number) =>
@@ -117,7 +136,8 @@ const reopenLastRule = async (page: Page, fixture: RepairFixture) => {
 // the tree blocks the save, is reported at its own exact path while the form stays
 // open and editable, and is repairable in place. It also pins the fork behaviour
 // that a bare {} child is discarded on decode (so it does NOT repair the node)
-// while an invert-only child is accepted even though it carries no conditions.
+// and that an invert-only child stays blocked: nested rules are headless in the
+// 1.14 core model, so only a real condition repairs them.
 const runRepairFlow = async (page: Page, fixture: RepairFixture) => {
   const form = await openAddForm(page, fixture)
   await selectRejectAction(page, form)
@@ -159,9 +179,19 @@ const runRepairFlow = async (page: Page, fixture: RepairFixture) => {
   await expect(anchor).toBeVisible()
   await expect(form).toBeVisible()
 
-  // An invert-only child carries no conditions yet is accepted by the fork, which
-  // is exactly the shape a local "has a meaningful field" heuristic would reject.
+  // An invert-only child carries no conditions, and the 1.14 core treats nested
+  // rules as headless: invert alone does not repair the node, so the save stays
+  // blocked instead of closing the form. The issue anchors on the offending child
+  // node itself, one level deeper than the earlier empty-list anchor.
   await turnOn(ownSwitchRoot(repaired, fixture.testId, 'invert'))
+  await save.click()
+  const childAnchor = form.locator(`[data-rule-issue="${fixture.rootPath}.rules[0].rules[0]"]`)
+  await expect(childAnchor).toBeVisible()
+  await expect(childAnchor).toContainText('rule has no conditions')
+  await expect(form).toBeVisible()
+
+  // The accepted repair is a real condition on the child.
+  await addDomainCondition(page, repaired)
   await save.click()
   await expect(form).toHaveCount(0)
 

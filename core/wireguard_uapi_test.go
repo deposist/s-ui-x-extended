@@ -84,6 +84,7 @@ func TestParseWireGuardPeerSnapshot(t *testing.T) {
 		"header_protection_key=" + strings.Repeat("cc", wireGuardKeySize) + "\n" +
 		"content_padding_addition=0\nrekey_after_time=120-180\nrekey_timeout=1-5\n" +
 		"reject_after_time=90-120\nkeepalive_timeout=5-10\nmax_handshake_attempts=20-30\n" +
+		"random_trailers=true\ndisable_cookies=false\n" +
 		"public_key=" + publicKeyHex + "\n" +
 		"preshared_key=" + strings.Repeat("bb", wireGuardKeySize) + "\n" +
 		"protocol_version=1\nlast_handshake_time_sec=123\nlast_handshake_time_nsec=7\n" +
