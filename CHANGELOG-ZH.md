@@ -10,6 +10,7 @@
 - 证书提供者让核心自行获取证书：ACME 通过 HTTP-01、TLS-ALPN-01 或 DNS-01 签发并续期 Let's Encrypt 证书，Tailscale 从现有 Tailscale 端点获取证书，Cloudflare Origin CA 面向 Cloudflare 之后的服务器。HTTP 客户端是按标签引用的命名传输，ACME 提供者、rule-set 和 provider 都可以引用它。网络命名空间可打开现有命名空间，或在核心启动时创建隔离命名空间；保存表单只改动配置。
 - 条目以卡片显示。删除最后一项会移除空集合，面板的 Save 按钮会用一个请求保存全部三个集合。beta3 的协议字段（QUIC 开关后面的 Hysteria、Hysteria 2 和 TUIC QUIC 选项；Mieru 的 MTU 与握手模式；MASQUE 的本地地址和端口；WireGuard 的 UDP 选项）位于 Inbounds 和 Outbounds 页面的协议表单中。
 - 证书提供者与终端菜单的证书工具互不替代：菜单安装外部 acme.sh，为面板自身的 Web 界面签发证书，签发期间面板停机，文件路径也要手动填写。提供者在 sing-box 核心内部运行，为入站协议签发证书、自动续期，并按标签引用。Tailscale 和 Cloudflare Origin CA 在终端菜单中没有对应功能。
+- USB/IP 一段话说明：它通过网络转发 USB 设备，插在一台机器上的设备会在另一台上显示为本地 USB。usbip-server 运行在设备所在机器（监听地址，设备用手写列表或自动导出），usbip-client 运行在需要设备的机器（服务器地址，按 bus ID、vendor ID、product ID 或序列号挑选设备）。Linux 需要 vhci 驱动和设备访问权限，核心会在启动时报告。
 
 完整发行说明：[`docs/releases/v1.1.1-beta5.md`](docs/releases/v1.1.1-beta5.md)。
 
