@@ -83,8 +83,8 @@ github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dblohm7/wingoes v0.0.0-20240119213807-a09d6be7affa h1:h8TfIT1xc8FWbwwpmHn1J5i43Y0uZP97GqasGCzSRJk=
 github.com/dblohm7/wingoes v0.0.0-20240119213807-a09d6be7affa/go.mod h1:Nx87SkVqTKd8UtT+xu7sM/l+LgXs6c0aHrlKusR+2EQ=
-github.com/deposist/sing-box-extended v1.14.0-extended-2.7.3 h1:m4m6YmVvq+mAyhQtm7Tw8XozZESBBpYrQWIJ08f1+3E=
-github.com/deposist/sing-box-extended v1.14.0-extended-2.7.3/go.mod h1:/mW1wYh7fgsy+soRcZQdOVb/BxSHJJ9VKeo34c/xVT0=
+github.com/deposist/sing-box-extended v1.14.0-extended-2.7.4 h1:deDIkzTSWsEsM6vQ9oOIw8vEewYhXcpYXQHXOEMcwps=
+github.com/deposist/sing-box-extended v1.14.0-extended-2.7.4/go.mod h1:/mW1wYh7fgsy+soRcZQdOVb/BxSHJJ9VKeo34c/xVT0=
 github.com/deposist/sing-openvpn v0.0.1-deposist.1 h1:huTc8UttXt5UhHZNVDeXjHpHRDRdmIJLUHvzGGuDUtU=
 github.com/deposist/sing-openvpn v0.0.1-deposist.1/go.mod h1:PWX7WygD8jpwfqfaGNySXpJYTn0SOwjBI1BKHHC2+Bw=
 github.com/dgryski/go-camellia v0.0.0-20191119043421-69a8a13fb23d h1:CPqTNIigGweVPT4CYb+OO2E6XyRKFOmvTHwWRLgCAlE=

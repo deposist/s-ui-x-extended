@@ -4,6 +4,14 @@
 
 这是中文版更新日志。英文版请见 `CHANGELOG-EN.md`，俄文版请见 `CHANGELOG-RU.md`。
 
+## [1.1.1-beta6] - 2026-09-16 - 修复 MTProxy 核心重启卡住
+
+- 修复启用 MTProxy 时核心停止过程卡住的问题。面板可能显示核心已停止，但 MTProxy 端口仍在监听，后续启动或重启请求无法完成。
+- 内置核心更新为 sing-box-extended `v1.14.0-extended-2.7.4`。MTProxy 现在先关闭监听套接字，再等待连接结束。
+- 无需修改代理设置或 Telegram 链接。如果旧进程已经卡住，请先重启整个 `s-ui` 服务，再更新。
+
+完整发行说明：[`docs/releases/v1.1.1-beta6.md`](docs/releases/v1.1.1-beta6.md)。
+
 ## [1.1.1-beta5] - 2026-09-16 - Basics 标签页显示“其他集合”分区
 
 - 修复缺失的“其他集合”分区。beta4 把结构化表单挂在了面板不再渲染的页面上；现在该分区出现在设置的 Basics 标签页中，nexus 网格和经典折叠面板两种布局都有。它是标签页最后一个分区，位于 Experimental settings 之后，包含证书提供者（ACME、Tailscale、Cloudflare Origin CA）、可复用 HTTP 客户端和 Linux 网络命名空间的编辑器。

@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 `CHANGELOG-ZH.md` for Simplified Chinese.
 
+## [1.1.1-beta6] - 2026-09-16 - MTProxy core restart fix
+
+- Fixed a core shutdown hang with MTProxy enabled. The panel could report the core as stopped while the MTProxy port stayed open, and subsequent start or restart requests could not complete.
+- Updated the bundled core to sing-box-extended `v1.14.0-extended-2.7.4`. MTProxy now closes its listener before waiting for connections to finish.
+- Existing proxy settings and Telegram links remain valid. If the old process is already stuck, restart the entire `s-ui` service before updating.
+
+Full release notes: [`docs/releases/v1.1.1-beta6.md`](docs/releases/v1.1.1-beta6.md).
+
 ## [1.1.1-beta5] - 2026-09-16 - Additional collections visible on the Basics tab
 
 - Fixed the missing Additional collections section. Beta4 mounted the structured forms on a page the panel no longer renders; the section now appears on the Basics tab in Settings, in both the nexus grid and the classic expansion panels. It is the last section on the tab, after Experimental settings, with editors for certificate providers (ACME, Tailscale, Cloudflare Origin CA), reusable HTTP clients and Linux network namespaces.
