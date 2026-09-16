@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 `CHANGELOG-ZH.md` for Simplified Chinese.
 
+## [1.1.1-beta5] - 2026-09-16 - Additional collections visible on the Basics tab
+
+- Fixed the missing Additional collections section. Beta4 mounted the structured forms on a page the panel no longer renders; the section now appears on the Basics tab in Settings, in both the nexus grid and the classic expansion panels.
+- Certificate providers, HTTP clients and network namespaces are editable as cards. Deleting the last item drops the empty collection, and the panel Save button stores all three collections in one request.
+
+Full release notes: [`docs/releases/v1.1.1-beta5.md`](docs/releases/v1.1.1-beta5.md).
+
 ## [1.1.1-beta4] - 2026-09-15 - structured core setting forms and QUIC editor fix
 
 - Replaced the JSON-only Additional collections editor with forms for ACME, Tailscale and Cloudflare Origin CA certificate providers, reusable HTTP clients and Linux network namespaces. The forms cover the bundled core's current fields, validate input and preserve unknown fields, explicit false and zero values, lists and secrets during normal edits.
