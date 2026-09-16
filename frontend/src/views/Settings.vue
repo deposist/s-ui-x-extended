@@ -1009,6 +1009,45 @@
               </v-card-text>
             </v-card>
           </v-col>
+          <!-- Additional collections (full width) -->
+          <v-col cols="12" class="d-flex flex-column">
+            <v-card variant="outlined" class="settings-section-card d-flex flex-column">
+              <v-card-title class="settings-section-title">{{ $t('basic.collections.title') }}</v-card-title>
+              <v-card-text class="pa-4 pt-2">
+                <ConfigCollection
+                  kind="certificate"
+                  :title="$t('basic.collections.certProviders')"
+                  :items="appConfig.certificate_providers ?? []"
+                  :new-item="() => ({ type: 'acme' })"
+                  default-type-label="acme"
+                  @add="collectionAdd('certificate_providers', $event)"
+                  @update="(i, item) => collectionUpdate('certificate_providers', i, item)"
+                  @remove="collectionRemove('certificate_providers', $event)"
+                />
+                <v-divider class="my-4"></v-divider>
+                <ConfigCollection
+                  kind="http"
+                  :title="$t('basic.collections.httpClients')"
+                  :items="appConfig.http_clients ?? []"
+                  :new-item="() => ({})"
+                  @add="collectionAdd('http_clients', $event)"
+                  @update="(i, item) => collectionUpdate('http_clients', i, item)"
+                  @remove="collectionRemove('http_clients', $event)"
+                />
+                <v-divider class="my-4"></v-divider>
+                <ConfigCollection
+                  kind="namespace"
+                  :title="$t('basic.collections.netNamespaces')"
+                  :items="appConfig.network_namespaces ?? []"
+                  :new-item="() => ({ type: 'unshare' })"
+                  default-type-label="default"
+                  @add="collectionAdd('network_namespaces', $event)"
+                  @update="(i, item) => collectionUpdate('network_namespaces', i, item)"
+                  @remove="collectionRemove('network_namespaces', $event)"
+                />
+              </v-card-text>
+            </v-card>
+          </v-col>
         </v-row>
 
         <!-- Classic Fallback layout: -->
@@ -1381,6 +1420,41 @@
                   </v-row>
                 </v-expansion-panel-text>
               </v-expansion-panel>
+              <v-expansion-panel :title="$t('basic.collections.title')">
+                <v-expansion-panel-text>
+                  <ConfigCollection
+                    kind="certificate"
+                    :title="$t('basic.collections.certProviders')"
+                    :items="appConfig.certificate_providers ?? []"
+                    :new-item="() => ({ type: 'acme' })"
+                    default-type-label="acme"
+                    @add="collectionAdd('certificate_providers', $event)"
+                    @update="(i, item) => collectionUpdate('certificate_providers', i, item)"
+                    @remove="collectionRemove('certificate_providers', $event)"
+                  />
+                  <v-divider class="my-4"></v-divider>
+                  <ConfigCollection
+                    kind="http"
+                    :title="$t('basic.collections.httpClients')"
+                    :items="appConfig.http_clients ?? []"
+                    :new-item="() => ({})"
+                    @add="collectionAdd('http_clients', $event)"
+                    @update="(i, item) => collectionUpdate('http_clients', i, item)"
+                    @remove="collectionRemove('http_clients', $event)"
+                  />
+                  <v-divider class="my-4"></v-divider>
+                  <ConfigCollection
+                    kind="namespace"
+                    :title="$t('basic.collections.netNamespaces')"
+                    :items="appConfig.network_namespaces ?? []"
+                    :new-item="() => ({ type: 'unshare' })"
+                    default-type-label="default"
+                    @add="collectionAdd('network_namespaces', $event)"
+                    @update="(i, item) => collectionUpdate('network_namespaces', i, item)"
+                    @remove="collectionRemove('network_namespaces', $event)"
+                  />
+                </v-expansion-panel-text>
+              </v-expansion-panel>
             </v-expansion-panels>
           </v-col>
         </v-row>
@@ -1414,6 +1488,7 @@ import SubClashExtVue from '@/components/SubClashExt.vue'
 import MaintenanceTab from '@/components/settings/MaintenanceTab.vue'
 import AwgSettingsTab from '@/components/settings/AwgSettingsTab.vue'
 import Dial from '@/components/Dial.vue'
+import ConfigCollection from '@/components/ConfigCollection.vue'
 import { normalizeSecretFields, stripSecretPlaceholders } from '@/components/settingsSecretField'
 import { push } from 'notivue'
 import { Config, Ntp } from '@/types/config'
@@ -1479,6 +1554,28 @@ const outboundTags = computed((): string[] => {
   const dataStore = Data()
   return [...dataStore.outbounds?.map((o:any) => o.tag), ...dataStore.endpoints?.map((e:any) => e.tag)]
 })
+
+// Config-blob collection mutators. The array is materialized only on a real
+// edit, so simply rendering the panel never dirties the form. On empty-after-
+// remove the key is dropped to keep the blob clean (matches omitempty).
+type CollectionKey = 'certificate_providers' | 'http_clients' | 'network_namespaces'
+const collectionArr = (key: CollectionKey): Record<string, any>[] => {
+  if (!Array.isArray(appConfig.value[key])) appConfig.value[key] = []
+  return appConfig.value[key] as Record<string, any>[]
+}
+const collectionAdd = (key: CollectionKey, item: Record<string, any>) => {
+  collectionArr(key).push(item)
+}
+const collectionUpdate = (key: CollectionKey, index: number, item: Record<string, any>) => {
+  const arr = collectionArr(key)
+  if (index >= 0 && index < arr.length) arr[index] = item
+}
+const collectionRemove = (key: CollectionKey, index: number) => {
+  const arr = collectionArr(key)
+  if (index < 0 || index >= arr.length) return
+  arr.splice(index, 1)
+  if (arr.length == 0) delete appConfig.value[key]
+}
 
 const levels = ["trace", "debug", "info", "warn", "error", "fatal", "panic"]
 const certificateModes = [
