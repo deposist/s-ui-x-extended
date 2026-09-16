@@ -7,10 +7,12 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 
 ## [1.1.1-beta5] - 2026-09-16 - Additional collections visible on the Basics tab
 
-- Fixed the missing Additional collections section. Beta4 mounted the structured forms on a page the panel no longer renders; the section now appears on the Basics tab in Settings, in both the nexus grid and the classic expansion panels.
-- Certificate providers, HTTP clients and network namespaces are editable as cards. Deleting the last item drops the empty collection, and the panel Save button stores all three collections in one request.
+- Fixed the missing Additional collections section. Beta4 mounted the structured forms on a page the panel no longer renders; the section now appears on the Basics tab in Settings, in both the nexus grid and the classic expansion panels. It is the last section on the tab, after Experimental settings, with editors for certificate providers (ACME, Tailscale, Cloudflare Origin CA), reusable HTTP clients and Linux network namespaces.
+- Certificate providers let the core obtain certificates on its own: ACME issues and renews Let's Encrypt certificates through HTTP-01, TLS-ALPN-01 or DNS-01, Tailscale takes certificates from an existing Tailscale endpoint, and Cloudflare Origin CA covers servers behind Cloudflare. HTTP clients are named transports referenced by tag from ACME providers, rule-sets and providers. Network namespaces open an existing namespace or create an isolated one when the core starts; saving the form changes only the configuration.
+- Saved items appear as cards. Deleting the last item drops the empty collection, and the panel Save button stores all three collections in one request. The beta3 protocol fields (QUIC options for Hysteria, Hysteria 2 and TUIC behind the QUIC switch; Mieru MTU and handshake mode; MASQUE local address and port; WireGuard UDP options) live in the protocol forms on the Inbounds and Outbounds pages.
 
 Full release notes: [`docs/releases/v1.1.1-beta5.md`](docs/releases/v1.1.1-beta5.md).
+
 
 ## [1.1.1-beta4] - 2026-09-15 - structured core setting forms and QUIC editor fix
 

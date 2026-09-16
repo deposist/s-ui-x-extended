@@ -6,10 +6,12 @@
 
 ## [1.1.1-beta5] - 2026-09-16 - Basics 标签页显示“其他集合”分区
 
-- 修复缺失的“其他集合”分区。beta4 把结构化表单挂在了面板不再渲染的页面上；现在该分区出现在设置的 Basics 标签页中，nexus 网格和经典折叠面板两种布局都有。
-- 证书提供者、HTTP 客户端和网络命名空间以卡片形式编辑。删除最后一项会移除空集合，面板的 Save 按钮会用一个请求保存全部三个集合。
+- 修复缺失的“其他集合”分区。beta4 把结构化表单挂在了面板不再渲染的页面上；现在该分区出现在设置的 Basics 标签页中，nexus 网格和经典折叠面板两种布局都有。它是标签页最后一个分区，位于 Experimental settings 之后，包含证书提供者（ACME、Tailscale、Cloudflare Origin CA）、可复用 HTTP 客户端和 Linux 网络命名空间的编辑器。
+- 证书提供者让核心自行获取证书：ACME 通过 HTTP-01、TLS-ALPN-01 或 DNS-01 签发并续期 Let's Encrypt 证书，Tailscale 从现有 Tailscale 端点获取证书，Cloudflare Origin CA 面向 Cloudflare 之后的服务器。HTTP 客户端是按标签引用的命名传输，ACME 提供者、rule-set 和 provider 都可以引用它。网络命名空间可打开现有命名空间，或在核心启动时创建隔离命名空间；保存表单只改动配置。
+- 条目以卡片显示。删除最后一项会移除空集合，面板的 Save 按钮会用一个请求保存全部三个集合。beta3 的协议字段（QUIC 开关后面的 Hysteria、Hysteria 2 和 TUIC QUIC 选项；Mieru 的 MTU 与握手模式；MASQUE 的本地地址和端口；WireGuard 的 UDP 选项）位于 Inbounds 和 Outbounds 页面的协议表单中。
 
 完整发行说明：[`docs/releases/v1.1.1-beta5.md`](docs/releases/v1.1.1-beta5.md)。
+
 
 ## [1.1.1-beta4] - 2026-09-15 - 核心共享设置表单与 QUIC 编辑器修复
 

@@ -2,9 +2,17 @@
 
 The Additional collections section is now visible on the Basics tab in Settings. Beta4 added the structured forms but mounted them on a page the panel no longer renders, so the new fields never appeared. This release puts them in the tab users actually see.
 
-Certificate providers (ACME, Tailscale, Cloudflare Origin CA), reusable HTTP clients and Linux network namespaces are editable as cards with add, edit and delete actions. Forms validate input before saving. The panel Save button writes all three collections to the panel database in one request; this was verified end to end on a live panel.
+Where to look: open Settings, switch to the Basics tab and scroll to the bottom. Advanced Collections is the last section, after Experimental settings. It holds three editors, each with an add button: certificate providers (ACME, Tailscale, Cloudflare Origin CA), reusable HTTP clients, and Linux network namespaces.
 
-The section appears in both panel layouts, the nexus grid and the classic expansion panels.
+What the collections do:
+
+- Certificate providers. The core obtains certificates on its own. An ACME provider issues and renews Let's Encrypt certificates through HTTP-01, TLS-ALPN-01 or DNS-01, so an inbound or endpoint with TLS gets a real certificate without manual steps. A Tailscale provider takes certificates from your existing Tailscale endpoint; a Cloudflare Origin CA provider covers servers behind Cloudflare.
+- HTTP clients. A named HTTP transport configured once: engine, HTTP versions 1 through 3, headers, receive windows, TLS and dial settings. ACME providers, rule-sets and providers reference it by tag instead of repeating the settings.
+- Network namespaces (Linux only). Default opens an existing namespace by path; unshare creates an isolated one when the core starts. Saving the form changes only the configuration, the panel creates nothing.
+
+The beta3 protocol fields live in the protocol forms on the Inbounds and Outbounds pages, most of them after the related toggle is on: QUIC options for Hysteria, Hysteria 2 and TUIC appear when the QUIC settings switch is enabled; Mieru has MTU and handshake mode; MASQUE has a local address and port; WireGuard has UDP mapping, UDP filtering and UDP NAT limits. OpenVPN endpoints, the cloudflared inbound and the usbip services are separate entries on the Endpoints, Inbounds and Services pages.
+
+Forms validate input before saving. The panel Save button writes all three collections to the panel database in one request; this was verified end to end on a live panel.
 
 The database schema is unchanged from beta4. No migration is required.
 
@@ -29,9 +37,17 @@ systemctl is-active s-ui  # active
 
 Раздел «Additional collections» теперь виден на вкладке «Basics» в настройках. Beta4 добавил структурированные формы, но разместил их на странице, которую панель больше не рендерит, поэтому новые поля не появлялись. Этот релиз помещает их во вкладку, которую видит пользователь.
 
-Провайдеры сертификатов (ACME, Tailscale, Cloudflare Origin CA), общие HTTP-клиенты и сетевые пространства имён Linux редактируются как карточки с действиями добавления, правки и удаления. Формы проверяют ввод до сохранения. Кнопка Save панели записывает все три коллекции в базу одним запросом; это проверено на живой панели.
+Где искать: откройте настройки, перейдите на вкладку «Basics» и прокрутите вниз. Advanced collections - последний раздел, после Experimental settings. В нём три редактора с кнопкой добавления: провайдеры сертификатов (ACME, Tailscale, Cloudflare Origin CA), общие HTTP-клиенты и сетевые пространства имён Linux.
 
-Раздел появляется в обеих раскладках панели: в nexus-гриде и в классических expansion-панелях.
+Что делают коллекции:
+
+- Провайдеры сертификатов. Ядро получает сертификаты само. ACME выпускает и перевыпускает сертификаты Let's Encrypt через HTTP-01, TLS-ALPN-01 или DNS-01, поэтому inbound или endpoint с TLS получает настоящий сертификат без ручных шагов. Провайдер Tailscale берёт сертификаты у существующего Tailscale-эндпоинта; Cloudflare Origin CA - для серверов за Cloudflare.
+- HTTP-клиенты. Именованный HTTP-транспорт, который настраивают один раз: движок, версии HTTP с первой по третью, заголовки, окна приёма, TLS и настройки исходящего соединения. ACME-провайдеры, rule-set и провайдеры ссылаются на него по тегу, а не повторяют настройки.
+- Сетевые пространства имён (только Linux). Режим default открывает существующее пространство по пути; unshare создаёт изолированное при запуске ядра. Сохранение формы меняет только конфигурацию, панель ничего не создаёт.
+
+Поля протоколов из beta3 живут в формах протоколов на страницах Inbounds и Outbounds, большинство появляется после включения соответствующего переключателя: QUIC-опции у Hysteria, Hysteria 2 и TUIC видны при включённом переключателе QUIC-настроек; у Mieru есть MTU и режим рукопожатия; у MASQUE - локальный адрес и порт; у WireGuard - UDP mapping, UDP filtering и лимиты UDP NAT. Эндпоинты OpenVPN, inbound cloudflared и службы usbip - отдельные записи на страницах Endpoints, Inbounds и Services.
+
+Формы проверяют ввод до сохранения. Кнопка Save панели записывает все три коллекции в базу одним запросом; это проверено на живой панели.
 
 Схема базы данных не менялась со времён beta4. Миграция не требуется.
 
