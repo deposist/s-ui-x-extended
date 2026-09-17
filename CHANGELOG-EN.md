@@ -5,6 +5,11 @@ All notable changes to this project are documented in this file.
 This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 `CHANGELOG-ZH.md` for Simplified Chinese.
 
+## [Unreleased]
+
+- Fixed hot-reload of managed AWG endpoints: saving an endpoint (for example toggling the AmneziaWG 3.1 switches) recreated it inside the running core without client preshared keys - peers are stored in the database without PSKs, and only the full core start injected them. Every client then failed handshakes until the s-ui service was restarted. Hot reload now injects the PSKs the same way the full start does; an integration test completes a real handshake after the reload and checks the PSK and both 3.1 flags in the live core.
+- The release CI pipeline runs the AmneziaWG 3.1 random trailers wire-format integration test alongside the existing AWG 2.0 test.
+
 ## [1.1.1-beta8] - 2026-09-17 - AmneziaWG 3.1 random trailers fix
 
 - Fixed handshakes with Random trailers (3.1) enabled: with the beta7 flag no client could connect and the panel showed no handshakes. The engine marshaled the handshake message into a message-plus-trailer buffer; the marshaling code demands the exact message size, returned a length error, and the caller ignored it, so packets went out without a handshake body.

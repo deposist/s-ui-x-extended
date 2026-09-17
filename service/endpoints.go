@@ -280,6 +280,23 @@ func (s *EndpointService) RestartEndpoints(tx *gorm.DB, ids []uint) error {
 		if err != nil {
 			return err
 		}
+		// Managed AWG endpoints store peers without preshared keys (the
+		// plaintext PSKs live only encrypted in awg_devices). The full-start
+		// path injects them via InjectManagedAWGEndpointPeers; a hot reload
+		// must do the same or the recreated device loses every PSK and no
+		// handshake ever completes again. Reconcile cannot repair this: it
+		// skips peers whose public key and allowed IP already match.
+		metadata, metadataErr := parseAWGEndpointMetadata(*endpoint)
+		if metadataErr != nil {
+			return metadataErr
+		}
+		if metadata.Managed {
+			injected, injectErr := InjectManagedAWGEndpointPeers(tx, []json.RawMessage{endpointConfig})
+			if injectErr != nil {
+				return injectErr
+			}
+			endpointConfig = injected[0]
+		}
 		if err := coreInstance.AddEndpoint(endpointConfig); err != nil {
 			return err
 		}

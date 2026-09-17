@@ -88,6 +88,9 @@ jobs:
       - name: AWG 2.0 live WireGuard integration
         run: sudo -E "$(command -v go)" test -tags="integration with_wireguard with_gvisor" ./core -run TestAWG2ServerEndpoint -count=1
 
+      - name: AWG 3.1 random trailers wire format
+        run: sudo -E "$(command -v go)" test -tags="integration with_wireguard with_gvisor" ./core -run TestAWG31RandomTrailersHandshakeWire -count=1
+
   build-frontend:
     needs: release-ref
     runs-on: ubuntu-latest
