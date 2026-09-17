@@ -217,7 +217,7 @@ S-UI-X Extended это веб-панель на базе [`sing-box-extended`](h
 | Канал | Версия | Заметки |
 |---|---|---|
 | Stable | `v1.0.7` | Рекомендуется для production. Меню управления остаётся доступным во время запуска сервиса, управление Sudoku-ключами стало понятнее, а очистка домена отключает сертификаты панели и подписок. Release notes: [`docs/releases/v1.0.7.md`](docs/releases/v1.0.7.md). |
-| Beta | [`v1.1.1-beta6`](docs/releases/v1.1.1-beta6.md) | Исправляет зависание остановки и перезапуска ядра при включённом MTProxy. |
+| Beta | [`v1.1.1-beta7`](docs/releases/v1.1.1-beta7.md) | Переключатели AmneziaWG 3.1 (случайные трейлеры, отключение cookies) в форме WireGuard-эндпоинта; ядро обновлено до `v1.14.0-extended-2.7.5`. |
 
 ### Linux/macOS, stable
 

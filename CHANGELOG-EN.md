@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 `CHANGELOG-ZH.md` for Simplified Chinese.
 
+## [1.1.1-beta7] - 2026-09-17 - AmneziaWG 3.1 switches
+
+- AmneziaWG 3.1 switches in the WireGuard endpoint form: Random trailers appends random bytes to every packet so handshakes lose their fixed size, and Disable cookies stops cookie replies and MAC2 checks under load. Random trailers must match on the server and every client (clients older than AmneziaVPN 5.0.1.5 do not know the key); Disable cookies is server-side only.
+- The bundled core is now sing-box-extended `v1.14.0-extended-2.7.5`, which exposes both options in the wireguard and warp amnezia schemas and passes them to the engine. The engine implementation was already present.
+- Both switches default to off and are written into configs only when enabled. Managed AWG device configs, QR codes and `.conf` downloads carry the flags. No database migration; existing endpoints and device configs are unchanged.
+
+Full release notes: [`docs/releases/v1.1.1-beta7.md`](docs/releases/v1.1.1-beta7.md).
+
 ## [1.1.1-beta6] - 2026-09-16 - MTProxy core restart fix
 
 - Fixed a core shutdown hang with MTProxy enabled. The panel could report the core as stopped while the MTProxy port stayed open, and subsequent start or restart requests could not complete.

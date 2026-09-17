@@ -4,6 +4,14 @@
 
 这是中文版更新日志。英文版请见 `CHANGELOG-EN.md`，俄文版请见 `CHANGELOG-RU.md`。
 
+## [1.1.1-beta7] - 2026-09-17 - AmneziaWG 3.1 开关
+
+- WireGuard 端点表单新增 AmneziaWG 3.1 开关：「随机尾部」为每个包追加随机字节，让握手报文不再有固定尺寸；「禁用 cookies」在负载下不再回应 cookie-reply，并跳过 MAC2 检查。随机尾部必须在服务器和所有客户端两端一致（低于 AmneziaVPN 5.0.1.5 的客户端不认识该键）；禁用 cookies 仅服务器端生效。
+- 内置核心更新为 sing-box-extended `v1.14.0-extended-2.7.5`，在 wireguard 与 warp 的 amnezia 配置中开放这两个选项并传给引擎。引擎本身的实现此前已具备。
+- 两个开关默认关闭，仅在启用时写入配置。受管 AWG 设备配置、二维码和 `.conf` 下载都会携带这两个标志。无需数据库迁移；现有端点与设备配置保持不变。
+
+完整发行说明：[`docs/releases/v1.1.1-beta7.md`](docs/releases/v1.1.1-beta7.md)。
+
 ## [1.1.1-beta6] - 2026-09-16 - 修复 MTProxy 核心重启卡住
 
 - 修复启用 MTProxy 时核心停止过程卡住的问题。面板可能显示核心已停止，但 MTProxy 端口仍在监听，后续启动或重启请求无法完成。
