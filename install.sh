@@ -410,7 +410,16 @@ config_after_install() {
     /usr/local/s-ui/sui migrate
 
     echo -e "${yellow}$(t install_done)${plain}"
-    read -rp "$(t continue_settings)" config_confirm
+    if [[ -t 0 ]]; then
+        read -rp "$(t continue_settings)" config_confirm
+    else
+        # Non-interactive stdin (curl | bash): `read` would hit EOF and return 1,
+        # which under `set -e` + the ERR trap aborts the committed transaction and
+        # rolls back the whole install. Treat EOF as "decline" instead, matching
+        # the interactive default of answering anything but y/Y.
+        echo "$(t continue_settings)"
+        config_confirm=""
+    fi
     if [[ "${config_confirm}" == "y" || "${config_confirm}" == "Y" ]]; then
         echo -e "$(t enter_panel_port)"
         read -r config_port

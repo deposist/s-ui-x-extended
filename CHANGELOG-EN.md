@@ -5,10 +5,14 @@ All notable changes to this project are documented in this file.
 This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 `CHANGELOG-ZH.md` for Simplified Chinese.
 
-## [Unreleased]
+## [1.1.1-beta9] - 2026-09-17 - installer rollback and AWG hot-reload fixes
 
+- Fixed fresh installs through the pipe form (`curl ... | sudo bash -s -- v1.1.1-beta9`): the installer completed every step, but the final settings prompt read from a pipe, `read` hit end of input and returned an error, and the error trap ran the rollback, which removed the just-installed binary and the `s-ui.service` unit and then reported a rollback error of its own. The prompt now runs only when standard input is a terminal; with a pipe the installer takes the default answer and finishes normally, leaving the service created, enabled and running (issue #9).
 - Fixed hot-reload of managed AWG endpoints: saving an endpoint (for example toggling the AmneziaWG 3.1 switches) recreated it inside the running core without client preshared keys - peers are stored in the database without PSKs, and only the full core start injected them. Every client then failed handshakes until the s-ui service was restarted. Hot reload now injects the PSKs the same way the full start does; an integration test completes a real handshake after the reload and checks the PSK and both 3.1 flags in the live core.
 - The release CI pipeline runs the AmneziaWG 3.1 random trailers wire-format integration test alongside the existing AWG 2.0 test.
+
+Full release notes: [`docs/releases/v1.1.1-beta9.md`](docs/releases/v1.1.1-beta9.md).
+
 
 ## [1.1.1-beta8] - 2026-09-17 - AmneziaWG 3.1 random trailers fix
 

@@ -143,7 +143,7 @@ grep -Fq 'config_after_install' "${installer}"
 # Every remote shell download is a successful HTTPS-to-file transfer before a
 # separately named interpreter invocation.  Streaming/process substitution is
 # forbidden in the management script.
-grep -Fq "--proto-redir '=https'" "${menu_script}"
+grep -Fq -- "--proto-redir '=https'" "${menu_script}"
 grep -Fq -- '--output "${temporary}"' "${menu_script}"
 grep -Fq 'bash "${installer}"' "${menu_script}"
 if grep -Eq '(bash|sh)[[:space:]]*<\(|<\(curl|curl[^|]*\|[[:space:]]*(bash|sh)|wget[^|]*\|[[:space:]]*(bash|sh)' "${menu_script}"; then

@@ -219,7 +219,7 @@ and tokens. Database migrations run on the first start after an upgrade.
 | Channel | Version | Notes |
 | --- | --- | --- |
 | Stable | [`v1.1.0`](docs/releases/v1.1.0.md) | Recommended for production. Includes the full 1.1.0 beta series: managed AmneziaWG in panel settings with automatic device keys and obfuscation presets, call outbound and telegram backup fixes, and panel startup and self-update fixes. |
-| Beta | [`v1.1.1-beta8`](docs/releases/v1.1.1-beta8.md) | AmneziaWG 3.1 random trailers fix: handshakes failed with the beta7 switch on; engine repinned to `deposist/wireguard-go v0.0.5-extended-1.6.2`. |
+| Beta | [`v1.1.1-beta9`](docs/releases/v1.1.1-beta9.md) | Installer fix: fresh installs through `curl | sudo bash -s` no longer roll themselves back after finishing. AmneziaWG hot-reload fix: saving a managed endpoint no longer drops client preshared keys. |
 
 ### Upgrade to the current stable release
 
@@ -233,12 +233,12 @@ curl -fLsS \
 
 ### Upgrade to the current beta release
 
-This command installs or upgrades the server to `v1.1.1-beta8`:
+This command installs or upgrades the server to `v1.1.1-beta9`:
 
 ```sh
 curl -fLsS \
-  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.1-beta8/install.sh \
-  | sudo bash -s -- v1.1.1-beta8
+  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.1-beta9/install.sh \
+  | sudo bash -s -- v1.1.1-beta9
 ```
 
 The version argument matters. If you run a tagged `install.sh` without an
@@ -274,7 +274,7 @@ sudo bash install.sh v1.1.0
 ### Windows
 
 - Stable: download [`v1.1.0`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.0), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
-- Beta: download [`v1.1.1-beta8`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.1-beta8), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
+- Beta: download [`v1.1.1-beta9`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.1-beta9), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
 
 Upgrade and rollback notes are in the changelogs:
 [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), and [中文](CHANGELOG-ZH.md).
