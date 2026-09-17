@@ -140,6 +140,14 @@
               :error-messages="errorText('content_padding_addition')"></v-text-field>
           </v-col>
         </v-row>
+        <v-row>
+          <v-col cols="12" sm="6" md="4">
+            <v-switch color="primary" hide-details :label="$t('types.amnezia.randomTrailers')" v-model="randomTrailers"></v-switch>
+          </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-switch color="primary" hide-details :label="$t('types.amnezia.disableCookies')" v-model="disableCookies"></v-switch>
+          </v-col>
+        </v-row>
       </template>
       <v-row>
         <v-col cols="12" sm="6" md="4">
@@ -301,6 +309,23 @@ export default {
     maxHandshakeAttempts: {
       get(): string { return this.amnezia.max_handshake_attempts != undefined ? String(this.amnezia.max_handshake_attempts) : '' },
       set(v: string) { this.setRange('max_handshake_attempts', v) },
+    },
+    // AmneziaWG 3.1 switches. Written only when true: absence means false, so
+    // older clients (AmneziaVPN < 5.0.1.5, which do not know the keys) and
+    // older cores keep receiving a config without the unknown fields.
+    randomTrailers: {
+      get(): boolean { return this.amnezia.random_trailers === true },
+      set(v: boolean) {
+        if (v) this.amnezia.random_trailers = true
+        else delete this.amnezia.random_trailers
+      },
+    },
+    disableCookies: {
+      get(): boolean { return this.amnezia.disable_cookies === true },
+      set(v: boolean) {
+        if (v) this.amnezia.disable_cookies = true
+        else delete this.amnezia.disable_cookies
+      },
     },
   },
   watch: {

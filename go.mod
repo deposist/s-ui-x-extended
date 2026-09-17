@@ -269,7 +269,7 @@ require (
 // It keeps the upstream module path (drop-in via replace). Go ignores `replace`
 // directives from dependencies, so the fork's nested replaces are duplicated here
 // and must stay in sync with the fork's own go.mod when bumping the pin.
-replace github.com/sagernet/sing-box => github.com/deposist/sing-box-extended v1.14.0-extended-2.7.4
+replace github.com/sagernet/sing-box => github.com/deposist/sing-box-extended v1.14.0-extended-2.7.5
 
 replace github.com/sagernet/sing => github.com/shtorm-7/sing v0.9.0-beta.4-extended-1.2.1
 

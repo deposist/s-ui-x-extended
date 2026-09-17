@@ -1874,6 +1874,8 @@ export default {
       rejectAfterTime: "Отклонение после (с)",
       keepaliveTimeout: "Таймаут keepalive (с)",
       maxHandshakeAttempts: "Максимум попыток рукопожатия",
+      randomTrailers: "Случайные трейлеры (3.1)",
+      disableCookies: "Отключить cookies (3.1)",
       randomize: "Случайные значения",
       recommended: "Рекомендуемые",
       hardened: "Усиленные (рандом)",

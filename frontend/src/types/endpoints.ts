@@ -54,6 +54,8 @@ export interface WireGuardAmnezia {
   reject_after_time?: number | string
   keepalive_timeout?: number | string
   max_handshake_attempts?: number | string
+  random_trailers?: boolean
+  disable_cookies?: boolean
 }
 
 export interface WireGuard extends EndpointBasics, Dial {

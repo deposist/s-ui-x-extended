@@ -58,6 +58,8 @@ type awgManagedEndpointOptions struct {
 		RejectAfterTime        any    `json:"reject_after_time"`
 		KeepaliveTimeout       any    `json:"keepalive_timeout"`
 		MaxHandshakeAttempts   any    `json:"max_handshake_attempts"`
+		RandomTrailers         bool   `json:"random_trailers"`
+		DisableCookies         bool   `json:"disable_cookies"`
 	} `json:"amnezia"`
 }
 

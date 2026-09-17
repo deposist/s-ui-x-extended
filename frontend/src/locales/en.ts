@@ -1866,6 +1866,8 @@ export default {
       rejectAfterTime: "Reject after time (s)",
       keepaliveTimeout: "Keepalive timeout (s)",
       maxHandshakeAttempts: "Max handshake attempts",
+      randomTrailers: "Random trailers (3.1)",
+      disableCookies: "Disable cookies (3.1)",
       randomize: "Randomize",
       recommended: "Recommended",
       hardened: "Hardened (randomized)",

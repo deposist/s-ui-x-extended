@@ -123,6 +123,12 @@ func (m *AWGManager) renderOwnedConfigInWorker(deviceID, clientID uint) ([]byte,
 	writeAWGConfigValue(&config, "RejectAfterTime", a.RejectAfterTime)
 	writeAWGConfigValue(&config, "KeepaliveTimeout", a.KeepaliveTimeout)
 	writeAWGConfigValue(&config, "MaxHandshakeAttempts", a.MaxHandshakeAttempts)
+	if a.RandomTrailers {
+		config.WriteString("RandomTrailers = true\n")
+	}
+	if a.DisableCookies {
+		config.WriteString("DisableCookies = true\n")
+	}
 	config.WriteString("\n[Peer]\n")
 	config.WriteString("PublicKey = " + managed.ServerPublicKey + "\n")
 	config.WriteString("PresharedKey = " + base64.StdEncoding.EncodeToString(psk) + "\n")
