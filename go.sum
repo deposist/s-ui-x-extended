@@ -87,6 +87,8 @@ github.com/deposist/sing-box-extended v1.14.0-extended-2.7.5 h1:PORmZJ2NHg76ag34
 github.com/deposist/sing-box-extended v1.14.0-extended-2.7.5/go.mod h1:/mW1wYh7fgsy+soRcZQdOVb/BxSHJJ9VKeo34c/xVT0=
 github.com/deposist/sing-openvpn v0.0.1-deposist.1 h1:huTc8UttXt5UhHZNVDeXjHpHRDRdmIJLUHvzGGuDUtU=
 github.com/deposist/sing-openvpn v0.0.1-deposist.1/go.mod h1:PWX7WygD8jpwfqfaGNySXpJYTn0SOwjBI1BKHHC2+Bw=
+github.com/deposist/wireguard-go v0.0.5-extended-1.6.2 h1:HohOkv1DKnO8HekKtsjxQa+EDLdj0bn7cimS1ZVUTNo=
+github.com/deposist/wireguard-go v0.0.5-extended-1.6.2/go.mod h1:1VZmkU7yPAZVE0XKufUqqAhEY1RnWUcyZLmry85y+7A=
 github.com/dgryski/go-camellia v0.0.0-20191119043421-69a8a13fb23d h1:CPqTNIigGweVPT4CYb+OO2E6XyRKFOmvTHwWRLgCAlE=
 github.com/dgryski/go-camellia v0.0.0-20191119043421-69a8a13fb23d/go.mod h1:QX5ZVULjAfZJux/W62Y91HvCh9hyW6enAwcrrv/sLj0=
 github.com/dgryski/go-metro v0.0.0-20180109044635-280f6062b5bc h1:8WFBn63wegobsYAX0YjD+8suexZDga5CctH4CCTx2+8=
@@ -484,8 +486,6 @@ github.com/shtorm-7/sing-vmess v0.2.8-extended-1.0.0 h1:OjvqZOhYSi9eIJGYC0iPDPqv
 github.com/shtorm-7/sing-vmess v0.2.8-extended-1.0.0/go.mod h1:P11scgTxMxVVQ8dlM27yNm3Cro40mD0+gHbnqrNGDuY=
 github.com/shtorm-7/tailscale v1.102.1-sing-box-1.14-mod.4-extended-1.0.3 h1:AG4leaIK/VByNXDCPtxtBjLc1orPAtBBNcfw+rebPno=
 github.com/shtorm-7/tailscale v1.102.1-sing-box-1.14-mod.4-extended-1.0.3/go.mod h1:+1R9TnmCDbxb7h7ZOBKxi5UI6aWf+polOO/fc0WB/4o=
-github.com/shtorm-7/wireguard-go v0.0.5-extended-1.6.1 h1:lLd8c5SNbm01idBlaSc18Urn4i4/ME/Umu8BeQLJ/io=
-github.com/shtorm-7/wireguard-go v0.0.5-extended-1.6.1/go.mod h1:1VZmkU7yPAZVE0XKufUqqAhEY1RnWUcyZLmry85y+7A=
 github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e h1:MRM5ITcdelLK2j1vwZ3Je0FKVCfqOLp5zO6trqMLYs0=
 github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e/go.mod h1:XV66xRDqSt+GTGFMVlhk3ULuV0y9ZmzeVGR4mloJI3M=
 github.com/smallstep/pkcs7 v0.1.1 h1:x+rPdt2W088V9Vkjho4KtoggyktZJlMduZAtRHm68LU=

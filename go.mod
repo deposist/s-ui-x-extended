@@ -273,7 +273,7 @@ replace github.com/sagernet/sing-box => github.com/deposist/sing-box-extended v1
 
 replace github.com/sagernet/sing => github.com/shtorm-7/sing v0.9.0-beta.4-extended-1.2.1
 
-replace github.com/sagernet/wireguard-go => github.com/shtorm-7/wireguard-go v0.0.5-extended-1.6.1
+replace github.com/sagernet/wireguard-go => github.com/deposist/wireguard-go v0.0.5-extended-1.6.2
 
 replace github.com/sagernet/tailscale => github.com/shtorm-7/tailscale v1.102.1-sing-box-1.14-mod.4-extended-1.0.3
 

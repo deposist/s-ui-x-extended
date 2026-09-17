@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 `CHANGELOG-ZH.md` for Simplified Chinese.
 
+## [1.1.1-beta8] - 2026-09-17 - AmneziaWG 3.1 random trailers fix
+
+- Fixed handshakes with Random trailers (3.1) enabled: with the beta7 flag no client could connect and the panel showed no handshakes. The engine marshaled the handshake message into a message-plus-trailer buffer; the marshaling code demands the exact message size, returned a length error, and the caller ignored it, so packets went out without a handshake body.
+- The engine is repinned to `deposist/wireguard-go v0.0.5-extended-1.6.2` (commit `8f4b19e`, fork of `shtorm-7/wireguard-go v1.6.1`): initiation, response and cookie reply are marshaled into an exact-size slice, and a marshaling error aborts the send. The wire format with trailers is covered by an engine loopback test and a panel integration test against the real core.
+- Disable cookies is unaffected. Clients on AmneziaVPN 5.0.1.5 or newer connect as before; the flag must still match on the server and every client. No database migration.
+
+Full release notes: [`docs/releases/v1.1.1-beta8.md`](docs/releases/v1.1.1-beta8.md).
+
 ## [1.1.1-beta7] - 2026-09-17 - AmneziaWG 3.1 switches
 
 - AmneziaWG 3.1 switches in the WireGuard endpoint form: Random trailers appends random bytes to every packet so handshakes lose their fixed size, and Disable cookies stops cookie replies and MAC2 checks under load. Random trailers must match on the server and every client (clients older than AmneziaVPN 5.0.1.5 do not know the key); Disable cookies is server-side only.

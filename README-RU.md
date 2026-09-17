@@ -217,7 +217,7 @@ S-UI-X Extended это веб-панель на базе [`sing-box-extended`](h
 | Канал | Версия | Заметки |
 |---|---|---|
 | Stable | `v1.0.7` | Рекомендуется для production. Меню управления остаётся доступным во время запуска сервиса, управление Sudoku-ключами стало понятнее, а очистка домена отключает сертификаты панели и подписок. Release notes: [`docs/releases/v1.0.7.md`](docs/releases/v1.0.7.md). |
-| Beta | [`v1.1.1-beta7`](docs/releases/v1.1.1-beta7.md) | Переключатели AmneziaWG 3.1 (случайные трейлеры, отключение cookies) в форме WireGuard-эндпоинта; ядро обновлено до `v1.14.0-extended-2.7.5`. |
+| Beta | [`v1.1.1-beta8`](docs/releases/v1.1.1-beta8.md) | Исправление случайных трейлеров AmneziaWG 3.1: с включённым флагом beta7 рукопожатия падали; движок перпиннен на `deposist/wireguard-go v0.0.5-extended-1.6.2`. |
 
 ### Linux/macOS, stable
 
