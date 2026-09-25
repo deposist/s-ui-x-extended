@@ -133,3 +133,26 @@ func TestFailoverProbeRecordsOutboundHealthSnapshot(t *testing.T) {
 		t.Fatalf("stored snapshot = %+v, probe result = %+v", stored, got)
 	}
 }
+
+// Rolling state must not outlive the groups and members it belongs to: the job
+// lives for the whole scheduler lifetime, so leftovers would accumulate forever.
+func TestFailoverJobPrunesRemovedGroupsAndMembers(t *testing.T) {
+	cur := time.Unix(1000, 0)
+	active := "a"
+	var switches []string
+	j := newTestFailoverJob(func() time.Time { return cur }, func(string) bool { return true }, &active, &switches)
+
+	for _, tag := range []string{"g1", "g2", "g3"} {
+		j.runGroup(nil, service.FailoverGroupConfig{Tag: tag, Members: []string{"a", "b", "c"}, ProbeTarget: "x", Interval: time.Second, Hysteresis: 1, Enabled: true}, "")
+	}
+	j.pruneStates([]string{"g2"})
+	if len(j.states) != 1 || j.states["g2"] == nil {
+		t.Fatalf("states after prune = %v, want only g2", j.states)
+	}
+
+	cur = cur.Add(time.Second)
+	j.runGroup(nil, service.FailoverGroupConfig{Tag: "g2", Members: []string{"a"}, ProbeTarget: "x", Interval: time.Second, Hysteresis: 1, Enabled: true}, "")
+	if health := j.states["g2"].health; len(health) != 1 {
+		t.Fatalf("member health after removing members = %v, want only a", health)
+	}
+}
