@@ -216,13 +216,13 @@ S-UI-X Extended это веб-панель на базе [`sing-box-extended`](h
 
 | Канал | Версия | Заметки |
 |---|---|---|
-| Stable | `v1.0.7` | Рекомендуется для production. Меню управления остаётся доступным во время запуска сервиса, управление Sudoku-ключами стало понятнее, а очистка домена отключает сертификаты панели и подписок. Release notes: [`docs/releases/v1.0.7.md`](docs/releases/v1.0.7.md). |
-| Beta | [`v1.1.1-beta9`](docs/releases/v1.1.1-beta9.md) | Исправление установщика: чистая установка через `curl | sudo bash -s` больше не откатывает сама себя после завершения. Исправление горячей перезагрузки AmneziaWG: сохранение управляемого эндпоинта больше не теряет общие ключи клиентов. |
+| Stable | [`v1.1.1`](docs/releases/v1.1.1.md) | Рекомендуется для production. Включает всю линейку 1.1.1: ядро sing-box-extended 1.14, AmneziaWG 3.1 со случайными трейлерами и отключением cookies, эндпоинты OpenVPN, структурированные формы ядра и исправления утечки памяти failover и отката установщика. |
+| Beta | [`v1.1.1`](docs/releases/v1.1.1.md) | Линейка 1.1.1 выпущена как stable. |
 
 ### Linux/macOS, stable
 
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.7/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.1/install.sh)
 ```
 
 Эта команда ставит последний stable release. Укажите тег версии явно, если нужна конкретная beta или старая сборка.
@@ -230,14 +230,14 @@ bash <(curl -Ls https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.
 ### Локальный clone
 
 ```sh
-git clone --branch v1.0.2 --depth 1 https://github.com/deposist/s-ui-x-extended.git
+git clone --branch v1.1.1 --depth 1 https://github.com/deposist/s-ui-x-extended.git
 cd s-ui-x-extended
-sudo bash install.sh v1.0.2
+sudo bash install.sh v1.1.1
 ```
 
 ### Windows
 
-- Stable: скачайте `v1.0.2` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.0.2), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
+- Stable: скачайте `v1.1.1` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.1), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
 
 Существующие установки сохраняют settings, users, inbounds, outbounds, clients, TLS, services и tokens. Миграции базы запускаются автоматически при первом старте. Заметки по обновлению и откату находятся в changelog: [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), [中文](CHANGELOG-ZH.md).
 

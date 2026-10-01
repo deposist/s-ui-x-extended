@@ -218,8 +218,8 @@ and tokens. Database migrations run on the first start after an upgrade.
 
 | Channel | Version | Notes |
 | --- | --- | --- |
-| Stable | [`v1.1.0`](docs/releases/v1.1.0.md) | Recommended for production. Includes the full 1.1.0 beta series: managed AmneziaWG in panel settings with automatic device keys and obfuscation presets, call outbound and telegram backup fixes, and panel startup and self-update fixes. |
-| Beta | [`v1.1.1-beta9`](docs/releases/v1.1.1-beta9.md) | Installer fix: fresh installs through `curl | sudo bash -s` no longer roll themselves back after finishing. AmneziaWG hot-reload fix: saving a managed endpoint no longer drops client preshared keys. |
+| Stable | [`v1.1.1`](docs/releases/v1.1.1.md) | Recommended for production. Includes the full 1.1.1 series: sing-box-extended 1.14 core, AmneziaWG 3.1 random trailers and disable-cookies, OpenVPN endpoints, structured core forms, and installer and failover memory leak fixes. |
+| Beta | [`v1.1.1`](docs/releases/v1.1.1.md) | The 1.1.1 series is now released as stable. |
 
 ### Upgrade to the current stable release
 
@@ -227,8 +227,8 @@ This command installs or upgrades the server to `v1.1.0`:
 
 ```sh
 curl -fLsS \
-  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.0/install.sh \
-  | sudo bash -s -- v1.1.0
+  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.1/install.sh \
+  | sudo bash -s -- v1.1.1
 ```
 
 ### Upgrade to the current beta release
@@ -237,8 +237,8 @@ This command installs or upgrades the server to `v1.1.1-beta9`:
 
 ```sh
 curl -fLsS \
-  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.1-beta9/install.sh \
-  | sudo bash -s -- v1.1.1-beta9
+  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.1/install.sh \
+  | sudo bash -s -- v1.1.1
 ```
 
 The version argument matters. If you run a tagged `install.sh` without an
@@ -249,8 +249,8 @@ If you are already running as `root`, the equivalent short form is:
 
 ```sh
 bash <(curl -fLsS \
-  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.1-beta1/install.sh) \
-  v1.1.1-beta1
+  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.1/install.sh) \
+  v1.1.1
 ```
 
 After the upgrade, check the installed version and service state:
@@ -265,16 +265,16 @@ The first command should report the selected version. The second should print `a
 ### Local clone
 
 ```sh
-git clone --branch v1.1.0 --depth 1 \
+git clone --branch v1.1.1 --depth 1 \
   https://github.com/deposist/s-ui-x-extended.git
 cd s-ui-x-extended
-sudo bash install.sh v1.1.0
+sudo bash install.sh v1.1.1
 ```
 
 ### Windows
 
-- Stable: download [`v1.1.0`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.0), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
-- Beta: download [`v1.1.1-beta9`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.1-beta9), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
+- Stable: download [`v1.1.1`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.1), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
+- Beta: download [`v1.1.1`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.1), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
 
 Upgrade and rollback notes are in the changelogs:
 [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), and [中文](CHANGELOG-ZH.md).

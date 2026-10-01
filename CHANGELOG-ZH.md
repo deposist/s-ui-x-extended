@@ -4,6 +4,20 @@
 
 这是中文版更新日志。英文版请见 `CHANGELOG-EN.md`，俄文版请见 `CHANGELOG-RU.md`。
 
+## [1.1.1] - 2026-10-01 - sing-box 1.14、AmneziaWG 3.1、OpenVPN 端点与 failover 内存清理
+
+- 内置核心升级至 sing-box-extended v1.14.0-extended-2.7.5：OpenVPN 客户端与服务端端点、cloudflared 入站、USB/IP 服务，以及 Hysteria、Hysteria 2、TUIC、Mieru、MASQUE 和 WireGuard 的新字段。
+- WireGuard 端点表单新增 AmneziaWG 3.1 开关：“随机尾部”（混淆握手包固定长度）与“禁用 cookies”。
+- 受管 AWG 端点热重载现在正确保留客户端预共享密钥（PSK）。
+- 当 failover 组或成员被删除时，及时清理常驻内存中的状态与健康检查记录（PR #10）。
+- 修复通过管道（`curl ... | sudo bash -s`）安装时错误触发回滚的问题。
+- 在设置的 Basics 标签页提供证书提供者（ACME、Tailscale、Cloudflare Origin CA）、HTTP 客户端和 Linux 网络命名空间的表单化配置。
+- 加固入站保存逻辑：TrustTunnel 强制要求 TLS、Mieru 与 TrustTunnel 自动补齐缺失密码、入站提交前严格校验核心配置。
+- 修复启用 MTProxy 时核心停止过程卡住的问题。
+
+完整发布说明：[`docs/releases/v1.1.1.md`](docs/releases/v1.1.1.md)。
+
+
 ## [1.1.1-beta9] - 2026-09-17 - 安装器回滚与 AWG 热重载修复
 
 - 修复通过管道执行全新安装（`curl ... | sudo bash -s -- v1.1.1-beta9`）的问题：安装器完成全部步骤后，最后的设置提问从管道读取输入，`read` 读到输入末尾并返回错误，错误陷阱随即执行回滚，删掉刚装好的二进制文件和 `s-ui.service` 单元，随后回滚自身也报错。现在只有标准输入是终端时才提示提问；管道输入下安装器采用默认答案并正常结束，服务保持创建、启用并运行（issue #9）。

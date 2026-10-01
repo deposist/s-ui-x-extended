@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 `CHANGELOG-ZH.md` for Simplified Chinese.
 
+## [1.1.1] - 2026-10-01 - sing-box 1.14, AmneziaWG 3.1, OpenVPN endpoints, failover cleanup
+
+- Bundled core is sing-box-extended v1.14.0-extended-2.7.5: OpenVPN client and server endpoints, cloudflared inbound, USB/IP services, and new fields for Hysteria, Hysteria 2, TUIC, Mieru, MASQUE and WireGuard.
+- WireGuard endpoint form adds AmneziaWG 3.1 switches: Random trailers adds random bytes to packet headers to mask fixed handshake sizes, and Disable cookies drops cookie replies and MAC2 checks under load.
+- Hot-reload of managed AWG endpoints now keeps client preshared keys (PSKs).
+- Dropped failover group and member state from memory when groups or members are removed (PR #10).
+- Installer no longer aborts and rolls back when invoked through a pipe (`curl ... | sudo bash -s`).
+- Structured forms for certificate providers (ACME, Tailscale, Cloudflare Origin CA), HTTP clients, and Linux network namespaces on the Basics settings tab.
+- Hardened inbound saves: TrustTunnel requires TLS, Mieru and TrustTunnel generate client passwords when empty, and invalid core configurations are rejected before commit.
+- Fixed core shutdown hang when MTProxy is enabled.
+
+Full release notes: [`docs/releases/v1.1.1.md`](docs/releases/v1.1.1.md).
+
+
 ## [1.1.1-beta9] - 2026-09-17 - installer rollback and AWG hot-reload fixes
 
 - Fixed fresh installs through the pipe form (`curl ... | sudo bash -s -- v1.1.1-beta9`): the installer completed every step, but the final settings prompt read from a pipe, `read` hit end of input and returned an error, and the error trap ran the rollback, which removed the just-installed binary and the `s-ui.service` unit and then reported a rollback error of its own. The prompt now runs only when standard input is a terminal; with a pipe the installer takes the default answer and finishes normally, leaving the service created, enabled and running (issue #9).
