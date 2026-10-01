@@ -61,6 +61,7 @@ func (j *FailoverJob) Run() {
 		tags = append(tags, group.Tag)
 	}
 	service.PruneFailoverLiveStatus(tags)
+	j.pruneStates(tags)
 	if len(groups) == 0 {
 		return
 	}
@@ -72,6 +73,23 @@ func (j *FailoverJob) Run() {
 	for _, group := range groups {
 		j.runGroup(coreInst, group, directTag)
 	}
+}
+
+// pruneStates drops rolling state for groups that no longer exist. The job
+// lives for the whole scheduler lifetime, so without this every group tag ever
+// created (or renamed) would keep its state and health map in memory forever.
+func (j *FailoverJob) pruneStates(keep []string) {
+	keepSet := make(map[string]struct{}, len(keep))
+	for _, tag := range keep {
+		keepSet[tag] = struct{}{}
+	}
+	j.mu.Lock()
+	for tag := range j.states {
+		if _, ok := keepSet[tag]; !ok {
+			delete(j.states, tag)
+		}
+	}
+	j.mu.Unlock()
 }
 
 func (j *FailoverJob) runGroup(coreInst *core.Core, group service.FailoverGroupConfig, directTag string) {
@@ -107,6 +125,13 @@ func (j *FailoverJob) runGroup(coreInst *core.Core, group service.FailoverGroupC
 		h.LastDelayMs = probe.DelayMs
 		h.LastError = probe.Error
 		st.health[member] = h
+	}
+	// Drop health for members removed from the group so it neither grows with
+	// every member ever configured nor feeds stale entries into the snapshot.
+	for member := range st.health {
+		if !memberListContains(group.Members, member) {
+			delete(st.health, member)
+		}
 	}
 	st.lastProbe = j.now()
 	snapshot := make(map[string]service.MemberHealth, len(st.health))
