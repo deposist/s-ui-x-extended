@@ -63,7 +63,7 @@ S-UI-X Extended это веб-панель на базе [`sing-box-extended`](h
 - Английский changelog: [`CHANGELOG-EN.md`](CHANGELOG-EN.md)
 - Русский changelog: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - Changelog на упрощенном китайском: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
-- Заметки последнего стабильного релиза: [`docs/releases/v1.0.7.md`](docs/releases/v1.0.7.md)
+- Заметки последнего стабильного релиза: [`docs/releases/v1.1.1.md`](docs/releases/v1.1.1.md)
 - Справка по паритету с upstream: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 ## Чем отличается от `alireza0/s-ui`
@@ -249,7 +249,7 @@ sudo bash install.sh v1.1.1
 ### Linux/macOS
 
 1. Скачайте последнюю версию S-UI-X Extended для вашей системы и архитектуры из GitHub: [https://github.com/deposist/s-ui-x-extended/releases/latest](https://github.com/deposist/s-ui-x-extended/releases/latest)
-2. Необязательно: скачайте последнюю версию `s-ui.sh`: [https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.2/s-ui.sh](https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.0.2/s-ui.sh)
+2. Необязательно: скачайте последнюю версию `s-ui.sh`: [https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.1/s-ui.sh](https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.1/s-ui.sh)
 3. Необязательно: скопируйте `s-ui.sh` в `/usr/bin/` и выполните `chmod +x /usr/bin/s-ui`.
 4. Распакуйте tar.gz-архив S-UI-X Extended в выбранный каталог и перейдите в распакованную папку.
 5. Скопируйте файлы `*.service` в `/etc/systemd/system/`, затем выполните `systemctl daemon-reload`.

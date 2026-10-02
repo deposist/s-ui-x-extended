@@ -63,7 +63,7 @@ Release history and upgrade notes:
 - English changelog: [`CHANGELOG-EN.md`](CHANGELOG-EN.md)
 - Russian changelog: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - Simplified Chinese changelog: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
-- Latest stable notes: [`docs/releases/v1.1.0.md`](docs/releases/v1.1.0.md)
+- Latest stable notes: [`docs/releases/v1.1.1.md`](docs/releases/v1.1.1.md)
 - Upstream parity reference: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 ## How this fork differs from `alireza0/s-ui`
@@ -223,17 +223,7 @@ and tokens. Database migrations run on the first start after an upgrade.
 
 ### Upgrade to the current stable release
 
-This command installs or upgrades the server to `v1.1.0`:
-
-```sh
-curl -fLsS \
-  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.1/install.sh \
-  | sudo bash -s -- v1.1.1
-```
-
-### Upgrade to the current beta release
-
-This command installs or upgrades the server to `v1.1.1-beta9`:
+This command installs or upgrades the server to `v1.1.1`:
 
 ```sh
 curl -fLsS \
@@ -244,6 +234,14 @@ curl -fLsS \
 The version argument matters. If you run a tagged `install.sh` without an
 argument, the installer queries GitHub for the latest stable release. It does
 not infer the release from the script URL.
+
+To install a specific version explicitly:
+
+```sh
+curl -fLsS \
+  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.1/install.sh \
+  | sudo bash -s -- v1.1.1
+```
 
 If you are already running as `root`, the equivalent short form is:
 
@@ -343,7 +341,7 @@ Docker Compose option:
 ```shell
 services:
   s-ui:
-    image: ghcr.io/deposist/s-ui-x:v1.1.0
+    image: ghcr.io/deposist/s-ui-x:v1.1.1
     container_name: s-ui
     hostname: "s-ui"
     network_mode: host
@@ -368,7 +366,7 @@ docker run -itd \
     -v $PWD/cert/:/root/cert/ \
     --name s-ui \
     --restart=unless-stopped \
-    ghcr.io/deposist/s-ui-x:v1.1.0
+    ghcr.io/deposist/s-ui-x:v1.1.1
 ```
 
 Build the image yourself:
