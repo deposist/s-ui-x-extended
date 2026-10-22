@@ -236,6 +236,8 @@ func InitDB(dbPath string) error {
 		&model.Client{},
 		&model.Changes{},
 		&model.AuditEvent{},
+		&model.Node{},
+		&model.ClientNode{},
 	)
 	if err != nil {
 		return err

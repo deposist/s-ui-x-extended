@@ -63,6 +63,9 @@ import (
 	localProvider "github.com/sagernet/sing-box/provider/local"
 	remoteProvider "github.com/sagernet/sing-box/provider/remote"
 	"github.com/sagernet/sing-box/service/api"
+	"github.com/sagernet/sing-box/service/manager"
+	"github.com/sagernet/sing-box/service/node"
+	nodeManagerAPI "github.com/sagernet/sing-box/service/node_manager_api"
 	originca "github.com/sagernet/sing-box/service/origin_ca"
 	"github.com/sagernet/sing-box/service/resolved"
 	"github.com/sagernet/sing-box/service/ssmapi"
@@ -203,12 +206,18 @@ func DNSTransportRegistry() *dns.TransportRegistry {
 func ServiceRegistry() *service.Registry {
 	registry := service.NewRegistry()
 
-	// NOTE: admin_panel / manager / manager_api / node / node_manager_api are
-	// intentionally NOT registered (centralized fleet management overlaps with
-	// s-ui-x's own panel/auth/DB). See PLAN-s-ui-x-extended.md.
+	// Centralized fleet management: the panel owns the admin UI, auth, audit and
+	// DB, so admin_panel and manager_api stay unregistered — the panel calls the
+	// typed manager interface in process. manager/node/node_manager_api are
+	// registered for the controller/node roles and are only usable when the
+	// binary is built with -tags with_manager (other builds get an explicit
+	// "not included in this build" error at service start).
 	api.RegisterService(registry)
 	resolved.RegisterService(registry)
 	ssmapi.RegisterService(registry)
+	manager.RegisterService(registry)
+	node.RegisterService(registry)
+	nodeManagerAPI.RegisterService(registry)
 
 	registerQUICServices(registry)
 	registerDERPService(registry)

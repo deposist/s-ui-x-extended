@@ -43,6 +43,13 @@ func (s *SubService) GetSubs(subId string) (*string, []string, error) {
 	}
 
 	linksArray := s.LinkService.GetLinks(&client.Links, "all", clientInfo)
+	// Every node the client is assigned to publishes its own links, so the
+	// subscription covers the main server and the fleet in one document. These
+	// are derived from the node's announced inventory, never cached on the
+	// client row, so a node's address change takes effect without touching it.
+	for _, nodeLink := range service.ClientNodeLinks(client) {
+		linksArray = append(linksArray, s.LinkService.addClientInfo(nodeLink["uri"], clientInfo))
+	}
 	result := strings.Join(linksArray, "\n")
 
 	headers := buildClientHeaders(client, cfg)

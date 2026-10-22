@@ -120,6 +120,12 @@ func (s *ClashService) GetClash(subId string) (*string, []string, error) {
 	}
 
 	links := s.LinkService.GetLinks(&client.Links, "external", "")
+	// Nodes a client is assigned to contribute their own links, so a Clash or
+	// JSON subscription covers the main server and the fleet just like the
+	// plain one does.
+	for _, nodeLink := range service.ClientNodeLinks(client) {
+		links = append(links, nodeLink["uri"])
+	}
 	tagNumEnable := 0
 	if len(links) > 1 {
 		tagNumEnable = 1

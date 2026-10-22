@@ -66,3 +66,6 @@ Single source of truth: `core/capabilities/protocols.json`. Derived backend maps
 | usbip-client | – | – | – | – | ✓ | – | – | – | – | with_usbip | all | – | Dials a remote USB/IP server and re-exports the selected devices; same platform limits as usbip-server. |
 | hysteria-realm | – | – | – | – | ✓ | – | – | – | – | with_quic | all | – | — |
 | api | – | – | – | – | ✓ | – | – | – | – | – | all | – | — |
+| manager | – | – | – | – | ✓ | – | – | – | – | with_manager | all | – | Fleet controller: squads, nodes, fleet users and the four limiter kinds, backed by its own SQLite or PostgreSQL database. The Nodes section drives it; it is not offered to other editors. |
+| node | – | – | – | – | ✓ | – | – | – | – | with_manager | all | – | Fleet member role: accepts users and limiters for the inbounds and limiter outbounds listed in its options. |
+| node-manager-api | – | – | – | – | ✓ | – | – | – | – | with_manager | all | – | Transport between controller and members. Server mode listens for members, client mode dials a controller; TLS is optional but recommended. |

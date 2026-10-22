@@ -20,7 +20,7 @@ var knownBuildTags = []string{
 	"with_tailscale", "with_dhcp", "with_wireguard", "with_masque", "with_mtproxy",
 	"with_openvpn", "with_sudoku", "with_trusttunnel", "with_call", "with_ccm", "with_ocm",
 	"with_oomkiller", "with_naive_outbound", "with_profiler", "with_cloudflared",
-	"with_openconnect", "with_usbip",
+	"with_openconnect", "with_usbip", "with_manager",
 }
 
 // BuildTags reports every known build tag with whether it was compiled into this

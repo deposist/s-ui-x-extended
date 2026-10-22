@@ -86,7 +86,7 @@ jobs:
           if 'obj' in data:
               data = data['obj']
           build_tags = data.get('buildTags') or {}
-          for tag in ['with_sudoku', 'with_trusttunnel', 'with_masque', 'with_openvpn']:
+          for tag in ['with_sudoku', 'with_trusttunnel', 'with_masque', 'with_openvpn', 'with_manager']:
               if build_tags.get(tag) is not True:
                   raise SystemExit(f'{tag} is not true')
           available = {}

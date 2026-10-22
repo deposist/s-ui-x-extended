@@ -77,6 +77,11 @@ func (j *JsonService) GetJson(subId string, format string) (*string, []string, e
 	}
 
 	links := j.LinkService.GetLinks(&client.Links, "external", "")
+	// Nodes a client is assigned to contribute their own links, so the JSON
+	// subscription covers the main server and the fleet just like the plain one.
+	for _, nodeLink := range service.ClientNodeLinks(client) {
+		links = append(links, nodeLink["uri"])
+	}
 	tagNumEnable := 0
 	if len(links) > 1 {
 		tagNumEnable = 1

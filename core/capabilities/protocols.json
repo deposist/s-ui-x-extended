@@ -569,6 +569,24 @@
     },
     {
       "type": "api"
+    },
+    {
+      "type": "manager",
+      "buildTag": "with_manager",
+      "experimental": true,
+      "notes": "Fleet controller: squads, nodes, fleet users and the four limiter kinds, backed by its own SQLite or PostgreSQL database. The Nodes section drives it; it is not offered to other editors."
+    },
+    {
+      "type": "node",
+      "buildTag": "with_manager",
+      "experimental": true,
+      "notes": "Fleet member role: accepts users and limiters for the inbounds and limiter outbounds listed in its options."
+    },
+    {
+      "type": "node-manager-api",
+      "buildTag": "with_manager",
+      "experimental": true,
+      "notes": "Transport between controller and members. Server mode listens for members, client mode dials a controller; TLS is optional but recommended."
     }
   ]
 }
