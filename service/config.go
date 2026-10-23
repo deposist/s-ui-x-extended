@@ -147,6 +147,7 @@ func (s *ConfigService) GetConfig(data string) (*[]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	services = InjectFleetController(database.GetDB(), services)
 	singboxConfig["services"], err = json.Marshal(services)
 	if err != nil {
 		return nil, err
