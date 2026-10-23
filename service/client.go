@@ -312,6 +312,11 @@ func (s *ClientService) Save(tx *gorm.DB, act string, data json.RawMessage, host
 		if err != nil {
 			return nil, err
 		}
+		for _, id := range ids {
+			if err := ClearClientNodes(tx, id); err != nil {
+				return nil, err
+			}
+		}
 	case "del":
 		var id uint
 		err = json.Unmarshal(data, &id)
@@ -336,6 +341,10 @@ func (s *ClientService) Save(tx *gorm.DB, act string, data json.RawMessage, host
 		}
 		err = tx.Where("id = ?", id).Delete(model.Client{}).Error
 		if err != nil {
+			return nil, err
+		}
+		// A deleted client must not linger on any server.
+		if err := ClearClientNodes(tx, id); err != nil {
 			return nil, err
 		}
 	default:

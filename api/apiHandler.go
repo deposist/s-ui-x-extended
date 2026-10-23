@@ -170,6 +170,7 @@ func (a *APIHandler) registerGroupedRoutes(g *gin.RouterGroup) {
 	realtime.GET("/ws", a.ApiService.RealtimeWS)
 
 	a.registerAWGRoutes(g)
+	a.registerNodeRoutes(g)
 
 	ipMonitor := g.Group("/ip-monitor")
 	ipMonitor.GET("/:client", a.ApiService.GetClientIPHistory)

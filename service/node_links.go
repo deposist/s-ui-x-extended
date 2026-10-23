@@ -22,15 +22,29 @@ type NodeInboundDescriptor struct {
 }
 
 // NodeInventory is the decoded self-description of one node: its inbound tags
-// and, per tag, the material needed to publish a link for it.
+// and, per tag, the material needed to publish a link for it. Limiters are
+// recorded alongside so the UI can offer only the servers that can enforce the
+// per-user limits configured for a client.
 type NodeInventory struct {
 	Inbounds []NodeInventoryInbound `json:"inbounds"`
+	Limiters []NodeInventoryLimiter `json:"limiters,omitempty"`
 }
 
 type NodeInventoryInbound struct {
 	Tag        string `json:"tag"`
 	Type       string `json:"type"`
 	Descriptor string `json:"descriptor"`
+}
+
+type NodeInventoryLimiter struct {
+	Tag     string `json:"tag"`
+	Type    string `json:"type"`
+	Variant string `json:"variant"`
+}
+
+// DecodeNodeLimiters reads the limiter entries of an inventory blob.
+func DecodeNodeLimiters(raw json.RawMessage) []NodeInventoryLimiter {
+	return DecodeNodeInventory(raw).Limiters
 }
 
 // DecodeNodeInventory reads the inventory blob stored on a node row. A malformed
