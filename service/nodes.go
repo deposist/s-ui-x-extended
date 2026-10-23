@@ -58,6 +58,11 @@ type ClientView struct {
 	Volume int64  `json:"volume"`
 	Expiry int64  `json:"expiry"`
 	Group  string `json:"group"`
+
+	// Assigned reports whether this client is already on the node being
+	// viewed. The picker lists every client so one dialog can both add and
+	// remove, and this flag draws the tick.
+	Assigned bool `json:"assigned"`
 }
 
 // ClientPage is one page of the per-server client list. Total is the count
@@ -245,12 +250,15 @@ func (s *NodeService) Delete(uuid string) error {
 	})
 }
 
-// Clients returns one server-paginated page of the clients assigned to a node.
+// Clients returns one server-paginated page of clients for a node.
 //
-// The filter and the page are applied by the database, not by slicing a full
-// slice in the browser: a controller with thousands of clients must not ship
-// them all to render 25 rows. query filters on the client name.
-func (s *NodeService) Clients(uuid string, limit int, offset int, query string) (*ClientPage, error) {
+// Every client is listed, each marked with whether it is already on this
+// server, so one dialog both adds and removes. The filter and the page are
+// applied by the database, not by slicing a full slice in the browser: a
+// controller with thousands of clients must not ship them all to render 25
+// rows. query filters on the client name; only assigned limits the result to
+// the server's own clients.
+func (s *NodeService) Clients(uuid string, limit int, offset int, query string, onlyAssigned bool) (*ClientPage, error) {
 	db := s.db()
 	if db == nil {
 		return nil, common.NewError("database is not initialized")
@@ -265,9 +273,11 @@ func (s *NodeService) Clients(uuid string, limit int, offset int, query string) 
 		offset = 0
 	}
 	build := func() *gorm.DB {
-		tx := db.Model(model.Client{}).
-			Joins("JOIN client_nodes ON client_nodes.client_id = clients.id").
-			Where("client_nodes.node_uuid = ?", uuid)
+		assignedExpr := "EXISTS (SELECT 1 FROM client_nodes WHERE client_nodes.client_id = clients.id AND client_nodes.node_uuid = ?)"
+		tx := db.Model(model.Client{})
+		if onlyAssigned {
+			tx = tx.Where(assignedExpr, uuid)
+		}
 		if pattern := clientNamePattern(query); pattern != "" {
 			tx = tx.Where("clients.name LIKE ? ESCAPE '\\'", pattern)
 		}
@@ -280,14 +290,61 @@ func (s *NodeService) Clients(uuid string, limit int, offset int, query string) 
 	if page.Total == 0 {
 		return page, nil
 	}
+	type clientRow struct {
+		Id     uint   `gorm:"column:id"`
+		Name   string `gorm:"column:name"`
+		Enable bool   `gorm:"column:enable"`
+		Up     int64  `gorm:"column:up"`
+		Down   int64  `gorm:"column:down"`
+		Volume int64  `gorm:"column:volume"`
+		Expiry int64  `gorm:"column:expiry"`
+		Group  string `gorm:"column:group"`
+	}
+	var rows []clientRow
 	err := build().
 		Select(`clients.id, clients.name, clients.enable, clients.up, clients.down, clients.volume, clients.expiry, clients."group"`).
 		Order("clients.name").
 		Limit(limit).
 		Offset(offset).
-		Scan(&page.Items).Error
+		Scan(&rows).Error
 	if err != nil {
 		return nil, err
+	}
+	if !onlyAssigned && len(rows) > 0 {
+		// Mark the page's rows that are already on this server with one query,
+		// so the picker can show ticks without asking per row.
+		ids := make([]uint, 0, len(rows))
+		for _, row := range rows {
+			ids = append(ids, row.Id)
+		}
+		var assignedIDs []uint
+		if err := db.Model(model.ClientNode{}).
+			Where("node_uuid = ? AND client_id IN ?", uuid, ids).
+			Pluck("client_id", &assignedIDs).Error; err != nil {
+			return nil, err
+		}
+		onNode := make(map[uint]struct{}, len(assignedIDs))
+		for _, id := range assignedIDs {
+			onNode[id] = struct{}{}
+		}
+		page.Items = make([]ClientView, 0, len(rows))
+		for _, row := range rows {
+			_, assigned := onNode[row.Id]
+			page.Items = append(page.Items, ClientView{
+				Id: row.Id, Name: row.Name, Enable: row.Enable,
+				Up: row.Up, Down: row.Down, Volume: row.Volume,
+				Expiry: row.Expiry, Group: row.Group, Assigned: assigned,
+			})
+		}
+		return page, nil
+	}
+	page.Items = make([]ClientView, 0, len(rows))
+	for _, row := range rows {
+		page.Items = append(page.Items, ClientView{
+			Id: row.Id, Name: row.Name, Enable: row.Enable,
+			Up: row.Up, Down: row.Down, Volume: row.Volume,
+			Expiry: row.Expiry, Group: row.Group, Assigned: true,
+		})
 	}
 	return page, nil
 }

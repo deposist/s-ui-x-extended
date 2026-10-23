@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -62,9 +63,10 @@ func TestNodeRoutesServePaginatedClients(t *testing.T) {
 	router, cookies := nodeTestRouter(t)
 	db := database.GetDB()
 
-	createBody := strings.NewReader(`{"name":"Германия-1","linkHost":"de1.example.com"}`)
-	recorder := performAuthenticatedTestRequest(router,
-		httptest.NewRequest(http.MethodPost, "/api/nodes", createBody), cookies...)
+	createBody := strings.NewReader("name=" + url.QueryEscape("Германия-1") + "&linkHost=de1.example.com")
+	createRequest := httptest.NewRequest(http.MethodPost, "/api/nodes", createBody)
+	createRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	recorder := performAuthenticatedTestRequest(router, createRequest, cookies...)
 	var created struct {
 		Success bool `json:"success"`
 		Obj     struct {
@@ -93,12 +95,14 @@ func TestNodeRoutesServePaginatedClients(t *testing.T) {
 		}
 		ids = append(ids, client.Id)
 	}
-	assignPayload, err := json.Marshal(map[string]any{"ids": ids})
+	assignPayload, err := json.Marshal(ids)
 	if err != nil {
 		t.Fatal(err)
 	}
-	recorder = performAuthenticatedTestRequest(router,
-		httptest.NewRequest(http.MethodPost, "/api/nodes/"+nodeUUID+"/clients", strings.NewReader(string(assignPayload))), cookies...)
+	assignRequest := httptest.NewRequest(http.MethodPost, "/api/nodes/"+nodeUUID+"/clients",
+		strings.NewReader("ids="+url.QueryEscape(string(assignPayload))))
+	assignRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	recorder = performAuthenticatedTestRequest(router, assignRequest, cookies...)
 	if !decodeNodePage(t, recorder).Success || recorder.Code != http.StatusOK {
 		t.Fatalf("assign clients: %s", recorder.Body.String())
 	}
@@ -148,9 +152,14 @@ func TestClientNodesRouteReplacesSelection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	body := fmt.Sprintf(`{"nodes":[%q]}`, node.UUID)
-	recorder := performAuthenticatedTestRequest(router,
-		httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/clients/%d/nodes", client.Id), strings.NewReader(body)), cookies...)
+	nodesPayload, err := json.Marshal([]string{node.UUID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	patchRequest := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/clients/%d/nodes", client.Id),
+		strings.NewReader("nodes="+url.QueryEscape(string(nodesPayload))))
+	patchRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	recorder := performAuthenticatedTestRequest(router, patchRequest, cookies...)
 	var result struct {
 		Success bool `json:"success"`
 	}
@@ -172,7 +181,7 @@ func TestNodeRoutesRejectBadInput(t *testing.T) {
 	router, cookies := nodeTestRouter(t)
 
 	recorder := performAuthenticatedTestRequest(router,
-		httptest.NewRequest(http.MethodPost, "/api/nodes", strings.NewReader("{not json")), cookies...)
+		httptest.NewRequest(http.MethodPost, "/api/nodes", strings.NewReader("enabled=maybe")), cookies...)
 	var result struct {
 		Success bool `json:"success"`
 	}
@@ -184,7 +193,7 @@ func TestNodeRoutesRejectBadInput(t *testing.T) {
 	}
 
 	recorder = performAuthenticatedTestRequest(router,
-		httptest.NewRequest(http.MethodPatch, "/api/clients/notanumber/nodes", strings.NewReader(`{"nodes":[]}`)), cookies...)
+		httptest.NewRequest(http.MethodPatch, "/api/clients/notanumber/nodes", strings.NewReader("")), cookies...)
 	if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
 		t.Fatalf("decode: %v", err)
 	}

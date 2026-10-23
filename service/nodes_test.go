@@ -132,7 +132,7 @@ func TestNodeServiceClientsAreServerPaginated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	page, err := nodes.Clients(node.UUID, 10, 0, "")
+	page, err := nodes.Clients(node.UUID, 10, 0, "", true)
 	if err != nil {
 		t.Fatalf("clients page 1: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestNodeServiceClientsAreServerPaginated(t *testing.T) {
 	if len(page.Items) != 10 {
 		t.Fatalf("page 1 returned %d items, want 10", len(page.Items))
 	}
-	page2, err := nodes.Clients(node.UUID, 10, 10, "")
+	page2, err := nodes.Clients(node.UUID, 10, 10, "", true)
 	if err != nil {
 		t.Fatalf("clients page 2: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestNodeServiceClientsAreServerPaginated(t *testing.T) {
 		t.Fatal("pages overlap; offset is not applied")
 	}
 
-	filtered, err := nodes.Clients(node.UUID, 10, 0, "client-0")
+	filtered, err := nodes.Clients(node.UUID, 10, 0, "client-0", true)
 	if err != nil {
 		t.Fatalf("filtered: %v", err)
 	}
@@ -162,21 +162,21 @@ func TestNodeServiceClientsAreServerPaginated(t *testing.T) {
 	}
 
 	// A LIKE wildcard in the query must match literally, not act as "all".
-	if wildcard, err := nodes.Clients(node.UUID, 10, 0, "%"); err != nil || wildcard.Total != 0 {
+	if wildcard, err := nodes.Clients(node.UUID, 10, 0, "%", true); err != nil || wildcard.Total != 0 {
 		t.Fatalf("a bare %% query matched %d rows; wildcards must be escaped (%v)", wildcard.Total, err)
 	}
 
 	// A limit of zero falls back to the default page size, which is larger than
 	// this fixture, so every row comes back; an oversized limit is capped
 	// instead of letting a caller ask for everything.
-	defaulted, err := nodes.Clients(node.UUID, 0, 0, "")
+	defaulted, err := nodes.Clients(node.UUID, 0, 0, "", true)
 	if err != nil {
 		t.Fatalf("default page size: %v", err)
 	}
 	if defaulted.Total != 12 || len(defaulted.Items) != 12 {
 		t.Fatalf("default page = %d of %d, want all 12", len(defaulted.Items), defaulted.Total)
 	}
-	if _, err := nodes.Clients(node.UUID, 100000, 0, ""); err != nil {
+	if _, err := nodes.Clients(node.UUID, 100000, 0, "", true); err != nil {
 		t.Fatalf("oversized limit: %v", err)
 	}
 }

@@ -127,6 +127,13 @@ function categories(): Record<string, CategorySpec> {
         // ResolvedServiceOptions is ListenOptions only, so the always-rendered
         // shared Listen section already covers every field it has.
         resolved: 'composed of the shared Listen section; the service has no other fields',
+        // The fleet trio is configured by the Nodes section, not by hand: the
+        // panel creates the manager, the node role and their transport itself,
+        // so offering raw JSON editors for them would let an operator build a
+        // second, unmanaged fleet.
+        manager: 'configured by the Nodes section; never hand-edited as a generic service',
+        node: 'configured by the Nodes section; never hand-edited as a generic service',
+        'node-manager-api': 'configured by the Nodes section; never hand-edited as a generic service',
       },
     },
   }
@@ -176,5 +183,15 @@ describe('every manifest type is editable in the panel', () => {
     // resolved must still be renderable by the shared Listen section: if it ever
     // gains fields, the exception has to be revisited.
     expect(sourceOf('services.ts')).toMatch(/export interface Resolved extends SrvBasics \{\}/)
+
+    // The fleet exception stays honest only while the Nodes section is the thing
+    // that creates these services: the moment SrvTypes gains one of them, the
+    // generic editor would be expected to bind it and this exception would hide
+    // the gap.
+    for (const fleetType of ['manager', 'node', 'node-manager-api']) {
+      expect(sourceOf('services.ts'), `${fleetType} must not be a generic service type`).not.toMatch(
+        new RegExp(`'${fleetType}'`),
+      )
+    }
   })
 })

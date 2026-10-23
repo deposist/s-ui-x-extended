@@ -238,6 +238,7 @@ func InitDB(dbPath string) error {
 		&model.AuditEvent{},
 		&model.Node{},
 		&model.ClientNode{},
+		&model.ClientLimits{},
 	)
 	if err != nil {
 		return err

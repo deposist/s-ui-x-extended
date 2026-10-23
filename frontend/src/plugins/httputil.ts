@@ -131,6 +131,18 @@ function isMsg(obj: unknown): obj is Msg {
   return Object.hasOwn(obj, 'success') && Object.hasOwn(obj, 'msg') && Object.hasOwn(obj, 'obj')
 }
   
+async function _send(call: () => Promise<any>): Promise<Msg> {
+  let msg: Msg
+  try {
+    const resp = await call()
+    msg = _respToMsg(resp)
+  } catch (e: any) {
+    msg = _errorToMsg(e)
+  }
+  _handleMsg(msg)
+  return msg
+}
+
 const HttpUtils = {
   async get(url: string, data: object = {}, options: any = {}): Promise<Msg> {
     let msg: Msg
@@ -144,15 +156,15 @@ const HttpUtils = {
     return msg
   },
   async post(url: string, data: object | null, options: any = undefined): Promise<Msg> {
-    let msg: Msg
-    try {
-        const resp = await api.post(url, data, options)
-        msg = _respToMsg(resp)
-    } catch (e: any) {
-        msg = _errorToMsg(e)
-    }
-    _handleMsg(msg)
-    return msg
+    return _send(() => api.post(url, data, options))
+  },
+  // PATCH and DELETE carry a form body like POST does, so the handlers stay on
+  // one content type; axios needs them spread into the config.
+  async patch(url: string, data: object = {}): Promise<Msg> {
+    return _send(() => api.patch(url, new URLSearchParams(data as Record<string, string>)))
+  },
+  async del(url: string, data: object = {}): Promise<Msg> {
+    return _send(() => api.delete(url, { data: new URLSearchParams(data as Record<string, string>) }))
   },
 }
 

@@ -10,6 +10,7 @@ const EXPECTED_PATHS = [
   '/endpoints',
   '/providers',
   '/services',
+  '/nodes',
   '/tls',
   '/basics',
   '/rules',

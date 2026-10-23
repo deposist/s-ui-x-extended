@@ -17,6 +17,7 @@ export const appMenu: MenuItem[] = [
   { title: 'pages.endpoints', icon: 'mdi-cloud-tags', path: '/endpoints', singBoxSettings: true },
   { title: 'pages.providers', icon: 'mdi-cloud-sync', path: '/providers' },
   { title: 'pages.services', icon: 'mdi-server', path: '/services', singBoxSettings: true },
+  { title: 'pages.nodes', icon: 'mdi-server-network', path: '/nodes' },
   { title: 'pages.tls', icon: 'mdi-certificate', path: '/tls', singBoxSettings: true },
   { title: 'pages.basics', icon: 'mdi-application-cog', path: '/basics', singBoxSettings: true },
   { title: 'pages.rules', icon: 'mdi-routes', path: '/rules', singBoxSettings: true },

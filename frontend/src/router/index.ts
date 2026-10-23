@@ -53,6 +53,11 @@ const routes = [
         component: () => import('@/views/Rules.vue'),
       },
       {
+        path: '/nodes',
+        name: 'pages.nodes',
+        component: () => import('@/views/Nodes.vue'),
+      },
+      {
         path: '/tls',
         name: 'pages.tls',
         component: () => import('@/views/Tls.vue'),

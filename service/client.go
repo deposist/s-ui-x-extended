@@ -316,6 +316,9 @@ func (s *ClientService) Save(tx *gorm.DB, act string, data json.RawMessage, host
 			if err := ClearClientNodes(tx, id); err != nil {
 				return nil, err
 			}
+			if err := ClearClientLimits(tx, id); err != nil {
+				return nil, err
+			}
 		}
 	case "del":
 		var id uint
@@ -343,8 +346,12 @@ func (s *ClientService) Save(tx *gorm.DB, act string, data json.RawMessage, host
 		if err != nil {
 			return nil, err
 		}
-		// A deleted client must not linger on any server.
+		// A deleted client must not linger on any server, nor keep limits that
+		// would be projected onto one the next time a node connects.
 		if err := ClearClientNodes(tx, id); err != nil {
+			return nil, err
+		}
+		if err := ClearClientLimits(tx, id); err != nil {
 			return nil, err
 		}
 	default:

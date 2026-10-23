@@ -159,6 +159,73 @@
                   </v-select>
                 </v-col>
               </v-row>
+              <v-row v-if="nodeItems.length > 0">
+                <v-col>
+                  <v-select
+                    v-model="clientNodes"
+                    :items="nodeItems"
+                    :label="$t('client.servers')"
+                    :hint="$t('client.serversHint')"
+                    clearable
+                    multiple
+                    chips
+                    hide-details="auto"
+                    persistent-hint
+                    data-testid="client-nodes">
+                  </v-select>
+                </v-col>
+              </v-row>
+              <v-row v-if="nodeItems.length > 0">
+                <v-col cols="12" sm="6" md="3">
+                  <v-switch
+                    v-model="limits.speedShared"
+                    color="primary"
+                    :label="$t('client.limits.shared')"
+                    hide-details
+                    data-testid="client-limits-shared" />
+                </v-col>
+                <v-col v-if="limits.speedShared" cols="12" sm="6" md="3">
+                  <v-text-field
+                    v-model.number="limits.speedMbps"
+                    type="number"
+                    min="0"
+                    :label="$t('client.limits.speed')"
+                    suffix="Mbps"
+                    hide-details
+                    data-testid="client-limits-speed" />
+                </v-col>
+                <template v-else>
+                  <v-col cols="12" sm="6" md="3">
+                    <v-text-field
+                      v-model.number="limits.downloadMbps"
+                      type="number"
+                      min="0"
+                      :label="$t('client.limits.download')"
+                      suffix="Mbps"
+                      hide-details
+                      data-testid="client-limits-download" />
+                  </v-col>
+                  <v-col cols="12" sm="6" md="3">
+                    <v-text-field
+                      v-model.number="limits.uploadMbps"
+                      type="number"
+                      min="0"
+                      :label="$t('client.limits.upload')"
+                      suffix="Mbps"
+                      hide-details
+                      data-testid="client-limits-upload" />
+                  </v-col>
+                </template>
+                <v-col cols="12" sm="6" md="3">
+                  <v-text-field
+                    v-model.number="limits.connections"
+                    type="number"
+                    min="0"
+                    :label="$t('client.limits.connections')"
+                    hide-details
+                    data-testid="client-limits-connections" />
+                </v-col>
+              </v-row>
             </v-window-item>
             <v-window-item value="t2">
               <v-row>
@@ -345,6 +412,12 @@ import { locale } from '@/locales'
 import { vlessFlows } from '@/types/recommended'
 import FormShell from '@/components/nexus/drawers/FormShell.vue'
 
+// Limits are entered in Mbps and stored in bytes per second, which is what the
+// core limiter takes.
+const MBPS = 125000
+const toMbps = (bytesPerSecond?: number) => Math.round(((bytesPerSecond ?? 0) / MBPS) * 100) / 100
+const fromMbps = (mbps?: number) => String(Math.max(0, Math.round((mbps ?? 0) * MBPS)))
+
 export default {
   props: ['visible', 'id', 'inboundTags', 'groups'],
   emits: ['close'],
@@ -369,6 +442,13 @@ export default {
       awgQrUrl: '',
       awgQrDeviceName: '',
       visibleSudokuKeys: <Record<string, boolean>>{},
+      // The servers this client is assigned to. Kept as uuids so the checkboxes
+      // survive a rename of the server they point at.
+      clientNodes: <string[]>[],
+      nodeItems: <{ title: string, value: string }[]>[],
+      // One shared speed number, or download and upload separately. Stored in
+      // Mbps here and converted on save, because that is what an operator types.
+      limits: { speedShared: true, speedMbps: 0, downloadMbps: 0, uploadMbps: 0, connections: 0 },
     }
   },
   methods: {
@@ -397,7 +477,41 @@ export default {
       this.extLinks = this.client.links?.filter(l => l.type == 'external')?? []
       this.subLinks = this.client.links?.filter(l => l.type == 'sub')?? []
       this.tab = "t1"
+      this.clientNodes = []
       this.loading = false
+      this.loadNodes()
+      if (id > 0) this.loadClientNodes(id)
+    },
+    async loadNodes() {
+      const msg = await HttpUtils.get('api/nodes')
+      if (!msg.success) return
+      this.nodeItems = (msg.obj ?? []).map((node: any) => ({ title: node.name, value: node.uuid }))
+    },
+    async loadClientNodes(id: number) {
+      const nodesMsg = await HttpUtils.get('api/clients/' + id + '/nodes')
+      if (nodesMsg.success) this.clientNodes = nodesMsg.obj ?? []
+      const limitsMsg = await HttpUtils.get('api/clients/' + id + '/limits')
+      if (!limitsMsg.success || !limitsMsg.obj) return
+      const limits = limitsMsg.obj
+      this.limits = {
+        speedShared: limits.speedShared !== false,
+        speedMbps: toMbps(limits.speed),
+        downloadMbps: toMbps(limits.downloadSpeed),
+        uploadMbps: toMbps(limits.uploadSpeed),
+        connections: limits.connections ?? 0,
+      }
+    },
+    async saveClientNodes(id: number) {
+      await HttpUtils.patch('api/clients/' + id + '/nodes', {
+        nodes: JSON.stringify(this.clientNodes),
+      })
+      await HttpUtils.patch('api/clients/' + id + '/limits', {
+        speedShared: String(this.limits.speedShared),
+        speed: fromMbps(this.limits.speedMbps),
+        downloadSpeed: fromMbps(this.limits.downloadMbps),
+        uploadSpeed: fromMbps(this.limits.uploadMbps),
+        connections: String(this.limits.connections ?? 0),
+      })
     },
     closeModal() {
       this.updateData(0) // reset
@@ -426,7 +540,17 @@ export default {
                           ...this.extLinks.filter(l => l.uri != ''),
                           ...this.subLinks.filter(l => l.uri != '')]
         const success = await Data().save("clients", this.$props.id == 0 ? "new" : "edit", this.client)
-        if (success) this.closeModal()
+        if (success) {
+          // Assignments are saved after the client row exists, so a new client
+          // has an id to hang them on. The save response carries no id, and the
+          // refreshed client list does, so the row is looked up by its name
+          // there — names are unique, which the save already enforced.
+          const savedId = this.$props.id > 0
+            ? this.$props.id
+            : Data().clients.findLast((c: any) => c.name == this.client.name)?.id ?? 0
+          if (savedId > 0) await this.saveClientNodes(savedId)
+          this.closeModal()
+        }
       } finally {
         this.loading = false
       }
