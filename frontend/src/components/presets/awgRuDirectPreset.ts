@@ -62,7 +62,8 @@ export function applyAWGRuDirect(config: Config, endpointTag: string, directOutb
   ensureShape(config)
   const changes: string[] = []
   const ruleSets = config.route.rule_set as any[]
-  if (!ruleSets.some(item => String(item?.tag ?? '') === AWG_RU_RULESET_TAG)) {
+  const existingRuleSet = ruleSets.find(item => String(item?.tag ?? '') === AWG_RU_RULESET_TAG)
+  if (!existingRuleSet) {
     ruleSets.push({
       type: 'remote',
       tag: AWG_RU_RULESET_TAG,
@@ -72,9 +73,13 @@ export function applyAWGRuDirect(config: Config, endpointTag: string, directOutb
       update_interval: '24h',
     })
     changes.push(`add rule-set ${AWG_RU_RULESET_TAG}`)
+  } else if (existingRuleSet.type === 'remote' && existingRuleSet.download_detour !== directOutbound) {
+    existingRuleSet.download_detour = directOutbound
+    changes.push(`update rule-set ${AWG_RU_RULESET_TAG}`)
   }
   const rules = config.route.rules as any[]
-  if (!rules.some(rule => presetRuleFor(rule, endpointTag))) {
+  const existingRule = rules.find(rule => presetRuleFor(rule, endpointTag))
+  if (!existingRule) {
     // Placed first: more specific (inbound-scoped) rules must win over the
     // broader regional preset rules that match by rule_set only.
     rules.unshift({
@@ -83,6 +88,9 @@ export function applyAWGRuDirect(config: Config, endpointTag: string, directOutb
       outbound: directOutbound,
     })
     changes.push(`add route rule ${endpointTag} -> ${directOutbound}`)
+  } else if (existingRule.outbound !== directOutbound) {
+    existingRule.outbound = directOutbound
+    changes.push(`update route rule ${endpointTag} -> ${directOutbound}`)
   }
   return changes
 }

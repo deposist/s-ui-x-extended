@@ -1134,6 +1134,11 @@ func (s *SettingService) validateAll(settings map[string]string) error {
 		if strings.HasSuffix(key, "HasSecret") {
 			continue
 		}
+		if key == "webPort" || key == "subPort" {
+			if err := validateIntRange(key, obj, 1, 65535); err != nil {
+				return err
+			}
+		}
 		if key == "trafficAge" {
 			if age, err := strconv.Atoi(strings.TrimSpace(obj)); err == nil && age == 0 {
 				return common.NewError("invalid trafficAge setting: 0 is reserved")

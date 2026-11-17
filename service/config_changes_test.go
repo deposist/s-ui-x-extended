@@ -52,3 +52,15 @@ func TestRedactChangePayloadHidesSudokuSplitKey(t *testing.T) {
 		t.Fatalf("Sudoku key was not redacted: %s", stored)
 	}
 }
+
+func TestRedactChangePayloadHidesPerInboundSudokuSplitKeys(t *testing.T) {
+	secret := strings.Repeat("b", 128)
+	payload := json.RawMessage(`[{"name":"alice","config":{"sudoku":{"keys":{"42":"` + secret + `"}}}}]`)
+	stored := string(redactChangePayload(payload))
+	if strings.Contains(stored, secret) {
+		t.Fatalf("change payload leaked per-inbound Sudoku split key: %s", stored)
+	}
+	if !strings.Contains(stored, `"keys":"[REDACTED]"`) || !strings.Contains(stored, `"name":"alice"`) {
+		t.Fatalf("change payload did not preserve the safe fields and redact the keys: %s", stored)
+	}
+}

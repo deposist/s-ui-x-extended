@@ -177,6 +177,39 @@ func TestClientNodesRouteReplacesSelection(t *testing.T) {
 }
 
 // TestNodeRoutesRejectBadInput keeps a malformed body from half-applying.
+func TestNodePatchPreservesRolesWhenFieldsAreOmitted(t *testing.T) {
+	router, cookies := nodeTestRouter(t)
+	db := database.GetDB()
+	inventory := json.RawMessage(`{"limiters":[{"tag":"bw","type":"bandwidth-limiter"},{"tag":"conn","type":"connection-limiter"}]}`)
+	node := model.Node{UUID:"33333333-3333-4333-8333-333333333333",Name:"patch",Enabled:true,Inventory:inventory,LimiterRoles:json.RawMessage(`{"speedShared":"bw","connections":"conn"}`)}
+	if err:=db.Create(&node).Error;err!=nil{t.Fatal(err)}
+	recorder:=performAuthenticatedTestRequest(router,httptest.NewRequest(http.MethodPatch,"/api/nodes/"+node.UUID,strings.NewReader("name=renamed")),cookies...)
+	if recorder.Code!=http.StatusOK{t.Fatalf("status=%d body=%s",recorder.Code,recorder.Body.String())}
+	var stored model.Node
+	if err:=db.Where("uuid = ?",node.UUID).First(&stored).Error;err!=nil{t.Fatal(err)}
+	var roles model.NodeLimiterTags
+	if err:=json.Unmarshal(stored.LimiterRoles,&roles);err!=nil{t.Fatal(err)}
+	if roles.SpeedShared!="bw"||roles.Connections!="conn"{t.Fatalf("PATCH without role fields cleared mapping: %+v",roles)}
+}
+
+func TestNodePatchAcceptsAndRejectsLimiterRoles(t *testing.T) {
+	router,cookies:=nodeTestRouter(t)
+	db:=database.GetDB()
+	node:=model.Node{UUID:"44444444-4444-4444-8444-444444444444",Name:"limits",Enabled:true,Inventory:json.RawMessage(`{"limiters":[{"tag":"bw","type":"bandwidth-limiter"},{"tag":"conn","type":"connection-limiter"}]}`)}
+	if err:=db.Create(&node).Error;err!=nil{t.Fatal(err)}
+	patch := func(body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPatch, "/api/nodes/"+node.UUID, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		return performAuthenticatedTestRequest(router, req, cookies...)
+	}
+	r:=patch("name=limits&speedShared=bw&connections=conn")
+	if r.Code!=http.StatusOK{t.Fatalf("valid roles patch failed: %d %s",r.Code,r.Body.String())}
+	r=patch("name=limits&connections=bw")
+	var rejected struct{ Success bool `json:"success"` }
+	if err:=json.Unmarshal(r.Body.Bytes(),&rejected);err!=nil{t.Fatalf("decode: %v",err)}
+	if rejected.Success{t.Fatal("bandwidth outbound accepted for connections role")}
+}
+
 func TestNodeRoutesRejectBadInput(t *testing.T) {
 	router, cookies := nodeTestRouter(t)
 

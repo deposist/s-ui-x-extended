@@ -60,13 +60,11 @@ func runDecryptBackup(args []string, stdin io.Reader, stdout io.Writer, stderr i
 	defer wipeCmdBytes(envelope)
 	plaintext, err := service.OpenTelegramBackupEnvelope(envelope, passphrase)
 	if err != nil {
-		_ = os.Remove(outPath)
 		fmt.Fprintln(stderr, "decrypt-backup: decryption_failed")
 		return 1
 	}
 	defer wipeCmdBytes(plaintext)
 	if err := writeDecryptBackupOutput(outPath, plaintext); err != nil {
-		_ = os.Remove(outPath)
 		fmt.Fprintln(stderr, "decrypt-backup:", err)
 		return 1
 	}

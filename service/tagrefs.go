@@ -64,7 +64,19 @@ func inboundTagReferences(tx *gorm.DB, tag string) ([]TagReference, error) {
 	if err != nil {
 		return nil, err
 	}
-	return scanServiceRowsForInboundTag(rows, tag), nil
+	groupRefs, err := inboundGroupTagReferences(tx, tag)
+	if err != nil {
+		return nil, err
+	}
+	return append(scanServiceRowsForInboundTag(rows, tag), groupRefs...), nil
+}
+
+func inboundGroupTagReferences(tx *gorm.DB, tag string) ([]TagReference, error) {
+	var rows []model.Inbound
+	if err := tx.Model(model.Inbound{}).Select("type", "tag", "options").Where("type IN ?", []string{"bond", CoreFailoverType}).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return scanInboundGroupsForTag(rows, tag), nil
 }
 
 // ssmCascadeServiceIds lists ssm-api services that must be recreated after the
@@ -132,4 +144,12 @@ func configBlobFrom(tx *gorm.DB) ([]byte, error) {
 		return nil, nil
 	}
 	return []byte(stored.Value), nil
+}
+
+func providerTagReferences(tx *gorm.DB, tag string) ([]TagReference, error) {
+	var outbounds []model.Outbound
+	if err := tx.Model(model.Outbound{}).Select("id", "type", "tag", "options").Find(&outbounds).Error; err != nil {
+		return nil, err
+	}
+	return scanOutboundRowsForProviderTag(outbounds, tag, 0), nil
 }

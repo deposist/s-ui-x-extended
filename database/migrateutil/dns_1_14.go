@@ -2,6 +2,7 @@ package migrateutil
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/deposist/s-ui-x-extended/database/model"
@@ -30,8 +31,11 @@ func MigrateDNS114(tx *gorm.DB) error {
 	}
 	var row model.Setting
 	if err := tx.Model(&model.Setting{}).Where("key = ?", "config").First(&row).Error; err != nil {
-		// No config blob yet (fresh install) — nothing to migrate.
-		return nil
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// No config blob yet (fresh install) — nothing to migrate.
+			return nil
+		}
+		return err
 	}
 	var config map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(row.Value), &config); err != nil {
@@ -195,6 +199,10 @@ func convertDNSAddressFilterRule(raw json.RawMessage, index int) ([]json.RawMess
 	if err := json.Unmarshal(raw, &rule); err != nil {
 		return nil, false, E.Cause(err, fmt.Sprintf("decode dns.rules[%d]", index))
 	}
+	// Already in the new form, including logical response filters.
+	if _, ok := rule["match_response"]; ok {
+		return []json.RawMessage{raw}, false, nil
+	}
 
 	// Logical rules (type: logical, mode and/or) nest sub-rules; the address
 	// filter can appear on the logical rule's own action or inside. Handle only
@@ -213,10 +221,6 @@ func convertDNSAddressFilterRule(raw json.RawMessage, index int) ([]json.RawMess
 	}
 
 	if !ruleUsesAddressFilter(rule) {
-		return []json.RawMessage{raw}, false, nil
-	}
-	// Already in the new form (match_response present) — nothing to do.
-	if _, ok := rule["match_response"]; ok {
 		return []json.RawMessage{raw}, false, nil
 	}
 	// Only route actions resolve a response to filter. Other actions (reject,
@@ -281,6 +285,14 @@ func ruleUsesAddressFilter(rule map[string]json.RawMessage) bool {
 	for _, field := range addressFilterFields {
 		if _, ok := rule[field]; ok {
 			return true
+		}
+	}
+	var children []map[string]json.RawMessage
+	if json.Unmarshal(rule["rules"], &children) == nil {
+		for _, child := range children {
+			if ruleUsesAddressFilter(child) {
+				return true
+			}
 		}
 	}
 	return false

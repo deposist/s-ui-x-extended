@@ -253,6 +253,11 @@ func (s *UserService) DeleteUser(actorUsername string, currentPass string, targe
 		if err := tx.Delete(&target).Error; err != nil {
 			return err
 		}
+		if coreInstance := s.runtime().Core(); coreInstance != nil && coreInstance.IsRunning() {
+			if box := coreInstance.GetInstance(); box != nil {
+				box.StatsTracker().RemoveCounter("user", target.Username)
+			}
+		}
 		result.User = target
 		result.DeletedTokenCount = tokenDelete.RowsAffected
 		return nil

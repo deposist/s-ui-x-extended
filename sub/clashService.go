@@ -99,6 +99,7 @@ func ClashRepresentable(protocol string) bool {
 }
 
 func (s *ClashService) GetClash(subId string) (*string, []string, error) {
+	revision := subscriptionCacheRevision()
 	now := time.Now()
 	cacheKey := "clash:" + subId
 	if body, headers, ok := subscriptionCacheGet(cacheKey, now); ok {
@@ -157,7 +158,7 @@ func (s *ClashService) GetClash(subId string) (*string, []string, error) {
 	}
 
 	headers := safeSubscriptionHeaders(buildClientHeaders(client, cachedSubDisplaySettings(&s.SettingService, now)))
-	subscriptionCacheSet(cacheKey, resultStr, headers, now)
+	subscriptionCacheSet(cacheKey, resultStr, headers, now, revision)
 
 	return &resultStr, headers, nil
 }

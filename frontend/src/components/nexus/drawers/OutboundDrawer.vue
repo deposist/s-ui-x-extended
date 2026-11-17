@@ -92,8 +92,8 @@
       <TrafficLimiter v-if="outbound.type == outTypes.TrafficLimiter" :data="outbound" :tags="tags" />
       <RateLimiter v-if="outbound.type == outTypes.RateLimiter" :data="outbound" :tags="tags" />
       <Fallback v-if="outbound.type == outTypes.Fallback" :data="outbound" :tags="tags" />
-      <Transport v-if="Object.hasOwn(outbound,'transport')" :data="outbound" :field-hints="currentFieldHints" />
-      <OutTLS v-if="Object.hasOwn(outbound,'tls')" :outbound="outbound" :field-hints="currentFieldHints" />
+      <Transport v-if="Object.hasOwn(outbound,'transport') && outbound.type != outTypes.Mieru" :data="outbound" :field-hints="currentFieldHints" />
+      <OutTLS v-if="Object.hasOwn(outbound,'tls') && outbound.type != outTypes.MASQUE" :outbound="outbound" :field-hints="currentFieldHints" />
       <Multiplex v-if="Object.hasOwn(outbound,'multiplex') && outbound.type != outTypes.TrustTunnel" direction="out" :data="outbound" :field-hints="currentFieldHints" />
       <Dial v-if="!NoDial.includes(outbound.type)" :dial="outbound" :field-hints="currentFieldHints" />
     </form-section>
@@ -177,7 +177,7 @@ export default {
       outTypes: OutTypes,
       capabilityRows: <CapabilityRow[]>[],
       NoDial: [OutTypes.Subscription, OutTypes.Selector, OutTypes.URLTest, OutTypes.Failover, OutTypes.Block, OutTypes.CoreFailover, OutTypes.Bond, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter, OutTypes.Parser, OutTypes.Fallback, OutTypes.Bridge],
-      NoServer: [OutTypes.Subscription, OutTypes.Direct, OutTypes.Selector, OutTypes.URLTest, OutTypes.Tor, OutTypes.Failover, OutTypes.Block, OutTypes.CoreFailover, OutTypes.Bond, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter, OutTypes.Parser, OutTypes.Fallback, OutTypes.Bridge],
+      NoServer: [OutTypes.Subscription, OutTypes.Direct, OutTypes.Selector, OutTypes.URLTest, OutTypes.Tor, OutTypes.Failover, OutTypes.Block, OutTypes.CoreFailover, OutTypes.Bond, OutTypes.BandwidthLimiter, OutTypes.ConnectionLimiter, OutTypes.TrafficLimiter, OutTypes.RateLimiter, OutTypes.Parser, OutTypes.Fallback, OutTypes.Bridge, OutTypes.Call, OutTypes.MASQUE],
     }
   },
   async mounted() {

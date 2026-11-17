@@ -59,6 +59,7 @@ func (s *NodeService) SetClientLimits(clientID uint, limits model.ClientLimits) 
 	if err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&limits).Error; err != nil {
 		return nil, err
 	}
+	s.projectFleetOrWarn("client limits")
 	return &limits, nil
 }
 

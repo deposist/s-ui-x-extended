@@ -153,6 +153,10 @@ func vmess(data string, i int) (*map[string]interface{}, string, error) {
 		}
 		return nil, "", err
 	}
+	port, err := strconv.ParseUint(fmt.Sprint(dataJson["port"]), 10, 16)
+	if err != nil || port == 0 {
+		return nil, "", common.NewError("Invalid vmess port")
+	}
 	transport := map[string]interface{}{}
 	tp_net, _ := dataJson["net"].(string)
 	tp_type, _ := dataJson["type"].(string)
@@ -200,7 +204,15 @@ func vmess(data string, i int) (*map[string]interface{}, string, error) {
 		tls["enabled"] = true
 		tls_sni, _ := dataJson["sni"].(string)
 		tls_alpn, _ := dataJson["alpn"].(string)
-		_, tls_insecure := dataJson["allowInsecure"]
+		tls_insecure := false
+		switch value := dataJson["allowInsecure"].(type) {
+		case bool:
+			tls_insecure = value
+		case float64:
+			tls_insecure = value == 1
+		case string:
+			tls_insecure = value == "1" || value == "true"
+		}
 		tls_fp, _ := dataJson["fp"].(string)
 		if len(tls_sni) > 0 {
 			tls["server_name"] = tls_sni
@@ -230,12 +242,14 @@ func vmess(data string, i int) (*map[string]interface{}, string, error) {
 		"type":        "vmess",
 		"tag":         tag,
 		"server":      dataJson["add"],
-		"server_port": dataJson["port"],
+		"server_port": int(port),
 		"uuid":        dataJson["id"],
 		"security":    "auto",
 		"alter_id":    alter_id,
 		"tls":         tls,
-		"transport":   transport,
+	}
+	if len(transport) > 0 {
+		vmess["transport"] = transport
 	}
 	return &vmess, tag, err
 }
@@ -295,7 +309,9 @@ func vless(u *url.URL, i int) (*map[string]interface{}, string, error) {
 		"uuid":        userinfo.Username(),
 		"flow":        query.Get("flow"),
 		"tls":         getTls(security, &query),
-		"transport":   getTransport(tp_type, &query),
+	}
+	if transport := getTransport(tp_type, &query); len(transport) > 0 {
+		vless["transport"] = transport
 	}
 	return &vless, tag, nil
 }
@@ -327,7 +343,9 @@ func trojan(u *url.URL, i int) (*map[string]interface{}, string, error) {
 		"server_port": port,
 		"password":    userinfo.Username(),
 		"tls":         getTls(security, &query),
-		"transport":   getTransport(tp_type, &query),
+	}
+	if transport := getTransport(tp_type, &query); len(transport) > 0 {
+		trojan["transport"] = transport
 	}
 	return &trojan, tag, nil
 }

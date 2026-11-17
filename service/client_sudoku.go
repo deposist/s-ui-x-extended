@@ -231,6 +231,9 @@ func ensureSudokuInboundMasterKey(inbound *model.Inbound, generate bool) error {
 	if strings.TrimSpace(masterKey) != "" || strings.TrimSpace(key) != "" || !generate {
 		return nil
 	}
+	if options == nil {
+		options = make(map[string]json.RawMessage)
+	}
 	masterKey, err := generateSudokuMasterKey()
 	if err != nil {
 		return err

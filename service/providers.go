@@ -170,6 +170,21 @@ func (s *ProviderService) Save(tx *gorm.DB, act string, data json.RawMessage) er
 			}
 			provider.Id = id
 		}
+		if act == "edit" && provider.Id > 0 {
+			var current model.Provider
+			if err := tx.Select("tag").First(&current, provider.Id).Error; err != nil {
+				return err
+			}
+			if current.Tag != provider.Tag {
+				refs, err := providerTagReferences(tx, current.Tag)
+				if err != nil {
+					return err
+				}
+				if len(refs) > 0 {
+					return formatTagReferenceError("provider", current.Tag, refs)
+				}
+			}
+		}
 
 		err = tx.Save(&provider).Error
 		if err != nil {
@@ -180,6 +195,13 @@ func (s *ProviderService) Save(tx *gorm.DB, act string, data json.RawMessage) er
 		err = json.Unmarshal(data, &tag)
 		if err != nil {
 			return err
+		}
+		refs, err := providerTagReferences(tx, tag)
+		if err != nil {
+			return err
+		}
+		if len(refs) > 0 {
+			return formatTagReferenceError("provider", tag, refs)
 		}
 		err = tx.Where("tag = ?", tag).Delete(model.Provider{}).Error
 		if err != nil {

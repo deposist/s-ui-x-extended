@@ -1,6 +1,18 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
-import { login } from './helpers'
+import { login, pickType } from './helpers'
+
+test('inline rulesets show rules without remote download fields', async ({ page }) => {
+  await login(page)
+  await page.goto('rules')
+  await page.getByRole('button', { name: /Add Rule.?Set/i }).first().click()
+  const form = page.locator('.nexus-drawer.v-navigation-drawer--active')
+  await expect(form).toBeVisible()
+  await pickType(page, form, 'Inline')
+  await expect(form.getByRole('button', { name: 'Add Rule', exact: true })).toBeVisible()
+  await expect(form.getByRole('textbox', { name: 'URL', exact: true })).toHaveCount(0)
+  await expect(form.getByRole('combobox', { name: 'Outbound', exact: true })).toHaveCount(0)
+})
 
 // The Rules/DNS entity forms now render via FormShell (drawer in Nexus). Their
 // views still mount those modals closed, so verify the pages render (the shell

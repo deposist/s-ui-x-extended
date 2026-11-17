@@ -112,7 +112,7 @@ func selectBetaRelease(releases []ghRelease) *ghRelease {
 	var best *ghRelease
 	for i := range releases {
 		r := &releases[i]
-		if r.Draft || strings.TrimSpace(r.TagName) == "" {
+		if r.Draft || config.ValidateReleaseVersion(config.NormalizeVersion(r.TagName)) != nil {
 			continue
 		}
 		if best == nil {

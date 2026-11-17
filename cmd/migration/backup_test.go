@@ -92,3 +92,34 @@ func TestBackupDatabaseBeforeMigrationSanitizesVersion(t *testing.T) {
 		t.Fatalf("backup filename contains unsafe chars: %s", base)
 	}
 }
+
+func TestBackupDatabaseBeforeMigrationFailurePreservesSnapshot(t *testing.T) {
+	db := openMigrationTestDB(t)
+	if err := db.Exec(`CREATE TABLE settings (key text, value text)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO settings VALUES ('version', '1.0.0')").Error; err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "s-ui.db")
+	backupPath := path + ".pre-1.0.0.bak"
+	if err := os.WriteFile(backupPath, []byte("previous snapshot"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tx := db.Begin()
+	if tx.Error != nil {
+		t.Fatal(tx.Error)
+	}
+	t.Cleanup(func() { _ = tx.Rollback().Error })
+	if err := backupDatabaseBeforeMigration(tx, path); err == nil {
+		t.Fatal("VACUUM inside a transaction must fail")
+	}
+	content, err := os.ReadFile(backupPath)
+	if err != nil || string(content) != "previous snapshot" {
+		t.Fatalf("prior rollback snapshot lost: %q, %v", content, err)
+	}
+	files, err := filepath.Glob(path + ".pre-*")
+	if err != nil || len(files) != 1 {
+		t.Fatalf("temporary snapshot was retained: %v, %v", files, err)
+	}
+}

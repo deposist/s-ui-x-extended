@@ -179,9 +179,14 @@ export default {
       this.applyFinal = false
     },
     extractRouteBlock(obj: any): any {
-      if (obj?.route && (obj.route.rules || obj.route.rule_set)) return obj.route
-      if (obj?.rules || obj?.rule_set) return obj
-      return null
+      const block = obj?.route && (obj.route.rules || obj.route.rule_set)
+        ? obj.route : obj?.rules || obj?.rule_set ? obj : null
+      if (!block) return null
+      for (const key of ['rules', 'rule_set']) {
+        if (block[key] === undefined) continue
+        if (!Array.isArray(block[key]) || block[key].some((item: any) => !item || typeof item !== 'object' || Array.isArray(item))) return null
+      }
+      return block
     },
     setParsed(block: any) {
       this.parsed = block

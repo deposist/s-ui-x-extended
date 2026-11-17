@@ -373,7 +373,7 @@
                   :label="$t('client.external') + ' ' + (index+1)"
                   append-icon="mdi-delete"
                   @click:append="extLinks.splice(index,1)"
-                  placeholder="<protocol>://<data>"
+                  :placeholder="externalLinkPlaceholder"
                   v-model="lnk.uri" />
                 </v-col>
               </v-row>
@@ -389,7 +389,7 @@
                   :label="$t('client.sub') + ' ' + (index+1)"
                   append-icon="mdi-delete"
                   @click:append="subLinks.splice(index,1)"
-                  placeholder="http[s]://<domain>[:]<port>/<path>"
+                  :placeholder="subscriptionLinkPlaceholder"
                   v-model="lnk.uri" />
                 </v-col>
               </v-row>
@@ -426,11 +426,14 @@ export default {
       client: createClient(),
       title: "add",
       loading: false,
+      loadGeneration: 0,
       tab: "t1",
       clientConfig: <any>[],
       links: <Link[]>[],
       extLinks: <Link[]>[],
       subLinks: <Link[]>[],
+      externalLinkPlaceholder: '<protocol>://<data>',
+      subscriptionLinkPlaceholder: 'http[s]://<domain>[:]<port>/<path>',
       ipLimitModes: ['monitor', 'enforce'],
       vlessFlows,
       awgAccesses: <any[]>[],
@@ -453,6 +456,10 @@ export default {
   },
   methods: {
     async updateData(id: number) {
+      const generation = ++this.loadGeneration
+      this.loading = true
+      this.clientNodes = []
+      this.limits = { speedShared: true, speedMbps: 0, downloadMbps: 0, uploadMbps: 0, connections: 0 }
       this.awgAccesses = []
       this.awgDevices = {}
       this.awgNewDeviceNames = {}
@@ -460,13 +467,11 @@ export default {
       this.visibleSudokuKeys = {}
       if (this.awgQrUrl) { URL.revokeObjectURL(this.awgQrUrl); this.awgQrUrl = '' }
       if (id > 0) {
-        this.loading = true
         const newData = await Data().loadClients(id)
+        if (generation !== this.loadGeneration) return
         this.client = createClient(newData)
         this.title = "edit"
         this.clientConfig = this.client.config
-        this.loading = false
-        this.loadAwgState()
       }
       else {
         this.client = createClient()
@@ -477,10 +482,8 @@ export default {
       this.extLinks = this.client.links?.filter(l => l.type == 'external')?? []
       this.subLinks = this.client.links?.filter(l => l.type == 'sub')?? []
       this.tab = "t1"
-      this.clientNodes = []
-      this.loading = false
-      this.loadNodes()
-      if (id > 0) this.loadClientNodes(id)
+      await Promise.all([this.loadNodes(), ...(id > 0 ? [this.loadClientNodes(id), this.loadAwgState()] : [])])
+      if (generation === this.loadGeneration) this.loading = false
     },
     async loadNodes() {
       const msg = await HttpUtils.get('api/nodes')
@@ -488,9 +491,12 @@ export default {
       this.nodeItems = (msg.obj ?? []).map((node: any) => ({ title: node.name, value: node.uuid }))
     },
     async loadClientNodes(id: number) {
+      const generation = this.loadGeneration
       const nodesMsg = await HttpUtils.get('api/clients/' + id + '/nodes')
+      if (generation !== this.loadGeneration) return
       if (nodesMsg.success) this.clientNodes = nodesMsg.obj ?? []
       const limitsMsg = await HttpUtils.get('api/clients/' + id + '/limits')
+      if (generation !== this.loadGeneration) return
       if (!limitsMsg.success || !limitsMsg.obj) return
       const limits = limitsMsg.obj
       this.limits = {
@@ -501,17 +507,21 @@ export default {
         connections: limits.connections ?? 0,
       }
     },
-    async saveClientNodes(id: number) {
-      await HttpUtils.patch('api/clients/' + id + '/nodes', {
-        nodes: JSON.stringify(this.clientNodes),
+    async saveClientNodes(id: number, nodes?: string[], limits?: any): Promise<boolean> {
+      nodes ??= [...this.clientNodes]
+      limits ??= { ...this.limits }
+      const nodesMsg = await HttpUtils.patch('api/clients/' + id + '/nodes', {
+        nodes: JSON.stringify(nodes),
       })
-      await HttpUtils.patch('api/clients/' + id + '/limits', {
-        speedShared: String(this.limits.speedShared),
-        speed: fromMbps(this.limits.speedMbps),
-        downloadSpeed: fromMbps(this.limits.downloadMbps),
-        uploadSpeed: fromMbps(this.limits.uploadMbps),
-        connections: String(this.limits.connections ?? 0),
+      if (!nodesMsg.success) return false
+      const limitsMsg = await HttpUtils.patch('api/clients/' + id + '/limits', {
+        speedShared: String(limits.speedShared),
+        speed: fromMbps(limits.speedMbps),
+        downloadSpeed: fromMbps(limits.downloadMbps),
+        uploadSpeed: fromMbps(limits.uploadMbps),
+        connections: String(limits.connections ?? 0),
       })
+      return limitsMsg.success
     },
     closeModal() {
       this.updateData(0) // reset
@@ -521,8 +531,13 @@ export default {
       // Guard against double-submit: ignore re-entry while a save is in flight
       // (the button is also :disabled while loading).
       if (!this.$props.visible || this.loading) return
+      const generation = this.loadGeneration
+      const client = this.client
+      const nodes = [...this.clientNodes]
+      const limits = { ...this.limits }
       // check duplicate name
-      const isDuplicateName = Data().checkClientName(this.$props.id, this.client.name)
+      const clientId = client.id || this.$props.id
+      const isDuplicateName = Data().checkClientName(clientId, client.name)
       if (isDuplicateName) return
 
       // Sudoku split keys are generated by the backend from each assigned
@@ -530,29 +545,32 @@ export default {
       // inbounds without sharing or manually pasting credentials.
 
       // check if delayStart is true and autoReset is false, set expiry to 0
-      if (this.client.delayStart && !this.client.autoReset) this.client.expiry = 0
+      if (client.delayStart && !client.autoReset) client.expiry = 0
 
       // save data
       this.loading = true
       try {
-        this.client.config = updateConfigs(this.clientConfig, this.client.name)
-        this.client.links = [
+        client.config = updateConfigs(this.clientConfig, client.name)
+        client.links = [
                           ...this.extLinks.filter(l => l.uri != ''),
                           ...this.subLinks.filter(l => l.uri != '')]
-        const success = await Data().save("clients", this.$props.id == 0 ? "new" : "edit", this.client)
+        const success = await Data().save("clients", clientId == 0 ? "new" : "edit", client)
         if (success) {
           // Assignments are saved after the client row exists, so a new client
           // has an id to hang them on. The save response carries no id, and the
           // refreshed client list does, so the row is looked up by its name
           // there — names are unique, which the save already enforced.
-          const savedId = this.$props.id > 0
-            ? this.$props.id
-            : Data().clients.findLast((c: any) => c.name == this.client.name)?.id ?? 0
-          if (savedId > 0) await this.saveClientNodes(savedId)
-          this.closeModal()
+          const savedId = clientId > 0
+            ? clientId
+            : Data().clients.findLast((c: any) => c.name == client.name)?.id ?? 0
+          if (savedId > 0) {
+            client.id = savedId
+            if (!await this.saveClientNodes(savedId, nodes, limits)) return
+          }
+          if (generation === this.loadGeneration) this.closeModal()
         }
       } finally {
-        this.loading = false
+        if (generation === this.loadGeneration) this.loading = false
       }
     },
     setDate(newDate:number){
@@ -578,11 +596,15 @@ export default {
     },
     async loadAwgState() {
       if (this.$props.id == 0) return
-      const accessMsg = await HttpUtils.get(`api/awg/clients/${this.$props.id}/access`)
+      const generation = this.loadGeneration
+      const id = this.$props.id
+      const accessMsg = await HttpUtils.get(`api/awg/clients/${id}/access`)
+      if (generation !== this.loadGeneration) return
       if (!accessMsg.success) return
       this.awgAccesses = accessMsg.obj ?? []
       for (const access of this.awgAccesses) {
-        const devicesMsg = await HttpUtils.get(`api/awg/clients/${this.$props.id}/devices`, { endpointId: access.endpointId })
+        const devicesMsg = await HttpUtils.get(`api/awg/clients/${id}/devices`, { endpointId: access.endpointId })
+        if (generation !== this.loadGeneration) return
         if (devicesMsg.success) this.awgDevices[access.endpointId] = devicesMsg.obj ?? []
       }
     },

@@ -56,7 +56,10 @@ func migrate_dns(db *gorm.DB) error {
 								dnsServer["server"] = addr
 							case "udp", "tcp", "tls", "quic", "https", "h3":
 								dnsServer["type"] = addrParsed.Scheme
-								dnsServer["server"] = addrParsed.Host
+								dnsServer["server"] = addrParsed.Hostname()
+								if (addrParsed.Scheme == "https" || addrParsed.Scheme == "h3") && addrParsed.Path != "" {
+									dnsServer["path"] = addrParsed.EscapedPath()
+								}
 							case "dhcp":
 								dnsServer["type"] = addrParsed.Scheme
 								if addrParsed.Host != "auto" && addrParsed.Host != "" {
@@ -140,6 +143,9 @@ func anytls_user_config(db *gorm.DB) error {
 			var configs map[string]json.RawMessage
 			if err := json.Unmarshal(clients[index].Config, &configs); err != nil {
 				return err
+			}
+			if configs == nil {
+				configs = make(map[string]json.RawMessage)
 			}
 			if configs["anytls"] != nil {
 				continue

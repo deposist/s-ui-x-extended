@@ -49,6 +49,7 @@
                   color="success"
                   density="compact"
                   hide-details
+                  :disabled="loading"
                   @update:model-value="setTokenEnabled(token.id, Boolean($event))"
                 ></v-switch>
               </td>
@@ -73,7 +74,7 @@
                     <v-divider></v-divider>
                     <v-card-text>{{ $t('confirm') }}</v-card-text>
                     <v-card-actions>
-                      <v-btn color="error" variant="outlined" @click="deleteToken(token.id)">{{ $t('yes') }}</v-btn>
+                      <v-btn color="error" variant="outlined" :disabled="loading" @click="deleteToken(token.id)">{{ $t('yes') }}</v-btn>
                       <v-btn color="success" variant="outlined" @click="delOverlay[index] = false">{{ $t('no') }}</v-btn>
                     </v-card-actions>
                   </v-card>
@@ -82,7 +83,7 @@
             </tr>
           </tbody>
         </v-table>
-        <v-btn color="primary" @click="showAddToken()">
+        <v-btn color="primary" :disabled="loading" @click="showAddToken()">
           {{ $t('actions.add') }}
         </v-btn>
         <v-dialog v-model="showNewToken" width="300">
@@ -128,6 +129,8 @@
               <v-btn
                 color="blue-darken-1"
                 variant="tonal"
+                :disabled="loading"
+                :loading="loading"
                 @click="addToken"
               >
                 {{ $t('actions.add') }}
@@ -189,12 +192,15 @@ export default {
   methods: {
     async loadData() {
       this.loading = true
-      const data = await HttpUtils.get('api/tokens')
-      if (data.success) {
-        this.tokens = data.obj ?? []
-        this.delOverlay = new Array<boolean>(this.tokens.length).fill(false)
+      try {
+        const data = await HttpUtils.get('api/tokens')
+        if (data.success) {
+          this.tokens = data.obj ?? []
+          this.delOverlay = new Array<boolean>(this.tokens.length).fill(false)
+        }
+      } finally {
+        this.loading = false
       }
-      this.loading = false
     },
     resetNewToken() {
       this.newToken={
@@ -209,31 +215,43 @@ export default {
       this.showNewToken = true
     },
     async addToken() {
+      if (this.loading) return
       this.loading = true
-      this.newToken.expiry = this.newToken.expiry>0 ? this.newToken.expiry : 0
-      const response = await HttpUtils.post('api/addToken', { desc: this.newToken.desc, expiry: this.newToken.expiry, scope: this.newToken.scope })
-      if (response.success) {
-        this.newToken.token = response.obj
-        this.loadData()
-        this.showNewToken = false
+      try {
+        this.newToken.expiry = this.newToken.expiry>0 ? this.newToken.expiry : 0
+        const response = await HttpUtils.post('api/addToken', { desc: this.newToken.desc, expiry: this.newToken.expiry, scope: this.newToken.scope })
+        if (response.success) {
+          this.newToken.token = response.obj
+          await this.loadData()
+          this.showNewToken = false
+        }
+      } finally {
+        this.loading = false
       }
-      this.loading = false
     },
     async setTokenEnabled(id: number, enabled: boolean) {
+      if (this.loading) return
       this.loading = true
-      const response = await HttpUtils.post('api/setTokenEnabled', { id, enabled })
-      if (response.success) {
-        this.loadData()
+      try {
+        const response = await HttpUtils.post('api/setTokenEnabled', { id, enabled })
+        if (response.success) {
+          await this.loadData()
+        }
+      } finally {
+        this.loading = false
       }
-      this.loading = false
     },
     async deleteToken(id: number) {
+      if (this.loading) return
       this.loading = true
-      const response = await HttpUtils.post('api/deleteToken', { id: id })
-      if (response.success) {
-        this.loadData()
+      try {
+        const response = await HttpUtils.post('api/deleteToken', { id: id })
+        if (response.success) {
+          await this.loadData()
+        }
+      } finally {
+        this.loading = false
       }
-      this.loading = false
     },
     dateFormatted(expiry: number) {
       if (expiry == 0) return i18n.global.t('unlimited')

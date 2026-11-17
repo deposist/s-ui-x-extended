@@ -60,3 +60,17 @@ func TestApplyToTargetRoutingErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestPatchTlsServerBlockAcceptsNull(t *testing.T) {
+	out, err := patchTlsServerBlock(json.RawMessage(`null`), "/managed/cert.crt", "/managed/key.key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var server map[string]string
+	if err := json.Unmarshal(out, &server); err != nil {
+		t.Fatal(err)
+	}
+	if server["certificate_path"] != "/managed/cert.crt" || server["key_path"] != "/managed/key.key" {
+		t.Fatalf("managed paths missing: %s", out)
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/deposist/s-ui-x-extended/database/model"
+	"github.com/sagernet/sing-box/option"
 )
 
 func TestGetOutboundRejectsMalformedAuthorityWithoutPanic(t *testing.T) {
@@ -84,5 +85,56 @@ func TestHTTPLinkProtocolIsPerAddress(t *testing.T) {
 	}
 	if first.Scheme != "https" || second.Scheme != "http" {
 		t.Fatalf("protocol leaked across addresses: %#v", links)
+	}
+}
+
+func TestVMessInsecureFlagValues(t *testing.T) {
+	for _, tc := range []struct {
+		value any
+		want  bool
+	}{{false, false}, {true, true}, {0, false}, {1, true}, {"false", false}, {"true", true}, {"0", false}, {"1", true}} {
+		data, err := json.Marshal(map[string]any{"tls": "tls", "allowInsecure": tc.value, "add": "example.com", "port": 443})
+		if err != nil {
+			t.Fatal(err)
+		}
+		outbound, _, err := GetOutbound("vmess://"+ByteToB64Str(data), 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tls := (*outbound)["tls"].(map[string]interface{})
+		if got, _ := tls["insecure"].(bool); got != tc.want {
+			t.Fatalf("allowInsecure=%v (%T): insecure=%v, want %v", tc.value, tc.value, got, tc.want)
+		}
+	}
+}
+
+func TestImportedTCPLinksDecodeWithCoreOptions(t *testing.T) {
+	for _, protocol := range []string{"vmess", "vless", "trojan"} {
+		t.Run(protocol, func(t *testing.T) {
+			links := LinkGenerator(json.RawMessage(wellFormedClientConfig), wellFormedInbound(protocol), "example.com")
+			if len(links) == 0 {
+				t.Fatal("no generated link")
+			}
+			outbound, _, err := GetOutbound(links[0], 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, err := json.Marshal(outbound)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var options any
+			switch protocol {
+			case "vmess":
+				options = &option.VMessOutboundOptions{}
+			case "vless":
+				options = &option.VLESSOutboundOptions{}
+			case "trojan":
+				options = &option.TrojanOutboundOptions{}
+			}
+			if err := json.Unmarshal(data, options); err != nil {
+				t.Fatalf("imported %s link does not decode as core options: %v", protocol, err)
+			}
+		})
 	}
 }

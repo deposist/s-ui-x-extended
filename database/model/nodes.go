@@ -24,7 +24,32 @@ type Node struct {
 	// Empty means the node has never connected.
 	Inventory json.RawMessage `json:"inventory"`
 
+	// LimiterRoles maps operator-selected outbounds to the per-client limiter roles.
+	// The column name stays stable for existing databases.
+	LimiterRoles json.RawMessage `json:"limiterRoles" gorm:"column:limiters"`
+
 	UpdatedAt int64 `json:"updatedAt"`
+}
+
+// NodeLimiterTags maps a limiter role to the outbound tag that enforces it on
+// one node. Roles are independent: a node may enforce speed but not traffic.
+type NodeLimiterTags struct {
+	// SpeedShared is a single bandwidth limiter capped in both directions.
+	SpeedShared string `json:"speedShared"`
+	// SpeedDown and SpeedUp carry one direction each when the operator splits
+	// the limit. The core stores one number per limiter record, so a split
+	// limit needs two outbounds.
+	SpeedDown string `json:"speedDown"`
+	SpeedUp   string `json:"speedUp"`
+
+	// Connections caps concurrent connections per user.
+	Connections string `json:"connections"`
+}
+
+// FleetNodeOwnership records the manager squad created for a node by this panel.
+type FleetNodeOwnership struct {
+	NodeUUID string `json:"nodeUuid" gorm:"primaryKey"`
+	SquadID  int    `json:"squadId" gorm:"not null"`
 }
 
 // ClientNode assigns a client to a node. A client without rows here is local

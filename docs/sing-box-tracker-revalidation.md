@@ -2,10 +2,10 @@
 
 Validated dependency:
 
-- `github.com/sagernet/sing-box v1.14.3`
+- `github.com/sagernet/sing-box v1.14.4`
 
 The module is provided by `github.com/deposist/sing-box-extended
-v1.14.3-extended-2.7.8`, which preserves the upstream import paths.
+v1.14.4-extended-2.7.10`, which preserves the upstream import paths.
 
 `ConnTracker` and `StatsTracker` track routed TCP connections, packet connections
 and sing-tun flows. Their behavioral tests cover traffic accounting, close and

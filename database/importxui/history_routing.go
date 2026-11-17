@@ -384,6 +384,9 @@ func mergeRoutingIntoConfig(tx *gorm.DB, mapped map[string]any) error {
 	if err := json.Unmarshal([]byte(current), &cfg); err != nil {
 		return fmt.Errorf("routing: existing config is not valid JSON: %w", err)
 	}
+	if cfg == nil {
+		cfg = map[string]json.RawMessage{}
+	}
 	changed := false
 
 	if route, ok := mapped["route"].(map[string]any); ok {
@@ -455,6 +458,9 @@ func decodeConfigObject(raw json.RawMessage) map[string]any {
 	out := map[string]any{}
 	if len(raw) > 0 {
 		_ = json.Unmarshal(raw, &out)
+	}
+	if out == nil {
+		out = map[string]any{}
 	}
 	return out
 }

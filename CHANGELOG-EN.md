@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 `CHANGELOG-ZH.md` for Simplified Chinese.
 
+## [1.1.2-beta8] - 2026-11-17 - Fleet nodes and sing-box 1.14.4
+
+- Added the Nodes section in beta for remote servers, their connection state, reported inbounds and client assignments. Subscriptions include links for assigned nodes.
+- Each client can have a shared or separate download/upload speed limit and a connection limit.
+- Updated the core to sing-box-extended `v1.14.4-extended-2.7.10`. Release builds use the deposist dependency forks to retain the extended changes.
+- Network reset closes tracked connections. Flow trackers release their state once, and deleting a user removes the user's traffic counter.
+- Panel update recovery resumes interrupted cleanup and rollback with binary hash checks.
+- Backups include nodes, client assignments, limits and paid-subscription charge records. Composite-key records are copied in full.
+- Legacy migrations handle missing and null sections. DNS migration preserves HTTPS/H3 paths and response filters in logical rules.
+- Subscription caches no longer keep stale entries. JSON subscriptions retain base TLS settings during partial overrides.
+- Nested inbound group and provider changes trigger the required reload. Provider rename and deletion now check outbound references.
+- Panel and subscription HTTP servers close their listeners on restart. Paid-subscription registration checks database errors. Sudoku `keys` values are masked in configuration change records.
+- Form editors ignore late responses, and new objects no longer share nested defaults. Bulk client editing does not change rows before a successful request.
+- Dashboard polling no longer overlaps and ignores responses after a page closes or goes offline. Fixed rule initialization, client search and compressed IPv6 masking.
+- WebSocket Host editing preserves other headers. SSH shows the username with key authentication. VPN no longer issues duplicate addresses after deletions.
+- Amnezia obfuscation results stay with the requesting endpoint. Fixed ACME default SNI, TLS default copying, and the Mieru, MASQUE and OOM Killer forms.
+- VMess import validates ports and `allowInsecure`. Empty transport blocks are omitted from VMess, VLESS and Trojan. Invalid WireGuard private keys return an error.
+- The installer reports failed remote updates instead of success. Certificate reissue preserves the previous certificate on failure; self-signed certificate generation was fixed.
+
+Back up the database before upgrading. Setup, upgrade and rollback: [release notes](docs/releases/v1.1.2-beta8.md).
+
 ## [1.1.2-beta7] - 2026-10-20 - sing-box 1.14.3
 
 - Updated the core to sing-box-extended `v1.14.3-extended-2.7.8`. Core startup follows the new launch order; NTP, the reference manager and the HTTP client now stop with the core.

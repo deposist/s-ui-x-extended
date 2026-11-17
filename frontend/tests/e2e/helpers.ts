@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -48,6 +48,14 @@ export const login = async (page: Page) => {
     return body.success === true
   }).toBe(true)
   await page.goto('')
+}
+
+export const pickType = async (page: Page, drawer: Locator, typeName: string) => {
+  await drawer.locator('.v-select .v-field').first().click()
+  // Typeahead reaches options outside Vuetify's virtualized visible rows.
+  await page.keyboard.type(typeName, { delay: 50 })
+  await page.keyboard.press('Escape')
+  await expect(drawer.getByRole('combobox', { name: 'Type', exact: true })).toHaveValue(typeName)
 }
 
 export const csrfToken = async (page: Page) => {

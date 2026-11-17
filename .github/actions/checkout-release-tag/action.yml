@@ -36,7 +36,10 @@ runs:
       shell: bash
       env:
         INPUT_TAG: ${{ inputs.tag }}
-      run: echo "tag=$(bash scripts/validate-release-tag.sh "$INPUT_TAG")" >> "$GITHUB_OUTPUT"
+      run: |
+        set -euo pipefail
+        tag=$(bash scripts/validate-release-tag.sh "$INPUT_TAG")
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
     - name: Stage trusted release verifier
       shell: bash

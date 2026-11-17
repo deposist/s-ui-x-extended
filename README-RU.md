@@ -43,7 +43,7 @@ S-UI-X Extended это проект с открытым исходным код�
 | TRX | `TFqEbp1Z82ZQebzDdsW1MbytMvVsHJGpPd` |
 | BTC | `bc1qn86mfmsnackfwvjd4czjaalv75sh830fws7xc9` |
 
-S-UI-X Extended это веб-панель на базе [`sing-box-extended`](https://github.com/shtorm-7/sing-box-extended), форка `SagerNet/sing-box` от shtorm-7.
+S-UI-X Extended это веб-панель на собственном форке [`sing-box-extended`](https://github.com/deposist/sing-box-extended). Ядро основано на [`shtorm-7/sing-box-extended`](https://github.com/shtorm-7/sing-box-extended) и `SagerNet/sing-box`.
 
 Этот репозиторий основан на `alireza0/s-ui`, начиная с `v1.4.1`. Он сохраняет паритет с upstream s-ui-x `v1.5.10-beta7` и работает на ядре `sing-box-extended`.
 
@@ -64,7 +64,7 @@ S-UI-X Extended это веб-панель на базе [`sing-box-extended`](h
 - Русский changelog: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - Changelog на упрощенном китайском: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
 - Заметки последнего стабильного релиза: [`docs/releases/v1.1.1.md`](docs/releases/v1.1.1.md)
-- Заметки последнего beta-релиза: [`docs/releases/v1.1.2-beta7.md`](docs/releases/v1.1.2-beta7.md)
+- Заметки последнего beta-релиза: [`docs/releases/v1.1.2-beta8.md`](docs/releases/v1.1.2-beta8.md)
 - Справка по паритету с upstream: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 ## Чем отличается от `alireza0/s-ui`
@@ -78,6 +78,7 @@ S-UI-X Extended это веб-панель на базе [`sing-box-extended`](h
 - Учетные данные Telegram, прокси-учетные данные, install salt и другие чувствительные настройки шифруются при хранении через secretbox. Сообщения Telegram, детали аудита, подписи резервных копий и история изменений редактируются перед выходом из панели.
 - Сетевые входные данные проверяются строже. `X-Forwarded-For` игнорируется без настроенных доверенных прокси. Загрузка внешних подписок проверяет URL и resolved IP, по умолчанию блокирует private и loopback цели, ограничивает ответ 4 MiB и повторно проверяет IP во время dial.
 - Подписки поддерживают отдельные секреты для каждого клиента в форматах link, JSON и Clash. Старые URL по имени клиента работают, пока `subSecretRequired=false`. Ответы подписок очищают headers, применяют лимиты на IP, поддерживают gzip и недолго кэшируют успешный вывод.
+- Раздел «Ноды» находится в бета-статусе. В нём можно добавлять удалённые серверы, назначать клиентов и выбирать outbound для ограничений. Подписки включают подключения к назначенным серверам. Для каждого клиента можно задать общий или раздельный лимит скорости на приём и отдачу, а также лимит соединений.
 - sing-box запускается как встроенная Go-библиотека, а не как subprocess. Изменения clients, TLS, inbounds, outbounds, endpoints и services применяются через hot apply к затронутому объекту, когда это возможно. Полный restart используется только если изменение требует его или hot apply не может безопасно сохранить running config.
 - Маршрутизация включает outbound-группы под управлением панели и участников от providers. Группы Selector, URLTest, fallback и failover используют проверку tag-ссылок, предварительный просмотр и capability metadata. Тип `failover` под управлением панели проверяет участников по HTTPS, переводит новые подключения с отказавшего активного участника и поддерживает явные all-down policies.
 - Панель умеет обновляться из Settings. Администратор может проверить stable или beta-релизы, сверить скачанный бинарный файл с release SHA-256, применить обновление и автоматически откатиться, если новый бинарный файл несколько раз не стартует. Действие записывается в audit и требует повторного ввода пароля.
@@ -218,7 +219,7 @@ S-UI-X Extended это веб-панель на базе [`sing-box-extended`](h
 | Канал | Версия | Заметки |
 |---|---|---|
 | Stable | [`v1.1.1`](docs/releases/v1.1.1.md) | Рекомендуется для production. Включает всю линейку 1.1.1: ядро sing-box-extended 1.14, AmneziaWG 3.1 со случайными трейлерами и отключением cookies, эндпоинты OpenVPN, структурированные формы ядра и исправления утечки памяти failover и отката установщика. |
-| Beta | [`v1.1.2-beta7`](docs/releases/v1.1.2-beta7.md) | Ядро обновлено до sing-box 1.14.3, загрузка ядра перестроена под новый жизненный цикл. В формах TrustTunnel и MASQUE появились новые поля, валидатор URL принимает домены в punycode, маскировщик логов вырезает учётные данные без схемы. |
+| Beta | [`v1.1.2-beta8`](docs/releases/v1.1.2-beta8.md) | Добавлена бета-версия раздела «Ноды» с лимитами клиентов, ядро обновлено до sing-box 1.14.4. Исправлены прерванные обновления, кэш подписок и гонки в формах. |
 
 ### Linux/macOS, stable
 
@@ -231,7 +232,7 @@ curl -fLsS https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.1/ins
 ### Linux/macOS, beta
 
 ```sh
-curl -fLsS https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.2-beta7/install.sh | sudo bash -s -- v1.1.2-beta7
+curl -fLsS https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.2-beta8/install.sh | sudo bash -s -- v1.1.2-beta8
 ```
 
 ### Локальный clone
@@ -241,13 +242,13 @@ git clone --branch v1.1.1 --depth 1 https://github.com/deposist/s-ui-x-extended.
 cd s-ui-x-extended
 sudo bash install.sh v1.1.1
 ```
-Для beta укажите `v1.1.2-beta7` в команде клонирования и аргументе установщика.
+Для beta укажите `v1.1.2-beta8` в команде клонирования и аргументе установщика.
 
 
 ### Windows
 
 - Stable: скачайте `v1.1.1` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.1), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
-- Beta: скачайте `v1.1.2-beta7` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.2-beta7), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
+- Beta: скачайте `v1.1.2-beta8` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.2-beta8), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
 
 Существующие установки сохраняют settings, users, inbounds, outbounds, clients, TLS, services и tokens. Миграции базы запускаются автоматически при первом старте. Заметки по обновлению и откату находятся в changelog: [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), [中文](CHANGELOG-ZH.md).
 
@@ -440,7 +441,8 @@ certbot certonly --standalone --register-unsafely-without-email --non-interactiv
 #### Благодарности
 
 - Автор оригинальной панели: [alireza0/s-ui](https://github.com/alireza0/s-ui)
-- Extended-ядро: [shtorm-7/sing-box-extended](https://github.com/shtorm-7/sing-box-extended)
+- Extended-ядро: [deposist/sing-box-extended](https://github.com/deposist/sing-box-extended)
+- Исходное extended-ядро: [shtorm-7/sing-box-extended](https://github.com/shtorm-7/sing-box-extended)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=deposist/s-ui-x-extended&type=date&theme=dark" />

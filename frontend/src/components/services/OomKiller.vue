@@ -29,18 +29,6 @@
           </template>
         </v-text-field>
       </v-col>
-      <v-col cols="12" sm="6" md="4">
-        <v-text-field
-          v-model.number="data.checks_before_limit"
-          :label="$t('types.oom.checksBeforeLimit')"
-          type="number"
-          min="1"
-          hide-details>
-          <template #append-inner>
-            <FieldHint :field-hints="fieldHints" field="checks_before_limit" />
-          </template>
-        </v-text-field>
-      </v-col>
     </v-row>
   </v-card>
 </template>

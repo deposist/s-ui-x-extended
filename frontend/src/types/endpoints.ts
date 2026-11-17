@@ -422,6 +422,6 @@ const defaultValues: Record<EpType, Endpoint> = {
 }
 
 export function createEndpoint<T extends Endpoint>(type: string,json?: Partial<T>): Endpoint {
-  const defaultObject: Endpoint = { ...defaultValues[type], ...(json || {}) }
+  const defaultObject: Endpoint = { ...structuredClone(defaultValues[type] ?? {}), ...(json || {}) }
   return defaultObject
 }

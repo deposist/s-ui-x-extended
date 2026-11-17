@@ -210,7 +210,7 @@ export default {
     },
     optionDefault: {
       get(): boolean { return this.acme?.default_server_name != undefined },
-      set(v:boolean) { this.acme.default_server_name = v ? this.domains.length>0 ? this.domains[0] : '' : undefined }
+      set(v:boolean) { this.acme.default_server_name = v ? this.acme.domain?.[0] ?? '' : undefined }
     },
     optionEmail: {
       get(): boolean { return this.acme?.email != undefined },

@@ -445,10 +445,11 @@ export default {
           if (ruleIndex >= 0){
             this.dns.rules[ruleIndex].rule_set = v
           } else {
+            if (this.dns.rules == undefined) this.dns.rules = []
             this.dns.rules.push({ rule_set: v, action: "route", server: "direct-dns" })
           }
         } else {
-          if (ruleIndex != -1) this.dns.rules.splice(ruleIndex,1)
+          if (ruleIndex >= 0) this.dns.rules.splice(ruleIndex,1)
         }
         this.updateRuleSets()
       }
@@ -474,7 +475,7 @@ export default {
             this.rules.push({ rule_set: v, action: "route", outbound: "direct" })
           }
         } else {
-          if (ruleIndex != -1) this.rules.splice(ruleIndex,1)
+          if (ruleIndex >= 0) this.rules.splice(ruleIndex,1)
         }
         this.updateRuleSets()
       }
@@ -494,7 +495,7 @@ export default {
             this.rules.push({ rule_set: v, action: "reject" })
           }
         } else {
-          if (ruleIndex != -1) this.rules.splice(ruleIndex,1)
+          if (ruleIndex >= 0) this.rules.splice(ruleIndex,1)
         }
         this.updateRuleSets()
       }
@@ -523,7 +524,7 @@ export default {
       } else {
         delete this.subJsonExt.rule_set
       }
-      if (this.rules.length == 0) delete this.subJsonExt.rules
+      if (this.rules?.length == 0) delete this.subJsonExt.rules
     },
     openEditor() {
       this.enableEditor = true

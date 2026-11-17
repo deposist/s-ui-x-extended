@@ -89,6 +89,7 @@ export default {
   data() {
     return {
       loading: false,
+      loadGeneration: 0,
       changes: <any[]>[],
       user: '',
       key: '',
@@ -105,14 +106,15 @@ export default {
   },
   methods: {
     async loadData() {
+      const generation = ++this.loadGeneration
       this.loading = true
       try {
         const data = await HttpUtils.get('api/changes',{ a: this.user, k: this.key, c: this.chngCount })
-        if (data.success) {
+        if (generation === this.loadGeneration && data.success) {
           this.changes = data.obj?? []
         }
       } finally {
-        this.loading = false
+        if (generation === this.loadGeneration) this.loading = false
       }
     },
     dateFormatted(dt: number): string {
@@ -135,6 +137,8 @@ export default {
   },
   watch: {
     visible(newValue) {
+      this.loadGeneration++
+      this.loading = false
       this.changes = []
       this.user = this.$props.actor
       this.key = ''

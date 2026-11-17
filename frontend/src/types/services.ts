@@ -79,7 +79,6 @@ export interface OOMKiller extends SrvBasics {
   safety_margin?: string | number
   min_interval?: string
   max_interval?: string
-  checks_before_limit?: number
 }
 
 export interface Profiler extends SrvBasics {
@@ -164,7 +163,7 @@ const defaultValues: Record<SrvType, Srv> = {
   'ssm-api': <SSMAPI>{ type: 'ssm-api', tls_id: 0, servers: {} },
   ocm: { type: 'ocm', id: 0, tag: '', listen: '::', listen_port: 8080, tls_id: 0, users: [] } as OCM,
   ccm: { type: 'ccm', id: 0, tag: '', listen: '::', listen_port: 8080, tls_id: 0, users: [] } as CCM,
-  'oom-killer': { type: 'oom-killer', id: 0, tag: '', checks_before_limit: 3, min_interval: '30s', max_interval: '5m' } as OOMKiller,
+  'oom-killer': { type: 'oom-killer', id: 0, tag: '', min_interval: '30s', max_interval: '5m' } as OOMKiller,
   profiler: { type: 'profiler', id: 0, tag: '', listen: '127.0.0.1:8964' } as Profiler,
   api: { type: 'api', id: 0, tag: '', listen: '127.0.0.1', listen_port: 9090, tls_id: 0 } as API,
   'hysteria-realm': { type: 'hysteria-realm', id: 0, tag: '', listen: '::', listen_port: 0, tls_id: 0, users: [] } as HysteriaRealm,
@@ -178,6 +177,6 @@ export function createSrv<T extends Srv>(type: string, json?: Partial<T>): Srv {
   // The partial is spread over the type's own defaults. Services do not share one
   // shape (listen vs dial only), so the spread cannot be proven assignable to the
   // Srv union here; each type's default above is the type-level guarantee.
-  const defaultObject = { ...defaultValues[type], ...(json || {}) } as Srv
+  const defaultObject = { ...structuredClone(defaultValues[type] ?? {}), ...(json || {}) } as Srv
   return defaultObject
 }

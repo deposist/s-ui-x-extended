@@ -38,6 +38,20 @@ func scanServiceRowsForInboundTag(rows []model.Service, tag string) []TagReferen
 	return refs
 }
 
+func scanInboundGroupsForTag(rows []model.Inbound, tag string) []TagReference {
+	var refs []TagReference
+	for _, row := range rows {
+		opts := optionsMapOf(row.Options)
+		if members, _ := opts["inbounds"].([]any); containsTag(members, tag) {
+			refs = append(refs, TagReference{
+				Kind:    "inbound group member",
+				Locator: fmt.Sprintf("%s inbound %q (inbounds list)", row.Type, row.Tag),
+			})
+		}
+	}
+	return refs
+}
+
 func ssmServiceIdsReferencingInbound(rows []model.Service, tag string) []uint {
 	var ids []uint
 	for _, row := range rows {

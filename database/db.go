@@ -237,6 +237,7 @@ func InitDB(dbPath string) error {
 		&model.Changes{},
 		&model.AuditEvent{},
 		&model.Node{},
+		&model.FleetNodeOwnership{},
 		&model.ClientNode{},
 		&model.ClientLimits{},
 	)

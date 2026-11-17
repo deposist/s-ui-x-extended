@@ -94,7 +94,7 @@
           <Call v-if="inbound.type == inTypes.Call" direction="in" :data="inbound" :field-hints="currentFieldHints" />
           <BondInbound v-if="inbound.type == inTypes.Bond" :data="inbound" :inTags="inTags" />
           <CoreFailoverInbound v-if="inbound.type == inTypes.CoreFailover" :data="inbound" :inTags="inTags" />
-          <Transport v-if="Object.hasOwn(inbound,'transport')" :data="inbound" :field-hints="currentFieldHints" />
+          <Transport v-if="Object.hasOwn(inbound,'transport') && inbound.type != inTypes.Mieru" :data="inbound" :field-hints="currentFieldHints" />
           <Users v-if="hasUser" :clients="clients" :data="initUsers" :field-hints="currentFieldHints" />
           <InTls v-if="HasTls.includes(inbound.type)"  :inbound="inbound" :tlsConfigs="tlsConfigs" :tls_id="inbound.tls_id" :field-hints="currentFieldHints" :allowed-template-kinds="allowedTlsTemplateKinds" />
           <Multiplex v-if="MuxAvailable.includes(inbound.type)" direction="in" :data="inbound" :field-hints="currentFieldHints" />
@@ -164,6 +164,7 @@ import OutJsonVue from '@/components/OutJson.vue'
 import HttpUtils from '@/plugins/httputil'
 import { capabilityRows, capabilityTypeItems, type CapabilityRow } from '@/utils/capabilityTypeItems'
 import Data from '@/store/modules/data'
+import { push } from 'notivue'
 import EntityDrawer from './EntityDrawer.vue'
 import FormSection from './FormSection.vue'
 import SettingInfo from '@/components/SettingInfo.vue'
@@ -182,6 +183,8 @@ export default {
       inbound: createInbound("direct",{ id:0, "tag": "" }),
       title: "add",
       loading: false,
+      loadGeneration: 0,
+      loadFailed: false,
       // Availability rows from /api/capabilities: types not compiled into this
       // binary or not implemented on this platform stay visible but disabled.
       capabilityRows: <CapabilityRow[]>[],
@@ -209,14 +212,27 @@ export default {
     // Exposed so the tag field's error state uses the same blank rule as Save.
     isBlankIdentity,
     async loadData(id: number) {
+      const generation = ++this.loadGeneration
       this.loading = true
-      const inboundArray = await Data().loadInbounds([id])
-      this.inbound = inboundArray[0]
-      this.editHadOutJson = this.inbound.out_json != null
-      this.loading = false
-      this.snapshot = JSON.stringify(this.inbound); this.snapshotInitUsers = JSON.stringify(this.initUsers)
+      this.loadFailed = false
+      try {
+        const inboundArray = await Data().loadInbounds([id])
+        if (generation !== this.loadGeneration) return
+        if (!inboundArray[0]) {
+          this.loadFailed = true
+          push.error({ message: this.$t('error.invalidData') })
+          return
+        }
+        this.inbound = inboundArray[0]
+        this.editHadOutJson = this.inbound.out_json != null
+        this.snapshot = JSON.stringify(this.inbound); this.snapshotInitUsers = JSON.stringify(this.initUsers)
+      } finally {
+        if (generation === this.loadGeneration) this.loading = false
+      }
     },
     updateData(id: number) {
+      this.loadGeneration++
+      this.loadFailed = false
       if (id > 0) {
         this.loadData(id)
         this.title = "edit"
@@ -282,7 +298,7 @@ export default {
     },
     async saveChanges() {
       // Guard against double-submit (button is also :disabled while loading).
-      if (!this.$props.visible || this.loading) return
+      if (!this.$props.visible || this.loading || this.loadFailed) return
       // check duplicate tag
       const isDuplicatedTag = Data().checkTag("inbound", this.inbound.id, this.inbound.tag)
       if (isDuplicatedTag) return
@@ -331,6 +347,7 @@ export default {
     // it so the footer message can never drift out of sync with the disabled
     // button. Empty string means the form is valid.
     saveBlockedReason(): string {
+      if (this.loadFailed) return this.$t('error.invalidData')
       if (this.inbound == undefined) return this.$t('error.invalidData')
       if (isBlankIdentity(this.inbound.tag)) return this.$t('form.cannotSave.tagRequired')
       // Tun has no listen_port; only range-check when the field is in use.

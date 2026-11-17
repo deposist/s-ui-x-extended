@@ -1,3 +1,4 @@
+import { safeGetItem, safeSetItem } from '@/utils/safeStorage'
 import { isSelectorRecord, nonNegativeNumber } from './selectorUtils'
 
 export interface TrafficSeries {
@@ -90,9 +91,11 @@ export const resolveTrafficTimeZone = (value?: unknown): string => {
   return isValidTrafficTimeZone(value) ? value : browserTrafficTimeZone()
 }
 
-export const loadTrafficTimeZone = (storage: Storage | undefined = typeof localStorage === 'undefined' ? undefined : localStorage): string => {
+export const loadTrafficTimeZone = (storage?: Storage): string => {
   try {
-    return resolveTrafficTimeZone(storage?.getItem(trafficTimeZoneStorageKey))
+    return resolveTrafficTimeZone(storage
+      ? storage.getItem(trafficTimeZoneStorageKey)
+      : safeGetItem(trafficTimeZoneStorageKey))
   } catch {
     return browserTrafficTimeZone()
   }
@@ -100,12 +103,13 @@ export const loadTrafficTimeZone = (storage: Storage | undefined = typeof localS
 
 export const persistTrafficTimeZone = (
   timeZone: string,
-  storage: Storage | undefined = typeof localStorage === 'undefined' ? undefined : localStorage,
+  storage?: Storage,
 ): void => {
   if (!isValidTrafficTimeZone(timeZone)) return
 
   try {
-    storage?.setItem(trafficTimeZoneStorageKey, timeZone)
+    if (storage) storage.setItem(trafficTimeZoneStorageKey, timeZone)
+    else safeSetItem(trafficTimeZoneStorageKey, timeZone)
   } catch {
     // Ignore storage failures; the selected timezone still applies in memory.
   }

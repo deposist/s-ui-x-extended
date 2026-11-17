@@ -93,7 +93,23 @@ func (a *ApiService) UpdateNode(c *gin.Context) {
 		}
 		enabled = parsed
 	}
-	node, err := a.NodeService.Update(uuid, name, linkHost, enabled)
+	roles := current.LimiterRoles
+	rolesProvided := false
+	for key, target := range map[string]*string{"speedShared": &roles.SpeedShared, "speedDown": &roles.SpeedDown, "speedUp": &roles.SpeedUp, "connections": &roles.Connections} {
+		if values, ok := c.Request.PostForm[key]; ok {
+			rolesProvided = true
+			*target = ""
+			if len(values) > 0 {
+				*target = values[len(values)-1]
+			}
+		}
+	}
+	var node *service.NodeView
+	if rolesProvided {
+		node, err = a.NodeService.UpdateWithLimiterRoles(uuid, name, linkHost, enabled, roles)
+	} else {
+		node, err = a.NodeService.Update(uuid, name, linkHost, enabled)
+	}
 	if err == nil {
 		a.recordAudit(c, requestActor(c), "node_updated", "node", service.AuditSeverityWarn, map[string]any{
 			"uuid":    uuid,

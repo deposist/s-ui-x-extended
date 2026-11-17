@@ -54,6 +54,7 @@ type JsonService struct {
 }
 
 func (j *JsonService) GetJson(subId string, format string) (*string, []string, error) {
+	revision := subscriptionCacheRevision()
 	var jsonConfig map[string]interface{}
 	now := time.Now()
 	cacheKey := "json:" + format + ":" + subId
@@ -120,7 +121,7 @@ func (j *JsonService) GetJson(subId string, format string) (*string, []string, e
 	resultStr := string(result)
 
 	headers := safeSubscriptionHeaders(buildClientHeaders(client, cachedSubDisplaySettings(&j.SettingService, now)))
-	subscriptionCacheSet(cacheKey, resultStr, headers, now)
+	subscriptionCacheSet(cacheKey, resultStr, headers, now, revision)
 
 	return &resultStr, headers, nil
 }
@@ -272,9 +273,10 @@ func (j *JsonService) getOutbounds(clientConfig json.RawMessage, inbounds []*mod
 
 				// Override TLS
 				if addrTls, ok := addr["tls"].(map[string]interface{}); ok {
-					outTls, _ := newOut["tls"].(map[string]interface{})
-					if outTls == nil {
-						outTls = make(map[string]interface{})
+					baseTLS, _ := outbound["tls"].(map[string]interface{})
+					outTls := make(map[string]interface{}, len(baseTLS)+len(addrTls))
+					for key, value := range baseTLS {
+						outTls[key] = value
 					}
 					for key, value := range addrTls {
 						outTls[key] = value

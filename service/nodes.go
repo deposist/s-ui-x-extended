@@ -1,11 +1,13 @@
 package service
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
+	"github.com/deposist/s-ui-x-extended/logger"
 	"github.com/deposist/s-ui-x-extended/util/common"
 
 	"github.com/gofrs/uuid/v5"
@@ -38,8 +40,9 @@ type NodeView struct {
 
 	// Inbounds and Limiters come from the last announced inventory, so the UI
 	// can show what a node can actually accept before assigning anything.
-	Inbounds []string `json:"inbounds"`
-	Limiters []string `json:"limiters"`
+	Inbounds     []string               `json:"inbounds"`
+	Limiters     []NodeInventoryLimiter `json:"limiters"`
+	LimiterRoles model.NodeLimiterTags  `json:"limiterRoles"`
 
 	// ClientCount is how many clients are currently assigned to this node.
 	ClientCount int64 `json:"clientCount"`
@@ -95,15 +98,17 @@ func (s *NodeService) List() ([]NodeView, error) {
 	if db == nil {
 		return nil, common.NewError("database is not initialized")
 	}
+	// Refresh what the connected nodes announced before reading the rows, so
+	// the list reflects a node that just reconnected. A core that is down, or a
+	// build without the manager, leaves the stored inventory alone.
+	if _, err := s.SyncInventory(); err != nil {
+		logger.Warning("fleet inventory sync failed: ", err)
+	}
 	var nodes []model.Node
 	if err := db.Model(model.Node{}).Order("name").Find(&nodes).Error; err != nil {
 		return nil, err
 	}
-	views := make([]NodeView, 0, len(nodes))
-	for index := range nodes {
-		views = append(views, s.view(db, &nodes[index]))
-	}
-	return views, nil
+	return s.views(db, nodes), nil
 }
 
 // Get returns one node by uuid.
@@ -124,61 +129,87 @@ func (s *NodeService) Get(uuid string) (*NodeView, error) {
 	return &view, nil
 }
 
-// view decorates a stored row with the live status and the assigned count.
-func (s *NodeService) view(db *gorm.DB, node *model.Node) NodeView {
-	view := NodeView{
-		UUID:      node.UUID,
-		Name:      node.Name,
-		LinkHost:  node.LinkHost,
-		Enabled:   node.Enabled,
-		UpdatedAt: node.UpdatedAt,
+// views decorates stored rows with live status and assigned counts. Both are
+// fetched once for the whole list: a fleet of N nodes must not cost N manager
+// round-trips and N COUNT queries per refresh.
+func (s *NodeService) views(db *gorm.DB, nodes []model.Node) []NodeView {
+	uuids := make([]string, 0, len(nodes))
+	for index := range nodes {
+		uuids = append(uuids, nodes[index].UUID)
 	}
-	inventory := DecodeNodeInventory(node.Inventory)
-	for _, inbound := range inventory.Inbounds {
+	statuses := NodeStatuses(uuids, s.runtime())
+	counts := NodeClientCounts(db, uuids)
+	views := make([]NodeView, 0, len(nodes))
+	for index := range nodes {
+		views = append(views, decorateNode(&nodes[index], statuses, counts))
+	}
+	return views
+}
+
+func (s *NodeService) view(db *gorm.DB, node *model.Node) NodeView {
+	statuses := NodeStatuses([]string{node.UUID}, s.runtime())
+	counts := NodeClientCounts(db, []string{node.UUID})
+	return decorateNode(node, statuses, counts)
+}
+
+func decorateNode(node *model.Node, statuses map[string]bool, counts map[string]int64) NodeView {
+	view := NodeView{
+		UUID:        node.UUID,
+		Name:        node.Name,
+		LinkHost:    node.LinkHost,
+		Enabled:     node.Enabled,
+		UpdatedAt:   node.UpdatedAt,
+		Online:      statuses[node.UUID],
+		ClientCount: counts[node.UUID],
+	}
+	_ = json.Unmarshal(node.LimiterRoles, &view.LimiterRoles)
+	for _, inbound := range DecodeNodeInventory(node.Inventory).Inbounds {
 		view.Inbounds = append(view.Inbounds, inbound.Tag)
 	}
-	for _, limiter := range DecodeNodeLimiters(node.Inventory) {
-		view.Limiters = append(view.Limiters, limiter.Tag)
-	}
-	if online, ok := NodeOnline(node.UUID, s.runtime()); ok {
-		view.Online = online
-	}
-	count, err := NodeClientCount(db, node.UUID)
-	if err == nil {
-		view.ClientCount = count
-	}
+	view.Limiters = DecodeNodeLimiters(node.Inventory)
 	return view
 }
 
-// NodeOnline asks the running manager whether a node is connected. Without a
-// manager service every node reads as offline rather than as an error, because
-// the list must still render when the core is down or the build lacks
-// with_manager.
-func NodeOnline(uuid string, rt *Runtime) (bool, bool) {
+// NodeStatuses resolves every requested node in one manager callback. A node
+// the manager does not know reads as offline.
+func NodeStatuses(uuids []string, rt *Runtime) map[string]bool {
+	statuses := make(map[string]bool, len(uuids))
 	coreInstance := rt.Core()
-	if coreInstance == nil {
-		return false, false
+	if coreInstance == nil || len(uuids) == 0 {
+		return statuses
 	}
-	online := false
-	err := coreInstance.WithFleetManager(func(manager CM.Manager) error {
-		status, statusErr := manager.GetNodeStatus(uuid)
-		online = statusErr == nil && status == "online"
+	_ = coreInstance.WithFleetManager(func(manager CM.Manager) error {
+		for _, uuid := range uuids {
+			status, err := manager.GetNodeStatus(uuid)
+			statuses[uuid] = err == nil && status == "online"
+		}
 		return nil
 	})
-	if err != nil {
-		return false, false
-	}
-	return online, true
+	return statuses
 }
 
-// NodeClientCount returns how many clients are assigned to a node.
-func NodeClientCount(db *gorm.DB, uuid string) (int64, error) {
-	if db == nil {
-		return 0, nil
+// NodeClientCounts counts assignments for all nodes in one grouped query.
+func NodeClientCounts(db *gorm.DB, uuids []string) map[string]int64 {
+	counts := make(map[string]int64, len(uuids))
+	if db == nil || len(uuids) == 0 {
+		return counts
 	}
-	var count int64
-	err := db.Model(model.ClientNode{}).Where("node_uuid = ?", uuid).Count(&count).Error
-	return count, err
+	type row struct {
+		NodeUUID string
+		Total    int64
+	}
+	var rows []row
+	if err := db.Model(model.ClientNode{}).
+		Select("node_uuid, COUNT(*) AS total").
+		Where("node_uuid IN ?", uuids).
+		Group("node_uuid").
+		Scan(&rows).Error; err != nil {
+		return counts
+	}
+	for _, r := range rows {
+		counts[r.NodeUUID] = r.Total
+	}
+	return counts
 }
 
 // Create stores a node. A node key is generated when the caller does not
@@ -205,6 +236,7 @@ func (s *NodeService) Create(node model.Node) (*NodeView, error) {
 	if err := db.Create(&node).Error; err != nil {
 		return nil, err
 	}
+	s.projectFleetOrWarn("node creation")
 	view := s.view(db, &node)
 	return &view, nil
 }
@@ -212,6 +244,14 @@ func (s *NodeService) Create(node model.Node) (*NodeView, error) {
 // Update changes the fields an operator owns. The uuid is the identity a node
 // announces, so it is never rewritten here.
 func (s *NodeService) Update(uuid string, name string, linkHost string, enabled bool) (*NodeView, error) {
+	return s.update(uuid, name, linkHost, enabled, nil)
+}
+
+func (s *NodeService) UpdateWithLimiterRoles(uuid string, name string, linkHost string, enabled bool, roles model.NodeLimiterTags) (*NodeView, error) {
+	return s.update(uuid, name, linkHost, enabled, &roles)
+}
+
+func (s *NodeService) update(uuid string, name string, linkHost string, enabled bool, roles *model.NodeLimiterTags) (*NodeView, error) {
 	db := s.db()
 	if db == nil {
 		return nil, common.NewError("database is not initialized")
@@ -220,19 +260,61 @@ func (s *NodeService) Update(uuid string, name string, linkHost string, enabled 
 	if name == "" {
 		return nil, common.NewError("node name is required")
 	}
-	result := db.Model(model.Node{}).Where("uuid = ?", uuid).Updates(map[string]any{
-		"name":       name,
-		"link_host":  strings.TrimSpace(linkHost),
-		"enabled":    enabled,
-		"updated_at": time.Now().Unix(),
-	})
+	var encoded json.RawMessage
+	if roles != nil {
+		var node model.Node
+		if err := db.Model(model.Node{}).Where("uuid = ?", uuid).First(&node).Error; err != nil {
+			if database.IsNotFound(err) {
+				return nil, common.NewError("node not found")
+			}
+			return nil, err
+		}
+		if err := validateNodeLimiterRoles(DecodeNodeInventory(node.Inventory), *roles); err != nil {
+			return nil, err
+		}
+		var err error
+		encoded, err = json.Marshal(roles)
+		if err != nil {
+			return nil, err
+		}
+	}
+	updates := map[string]any{"name": name, "link_host": strings.TrimSpace(linkHost), "enabled": enabled, "updated_at": time.Now().Unix()}
+	if roles != nil {
+		updates["limiters"] = encoded
+	}
+	result := db.Model(model.Node{}).Where("uuid = ?", uuid).Updates(updates)
 	if result.Error != nil {
 		return nil, result.Error
 	}
 	if result.RowsAffected == 0 {
 		return nil, common.NewError("node not found")
 	}
+	s.projectFleetOrWarn("node update")
 	return s.Get(uuid)
+}
+
+func validateNodeLimiterRoles(inventory NodeInventory, roles model.NodeLimiterTags) error {
+	available := map[string]string{}
+	for _, limiter := range inventory.Limiters {
+		available[limiter.Tag] = limiter.Type
+	}
+	if roles.SpeedDown != "" && roles.SpeedDown == roles.SpeedUp {
+		return common.NewError("speedDown and speedUp must be different outbounds")
+	}
+	for role, outbound := range map[string]string{"speedShared": roles.SpeedShared, "speedDown": roles.SpeedDown, "speedUp": roles.SpeedUp, "connections": roles.Connections} {
+		if outbound == "" {
+			continue
+		}
+		type_, ok := available[outbound]
+		want := "bandwidth-limiter"
+		if role == "connections" {
+			want = "connection-limiter"
+		}
+		if !ok || type_ != want {
+			return common.NewErrorf("%s must select an announced %s outbound", role, want)
+		}
+	}
+	return nil
 }
 
 // Delete removes a node and every assignment to it, so no client keeps a link
@@ -242,12 +324,16 @@ func (s *NodeService) Delete(uuid string) error {
 	if db == nil {
 		return common.NewError("database is not initialized")
 	}
-	return db.Transaction(func(tx *gorm.DB) error {
+	if err := db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("node_uuid = ?", uuid).Delete(model.ClientNode{}).Error; err != nil {
 			return err
 		}
 		return tx.Where("uuid = ?", uuid).Delete(model.Node{}).Error
-	})
+	}); err != nil {
+		return err
+	}
+	s.projectFleetOrWarn("node deletion")
+	return nil
 }
 
 // Clients returns one server-paginated page of clients for a node.
@@ -417,7 +503,13 @@ func (s *NodeService) assign(uuid string, clientIDs []uint, assigned bool) (int,
 		}
 		return nil
 	})
-	return changed, err
+	if err != nil {
+		return changed, err
+	}
+	if changed > 0 {
+		s.projectFleetOrWarn("client node assignment")
+	}
+	return changed, nil
 }
 
 // ClientNodeUUIDs returns the nodes a client is assigned to, for the checkboxes
@@ -449,13 +541,30 @@ func (s *NodeService) SetClientNodes(clientID uint, uuids []string) error {
 		return common.NewError("client id is required")
 	}
 	wanted := make([]string, 0, len(uuids))
+	seen := make(map[string]struct{}, len(uuids))
 	for _, nodeUUID := range uuids {
-		if strings.TrimSpace(nodeUUID) == "" {
+		nodeUUID = strings.TrimSpace(nodeUUID)
+		if nodeUUID == "" {
 			continue
 		}
+		if _, done := seen[nodeUUID]; done {
+			continue
+		}
+		seen[nodeUUID] = struct{}{}
 		wanted = append(wanted, nodeUUID)
 	}
-	return db.Transaction(func(tx *gorm.DB) error {
+	if len(wanted) > 0 {
+		// Reject unknown nodes instead of storing an assignment row that no
+		// projection would ever read and no node would ever delete.
+		var known int64
+		if err := db.Model(model.Node{}).Where("uuid IN ?", wanted).Count(&known).Error; err != nil {
+			return err
+		}
+		if int(known) != len(wanted) {
+			return common.NewError("one or more nodes no longer exist")
+		}
+	}
+	if err := db.Transaction(func(tx *gorm.DB) error {
 		if len(wanted) == 0 {
 			return tx.Where("client_id = ?", clientID).Delete(model.ClientNode{}).Error
 		}
@@ -477,7 +586,11 @@ func (s *NodeService) SetClientNodes(clientID uint, uuids []string) error {
 			}
 		}
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+	s.projectFleetOrWarn("client node assignment")
+	return nil
 }
 
 // ClearClientNodes drops every assignment for a client. It is the delete path:

@@ -1,19 +1,12 @@
 import { expect, test } from '@playwright/test'
 
-import { login } from './helpers'
+import { login, pickType } from './helpers'
 
 // Smoke coverage for the 2.6.x UI surface:
 //  - the Call protocol appears in the inbound/outbound type pickers and its
 //    form renders the platform select + join link;
 //  - the AmneziaWG 3.0 endpoint form renders the timing fields and no longer
 //    exposes the removed 2.0 fields (J1/J2/J3/Itime).
-
-const pickType = async (page: any, drawer: any, typeName: string) => {
-  // Vuetify v3 renders v-select as a visually-hidden input inside a .v-field;
-  // clicking the field control opens the menu reliably.
-  await drawer.locator('.v-select .v-field').first().click()
-  await page.getByRole('option', { name: typeName, exact: true }).click()
-}
 
 // Vuetify labels render inside the visible .v-field control; text nodes can
 // also appear hidden inside select overlays, so assert on the field wrapper.
@@ -136,6 +129,20 @@ test('call outbound is selectable and renders its form', async ({ page }) => {
   await pickType(page, drawer, 'Call')
   await expect(fieldWithText(drawer, 'Platform')).toBeVisible()
   await expect(fieldWithText(drawer, 'Join link')).toBeVisible()
+  await expect(fieldWithText(drawer, 'Server Address')).toHaveCount(0)
+  await expect(fieldWithText(drawer, 'Server Port')).toHaveCount(0)
+})
+
+test('masque outbound uses its own address fields', async ({ page }) => {
+  await login(page)
+  await page.goto('outbounds')
+  await page.getByRole('button', { name: 'Add', exact: true }).first().click()
+  const drawer = page.getByRole('dialog')
+  await pickType(page, drawer, 'MASQUE')
+  await expect(fieldWithText(drawer, 'Profile ID')).toBeVisible()
+  await expect(fieldWithText(drawer, 'Server Address')).toHaveCount(0)
+  await expect(fieldWithText(drawer, 'Server Port')).toHaveCount(0)
+  await expect(drawer.getByRole('checkbox', { name: 'Enable TLS', exact: true })).toHaveCount(0)
 })
 
 test('amnezia wireguard form shows AWG 3.0 fields and hides 2.0 fields', async ({ page }) => {
@@ -163,3 +170,41 @@ test('amnezia wireguard form shows AWG 3.0 fields and hides 2.0 fields', async (
   await expect(drawer.getByText('Junk packet J1')).toHaveCount(0)
   await expect(drawer.getByText('Init interval')).toHaveCount(0)
 })
+
+for (const kind of ['VpnClient', 'VpnServer']) {
+test(`${kind} save keeps the pool size numeric`, async ({ page }) => {
+  const pageErrors: Error[] = []
+  page.on('pageerror', error => pageErrors.push(error))
+  await login(page)
+  await page.goto('endpoints')
+  await page.getByRole('button', { name: 'Add', exact: true }).first().click()
+  const drawer = page.getByRole('dialog')
+  await pickType(page, drawer, kind)
+  await fieldWithText(drawer, 'Tag').locator('input').fill(`${kind}-e2e-${Date.now()}`)
+  await fieldWithText(drawer, 'Pool size').locator('input').fill('3')
+
+  const saveRequestPromise = page.waitForRequest(request => (
+    request.method() === 'POST'
+    && request.url().endsWith('/api/save')
+    && new URLSearchParams(request.postData() ?? '').get('object') === 'endpoints'
+  ))
+  await drawer.getByRole('button', { name: 'Save', exact: true }).click()
+  const form = new URLSearchParams((await saveRequestPromise).postData() ?? '')
+  const data = JSON.parse(form.get('data') ?? '{}') as Record<string, unknown>
+  expect(data.pool_size).toBe(3)
+  await expect(drawer).toBeHidden()
+  expect(pageErrors).toEqual([])
+})
+}
+
+for (const kind of ['inbounds', 'outbounds']) {
+  test(`mieru ${kind} show only their protocol transport controls`, async ({ page }) => {
+    await login(page)
+    await page.goto(kind)
+    await page.getByRole('button', { name: 'Add', exact: true }).first().click()
+    const drawer = page.getByRole('dialog')
+    await pickType(page, drawer, 'Mieru')
+    await expect(drawer.getByRole('combobox', { name: 'Transport', exact: true })).toBeVisible()
+    await expect(drawer.getByRole('checkbox', { name: 'Enable Transport', exact: true })).toHaveCount(0)
+  })
+}

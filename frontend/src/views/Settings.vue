@@ -1515,7 +1515,12 @@ const appConfig = ref<any>({
   }
 })
 
-const cloneStoreConfig = (): any => JSON.parse(JSON.stringify(Data().config ?? {}))
+const cloneStoreConfig = (): any => {
+  const config = JSON.parse(JSON.stringify(Data().config ?? {}))
+  config.log ??= {}
+  config.experimental ??= {}
+  return config
+}
 
 const resyncBasicsFromStore = () => {
   appConfig.value = cloneStoreConfig()

@@ -43,7 +43,11 @@ func TestWithFleetManagerReachesRunningManager(t *testing.T) {
 	if err := core.Start([]byte(config)); err != nil {
 		t.Fatalf("start core: %v", err)
 	}
-	defer core.Stop()
+	defer func() {
+		if err := core.Stop(); err != nil {
+			t.Errorf("stop core: %v", err)
+		}
+	}()
 
 	seen := 0
 	for i := 0; i < 2; i++ {
@@ -74,7 +78,11 @@ func TestWithFleetManagerErrorsWithoutManager(t *testing.T) {
 	}`)); err != nil {
 		t.Fatalf("start core: %v", err)
 	}
-	defer core.Stop()
+	defer func() {
+		if err := core.Stop(); err != nil {
+			t.Errorf("stop core: %v", err)
+		}
+	}()
 
 	err := core.WithFleetManager(func(CM.Manager) error { return nil })
 	if err == nil {

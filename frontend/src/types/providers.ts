@@ -68,6 +68,6 @@ const defaultValues: Record<ProviderType, Provider> = {
 }
 
 export function createProvider<T extends Provider>(type: string, json?: Partial<T>): Provider {
-  const defaultObject: Provider = { ...defaultValues[type], ...(json || {}) }
+  const defaultObject: Provider = { ...structuredClone(defaultValues[type] ?? {}), ...(json || {}) }
   return defaultObject
 }

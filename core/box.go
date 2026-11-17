@@ -251,13 +251,13 @@ func NewBox(options Options) (*Box, error) {
 	}
 	service.MustRegister[adapter.DNSRouter](ctx, dnsRouter)
 	service.MustRegister[adapter.DNSRuleSetUpdateValidator](ctx, dnsRouter)
+	connectionManager := route.NewConnectionManager(ctx, logFactory.NewLogger("connection"))
+	service.MustRegister[adapter.ConnectionManager](ctx, connectionManager)
 	networkManager, err := route.NewNetworkManager(ctx, logFactory.NewLogger("network"), routeOptions, dnsOptions)
 	if err != nil {
 		return nil, common.NewError("initialize network manager", err)
 	}
 	service.MustRegister[adapter.NetworkManager](ctx, networkManager)
-	connectionManager := route.NewConnectionManager(logFactory.NewLogger("connection"))
-	service.MustRegister[adapter.ConnectionManager](ctx, connectionManager)
 	// Must register after ConnectionManager: the default HTTP client resolution
 	// reads it from the context.
 	httpClientManager := httpclient.NewManager(ctx, logFactory.NewLogger("httpclient"), options.HTTPClients, routeOptions.DefaultHTTPClient)
@@ -271,7 +271,7 @@ func NewBox(options Options) (*Box, error) {
 		return nil, common.NewError("initialize router", err)
 	}
 	if needClashAPI || needAPIService {
-		trafficManager := trafficcontrol.NewManager(outboundManager)
+		trafficManager := trafficcontrol.NewManager()
 		service.MustRegisterPtr(ctx, trafficManager)
 		router.AppendTracker(trafficManager)
 		internalServices = append(internalServices, trafficManager)

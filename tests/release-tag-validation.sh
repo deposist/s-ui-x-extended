@@ -131,6 +131,30 @@ done < <(find "$root_dir/.github/workflows" -type f \( -name '*.yml' -o -name '*
 
 tmp_dir=$(mktemp -d)
 trap 'rm -rf "$tmp_dir"' EXIT
+input_script=$(awk '
+    /name: Validate release tag/ { in_step=1; next }
+    in_step && /- name:/ { exit }
+    in_step && /^[ ]*run:/ {
+        sub(/^[ ]*run:[ ]*/, "")
+        if ($0 == "|") { in_run=1; next }
+        print; exit
+    }
+    in_run { sub(/^        /, ""); print }
+' "$checkout_action")
+test -n "$input_script"
+for tag in v1.2.3 invalid-tag; do
+    : >"$tmp_dir/input-output"
+    status=0
+    (cd "$root_dir" && INPUT_TAG="$tag" GITHUB_OUTPUT="$tmp_dir/input-output" bash -e -c "$input_script") || status=$?
+    if [[ $tag == invalid-tag ]]; then
+        test "$status" -ne 0 && test ! -s "$tmp_dir/input-output" || {
+            echo 'checkout action hid invalid release tag' >&2
+            exit 1
+        }
+    else
+        test "$status" -eq 0 && grep -Fxq "tag=$tag" "$tmp_dir/input-output"
+    fi
+done
 mkdir "$tmp_dir/bin" "$tmp_dir/assets"
 
 git -C "$tmp_dir" init --quiet

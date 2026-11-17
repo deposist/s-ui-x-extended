@@ -382,6 +382,31 @@ func TestMaterializeConcurrentCallsPreserveManifestEntries(t *testing.T) {
 	}
 }
 
+func TestCommitRuleSetBatchAcceptsNullManifest(t *testing.T) {
+	initDoctorTestDB(t)
+	if err := os.MkdirAll(RuleSetDir(), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(RuleSetManifestPath(), []byte("null"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	source := RuleSetSource{Tag: "null-manifest", URL: "https://example.com/valid.srs"}
+	payload := validRuleSetBytes(t, "null.example")
+	assets, err := commitRuleSetBatch([]RuleSetSource{source}, map[string][]byte{source.Tag: payload})
+	if err != nil {
+		t.Fatalf("materialize with null manifest: %v", err)
+	}
+	if len(assets) != 1 {
+		t.Fatalf("materialized assets: %v", assets)
+	}
+	if err := VerifyRuleSetFile(assets[0].Path); err != nil {
+		t.Fatalf("materialized rule-set cannot be loaded: %v", err)
+	}
+	if recorded := readManifest()[source.Tag]; recorded != source.URL {
+		t.Fatalf("new source not persisted: got %q, want %q", recorded, source.URL)
+	}
+}
+
 func TestVerifyRuleSetFileRejectsUnboundedInputs(t *testing.T) {
 	t.Run("directory", func(t *testing.T) {
 		if err := VerifyRuleSetFile(t.TempDir()); err == nil {

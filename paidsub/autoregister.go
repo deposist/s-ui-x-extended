@@ -130,15 +130,15 @@ func (b *Bot) tryAutoRegister(ctx context.Context, chatID int64, from *tgUser, l
 }
 
 // uniqueClientName derives a collision-free name from the Telegram id.
-// Returns an error only in the extremely unlikely case that the clients table
-// was pre-seeded with every Random(16) candidate under this base. Callers must
-// handle the error and not auto-register a colliding name.
+// Returns an error if uniqueness cannot be checked or no candidate is free.
 func (b *Bot) uniqueClientName(db *gorm.DB, tgID int64) (string, error) {
 	base := "tg" + strconv.FormatInt(tgID, 10)
 	name := base
 	for i := 0; i < 50; i++ {
 		var cnt int64
-		db.Model(&model.Client{}).Where("name = ?", name).Count(&cnt)
+		if err := db.Model(&model.Client{}).Where("name = ?", name).Count(&cnt).Error; err != nil {
+			return "", err
+		}
 		if cnt == 0 {
 			return name, nil
 		}
@@ -148,7 +148,9 @@ func (b *Bot) uniqueClientName(db *gorm.DB, tgID int64) (string, error) {
 	for i := 0; i < 10; i++ {
 		name = base + "_" + common.Random(8)
 		var cnt int64
-		db.Model(&model.Client{}).Where("name = ?", name).Count(&cnt)
+		if err := db.Model(&model.Client{}).Where("name = ?", name).Count(&cnt).Error; err != nil {
+			return "", err
+		}
 		if cnt == 0 {
 			return name, nil
 		}
@@ -162,7 +164,9 @@ func (b *Bot) uniqueClientName(db *gorm.DB, tgID int64) (string, error) {
 	for i := 0; i < 20; i++ {
 		name = base + "_" + common.Random(16)
 		var cnt int64
-		db.Model(&model.Client{}).Where("name = ?", name).Count(&cnt)
+		if err := db.Model(&model.Client{}).Where("name = ?", name).Count(&cnt).Error; err != nil {
+			return "", err
+		}
 		if cnt == 0 {
 			return name, nil
 		}

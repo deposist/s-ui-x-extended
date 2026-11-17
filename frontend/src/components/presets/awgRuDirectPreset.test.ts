@@ -43,6 +43,16 @@ describe('awg ru-direct preset', () => {
     expect((config.route!.rule_set as any[]).length).toBe(1)
   })
 
+  it('updates the selected outbound for an existing endpoint rule and rule-set', () => {
+    const config = emptyConfig()
+    applyAWGRuDirectState(config, { enabled: true, endpointTag: 'awg-endpoint' }, 'first-direct')
+    applyAWGRuDirectState(config, { enabled: true, endpointTag: 'awg-endpoint' }, 'second-direct')
+    expect((config.route!.rules as any[])[0].outbound).toBe('second-direct')
+    expect((config.route!.rule_set as any[])[0].download_detour).toBe('second-direct')
+    expect(config.route!.rules).toHaveLength(1)
+    expect(config.route!.rule_set).toHaveLength(1)
+  })
+
   it('prepends the rule so it wins over broader regional rules', () => {
     const config = {
       route: {

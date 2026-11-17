@@ -222,6 +222,7 @@ func (s *ConfigService) startCoreLocked(force bool) error {
 	}
 	runtime.markCoreStartSucceeded()
 	logger.Info("sing-box started")
+	(&NodeService{Runtime: runtime}).projectFleetOrWarn("core start")
 	if err := runtime.TriggerAWGReconcile(context.Background()); err != nil {
 		logger.Warning("AWG reconcile after core start failed: ", err)
 	}
@@ -350,6 +351,9 @@ func (s *ConfigService) Save(obj string, act string, data json.RawMessage, initU
 			// so a failed commit cannot make CheckChanges report phantom changes.
 			s.setLastUpdate(time.Now().Unix())
 			realtime.Publish(realtime.TopicConfigInvalidated, nil)
+			if obj == "clients" {
+				(&NodeService{Runtime: s.runtime()}).projectFleetOrWarn("client save")
+			}
 			s.applyPostCommitCoreChanges(plan)
 		} else {
 			tx.Rollback()
@@ -381,10 +385,11 @@ func clientSubscriptionCacheIDs(obj string, data json.RawMessage) []string {
 		return nil
 	}
 	var clientIDs []uint
+	var ids []string
 	var one model.Client
 	if json.Unmarshal(data, &one) == nil {
 		if one.SubSecret != "" {
-			return []string{one.SubSecret}
+			ids = append(ids, one.SubSecret)
 		}
 		if one.Id > 0 {
 			clientIDs = append(clientIDs, one.Id)
@@ -394,11 +399,12 @@ func clientSubscriptionCacheIDs(obj string, data json.RawMessage) []string {
 		if json.Unmarshal(data, &many) != nil {
 			return nil
 		}
-		ids := make([]string, 0, len(many))
+		ids = make([]string, 0, len(many))
 		for _, client := range many {
 			if client.SubSecret != "" {
 				ids = append(ids, client.SubSecret)
-			} else if client.Id > 0 {
+			}
+			if client.Id > 0 {
 				clientIDs = append(clientIDs, client.Id)
 			}
 		}
@@ -410,7 +416,15 @@ func clientSubscriptionCacheIDs(obj string, data json.RawMessage) []string {
 	if err := database.GetDB().Model(model.Client{}).Where("id in ?", clientIDs).Pluck("sub_secret", &secrets).Error; err != nil {
 		return nil
 	}
-	return secrets
+	seen := make(map[string]struct{}, len(ids)+len(secrets))
+	result := make([]string, 0, len(ids)+len(secrets))
+	for _, secret := range append(ids, secrets...) {
+		if _, exists := seen[secret]; !exists {
+			seen[secret] = struct{}{}
+			result = append(result, secret)
+		}
+	}
+	return result
 }
 
 // dispatchSave routes the save to the owning entity service and translates its
@@ -476,6 +490,8 @@ func (s *ConfigService) dispatchSave(tx *gorm.DB, obj string, act string, data j
 		if err != nil {
 			return nil, plan, false, err
 		}
+		plan.needsCoreRestart = true
+		plan.restartReason = "provider configuration changed"
 		return objs, plan, false, nil
 	case "config":
 		if err := ValidateCoreConfigPolicy(data); err != nil {
@@ -723,6 +739,9 @@ func redactSudokuSplitKeys(value any) {
 		if sudoku, ok := typed["sudoku"].(map[string]any); ok {
 			if _, exists := sudoku["key"]; exists {
 				sudoku["key"] = redact.Marker
+			}
+			if _, exists := sudoku["keys"]; exists {
+				sudoku["keys"] = redact.Marker
 			}
 		}
 		for _, child := range typed {

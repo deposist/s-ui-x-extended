@@ -33,7 +33,7 @@
             <v-text-field v-model="rule_set.path" :label="$t('transport.path')" hide-details></v-text-field>
           </v-col>
         </v-row>
-        <v-row v-else>
+        <v-row v-else-if="rule_set.type == 'remote'">
           <v-col cols="12">
             <v-text-field v-model="rule_set.url" label="URL" hide-details></v-text-field>
           </v-col>

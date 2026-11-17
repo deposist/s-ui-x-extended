@@ -22,6 +22,7 @@ type SubService struct {
 }
 
 func (s *SubService) GetSubs(subId string) (*string, []string, error) {
+	revision := subscriptionCacheRevision()
 	now := time.Now()
 	cacheKey := "base:" + subId
 	if body, headers, ok := subscriptionCacheGet(cacheKey, now); ok {
@@ -58,7 +59,7 @@ func (s *SubService) GetSubs(subId string) (*string, []string, error) {
 		result = base64.StdEncoding.EncodeToString([]byte(result))
 	}
 
-	subscriptionCacheSet(cacheKey, result, headers, now)
+	subscriptionCacheSet(cacheKey, result, headers, now, revision)
 	return &result, headers, nil
 }
 
@@ -72,7 +73,10 @@ func (j *SubService) getClientBySubId(subId string) (*model.Client, error) {
 	if !database.IsNotFound(err) {
 		return nil, err
 	}
-	required, _ := j.SettingService.GetSubSecretRequired()
+	required, err := j.SettingService.GetSubSecretRequired()
+	if err != nil {
+		return nil, err
+	}
 	if required {
 		return nil, gorm.ErrRecordNotFound
 	}

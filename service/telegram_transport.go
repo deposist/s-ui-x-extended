@@ -17,10 +17,14 @@ import (
 // addition to) an HTTP/SOCKS proxy. Requires the core to be running and the
 // outbound to exist; otherwise returns an error so the caller can surface it.
 func newCoreOutboundHTTPClient(tag string, timeout time.Duration) (*http.Client, error) {
+	return newCoreOutboundHTTPClientWithRuntime(DefaultRuntime(), tag, timeout)
+}
+
+func newCoreOutboundHTTPClientWithRuntime(runtime *Runtime, tag string, timeout time.Duration) (*http.Client, error) {
 	if tag == "" {
 		return nil, common.NewError("outbound tag is empty")
 	}
-	coreInstance := DefaultRuntime().Core()
+	coreInstance := runtimeOrDefault(runtime).Core()
 	if coreInstance == nil || !coreInstance.IsRunning() {
 		return nil, common.NewError("core is not running; cannot use outbound transport")
 	}

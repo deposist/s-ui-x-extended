@@ -233,16 +233,17 @@ func (s *Server) Start() (err error) {
 	}
 	s.listener = listener
 
-	s.httpServer = &http.Server{
+	httpServer := &http.Server{
 		Handler:           engine,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
+	s.httpServer = httpServer
 
 	go func() {
-		if serveErr := s.httpServer.Serve(listener); serveErr != nil && serveErr != http.ErrServerClosed {
+		if serveErr := httpServer.Serve(listener); serveErr != nil && serveErr != http.ErrServerClosed {
 			logger.Warning("Sub server stopped unexpectedly:", serveErr)
 		}
 	}()
@@ -262,6 +263,9 @@ func (s *Server) Stop() error {
 				_ = s.listener.Close()
 			}
 			return err
+		}
+		if s.listener != nil {
+			_ = s.listener.Close()
 		}
 	} else if s.listener != nil {
 		err = s.listener.Close()

@@ -255,6 +255,27 @@ func TestEnsureSudokuInboundMasterKeyGeneratesCanonicalScalar(t *testing.T) {
 	}
 }
 
+func TestEnsureSudokuInboundMasterKeyGeneratesForNullOptions(t *testing.T) {
+	inbound := model.Inbound{Type: "sudoku", Options: json.RawMessage(`null`)}
+	if err := ensureSudokuInboundMasterKey(&inbound, true); err != nil {
+		t.Fatal(err)
+	}
+	var options struct {
+		Key       string `json:"key"`
+		MasterKey string `json:"master_key"`
+	}
+	if err := json.Unmarshal(inbound.Options, &options); err != nil {
+		t.Fatal(err)
+	}
+	master, err := parseSudokuMasterKey(options.MasterKey)
+	if err != nil {
+		t.Fatalf("generated inbound master key is invalid: %v", err)
+	}
+	if options.Key != sudokuPublicKey(master) {
+		t.Fatal("inbound public key does not match generated master key")
+	}
+}
+
 func TestEnsureClientSudokuKeysRotatesChangedMasterAndPrunesRemovedInbound(t *testing.T) {
 	initSettingTestDB(t)
 	inbound := model.Inbound{Type: "sudoku", Tag: "rotate", Options: json.RawMessage(`{"master_key":"` + validSudokuHalfA + `","key":"public"}`), Addrs: json.RawMessage(`[]`)}

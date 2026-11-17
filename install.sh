@@ -536,7 +536,7 @@ validate_archive_paths() {
     local verbose_path="$3"
     local member line type duplicates
 
-    TAR_OPTIONS= LC_ALL=C tar --quoting-style=escape --list --gzip \
+    TAR_OPTIONS='' LC_ALL=C tar --quoting-style=escape --list --gzip \
         --file "${archive_path}" >"${list_path}" || return 1
     [[ -s "${list_path}" ]] || return 1
 
@@ -545,7 +545,7 @@ validate_archive_paths() {
         # This deliberately accepts a small, portable path alphabet.  In
         # particular, escaped controls/backslashes, absolute paths, dot
         # components and paths outside the single s-ui root are rejected.
-        [[ "${member}" != *'\\'* ]] || return 1
+        [[ "${member}" != *\\* ]] || return 1
         [[ "${member}" == "s-ui" || "${member}" == "s-ui/" || "${member}" == s-ui/* ]] || return 1
         [[ "${member}" =~ ^s-ui(/[-+._A-Za-z0-9]+)*/?$ ]] || return 1
         [[ "${member}" != */. && "${member}" != */.. ]] || return 1
@@ -558,7 +558,7 @@ validate_archive_paths() {
     [[ $(grep -Fxc 's-ui/s-ui.sh' "${list_path}") -eq 1 ]] || return 1
     [[ $(grep -Fxc 's-ui/s-ui.service' "${list_path}") -eq 1 ]] || return 1
 
-    TAR_OPTIONS= LC_ALL=C tar --quoting-style=escape --list --verbose --gzip \
+    TAR_OPTIONS='' LC_ALL=C tar --quoting-style=escape --list --verbose --gzip \
         --file "${archive_path}" >"${verbose_path}" || return 1
     while IFS= read -r line; do
         [[ -n "${line}" ]] || return 1
@@ -831,7 +831,7 @@ install_s-ui() {
         return 1
     }
     mkdir "${INSTALL_STAGE}/extract"
-    TAR_OPTIONS= tar --extract --gzip --file "${archive_path}" \
+    TAR_OPTIONS='' tar --extract --gzip --file "${archive_path}" \
         --directory "${INSTALL_STAGE}/extract" --no-same-owner --no-same-permissions
     extracted_tree="${INSTALL_STAGE}/extract/s-ui"
     verify_staged_tree "${extracted_tree}"

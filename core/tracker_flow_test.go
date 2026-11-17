@@ -69,6 +69,65 @@ func TestRoutedFlowClosedBeforeAttachStaysUntracked(t *testing.T) {
 	}
 }
 
+func TestRoutedFlowForcedCloseBeforeAttachClosesLateHandle(t *testing.T) {
+	tracker := NewConnTracker()
+	flow := tracker.RoutedFlow(context.Background(), adapter.InboundContext{Inbound: "in"}, nil, nil)
+	if closed := tracker.CloseConnByInbound("in"); closed != 1 {
+		t.Fatalf("closed %d flows, want 1", closed)
+	}
+	handle := &testFlowHandle{tracker: flow}
+	flow.AttachFlow(handle)
+	if !handle.closed {
+		t.Fatal("late-attached handle remains open after forced close")
+	}
+	if tracker.inflight.Active() != 0 {
+		t.Fatal("forced-close flow retained an active writer")
+	}
+}
+
+func TestStatsFlowClosedBeforeAttachDoesNotRetainWriter(t *testing.T) {
+	tracker := NewStatsTracker()
+	flow := tracker.RoutedFlow(context.Background(), adapter.InboundContext{Inbound: "in"}, nil, fakeStatsOutbound{tag: "out"})
+	flow.CloseFlow(tun.FlowCloseReset)
+	handle := &testFlowHandle{tracker: flow}
+	flow.AttachFlow(handle)
+	if active := tracker.inflight.Active(); active != 0 {
+		t.Fatalf("late attach retained %d active writers", active)
+	}
+	if !handle.closed {
+		t.Fatal("late-attached stats flow remains open after closure")
+	}
+}
+
+func TestFlowAttachAndCloseConcurrent(t *testing.T) {
+	for _, kind := range []string{"connection", "stats"} {
+		t.Run(kind, func(t *testing.T) {
+			for i := 0; i < 100; i++ {
+				var flow tun.FlowTracker
+				var active func() int64
+				if kind == "connection" {
+					tracker := NewConnTracker()
+					flow = tracker.RoutedFlow(context.Background(), adapter.InboundContext{Inbound: "in"}, nil, nil)
+					active = tracker.inflight.Active
+				} else {
+					tracker := NewStatsTracker()
+					flow = tracker.RoutedFlow(context.Background(), adapter.InboundContext{Inbound: "in"}, nil, fakeStatsOutbound{tag: "out"})
+					active = tracker.inflight.Active
+				}
+				handle := &testFlowHandle{tracker: flow}
+				var wg sync.WaitGroup
+				wg.Add(2)
+				go func() { defer wg.Done(); flow.AttachFlow(handle) }()
+				go func() { defer wg.Done(); flow.CloseFlow(tun.FlowCloseReset) }()
+				wg.Wait()
+				if count := active(); count != 0 {
+					t.Fatalf("concurrent attach/close retained %d writers", count)
+				}
+			}
+		})
+	}
+}
+
 type testFlowHandle struct {
 	tracker tun.FlowTracker
 	once    sync.Once

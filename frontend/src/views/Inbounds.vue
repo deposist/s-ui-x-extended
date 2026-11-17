@@ -195,16 +195,20 @@ let cloneLoading = ref(false)
 
 const clone = async (id: number) => {
   cloneLoading.value = true
-  const inboundArray = await Data().loadInbounds([id])
-  const inbound = inboundArray[0]
-  let newTag = inbound.type + "-" + RandomUtil.randomSeq(3)
-  const newInbound = createInbound(inbound.type, { ...inbound,
-    id: 0,
-    tag: newTag,
-    listen_port: RandomUtil.randomIntRange(10000, 60000),
-  })
-  await Data().save("inbounds", "new", newInbound)
-  cloneLoading.value = false
+  try {
+    const inboundArray = await Data().loadInbounds([id])
+    const inbound = inboundArray[0]
+    if (!inbound) return
+    let newTag = inbound.type + "-" + RandomUtil.randomSeq(3)
+    const newInbound = createInbound(inbound.type, { ...inbound,
+      id: 0,
+      tag: newTag,
+      listen_port: RandomUtil.randomIntRange(10000, 60000),
+    })
+    await Data().save("inbounds", "new", newInbound)
+  } finally {
+    cloneLoading.value = false
+  }
 }
 
 const stats = ref({

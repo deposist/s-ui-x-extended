@@ -1,5 +1,10 @@
 <template>
   <v-card subtitle="SSH">
+    <v-row>
+      <v-col cols="12" sm="6" md="4">
+        <v-text-field v-model="data.user" :label="$t('types.un')" hide-details></v-text-field>
+      </v-col>
+    </v-row>
     <template v-if="optionKey">
         <v-row>
           <v-col cols="auto">
@@ -48,9 +53,6 @@
       </template>
       <template v-else>
         <v-row>
-          <v-col cols="12" sm="6" md="4">
-            <v-text-field v-model="data.user" :label="$t('types.un')" hide-details></v-text-field>
-          </v-col>
           <v-col cols="12" sm="6" md="4">
             <v-text-field v-model="data.password" :label="$t('types.pw')" hide-details></v-text-field>
           </v-col>
@@ -117,7 +119,6 @@ export default {
         this.usePath = 0
         if (v) {
           this.$props.data.private_key_path = ""
-          delete this.$props.data.user
           delete this.$props.data.password
         } else {
           delete this.$props.data.private_key_path

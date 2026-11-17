@@ -70,7 +70,7 @@ function escapeHtml(value) {
 fs.mkdirSync(outDir, { recursive: true });
 
 const junitFiles = walk(baselineDir)
-  .filter((file) => file.endsWith('.junit.xml'))
+  .filter((file) => file.endsWith('.junit.xml') && path.basename(file) !== 'aggregate.junit.xml')
   .sort();
 
 if (junitFiles.length === 0) {

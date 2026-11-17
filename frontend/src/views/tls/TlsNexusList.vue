@@ -136,9 +136,9 @@ const columns: Column<TlsRow>[] = [
   { key: 'name', labelKey: 'client.name', sortable: true },
   { key: 'server_name', labelKey: 'setting.domain' },
   { key: 'inbounds', labelKey: 'pages.inbounds' },
-  { key: 'acme', labelKey: 'ACME' },
-  { key: 'ech', labelKey: 'ECH' },
-  { key: 'reality', labelKey: 'Reality' },
+  { key: 'acme', label: 'ACME' },
+  { key: 'ech', label: 'ECH' },
+  { key: 'reality', label: 'Reality' },
 ]
 
 const usedBy = (id: number): string[] =>

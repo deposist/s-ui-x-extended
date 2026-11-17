@@ -81,9 +81,9 @@ export default {
       },
       set(v:Header[]) {
         if (v.length>0) {
-          let headers:any = {}
+          let headers:any = Object.create(null)
           v.forEach((h:Header) => {
-            if (headers[h.name]) {
+            if (Object.hasOwn(headers, h.name)) {
               if (Array.isArray(headers[h.name])) {
                 headers[h.name].push(h.value)
               } else {

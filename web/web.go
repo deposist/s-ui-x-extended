@@ -273,7 +273,8 @@ func (s *Server) Start() (err error) {
 	}
 	s.listener = listener
 
-	s.httpServer = &http.Server{
+	serverContext := s.ctx
+	httpServer := &http.Server{
 		Handler:           engine,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
@@ -283,12 +284,13 @@ func (s *Server) Start() (err error) {
 		// can lift the 30s Read/Write timeouts. The gzip middleware wraps
 		// c.Writer such that http.NewResponseController can no longer reach the
 		// connection, so the deadline must be set on the conn directly.
-		BaseContext: func(net.Listener) context.Context { return s.ctx },
+		BaseContext: func(net.Listener) context.Context { return serverContext },
 		ConnContext: api.SaveConnContext,
 	}
+	s.httpServer = httpServer
 
 	go func() {
-		if serveErr := s.httpServer.Serve(listener); serveErr != nil && serveErr != http.ErrServerClosed {
+		if serveErr := httpServer.Serve(listener); serveErr != nil && serveErr != http.ErrServerClosed {
 			logger.Warning("web server stopped unexpectedly:", serveErr)
 		}
 	}()
@@ -310,6 +312,9 @@ func (s *Server) Stop() error {
 				_ = s.listener.Close()
 			}
 			return err
+		}
+		if s.listener != nil {
+			_ = s.listener.Close()
 		}
 	} else if s.listener != nil {
 		err = s.listener.Close()

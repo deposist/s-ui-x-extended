@@ -162,3 +162,39 @@ func TestTrustTunnelBackfillGeneratesPassword(t *testing.T) {
 		t.Fatalf("trusttunnel password changed on edit: before=%q after=%q", pw1, pw2)
 	}
 }
+
+func TestBackfillClientProtocolAcceptsNullConfigAndProtocol(t *testing.T) {
+	for _, tc := range []struct {
+		name, config, protocol string
+	}{
+		{"null config", `null`, "vless"},
+		{"null trusttunnel", `{"trusttunnel":null}`, "trusttunnel"},
+		{"null mieru", `{"mieru":null}`, "mieru"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			config, changed, err := backfillClientProtocol(json.RawMessage(tc.config), tc.protocol, "client")
+			if err != nil || !changed {
+				t.Fatalf("backfill: changed=%v err=%v", changed, err)
+			}
+			var decoded map[string]map[string]any
+			if err := json.Unmarshal(config, &decoded); err != nil {
+				t.Fatal(err)
+			}
+			block := decoded[tc.protocol]
+			if block["name"] != "client" {
+				t.Fatalf("backfill omitted client name: %s", config)
+			}
+			if tc.protocol == "vless" {
+				if value, _ := block["uuid"].(string); value == "" {
+					t.Fatalf("backfill omitted UUID: %s", config)
+				}
+			} else if value, _ := block["password"].(string); value == "" {
+				t.Fatalf("backfill omitted password: %s", config)
+			}
+			second, changed, err := backfillClientProtocol(config, tc.protocol, "client")
+			if err != nil || changed || string(second) != string(config) {
+				t.Fatalf("repeated backfill changed credentials: changed=%v err=%v", changed, err)
+			}
+		})
+	}
+}

@@ -838,25 +838,42 @@ func recoverPendingUpdateLocked(execPath string, writeAttempts func(string, int)
 		}
 		marker = migratedMarker
 	}
-	backupSHA256, err := fileSHA256(execPath + backupSuffix)
-	if err != nil {
-		return false, fmt.Errorf("verify transaction %s backup: %w", marker.TransactionID, err)
-	}
-	if !strings.EqualFold(backupSHA256, marker.BackupSHA256) {
-		return false, fmt.Errorf("update transaction %s backup identity mismatch", marker.TransactionID)
-	}
 	liveSHA256, err := fileSHA256(execPath)
 	if err != nil {
 		return false, fmt.Errorf("verify transaction %s live binary: %w", marker.TransactionID, err)
 	}
+	if marker.Phase == updatePhaseConfirmed {
+		if !strings.EqualFold(liveSHA256, marker.CandidateSHA256) {
+			return false, fmt.Errorf("update transaction %s confirmed identity mismatch", marker.TransactionID)
+		}
+		return false, confirmPendingUpdateLocked(execPath)
+	}
+	if marker.Phase == updatePhaseRolledBack {
+		if !strings.EqualFold(liveSHA256, marker.BackupSHA256) {
+			return false, fmt.Errorf("update transaction %s rolled-back identity mismatch", marker.TransactionID)
+		}
+		return false, cleanupInactiveUpdateLocked(execPath, marker)
+	}
+	backupSHA256, err := fileSHA256(execPath + backupSuffix)
+	if err != nil && !(errors.Is(err, os.ErrNotExist) && strings.EqualFold(liveSHA256, marker.BackupSHA256)) {
+		return false, fmt.Errorf("verify transaction %s backup: %w", marker.TransactionID, err)
+	}
+	if err == nil && !strings.EqualFold(backupSHA256, marker.BackupSHA256) {
+		return false, fmt.Errorf("update transaction %s backup identity mismatch", marker.TransactionID)
+	}
 	if strings.EqualFold(liveSHA256, marker.BackupSHA256) {
 		if marker.Phase != updatePhasePrepared {
-			return false, fmt.Errorf("applied transaction %s unexpectedly runs its backup binary", marker.TransactionID)
+			if err == nil {
+				return false, fmt.Errorf("applied transaction %s unexpectedly runs its backup binary", marker.TransactionID)
+			}
+			// Rollback restores the database before renaming its binary. A crash
+			// between that rename and the marker write leaves the old binary live.
+			marker.Phase = updatePhaseRolledBack
+			if err := writePendingUpdateMarker(execPath, marker); err != nil {
+				return false, fmt.Errorf("persist completed rollback: %w", err)
+			}
 		}
-		if err := cleanupPreparedUpdateLocked(execPath, marker); err != nil {
-			return false, err
-		}
-		return false, nil
+		return false, cleanupInactiveUpdateLocked(execPath, marker)
 	}
 	if !strings.EqualFold(liveSHA256, marker.CandidateSHA256) {
 		return false, fmt.Errorf("update transaction %s candidate identity mismatch", marker.TransactionID)
@@ -911,36 +928,31 @@ func rollbackPendingUpdateLocked(execPath string, marker pendingUpdateMarker, ca
 	if err := RestoreBackup(execPath); err != nil {
 		return false, errors.Join(cause, fmt.Errorf("rollback transaction %s binary: %w", marker.TransactionID, err))
 	}
-	if err := cleanupUpdateStagingFiles(execPath); err != nil {
+	marker.Phase = updatePhaseRolledBack
+	if err := writePendingUpdateMarker(execPath, marker); err != nil {
+		return true, errors.Join(cause, fmt.Errorf("persist completed rollback: %w", err))
+	}
+	if err := cleanupInactiveUpdateLocked(execPath, marker); err != nil {
 		return true, errors.Join(cause, err)
-	}
-	if err := removePendingDatabaseSnapshot(execPath, marker); err != nil {
-		return true, errors.Join(cause, fmt.Errorf("remove rolled-back database snapshot: %w", err))
-	}
-	if err := removeUpdateFile(execPath + pendingSuffix); err != nil {
-		return true, errors.Join(cause, fmt.Errorf("remove rolled-back marker: %w", err))
-	}
-	if err := syncDirectory(filepath.Dir(execPath)); err != nil {
-		return true, errors.Join(cause, fmt.Errorf("sync rolled-back transaction: %w", err))
 	}
 	return true, nil
 }
 
-func cleanupPreparedUpdateLocked(execPath string, marker pendingUpdateMarker) error {
+func cleanupInactiveUpdateLocked(execPath string, marker pendingUpdateMarker) error {
 	if err := removeUpdateFile(execPath + backupSuffix); err != nil {
-		return fmt.Errorf("remove prepared backup: %w", err)
+		return fmt.Errorf("remove update backup: %w", err)
 	}
 	if err := cleanupUpdateStagingFiles(execPath); err != nil {
 		return err
 	}
 	if err := syncDirectory(filepath.Dir(execPath)); err != nil {
-		return fmt.Errorf("sync prepared cleanup: %w", err)
+		return fmt.Errorf("sync update cleanup: %w", err)
 	}
 	if err := removePendingDatabaseSnapshot(execPath, marker); err != nil {
-		return fmt.Errorf("remove prepared database snapshot: %w", err)
+		return fmt.Errorf("remove update database snapshot: %w", err)
 	}
 	if err := removeUpdateFile(execPath + pendingSuffix); err != nil {
-		return fmt.Errorf("remove prepared marker: %w", err)
+		return fmt.Errorf("remove update marker: %w", err)
 	}
 	return syncDirectory(filepath.Dir(execPath))
 }

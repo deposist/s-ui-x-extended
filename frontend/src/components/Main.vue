@@ -238,12 +238,20 @@ const reloadItems = computed({
   }
 })
 
+let statusRequestPending = false
+
 const reloadData = async () => {
-  const request = [...new Set(reloadItems.value.map(r => r.split('-')[1]))]
-  const filteredRequest = tilesData.value?.sys?.appVersion ? request.filter(r => r != 'sys') : request
-  const data = await HttpUtils.get('api/status',{ r: filteredRequest.join(',')})
-  if (data.success) {
-    tilesData.value = data.obj
+  if (statusRequestPending || reloadItems.value.length === 0) return
+  statusRequestPending = true
+  try {
+    const request = [...new Set(reloadItems.value.map(r => r.split('-')[1]))]
+    const filteredRequest = tilesData.value?.sys?.appVersion ? request.filter(r => r != 'sys') : request
+    const data = await HttpUtils.get('api/status',{ r: filteredRequest.join(',')})
+    if (data.success) {
+      tilesData.value = { ...tilesData.value, ...data.obj }
+    }
+  } finally {
+    statusRequestPending = false
   }
 }
 
@@ -257,6 +265,7 @@ const reloadSys = async () => {
 let intervalId: ReturnType<typeof setInterval> | null = null
 
 const startTimer = () => {
+  if (intervalId) return
   intervalId = setInterval(() => {
     // Don't poll a backgrounded tab nobody is looking at; resume on re-show.
     if (document.hidden) return
@@ -277,10 +286,10 @@ const stopTimer = () => {
 
 onMounted(async () => {
   loading.value = true
+  document.addEventListener('visibilitychange', onVisibilityChange)
   if (Data().reloadItems.length != 0) {
-    await reloadData()
     startTimer()
-    document.addEventListener('visibilitychange', onVisibilityChange)
+    await reloadData()
   }
   loading.value = false
 })

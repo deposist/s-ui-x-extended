@@ -97,7 +97,10 @@ func parseVersion(version string, allowLegacyMinor bool) (Semver, bool) {
 			return Semver{}, false
 		}
 	}
-	corePart, prerelease, _ := strings.Cut(coreAndBuild[0], "-")
+	corePart, prerelease, hasPrerelease := strings.Cut(coreAndBuild[0], "-")
+	if hasPrerelease && prerelease == "" {
+		return Semver{}, false
+	}
 	coreFields := strings.Split(corePart, ".")
 	if len(coreFields) == 2 && allowLegacyMinor {
 		coreFields = append(coreFields, "0")

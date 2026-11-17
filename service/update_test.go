@@ -145,6 +145,18 @@ func TestSelectBetaReleaseOrdersNumericSuffixes(t *testing.T) {
 	}
 }
 
+func TestSelectBetaReleaseSkipsInvalidVersionTags(t *testing.T) {
+	releases := []ghRelease{
+		{TagName: "nightly"},
+		{TagName: "v2.0.0-beta2"},
+		{TagName: "v2.0.0-beta3"},
+	}
+	best := selectBetaRelease(releases)
+	if best == nil || best.TagName != "v2.0.0-beta3" {
+		t.Fatalf("beta channel did not skip invalid version: %#v", best)
+	}
+}
+
 func TestFetchBetaChannelSelectsBeta10OverBeta9(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/releases" || r.URL.Query().Get("per_page") != "20" {

@@ -68,7 +68,15 @@ $totals = [ordered]@{ tests = 0; green = 0; red = 0; skipped = 0; xfail = 0 }
 
 $junitFiles = @()
 if (Test-Path -LiteralPath $baselineDir) {
-    $junitFiles = Get-ChildItem -LiteralPath $baselineDir -Recurse -Filter "*.junit.xml" | Sort-Object FullName
+    $junitFiles = Get-ChildItem -LiteralPath $baselineDir -Recurse -Filter "*.junit.xml" | Where-Object { $_.Name -ne 'aggregate.junit.xml' } | Sort-Object FullName
+}
+if (@($junitFiles).Count -eq 0) {
+    throw 'audit aggregate found no JUnit files'
+}
+foreach ($report in @('go-build', 'go-vet', 'go-test', 'go-test-race', 'go-cover', 'staticcheck', 'golangci-lint', 'gosec', 'govulncheck')) {
+    if (-not ($junitFiles | Where-Object { $_.Name.StartsWith($report) })) {
+        throw "audit aggregate is missing required report: $report"
+    }
 }
 
 foreach ($file in $junitFiles) {
@@ -132,6 +140,13 @@ foreach ($file in $junitFiles) {
         skipped = $skipped
         xfail = $xfail
     }
+}
+
+if ($totals.tests -eq 0) {
+    throw 'audit aggregate found zero tests'
+}
+if ($totals.red -gt 0) {
+    throw "audit aggregate found $($totals.red) failed checks"
 }
 
 $summaryPath = Join-Path $baselineDir "SUMMARY.md"

@@ -20,9 +20,10 @@ type subscriptionOutputCacheEntry struct {
 }
 
 type subscriptionOutputCacheStore struct {
-	mu      sync.Mutex
-	ttl     time.Duration
-	entries map[string]subscriptionOutputCacheEntry
+	mu       sync.Mutex
+	ttl      time.Duration
+	entries  map[string]subscriptionOutputCacheEntry
+	revision uint64
 }
 
 func newSubscriptionOutputCache(ttl time.Duration) *subscriptionOutputCacheStore {
@@ -51,9 +52,18 @@ func subscriptionCacheGet(key string, now time.Time) (string, []string, bool) {
 	return entry.body, append([]string(nil), entry.headers...), true
 }
 
-func subscriptionCacheSet(key string, body string, headers []string, now time.Time) {
+func subscriptionCacheRevision() uint64 {
 	subscriptionOutputCache.mu.Lock()
 	defer subscriptionOutputCache.mu.Unlock()
+	return subscriptionOutputCache.revision
+}
+
+func subscriptionCacheSet(key string, body string, headers []string, now time.Time, revision uint64) {
+	subscriptionOutputCache.mu.Lock()
+	defer subscriptionOutputCache.mu.Unlock()
+	if revision != subscriptionOutputCache.revision {
+		return
+	}
 	if len(subscriptionOutputCache.entries) >= subscriptionOutputCacheMaxEntries {
 		subscriptionOutputCache.entries = map[string]subscriptionOutputCacheEntry{}
 	}
@@ -68,6 +78,7 @@ func ClearSubscriptionOutputCache() {
 	subscriptionOutputCache.mu.Lock()
 	defer subscriptionOutputCache.mu.Unlock()
 	subscriptionOutputCache.entries = map[string]subscriptionOutputCacheEntry{}
+	subscriptionOutputCache.revision++
 }
 
 func InvalidateClientSubscriptionOutputCache(subIDs []string) {
@@ -79,6 +90,7 @@ func InvalidateClientSubscriptionOutputCache(subIDs []string) {
 	}
 	subscriptionOutputCache.mu.Lock()
 	defer subscriptionOutputCache.mu.Unlock()
+	subscriptionOutputCache.revision++
 	for key := range subscriptionOutputCache.entries {
 		for _, subID := range subIDs {
 			if strings.HasSuffix(key, ":"+subID) {

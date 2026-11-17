@@ -37,6 +37,9 @@ func (i *Service) UnmarshalJSON(data []byte) error {
 	}
 	delete(raw, "tls_id")
 	delete(raw, "tls")
+	if i.Type == "oom-killer" {
+		delete(raw, "checks_before_limit")
+	}
 
 	// Remaining fields
 	i.Options, err = json.MarshalIndent(raw, "", "  ")
@@ -57,6 +60,9 @@ func (i Service) MarshalJSON() ([]byte, error) {
 		var restFields map[string]json.RawMessage
 		if err := json.Unmarshal(i.Options, &restFields); err != nil {
 			return nil, err
+		}
+		if i.Type == "oom-killer" {
+			delete(restFields, "checks_before_limit")
 		}
 
 		for k, v := range restFields {

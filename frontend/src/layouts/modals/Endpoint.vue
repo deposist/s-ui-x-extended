@@ -163,6 +163,7 @@ export default {
       title: "add",
       tab: "t1",
       loading: false,
+      typeGeneration: 0,
       // Availability rows from /api/capabilities: types not compiled into this
       // binary or not implemented on this platform stay visible but disabled.
       capabilityRows: <CapabilityRow[]>[],
@@ -180,6 +181,7 @@ export default {
   },
   methods: {
     async updateData(id: number) {
+      this.typeGeneration++
       // Never auto-suggest over a stored endpoint; the flag only turns on
       // again when the admin flips the managed switch in this session.
       this.awgAutoPublicEndpoint = null
@@ -190,8 +192,7 @@ export default {
         this.originalAmnezia = JSON.stringify(newData.amnezia ?? null)
       }
       else {
-        this.endpoint.type = "wireguard"
-        this.endpoint.listen_port = RandomUtil.randomIntRange(10000, 60000)
+        this.endpoint = createEndpoint("wireguard", { listen_port: RandomUtil.randomIntRange(10000, 60000), peers: [], ext: { keys: [] } })
         this.changeType()
         this.title = "add"
         this.originalAmnezia = ""
@@ -208,14 +209,17 @@ export default {
       applyEndpointRecommendedValues(this.endpoint)
     },
     async changeType() {
+      const generation = ++this.typeGeneration
+      const type = this.endpoint.type
       // Tag change only in add endpoint
-      const tag = this.endpoint.type + "-" + RandomUtil.randomSeq(3)
+      const tag = type + "-" + RandomUtil.randomSeq(3)
       
       // Use previous data
       let prevConfig = {}
-      switch (this.endpoint.type) {
+      switch (type) {
         case EpTypes.Wireguard:
           const wgKeys = (await this.genWgKey())
+          if (generation !== this.typeGeneration || type !== this.endpoint.type) return
           const randomIPoctet = RandomUtil.randomIntRange(1, 255)
           prevConfig = {
             tag: tag,
@@ -263,7 +267,7 @@ export default {
           prevConfig = { tag: tag }
           break
       }
-      this.endpoint = createEndpoint(this.endpoint.type, prevConfig)
+      this.endpoint = createEndpoint(type, prevConfig)
     },
     closeModal() {
       this.updateData(0) // reset
@@ -322,26 +326,34 @@ export default {
       return result
     },
     async newWgKey(){
+      const endpoint = this.endpoint
       this.loading = true
       const newKeys = await this.genWgKey()
+      if (this.endpoint !== endpoint || endpoint.type !== EpTypes.Wireguard) return
       this.endpoint.private_key = newKeys.private_key
       if (!this.endpoint.ext) this.endpoint.ext = {keys: []}
       this.endpoint.ext.public_key = newKeys.public_key
       this.loading = false
     },
     async getWgPubKey(private_key: string) {
-      if (!this.endpoint.ext) this.endpoint.ext = {keys: []}
+      const endpoint = this.endpoint
+      if (!endpoint.ext) endpoint.ext = {keys: []}
       this.loading = true
-      const msg = await HttpUtils.get('api/keypairs', { k: "wireguard", o: private_key })
-      if (msg.success) {
-        this.endpoint.ext.public_key = msg.obj[0]
+      try {
+        const msg = await HttpUtils.get('api/keypairs', { k: "wireguard", o: private_key })
+        if (this.endpoint === endpoint && endpoint.type === EpTypes.Wireguard && endpoint.private_key === private_key && msg.success) {
+          endpoint.ext.public_key = msg.obj[0]
+        }
+      } finally {
+        if (this.endpoint === endpoint) this.loading = false
       }
-      this.loading = false
     },
     async addWgPeer(){
       if (this.endpoint.type != EpTypes.Wireguard) return
+      const endpoint = this.endpoint
       this.loading = true
       const newKeys = await this.genWgKey()
+      if (this.endpoint !== endpoint || endpoint.type !== EpTypes.Wireguard) return
       if (!this.endpoint.ext) this.endpoint.ext = {keys: []}
       this.endpoint.ext.keys.push(newKeys)
       this.endpoint.peers.push({
@@ -364,17 +376,22 @@ export default {
       this.endpoint.peers.splice(index, 1)
     },
     async fillRandomAmneziaHeaders() {
+      const endpoint = this.endpoint
+      const amnezia = endpoint.amnezia
       const msg = await HttpUtils.get('api/awg/obfuscation/random')
-      if (msg.success && msg.obj && this.endpoint.amnezia) {
-        this.endpoint.amnezia.h1 = msg.obj.h1
-        this.endpoint.amnezia.h2 = msg.obj.h2
-        this.endpoint.amnezia.h3 = msg.obj.h3
-        this.endpoint.amnezia.h4 = msg.obj.h4
+      if (this.endpoint === endpoint && endpoint.amnezia === amnezia && msg.success && msg.obj && amnezia) {
+        amnezia.h1 = msg.obj.h1
+        amnezia.h2 = msg.obj.h2
+        amnezia.h3 = msg.obj.h3
+        amnezia.h4 = msg.obj.h4
       }
     },
     async refreshWgPeerKey(index: number) {
+      const endpoint = this.endpoint
+      const peer = endpoint.peers?.[index]
       this.loading = true
       const newKeys = await this.genWgKey()
+      if (this.endpoint !== endpoint || endpoint.type !== EpTypes.Wireguard || !peer || endpoint.peers?.[index] !== peer) return
       if (!this.endpoint.ext) this.endpoint.ext = {keys: []}
       const indexKeys = this.endpoint.ext.keys.findIndex((key: any) => key.public_key == this.endpoint.peers[index].public_key)
       this.endpoint.ext.keys[indexKeys == -1 ? this.endpoint.ext.keys.length : indexKeys] = newKeys

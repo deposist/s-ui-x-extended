@@ -36,7 +36,7 @@
       </v-col>
       <v-col cols="12" sm="6" md="4">
         <v-text-field
-          v-model="data.pool_size"
+          v-model.number="data.pool_size"
           :label="$t('types.vpn.poolSize')"
           hide-details
           type="number"
@@ -166,7 +166,9 @@ export default {
     },
     addUser() {
       if (!Array.isArray(this.$props.data.users)) this.$props.data.users = []
-      const octet = (this.$props.data.users?.length ?? 0) + 2
+      const addresses = new Set(this.$props.data.users.map((user: any) => user.address))
+      let octet = 2
+      while (octet <= 254 && addresses.has('10.0.0.' + octet)) octet++
       if (octet > 254) return
       this.$props.data.users.push({ address: "10.0.0." + octet, key: this.genKey() })
     },

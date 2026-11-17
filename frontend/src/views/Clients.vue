@@ -446,7 +446,7 @@ const doFilter = () => {
   }
   if (filterSettings.value.text.length>0) {
     const txt = filterSettings.value.text
-    filteredClients = filteredClients.filter(c => c.name.search(txt) != -1 || c.desc.search(txt) != -1)
+    filteredClients = filteredClients.filter(c => c.name.includes(txt) || c.desc.includes(txt))
   }
   switch (filterSettings.value.state) {
     case "disable":

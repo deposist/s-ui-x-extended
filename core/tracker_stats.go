@@ -107,6 +107,21 @@ func (c *StatsTracker) loadOrCreateCounter(obj *map[string]Counter, name string)
 	return counter
 }
 
+// RemoveCounter removes the counter for a specific resource tag to prevent memory leaks.
+func (c *StatsTracker) RemoveCounter(resource string, tag string) {
+	c.access.Lock()
+	defer c.access.Unlock()
+
+	switch resource {
+	case "inbound":
+		delete(c.inbounds, tag)
+	case "outbound":
+		delete(c.outbounds, tag)
+	case "user":
+		delete(c.users, tag)
+	}
+}
+
 func (c *StatsTracker) RoutedConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, matchedRule adapter.Rule, matchOutbound adapter.Outbound) net.Conn {
 	sourceIP := sourceIPFromMetadata(metadata)
 	if !ipmonitor.ObserveAndAllowContext(ctx, metadata.User, sourceIP) {
@@ -159,18 +174,28 @@ type statsFlowTracker struct {
 	readCounter  []*atomic.Int64
 	writeCounter []*atomic.Int64
 	waitGroup    *trackerWaitGroup
-	attachOnce   sync.Once
-	doneOnce     sync.Once
+	mu           sync.Mutex
+	attached     bool
+	closed       bool
 }
 
 func (t *statsFlowTracker) AttachFlow(handle tun.FlowHandle) {
-	t.attachOnce.Do(func() {
+	t.mu.Lock()
+	if t.closed {
+		t.mu.Unlock()
+		if handle != nil {
+			handle.CloseFlow()
+		}
+		return
+	}
+	if !t.attached {
 		t.tracker.access.Lock()
-		waitGroup := t.tracker.inflight
-		waitGroup.Add()
+		t.waitGroup = t.tracker.inflight
+		t.waitGroup.Add()
 		t.tracker.access.Unlock()
-		t.waitGroup = waitGroup
-	})
+		t.attached = true
+	}
+	t.mu.Unlock()
 }
 
 func (t *statsFlowTracker) CountForward(n int) {
@@ -188,11 +213,15 @@ func (t *statsFlowTracker) CountReverse(n int) {
 func (t *statsFlowTracker) FlowEstablished() {}
 
 func (t *statsFlowTracker) CloseFlow(reason tun.FlowCloseReason) {
-	t.doneOnce.Do(func() {
-		if t.waitGroup != nil {
-			t.waitGroup.Done()
-		}
-	})
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed {
+		return
+	}
+	t.closed = true
+	if t.waitGroup != nil {
+		t.waitGroup.Done()
+	}
 }
 
 func newStatsTrackedConn(conn net.Conn, waitGroup *trackerWaitGroup) net.Conn {

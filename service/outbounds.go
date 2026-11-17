@@ -239,18 +239,11 @@ func (s *OutboundService) RestartOutbounds(tx *gorm.DB, ids []uint) error {
 	if err := tx.Model(model.Outbound{}).Where("id in ?", ids).Find(&outbounds).Error; err != nil {
 		return err
 	}
-	directTag := DirectFallbackTag(tx)
 	for _, outbound := range outbounds {
 		if err := coreInstance.RemoveOutbound(outbound.Tag); err != nil && err != os.ErrInvalid {
 			return err
 		}
-		var outboundConfig json.RawMessage
-		var err error
-		if outbound.Type == FailoverType {
-			outboundConfig, err = assembleFailoverForCore(*outbound, directTag)
-		} else {
-			outboundConfig, err = outbound.MarshalJSON()
-		}
+		outboundConfig, err := outboundCoreJSON(tx, *outbound)
 		if err != nil {
 			return err
 		}

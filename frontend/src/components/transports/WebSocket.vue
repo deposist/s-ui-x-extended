@@ -56,7 +56,10 @@ export default {
     host: {
       get() { return this.WS.headers?.Host ? this.WS.headers.Host : '' },
       set(newValue:string) {
-        this.$props.transport.headers = newValue != "" ? { Host: newValue } : undefined
+        const headers = { ...this.$props.transport.headers }
+        if (newValue != "") headers.Host = newValue
+        else delete headers.Host
+        this.$props.transport.headers = Object.keys(headers).length > 0 ? headers : undefined
       }
     },
   },

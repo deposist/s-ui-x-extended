@@ -1,6 +1,6 @@
 module github.com/deposist/s-ui-x-extended
 
-go 1.26.9
+go 1.26.11
 
 require (
 	filippo.io/edwards25519 v1.2.0
@@ -9,22 +9,22 @@ require (
 	github.com/gin-contrib/sessions v1.0.4
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-acme/lego/v4 v4.35.2
-	github.com/go-chi/chi/v5 v5.2.5
+	github.com/go-chi/chi/v5 v5.3.0
 	github.com/gofrs/uuid/v5 v5.5.1
 	github.com/gorilla/securecookie v1.1.2
 	github.com/gorilla/sessions v1.4.0
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/sagernet/sing v0.9.7-0.20260929150544-0ad23b637bd4
-	github.com/sagernet/sing-box v1.14.3
-	github.com/sagernet/sing-tun v0.9.7-0.20261009020158-bca4bf029237
+	github.com/sagernet/sing v0.9.7-0.20261023115459-5dc452e537bf
+	github.com/sagernet/sing-box v1.14.4
+	github.com/sagernet/sing-tun v0.9.7-0.20261023115432-040db71fcd33
 	github.com/shirou/gopsutil/v4 v4.26.2
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
-	golang.org/x/crypto v0.57.0
-	golang.org/x/net v0.60.0
-	golang.org/x/sync v0.23.0
-	golang.org/x/sys v0.48.0
-	golang.org/x/term v0.46.0
-	golang.org/x/text v0.42.0
+	golang.org/x/crypto v0.58.1-0.20261009181718-2f1f834330b2
+	golang.org/x/net v0.62.0
+	golang.org/x/sync v0.24.0
+	golang.org/x/sys v0.49.0
+	golang.org/x/term v0.47.0
+	golang.org/x/text v0.43.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/sqlite v1.6.0
@@ -43,7 +43,7 @@ require (
 	github.com/ameshkov/dnscrypt/v2 v2.4.0 // indirect
 	github.com/ameshkov/dnsstamps v1.0.3 // indirect
 	github.com/anchore/go-lzo v0.1.0 // indirect
-	github.com/andybalholm/brotli v1.2.1 // indirect
+	github.com/andybalholm/brotli v1.2.7 // indirect
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
 	github.com/anthropics/anthropic-sdk-go v1.26.0 // indirect
 	github.com/anytls/sing-anytls v0.0.11 // indirect
@@ -106,10 +106,10 @@ require (
 	github.com/huandu/go-sqlbuilder v1.39.1 // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
-	github.com/insomniacslk/dhcp v0.0.0-20260220084031-5adc3eb26f91 // indirect
+	github.com/insomniacslk/dhcp v0.0.0-20260719225207-c76316d4aa82 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/pgx/v5 v5.8.0 // indirect
+	github.com/jackc/pgx/v5 v5.9.2 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
@@ -117,7 +117,7 @@ require (
 	github.com/jsimonetti/rtnetlink v1.4.1 // indirect
 	github.com/json-iterator/go v1.1.13-0.20220915233716-71ac16282d12 // indirect
 	github.com/keybase/go-keychain v0.0.1 // indirect
-	github.com/klauspost/compress v1.19.1 // indirect
+	github.com/klauspost/compress v1.20.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/klauspost/reedsolomon v1.12.0 // indirect
 	github.com/koron/go-ssdp v0.0.4 // indirect
@@ -206,25 +206,25 @@ require (
 	github.com/sagernet/cronet-go/lib/windows_amd64 v0.0.0-20260912104006-c10c03c318db // indirect
 	github.com/sagernet/cronet-go/lib/windows_arm64 v0.0.0-20260912104006-c10c03c318db // indirect
 	github.com/sagernet/fswatch v0.1.2 // indirect
-	github.com/sagernet/gliderssh v0.3.4-0.20260531100337-2194faca5648 // indirect
+	github.com/sagernet/gliderssh v0.3.4-0.20261023092853-e0cad6d28647 // indirect
 	github.com/sagernet/gvisor v0.0.0-20260727.0-sing-box-mod.1 // indirect
 	github.com/sagernet/netlink v0.0.0-20260814022025-64455d367bbf // indirect
 	github.com/sagernet/nftables v0.3.0-mod.4 // indirect
-	github.com/sagernet/quic-go v0.61.0-sing-box-mod.9 // indirect
-	github.com/sagernet/sing-cloudflared v0.1.4-0.20261002084126-c1255ae368f2 // indirect
+	github.com/sagernet/quic-go v0.61.0-sing-box-mod.12 // indirect
+	github.com/sagernet/sing-cloudflared v0.1.4-0.20261021152903-2d40d788fcf6 // indirect
 	github.com/sagernet/sing-mux v0.3.10-0.20260929204512-caf09fe32475 // indirect
 	github.com/sagernet/sing-openconnect v0.1.1-0.20260929151225-cbd68c45de58 // indirect
-	github.com/sagernet/sing-openvpn v0.1.1-0.20260929151220-7c3045dbddce // indirect
-	github.com/sagernet/sing-quic v0.7.2-0.20261002084117-75c3ac4fa12b // indirect
+	github.com/sagernet/sing-openvpn v0.1.1-0.20261020061838-432d37b47c92 // indirect
+	github.com/sagernet/sing-quic v0.7.2-0.20261020082049-7e0a5869a5f4 // indirect
 	github.com/sagernet/sing-shadowsocks v0.2.9-0.20260929204512-65740e0f0e3e // indirect
 	github.com/sagernet/sing-shadowsocks2 v0.2.2-0.20260929152114-a69d1086332b // indirect
 	github.com/sagernet/sing-shadowtls v0.2.2-0.20260928201441-a9c0127d5c99 // indirect
 	github.com/sagernet/sing-snell v0.0.0-20260904135315-bc5a12ac736f // indirect
 	github.com/sagernet/sing-usbip v0.0.0-20260817040617-28bd42667eca // indirect
-	github.com/sagernet/sing-vmess v0.2.9-0.20260929152519-9b95ab8c9478 // indirect
+	github.com/sagernet/sing-vmess v0.2.9-0.20261019223527-a0c58542bd9d // indirect
 	github.com/sagernet/smux v1.5.50-sing-box-mod.1 // indirect
-	github.com/sagernet/tailscale v1.102.1-sing-box-1.14-mod.5 // indirect
-	github.com/sagernet/wireguard-go v0.0.6-extended-1.6.1 // indirect
+	github.com/sagernet/tailscale v1.102.1-sing-box-1.14-mod.5.0.20261019070639-79c1732442a9 // indirect
+	github.com/sagernet/wireguard-go v0.0.8-0.20261022215841-e4d85ef2ed38 // indirect
 	github.com/sagernet/ws v0.0.0-20231204124109-acfe8907c854 // indirect
 	github.com/shtorm-7/go-cache/v2 v2.1.0-extended-1.0.2 // indirect
 	github.com/shtorm-7/rmux v1.0.1 // indirect
@@ -266,7 +266,7 @@ require (
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	golang.org/x/tools v0.49.0 // indirect
+	golang.org/x/tools v0.51.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	golang.zx2c4.com/wireguard/windows v0.5.3 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
@@ -286,13 +286,13 @@ require (
 // It keeps the upstream module path (drop-in via replace). Go ignores `replace`
 // directives from dependencies, so the fork's nested replaces are duplicated here
 // and must stay in sync with the fork's own go.mod when bumping the pin.
-replace github.com/sagernet/sing-box => github.com/deposist/sing-box-extended v1.14.3-extended-2.7.8
+replace github.com/sagernet/sing-box => github.com/deposist/sing-box-extended v1.14.4-extended-2.7.10
 
-replace github.com/sagernet/sing => github.com/shtorm-7/sing v0.9.7-extended-1.2.1
+replace github.com/sagernet/sing => github.com/deposist/sing v0.9.7-extended-1.2.2
 
 replace github.com/sagernet/wireguard-go => github.com/shtorm-7/wireguard-go v0.0.8-extended-1.6.2
 
-replace github.com/sagernet/tailscale => github.com/shtorm-7/tailscale v1.102.1-sing-box-1.14-mod.5-extended-1.0.3
+replace github.com/sagernet/tailscale => github.com/deposist/tailscale v1.102.1-sing-box-1.14-mod.5-extended-1.0.4
 
 replace github.com/sagernet/sing-mux => github.com/shtorm-7/sing-mux v0.3.10-extended-1.1.0
 
@@ -309,4 +309,4 @@ replace github.com/shtorm-7/go-cache/v2 => github.com/shtorm-7/go-cache/v2 v2.1.
 // deposist fork with the previous OpenVPN behaviour preserved; mirrors the
 // fork's replace so the panel resolves the same patched module (Go ignores
 // replaces declared in dependencies).
-replace github.com/sagernet/sing-openvpn => github.com/deposist/sing-openvpn v0.0.1-deposist.1
+replace github.com/sagernet/sing-openvpn => github.com/deposist/sing-openvpn v0.0.1-deposist.2

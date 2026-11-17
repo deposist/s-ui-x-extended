@@ -214,6 +214,9 @@ const password = ref('')
 let suppressChannelCheck = false
 let pollTimer: ReturnType<typeof setInterval> | undefined
 let pollPending = false
+let componentActive = true
+let statusRequestId = 0
+let checkRequestId = 0
 
 const jobActive = computed(() => RUNNING_STAGES.includes(status.value?.job?.stage || ''))
 const canUpdate = computed(() =>
@@ -234,20 +237,24 @@ const applyStatus = (obj: unknown) => {
     suppressChannelCheck = true
     channel.value = incoming
   }
+  if (jobActive.value && !pollTimer) startPolling()
 }
 
 const loadStatus = async () => {
+  const requestId = ++statusRequestId
   const msg = await HttpUtils.get('api/update/status')
-  if (msg.success) applyStatus(msg.obj)
+  if (componentActive && requestId === statusRequestId && msg.success) applyStatus(msg.obj)
 }
 
 const checkUpdates = async () => {
+  const requestId = ++statusRequestId
+  const checkId = ++checkRequestId
   checking.value = true
   try {
     const msg = await HttpUtils.post('api/update/check', { channel: channel.value })
-    if (msg.success) applyStatus(msg.obj)
+    if (componentActive && requestId === statusRequestId && msg.success) applyStatus(msg.obj)
   } finally {
-    checking.value = false
+    if (checkId === checkRequestId) checking.value = false
   }
 }
 
@@ -257,6 +264,7 @@ const openConfirm = () => {
 }
 
 const runUpdate = async () => {
+  ++statusRequestId
   applying.value = true
   try {
     const msg = await HttpUtils.post('api/update/apply', {
@@ -265,7 +273,8 @@ const runUpdate = async () => {
       password: password.value,
     })
     password.value = ''
-    if (msg.success) {
+    if (componentActive && msg.success) {
+      ++statusRequestId
       confirm.value = false
       applyStatus(msg.obj)
       startPolling()
@@ -276,9 +285,10 @@ const runUpdate = async () => {
 }
 
 const startPolling = () => {
+  if (!componentActive) return
   stopPolling()
   pollTimer = setInterval(() => {
-    if (pollPending) return
+    if (pollPending || checking.value || applying.value) return
     pollPending = true
     // While the panel restarts into the new binary, requests fail. That is the
     // expected end state; keep polling so the UI recovers once it returns.
@@ -305,7 +315,11 @@ watch(channel, () => {
 })
 
 onMounted(loadStatus)
-onUnmounted(stopPolling)
+onUnmounted(() => {
+  componentActive = false
+  ++statusRequestId
+  stopPolling()
+})
 </script>
 
 <style scoped>

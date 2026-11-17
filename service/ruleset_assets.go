@@ -426,7 +426,7 @@ func readManifest() map[string]string {
 		return map[string]string{}
 	}
 	var sources map[string]string
-	if err := json.Unmarshal(data, &sources); err != nil {
+	if err := json.Unmarshal(data, &sources); err != nil || sources == nil {
 		return map[string]string{}
 	}
 	return sources

@@ -561,10 +561,12 @@ run_remote_installer() {
 install() {
     if run_remote_installer; then
         if [[ $# == 0 ]]; then
-            start
+            start s-ui
         else
-            start 0
+            start s-ui 0
         fi
+    else
+        return $?
     fi
 }
 
@@ -579,6 +581,8 @@ update() {
     if run_remote_installer; then
         LOGI "$(t update_done)"
         exit 0
+    else
+        return $?
     fi
 }
 
@@ -1252,6 +1256,10 @@ ssl_cert_issue() {
 
     local domain=""
 read -rp "Domain / Домен: " domain
+    if [[ ! "${domain}" =~ ^[-._[:alnum:]]+$ || "${domain}" == '.' || "${domain}" == '..' ]]; then
+        LOGE "Invalid domain / Некорректный домен"
+        return 1
+    fi
     LOGD "Domain: ${domain}"
     # Detect an existing acme.sh cert for this exact domain. Scan every row
     # (column 1) rather than only the last line, so the check stays correct
@@ -1278,7 +1286,6 @@ read -rp "Force re-issue? / Перевыпустить принудительн�
     fi
 
     certPath="/root/cert/${domain}"
-    rm -rf "$certPath"
     mkdir -p "$certPath"
 
     local WebPort=80
@@ -1290,7 +1297,6 @@ read -rp "Port (default 80) / Порт (по умолчанию 80): " WebPort
     "${HOME}/.acme.sh/acme.sh" --set-default-ca --server letsencrypt
     if ! "${HOME}/.acme.sh/acme.sh" --issue -d "${domain}" --standalone --httpport "${WebPort}" $force_flag; then
         LOGE "Issue failed; aborting."
-        rm -rf "${HOME}/.acme.sh/${domain}"
         exit 1
     fi
     "${HOME}/.acme.sh/acme.sh" --installcert -d "${domain}" \
@@ -1323,10 +1329,14 @@ read -rp "Choice [1-3]: " choice
             CF_AccountEmail=""
 
 read -rp "Domain / Домен: " CF_Domain
+            if [[ ! "${CF_Domain}" =~ ^[-._[:alnum:]]+$ || "${CF_Domain}" == '.' || "${CF_Domain}" == '..' ]]; then
+                LOGE "Invalid domain / Некорректный домен"
+                return 1
+            fi
 read -rp "Cloudflare Global API key / API key: " CF_GlobalKey
 read -rp "Cloudflare account email / Email: " CF_AccountEmail
 
-            rm -rf "$certPath" && mkdir -p "$certPath"
+            mkdir -p "$certPath"
 
             "${HOME}/.acme.sh/acme.sh" --set-default-ca --server letsencrypt || exit 1
             export CF_Key="${CF_GlobalKey}"
@@ -1360,20 +1370,21 @@ generate_self_signed_cert() {
 read -rp "Choice [1-5, default 1]: " cert_type
     cert_type=${cert_type:-1}
 
+    local -a key_opt
     case "$cert_type" in
-        1) algo="ed25519"; key_opt="-newkey ed25519" ;;
-        2) algo="rsa"; key_opt="-newkey rsa:2048" ;;
-        3) algo="rsa"; key_opt="-newkey rsa:4096" ;;
-        4) algo="ecdsa"; key_opt="-newkey ec -pkeyopt ec_paramgen_curve:prime256v1" ;;
-        5) algo="ecdsa"; key_opt="-newkey ec -pkeyopt ec_paramgen_curve:secp384r1" ;;
-        *) algo="ed25519"; key_opt="-newkey ed25519" ;;
+        1) algo="ed25519"; key_opt=(-newkey ed25519) ;;
+        2) algo="rsa"; key_opt=(-newkey rsa:2048) ;;
+        3) algo="rsa"; key_opt=(-newkey rsa:4096) ;;
+        4) algo="ecdsa"; key_opt=(-newkey ec -pkeyopt ec_paramgen_curve:prime256v1) ;;
+        5) algo="ecdsa"; key_opt=(-newkey ec -pkeyopt ec_paramgen_curve:secp384r1) ;;
+        *) algo="ed25519"; key_opt=(-newkey ed25519) ;;
     esac
 
     LOGI "Generating self-signed certificate ($algo)..."
     # The script already requires root (see the EUID check), so call openssl
     # directly: prefixing sudo breaks on minimal root-only systems where sudo is
     # not installed ("sudo: command not found").
-    if openssl req -x509 -nodes -days 3650 "${key_opt}" \
+    if openssl req -x509 -nodes -days 3650 "${key_opt[@]}" \
         -keyout "${cert_dir}/self.key" \
         -out "${cert_dir}/self.crt" \
         -subj "/CN=myserver"; then

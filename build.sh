@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 REPO_ROOT=$SCRIPT_DIR
 FRONTEND_DIR=$REPO_ROOT/frontend
 FRONTEND_DIST=$FRONTEND_DIR/dist

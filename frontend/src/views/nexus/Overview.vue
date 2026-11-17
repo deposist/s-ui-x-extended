@@ -94,6 +94,8 @@ const trafficLoading = ref(false)
 let statusInterval: ReturnType<typeof setInterval> | undefined
 let trafficInterval: ReturnType<typeof setInterval> | undefined
 let statusRequestPending = false
+let statusRequestId = 0
+let auditRequestId = 0
 let trafficRequestId = 0
 let previousNetworkSample = overviewStatusNetworkSample()
 
@@ -175,10 +177,12 @@ const loadStatus = async () => {
   }
 
   statusRequestPending = true
+  const requestId = ++statusRequestId
   statusLoading.value = !statusLoaded.value
   const msg = await HttpUtils.get('api/status', {
     r: 'sys,sbd,net,cpu,mem,dsk',
   })
+  if (requestId !== statusRequestId) return
   nowSec.value = Math.floor(Date.now() / 1000)
 
   if (msg.success) {
@@ -203,6 +207,7 @@ const loadStatus = async () => {
 }
 
 const loadAuditEvents = async () => {
+  const requestId = ++auditRequestId
   if (!browserOnline.value) {
     auditLoading.value = false
     auditUnavailable.value = true
@@ -211,6 +216,7 @@ const loadAuditEvents = async () => {
 
   auditLoading.value = true
   const msg = await HttpUtils.get('api/security/audit', { limit: 10 })
+  if (requestId !== auditRequestId) return
 
   if (msg.success) {
     auditEvents.value = mapAuditDisplayItems(auditEventsFromPayload(msg.obj))
@@ -231,7 +237,14 @@ const setOnline = () => {
 }
 
 const setOffline = () => {
+  ++statusRequestId
+  ++auditRequestId
+  ++trafficRequestId
+  statusRequestPending = false
   browserOnline.value = false
+  statusLoading.value = false
+  auditLoading.value = false
+  trafficLoading.value = false
   statusUnavailable.value = true
   auditUnavailable.value = true
   previousNetworkSample = undefined
@@ -277,6 +290,9 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  ++statusRequestId
+  ++auditRequestId
+  ++trafficRequestId
   if (statusInterval) clearInterval(statusInterval)
   if (trafficInterval) clearInterval(trafficInterval)
   document.removeEventListener('visibilitychange', onVisible)

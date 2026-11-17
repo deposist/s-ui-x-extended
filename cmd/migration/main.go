@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -292,8 +293,8 @@ func checkpointWAL(db *gorm.DB) error {
 // downgraded binary cannot read the migrated schema, so the pre-migration file
 // is swapped back into place.
 //
-// The destination must not already exist (VACUUM INTO refuses to overwrite), so
-// any stale snapshot from a previous attempt is removed first.
+// VACUUM INTO writes a new temporary file; a successful snapshot replaces the
+// prior backup only after the database copy is complete.
 func backupDatabaseBeforeMigration(db *gorm.DB, path string) error {
 	versionTag := "unknown"
 	_ = db.Raw("SELECT value FROM settings WHERE key = ?", "version").Scan(&versionTag)
@@ -308,10 +309,24 @@ func backupDatabaseBeforeMigration(db *gorm.DB, path string) error {
 		return '_'
 	}, versionTag)
 	backupPath := path + ".pre-" + safe + ".bak"
-	_ = os.Remove(backupPath)
+	temporary, err := os.CreateTemp(filepath.Dir(backupPath), filepath.Base(backupPath)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	defer func() { _ = os.Remove(temporaryPath) }()
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if err := os.Remove(temporaryPath); err != nil {
+		return err
+	}
 	// Escape single quotes for the SQL string literal.
-	escaped := strings.ReplaceAll(backupPath, "'", "''")
-	return db.Exec("VACUUM INTO '" + escaped + "'").Error
+	escaped := strings.ReplaceAll(temporaryPath, "'", "''")
+	if err := db.Exec("VACUUM INTO '" + escaped + "'").Error; err != nil {
+		return err
+	}
+	return os.Rename(temporaryPath, backupPath)
 }
 
 type foreignKeyViolation struct {

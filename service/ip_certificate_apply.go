@@ -104,6 +104,9 @@ func patchTlsServerBlock(serverJSON json.RawMessage, certPath, keyPath string) (
 			return nil, common.NewError("ip cert: tls server block is not an object: ", err.Error())
 		}
 	}
+	if server == nil {
+		server = make(map[string]json.RawMessage)
+	}
 	if err := setJSONStringField(server, "certificate_path", certPath); err != nil {
 		return nil, err
 	}

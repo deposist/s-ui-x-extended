@@ -120,3 +120,60 @@ func TestDecryptBackupCommandRejectsPassphraseArgument(t *testing.T) {
 		t.Fatalf("passphrase argv leaked to command output stdout=%q stderr=%q", stdout.String(), stderr.String())
 	}
 }
+
+func TestDecryptBackupFailurePreservesExistingFiles(t *testing.T) {
+	for _, samePath := range []bool{false, true} {
+		name := "existing_output"
+		if samePath {
+			name = "input_is_output"
+		}
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			inPath := filepath.Join(dir, "backup.db.aes")
+			outPath := filepath.Join(dir, "existing.db")
+			original := invalidTelegramBackupEnvelopeForDecryptTest()
+			if samePath {
+				outPath = inPath
+			}
+			if err := os.WriteFile(inPath, original, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(outPath, original, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			var stdout, stderr bytes.Buffer
+			code := runDecryptBackup([]string{"--in", inPath, "--out", outPath, "--passphrase-stdin"}, strings.NewReader("test-passphrase"), &stdout, &stderr, os.Getenv)
+			if code == 0 {
+				t.Fatal("invalid envelope should fail")
+			}
+			got, err := os.ReadFile(outPath)
+			if err != nil || !bytes.Equal(got, original) {
+				t.Fatalf("failed decryption changed existing file: err=%v", err)
+			}
+		})
+	}
+}
+
+func TestDecryptBackupWriteFailurePreservesOutputDirectory(t *testing.T) {
+	dir := t.TempDir()
+	inPath := filepath.Join(dir, "backup.db.aes")
+	outPath := filepath.Join(dir, "existing-directory")
+	if err := os.Mkdir(outPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	envelope, err := service.BuildTelegramBackupEnvelope([]byte("payload"), []byte("test-passphrase"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(inPath, envelope, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	code := runDecryptBackup([]string{"--in", inPath, "--out", outPath, "--passphrase-stdin"}, strings.NewReader("test-passphrase"), &stdout, &stderr, os.Getenv)
+	if code == 0 {
+		t.Fatal("writing over a directory should fail")
+	}
+	if info, err := os.Stat(outPath); err != nil || !info.IsDir() {
+		t.Fatalf("failed output write removed directory: err=%v", err)
+	}
+}

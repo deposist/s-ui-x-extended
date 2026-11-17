@@ -97,7 +97,7 @@ const columns: Column<AdminRow>[] = [
   { key: 'username', labelKey: 'admin.username', sortable: true },
   { key: 'loginDate', labelKey: 'admin.date', sortable: true },
   { key: 'loginTime', labelKey: 'admin.time' },
-  { key: 'ip', labelKey: 'IP' },
+  { key: 'ip', label: 'IP' },
 ]
 
 // Named <entity>Actions (not rowActions) so it never shadows the RowActions

@@ -32,6 +32,7 @@ func TestValidateReleaseVersion(t *testing.T) {
 		"1.05.2",
 		"1.5.2-BETA",
 		"1.5.2-01",
+		"1.5.2-",
 	}
 	for _, version := range invalid {
 		if err := ValidateReleaseVersion(version); err == nil {

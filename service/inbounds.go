@@ -272,6 +272,14 @@ func (s *InboundService) saveInboundUpsert(tx *gorm.DB, act string, data json.Ra
 	}
 
 	change := &entityCoreChange{reloadIds: []uint{inbound.Id}}
+	groupRefs, err := inboundGroupTagReferences(tx, inbound.Tag)
+	if err != nil {
+		return nil, err
+	}
+	if len(groupRefs) > 0 || inbound.Type == "bond" || inbound.Type == CoreFailoverType {
+		change.needsRestart = true
+		change.restartReason = "nested inbound configuration changed"
+	}
 	if oldTag != "" && oldTag != inbound.Tag {
 		change.removeTags = []string{oldTag}
 	}

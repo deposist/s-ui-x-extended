@@ -307,7 +307,7 @@
 
 <script lang="ts" setup>
 import Data from '@/store/modules/data'
-import { computed, ref, onBeforeMount } from 'vue'
+import { computed, ref, onBeforeMount, watch } from 'vue'
 import RuleVue from '@/layouts/modals/Rule.vue'
 import RulesetVue from '@/layouts/modals/Ruleset.vue'
 import RulesetImport from '@/layouts/modals/RulesetImport.vue'
@@ -344,7 +344,13 @@ const regionalPresetDrawer = ref(false)
 // Edit a LOCAL clone of the store config. A background reload (data.ts setNewData
 // replaces Data().config wholesale, driven by the 10s poll / WS events) must not wipe
 // unsaved edits, so the form binds to this clone instead of the live store object.
-const cloneStoreConfig = (): Config => JSON.parse(JSON.stringify(Data().config ?? {}))
+const cloneStoreConfig = (): Config => {
+  const config = JSON.parse(JSON.stringify(Data().config ?? {}))
+  config.route ??= {}
+  config.route.rules ??= []
+  config.route.rule_set ??= []
+  return config
+}
 const appConfig = ref<Config>(cloneStoreConfig())
 
 const resyncFromStore = () => {
@@ -352,13 +358,14 @@ const resyncFromStore = () => {
   oldConfig.value = cloneStoreConfig()
 }
 
-onBeforeMount(async () => {
+onBeforeMount(() => {
   loading.value = true
-  while (Data().lastLoad == 0) {
-    await new Promise(resolve => setTimeout(resolve, 100))
+  const finishLoading = () => {
+    resyncFromStore()
+    loading.value = false
   }
-  resyncFromStore()
-  loading.value = false
+  if (Data().lastLoad == 0) watch(() => Data().lastLoad, finishLoading, { once: true })
+  else finishLoading()
 })
 
 const routeMark = computed({
@@ -448,9 +455,10 @@ const stateChange = computed(() => FindDiff.deepCompare(appConfig.value, oldConf
 
 const saveConfig = async () => {
   loading.value = true
-  const success = await Data().save("config", "set", appConfig.value)
-  if (success) {
-    resyncFromStore()
+  try {
+    const success = await Data().save("config", "set", appConfig.value)
+    if (success) resyncFromStore()
+  } finally {
     loading.value = false
   }
 }

@@ -36,7 +36,7 @@ func (r *rateLimiter) allow(id int64, now int64) bool {
 func (r *rateLimiter) allowWithMax(id int64, now int64, max int) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if len(r.entries) > r.maxKeys {
+	if len(r.entries) >= r.maxKeys {
 		r.gcLocked(now)
 	}
 	e, exists := r.entries[id]

@@ -72,15 +72,15 @@ audit\:semgrep:
 
 audit\:bench:
 	@echo "==> go test -bench (hot paths)"
-	@cd . && go test -run=^$$ -bench=. -benchmem -benchtime=2s ./core ./sub ./paidsub ./service ./util ./util/common | tee tests/baseline/phase8/bench-all.txt
+	@bash -o pipefail -c 'go test -run=^$$ -bench=. -benchmem -benchtime=2s ./core ./sub ./paidsub ./service ./util ./util/common | tee tests/baseline/phase8/bench-all.txt'
 	@grep -q '^Benchmark' tests/baseline/phase8/bench-all.txt
 
 audit\:fuzz:
 	@echo "==> go test -fuzz (JSON unmarshal paths)"
-	@cd . && go test -run=^$$ -fuzz=FuzzTgUpdateUnmarshal -fuzztime=10s ./paidsub/ 2>&1 | tail -2
-	@cd . && go test -run=^$$ -fuzz=FuzzParseTelegramResponse -fuzztime=10s ./paidsub/ 2>&1 | tail -2
-	@cd . && go test -run=^$$ -fuzz=FuzzTariffUnmarshal -fuzztime=10s ./paidsub/ 2>&1 | tail -2
-	@cd . && go test -run=^$$ -fuzz=FuzzProxyGroupsYAML -fuzztime=10s ./sub/ 2>&1 | tail -2
-	@cd . && go test -run=^$$ -fuzz=FuzzClashBasicConfigYAML -fuzztime=10s ./sub/ 2>&1 | tail -2
-	@cd . && go test -run=^$$ -fuzz=FuzzTokenInMemoryUnmarshal -fuzztime=10s ./api/ 2>&1 | tail -2
-	@cd . && go test -run=^$$ -fuzz=FuzzSubscriptionPathSnapshotSettings -fuzztime=10s ./api/ 2>&1 | tail -2
+	@bash -o pipefail -c 'go test -run=^$$ -fuzz=FuzzTgUpdateUnmarshal -fuzztime=10s ./paidsub/ 2>&1 | tail -2'
+	@bash -o pipefail -c 'go test -run=^$$ -fuzz=FuzzParseTelegramResponse -fuzztime=10s ./paidsub/ 2>&1 | tail -2'
+	@bash -o pipefail -c 'go test -run=^$$ -fuzz=FuzzTariffUnmarshal -fuzztime=10s ./paidsub/ 2>&1 | tail -2'
+	@bash -o pipefail -c 'go test -run=^$$ -fuzz=FuzzProxyGroupsYAML -fuzztime=10s ./sub/ 2>&1 | tail -2'
+	@bash -o pipefail -c 'go test -run=^$$ -fuzz=FuzzClashBasicConfigYAML -fuzztime=10s ./sub/ 2>&1 | tail -2'
+	@bash -o pipefail -c 'go test -run=^$$ -fuzz=FuzzTokenInMemoryUnmarshal -fuzztime=10s ./api/ 2>&1 | tail -2'
+	@bash -o pipefail -c 'go test -run=^$$ -fuzz=FuzzSubscriptionPathSnapshotSettings -fuzztime=10s ./api/ 2>&1 | tail -2'

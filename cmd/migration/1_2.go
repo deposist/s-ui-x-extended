@@ -44,7 +44,10 @@ func moveJsonToDb(db *gorm.DB) error {
 		return err
 	}
 
-	oldInbounds := oldConfig["inbounds"].([]interface{})
+	if err := validateLegacyMigrationConfig(oldConfig); err != nil {
+		return err
+	}
+	oldInbounds, _ := oldConfig["inbounds"].([]interface{})
 	legacyInboundRules := make([]interface{}, 0)
 	if err := db.Migrator().DropTable(&model.Inbound{}); err != nil {
 		return err
@@ -138,7 +141,7 @@ func moveJsonToDb(db *gorm.DB) error {
 	blockOutboundTags := []string{}
 	dnsOutboundTags := []string{}
 
-	oldOutbounds := oldConfig["outbounds"].([]interface{})
+	oldOutbounds, _ := oldConfig["outbounds"].([]interface{})
 	if err := db.Migrator().DropTable(&model.Outbound{}, &model.Endpoint{}); err != nil {
 		return err
 	}
@@ -236,10 +239,10 @@ func moveJsonToDb(db *gorm.DB) error {
 	}
 
 	// Remove v2rayapi and clashapi from experimental config
-	experimental := oldConfig["experimental"].(map[string]interface{})
-	delete(experimental, "v2ray_api")
-	delete(experimental, "clash_api")
-	oldConfig["experimental"] = experimental
+	if experimental, ok := oldConfig["experimental"].(map[string]interface{}); ok {
+		delete(experimental, "v2ray_api")
+		delete(experimental, "clash_api")
+	}
 
 	// Save the other configs
 	var otherConfigs json.RawMessage
@@ -252,6 +255,38 @@ func moveJsonToDb(db *gorm.DB) error {
 		Key:   "config",
 		Value: string(otherConfigs),
 	}).Error
+}
+
+func validateLegacyMigrationConfig(config map[string]interface{}) error {
+	if config == nil {
+		return errors.New("legacy config must be an object")
+	}
+	for _, key := range []string{"experimental", "route"} {
+		if value := config[key]; value != nil {
+			if _, ok := value.(map[string]interface{}); !ok {
+				return errors.New("legacy config " + key + " must be an object")
+			}
+		}
+	}
+	arrays := map[string]interface{}{"inbounds": config["inbounds"], "outbounds": config["outbounds"]}
+	if route, ok := config["route"].(map[string]interface{}); ok {
+		arrays["route.rules"] = route["rules"]
+	}
+	for key, value := range arrays {
+		if value == nil {
+			continue
+		}
+		items, ok := value.([]interface{})
+		if !ok {
+			return errors.New("legacy config " + key + " must be an array of objects")
+		}
+		for _, item := range items {
+			if object, ok := item.(map[string]interface{}); !ok || object == nil {
+				return errors.New("legacy config " + key + " must be an array of objects")
+			}
+		}
+	}
+	return nil
 }
 
 func appendLegacyInboundRuleActions(rules []interface{}, inboundTag string, inbound map[string]interface{}) []interface{} {

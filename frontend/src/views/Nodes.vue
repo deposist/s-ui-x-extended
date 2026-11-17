@@ -105,6 +105,48 @@
             persistent-hint
             variant="outlined"
           />
+          <v-row>
+            <v-col cols="12" sm="6">
+              <v-select
+                v-model="form.limiterRoles.speedShared"
+                item-title="title"
+                item-value="value"
+                :items="speedLimiterItems"
+                :label="$t('nodes.sharedBandwidthLimiter')"
+                variant="outlined"
+              />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-select
+                v-model="form.limiterRoles.speedDown"
+                item-title="title"
+                item-value="value"
+                :items="speedLimiterItems"
+                :label="$t('nodes.downloadBandwidthLimiter')"
+                variant="outlined"
+              />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-select
+                v-model="form.limiterRoles.speedUp"
+                item-title="title"
+                item-value="value"
+                :items="speedLimiterItems"
+                :label="$t('nodes.uploadBandwidthLimiter')"
+                variant="outlined"
+              />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-select
+                v-model="form.limiterRoles.connections"
+                item-title="title"
+                item-value="value"
+                :items="connectionLimiterItems"
+                :label="$t('nodes.connectionsLimiter')"
+                variant="outlined"
+              />
+            </v-col>
+          </v-row>
           <v-switch v-model="form.enabled" color="primary" :label="$t('enable')" />
         </v-card-text>
         <v-divider />
@@ -221,7 +263,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { Column } from '@/components/nexus/data/dataTableColumns'
@@ -236,6 +278,19 @@ import PageToolbar from '@/components/nexus/primitives/PageToolbar.vue'
 import { useConfirm } from '@/components/nexus/primitives/useConfirm'
 import HttpUtils from '@/plugins/httputil'
 
+interface LimiterRoles {
+  speedShared: string
+  speedDown: string
+  speedUp: string
+  connections: string
+}
+
+interface NodeLimiter {
+  tag: string
+  type: string
+  variant?: string
+}
+
 interface NodeRow {
   uuid: string
   name: string
@@ -243,7 +298,8 @@ interface NodeRow {
   enabled: boolean
   online: boolean
   inbounds: string[]
-  limiters: string[]
+  limiters: NodeLimiter[]
+  limiterRoles: LimiterRoles
   clientCount: number
 }
 
@@ -283,8 +339,18 @@ const form = reactive({
   name: '',
   linkHost: '',
   enabled: true,
+  limiters: [] as NodeLimiter[],
+  limiterRoles: { speedShared: '', speedDown: '', speedUp: '', connections: '' },
   saving: false,
 })
+
+const limiterItems = (type: string, selected: string) => [
+  { title: t('nodes.noLimiter'), value: '' },
+  ...[...new Set([...form.limiters.filter(item => item.type === type).map(item => item.tag), selected].filter(Boolean))]
+    .map(value => ({ title: value, value })),
+]
+const speedLimiterItems = computed(() => limiterItems('bandwidth-limiter', form.limiterRoles.speedShared))
+const connectionLimiterItems = computed(() => limiterItems('connection-limiter', form.limiterRoles.connections))
 
 const clientsPanel = reactive({
   visible: false,
@@ -299,15 +365,16 @@ const clientsPanel = reactive({
 // The selection is keyed by client id and survives paging, so a batch applies
 // to everything the operator ticked and not only to the visible page.
 const selection = reactive({
-  ids: new Set<number>(),
+  ids: new Map<number, boolean>(),
 })
 
 // The two bulk buttons act on what the ticked rows currently are, so ticking a
 // client already on the server means "remove" and ticking one off it means
 // "add". No separate mode switch to get wrong.
-const selected = computed(() => clientsPanel.items.filter(item => selection.ids.has(item.id)))
-const selectionAddable = computed(() => selected.value.filter(item => !item.assigned).map(item => item.id))
-const selectionRemovable = computed(() => selected.value.filter(item => item.assigned).map(item => item.id))
+const selectionAddable = computed(() => [...selection.ids].filter(([, assigned]) => !assigned).map(([id]) => id))
+const selectionRemovable = computed(() => [...selection.ids].filter(([, assigned]) => assigned).map(([id]) => id))
+let clientsRevision = 0
+onBeforeUnmount(() => { clientsRevision++ })
 
 async function loadNodes() {
   loading.value = true
@@ -325,6 +392,8 @@ function startCreate() {
   form.name = ''
   form.linkHost = ''
   form.enabled = true
+  form.limiters = nodes.value.flatMap(node => node.limiters ?? [])
+  Object.assign(form.limiterRoles, { speedShared: '', speedDown: '', speedUp: '', connections: '' })
   form.visible = true
 }
 
@@ -333,6 +402,9 @@ function startEdit(node: NodeRow) {
   form.name = node.name
   form.linkHost = node.linkHost
   form.enabled = node.enabled
+  form.limiters = node.limiters ?? []
+  Object.assign(form.limiterRoles, { speedShared: '', speedDown: '', speedUp: '', connections: '' })
+  Object.assign(form.limiterRoles, node.limiterRoles ?? {})
   form.visible = true
 }
 
@@ -343,6 +415,7 @@ async function saveNode() {
     name: form.name,
     linkHost: form.linkHost,
     enabled: String(form.enabled),
+    ...form.limiterRoles,
   }
   const msg = form.uuid
     ? await HttpUtils.patch(`api/nodes/${form.uuid}`, payload)
@@ -369,23 +442,30 @@ async function openClients(node: NodeRow) {
   clientsPanel.node = node
   clientsPanel.visible = true
   clientsPanel.query = ''
+  clientsPanel.items = []
+  clientsPanel.total = 0
   selection.ids.clear()
   await loadClients(1)
 }
 
 async function loadClients(page: number) {
   if (!clientsPanel.node) return
+  const revision = ++clientsRevision
+  const nodeUUID = clientsPanel.node.uuid
   clientsPanel.page = page
   const offset = (page - 1) * clientsPanel.limit
-  const msg = await HttpUtils.get(`api/nodes/${clientsPanel.node.uuid}/clients`, {
+  const msg = await HttpUtils.get(`api/nodes/${nodeUUID}/clients`, {
     limit: clientsPanel.limit,
     offset,
     q: clientsPanel.query,
   })
-  if (!msg.success) return
+  if (!msg.success || revision !== clientsRevision || nodeUUID !== clientsPanel.node?.uuid) return
   const body = msg.obj as { items: NodeClientRow[], total: number }
   clientsPanel.items = body?.items ?? []
   clientsPanel.total = body?.total ?? 0
+  for (const client of clientsPanel.items) {
+    if (selection.ids.has(client.id)) selection.ids.set(client.id, Boolean(client.assigned))
+  }
 }
 
 function onPageSize(size: number) {
@@ -395,7 +475,10 @@ function onPageSize(size: number) {
 
 function toggleClient(id: number) {
   if (selection.ids.has(id)) selection.ids.delete(id)
-  else selection.ids.add(id)
+  else {
+    const client = clientsPanel.items.find(item => item.id === id)
+    if (client) selection.ids.set(id, Boolean(client.assigned))
+  }
 }
 
 const pageSelectedCount = computed(
@@ -407,7 +490,7 @@ const allOnPageSelected = computed(
 
 function togglePage(value: boolean | null) {
   for (const client of clientsPanel.items) {
-    if (value) selection.ids.add(client.id)
+    if (value) selection.ids.set(client.id, Boolean(client.assigned))
     else selection.ids.delete(client.id)
   }
 }

@@ -103,19 +103,22 @@ func (c *ConnTracker) RoutedPacketConnection(ctx context.Context, conn network.P
 // ConnectionInfo stores the handle for forced close.
 func (c *ConnTracker) RoutedFlow(ctx context.Context, metadata adapter.InboundContext, matchedRule adapter.Rule, matchOutbound adapter.Outbound) tun.FlowTracker {
 	connID := c.generateConnectionID()
+	c.access.Lock()
+	defer c.access.Unlock()
+	flow := &trackedFlow{
+		tracker:   c,
+		connID:    connID,
+		epoch:     c.epoch,
+		waitGroup: c.inflight,
+	}
 	connInfo := &ConnectionInfo{
 		ID:      connID,
 		Inbound: metadata.Inbound,
 		Type:    "flow",
+		Flow:    flow,
 	}
-	epoch, waitGroup := c.trackConnection(connID, connInfo)
-	flow := &trackedFlow{
-		tracker:   c,
-		connID:    connID,
-		epoch:     epoch,
-		waitGroup: waitGroup,
-	}
-	connInfo.Flow = flow
+	c.inflight.Add()
+	c.connections[connID] = connInfo
 	return flow
 }
 
@@ -124,12 +127,23 @@ type trackedFlow struct {
 	connID      string
 	epoch       uint64
 	waitGroup   *trackerWaitGroup
+	mu          sync.Mutex
 	handle      tun.FlowHandle
+	closed      bool
 	untrackOnce sync.Once
 }
 
 func (t *trackedFlow) AttachFlow(handle tun.FlowHandle) {
+	t.mu.Lock()
+	if t.closed {
+		t.mu.Unlock()
+		if handle != nil {
+			handle.CloseFlow()
+		}
+		return
+	}
 	t.handle = handle
+	t.mu.Unlock()
 }
 
 func (t *trackedFlow) CountForward(n int) {}
@@ -142,6 +156,9 @@ func (t *trackedFlow) CloseFlow(reason tun.FlowCloseReason) {
 
 func (t *trackedFlow) doUntrack() {
 	t.untrackOnce.Do(func() {
+		t.mu.Lock()
+		t.closed = true
+		t.mu.Unlock()
 		t.tracker.untrackConnection(t.connID, t.epoch)
 		t.waitGroup.Done()
 	})
@@ -149,8 +166,12 @@ func (t *trackedFlow) doUntrack() {
 
 // Close terminates the underlying flow, used by CloseConnByInbound/Reset.
 func (t *trackedFlow) Close() error {
-	if t.handle != nil {
-		t.handle.CloseFlow()
+	t.mu.Lock()
+	t.closed = true
+	handle := t.handle
+	t.mu.Unlock()
+	if handle != nil {
+		handle.CloseFlow()
 	}
 	t.doUntrack()
 	return nil

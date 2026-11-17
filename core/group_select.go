@@ -45,8 +45,7 @@ func (c *Core) SelectGroupMember(groupTag, memberTag string) error {
 }
 
 // GroupNow returns the group's currently active member as the running core sees
-// it (selector.Now()), read through the adapter.OutboundGroup interface (Now()
-// IS on the interface; only the write path needs the concrete type). ok is
+// it (selector.Now()), read through the group's current-selection method. ok is
 // false when the tag is not a running outbound group.
 func (c *Core) GroupNow(groupTag string) (active string, ok bool) {
 	_ = c.withRuntime(func(rt coreRuntime) error {
@@ -54,8 +53,12 @@ func (c *Core) GroupNow(groupTag string) (active string, ok bool) {
 		if !found {
 			return nil
 		}
-		grp, isGroup := ob.(adapter.OutboundGroup)
+		_, isGroup := ob.(adapter.OutboundGroup)
 		if !isGroup {
+			return nil
+		}
+		grp, hasCurrentSelection := ob.(interface{ Now() string })
+		if !hasCurrentSelection {
 			return nil
 		}
 		active = grp.Now()

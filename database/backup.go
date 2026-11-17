@@ -49,9 +49,14 @@ func backupTables() []backupTable {
 		{name: "clients", model: &model.Client{}},
 		{name: "changes", model: &model.Changes{}},
 		{name: "audit_events", model: &model.AuditEvent{}},
+		{name: "nodes", model: &model.Node{}, optional: true},
+		{name: "fleet_node_ownerships", model: &model.FleetNodeOwnership{}, optional: true},
+		{name: "client_nodes", model: &model.ClientNode{}, optional: true},
+		{name: "client_limits", model: &model.ClientLimits{}, optional: true},
 		{name: "paidsub_bindings", model: &model.PaidSubBinding{}, optional: true},
 		{name: "tariffs", model: &model.PaidSubTariff{}, optional: true},
 		{name: "payment_orders", model: &model.PaidSubPaymentOrder{}, optional: true},
+		{name: "paidsub_payment_charges", model: &model.PaidSubPaymentCharge{}, optional: true},
 		{name: "paidsub_poll_cursors", model: &model.PaidSubPollCursor{}, optional: true},
 		{name: "paidsub_invoice_cancellations", model: &model.PaidSubInvoiceCancellation{}, optional: true},
 		{name: "client_endpoint_access", model: &model.ClientEndpointAccess{}, optional: true},
@@ -98,9 +103,10 @@ func PrepareDbBackup(exclude string) (backupPath string, cleanup func(), err err
 	if backupTempPathHook != nil {
 		backupTempPathHook(dbPath)
 	}
+	cleanupOnError := cleanup
 	defer func() {
 		if err != nil {
-			cleanup()
+			cleanupOnError()
 		}
 	}()
 
@@ -245,15 +251,32 @@ func copyBackupTable(sourceDB *gorm.DB, backupDB *gorm.DB, modelValue any) error
 	// exceeds the budget — the historical 1.5.x backup / xui-import bug.
 	batch := SafeSQLiteBatchSize(backupDB, modelValue)
 	return backupDB.Transaction(func(tx *gorm.DB) error {
-		slicePtr := reflect.New(reflect.SliceOf(modelType.Elem()))
-		findResult := sourceDB.Model(modelValue).
-			FindInBatches(slicePtr.Interface(), batch, func(_ *gorm.DB, _ int) error {
-				if slicePtr.Elem().Len() == 0 {
-					return nil
+		rows, err := sourceDB.Model(modelValue).Rows()
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		values := reflect.MakeSlice(reflect.SliceOf(modelType.Elem()), 0, batch)
+		for rows.Next() {
+			value := reflect.New(modelType.Elem())
+			if err := sourceDB.ScanRows(rows, value.Interface()); err != nil {
+				return err
+			}
+			values = reflect.Append(values, value.Elem())
+			if values.Len() == batch {
+				if err := tx.CreateInBatches(values.Interface(), batch).Error; err != nil {
+					return err
 				}
-				return tx.CreateInBatches(slicePtr.Elem().Interface(), batch).Error
-			})
-		return findResult.Error
+				values = reflect.MakeSlice(values.Type(), 0, batch)
+			}
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		if values.Len() > 0 {
+			return tx.CreateInBatches(values.Interface(), batch).Error
+		}
+		return nil
 	})
 }
 
@@ -627,7 +650,7 @@ func sqliteReadOnlyDSN(path string) string {
 func IsSQLiteDB(file io.Reader) (bool, error) {
 	signature := []byte("SQLite format 3\x00")
 	buf := make([]byte, len(signature))
-	_, err := file.Read(buf)
+	_, err := io.ReadFull(file, buf)
 	if err != nil {
 		return false, err
 	}

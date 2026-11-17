@@ -114,7 +114,7 @@
               <Vmess v-if="inbound.type == inTypes.VMess" direction="in" :data="inbound" :field-hints="currentFieldHints" />
               <Redirect v-if="inbound.type == inTypes.Redirect" :data="inbound" />
               <Cloudflared v-if="inbound.type == inTypes.Cloudflared" :data="inbound" :field-hints="currentFieldHints" />
-              <Transport v-if="Object.hasOwn(inbound,'transport')" :data="inbound" :field-hints="currentFieldHints" />
+              <Transport v-if="Object.hasOwn(inbound,'transport') && inbound.type != inTypes.Mieru" :data="inbound" :field-hints="currentFieldHints" />
               <Users v-if="hasUser" :clients="clients" :data="initUsers" :field-hints="currentFieldHints" />
               <InTls v-if="HasTls.includes(inbound.type)"  :inbound="inbound" :tlsConfigs="tlsConfigs" :tls_id="inbound.tls_id" :field-hints="currentFieldHints" :allowed-template-kinds="allowedTlsTemplateKinds" />
               <Multiplex v-if="MuxAvailable.includes(inbound.type)" direction="in" :data="inbound" :field-hints="currentFieldHints" />
@@ -214,6 +214,8 @@ export default {
       inbound: createInbound("direct",{ id:0, "tag": "" }),
       title: "add",
       loading: false,
+      loadGeneration: 0,
+      loadFailed: false,
       side: "s",
       inTypes: InTypes,
       // Capability lists are generated from core/capabilities/protocols.json by
@@ -247,13 +249,26 @@ export default {
       return item.props ?? {}
     },
     async loadData(id: number) {
+      const generation = ++this.loadGeneration
       this.loading = true
-      const inboundArray = await Data().loadInbounds([id])
-      this.inbound = inboundArray[0]
-      this.editHadOutJson = this.inbound.out_json != null
-      this.loading = false
+      this.loadFailed = false
+      try {
+        const inboundArray = await Data().loadInbounds([id])
+        if (generation !== this.loadGeneration) return
+        if (!inboundArray[0]) {
+          this.loadFailed = true
+          push.error({ message: this.$t('error.invalidData') })
+          return
+        }
+        this.inbound = inboundArray[0]
+        this.editHadOutJson = this.inbound.out_json != null
+      } finally {
+        if (generation === this.loadGeneration) this.loading = false
+      }
     },
     updateData(id: number) {
+      this.loadGeneration++
+      this.loadFailed = false
       if (id > 0) {
         this.loadData(id)
         this.title = "edit"
@@ -350,7 +365,7 @@ export default {
     },
     async saveChanges() {
       // Guard against double-submit (button is also :disabled while loading).
-      if (!this.$props.visible || this.loading) return
+      if (!this.$props.visible || this.loading || this.loadFailed) return
       // check duplicate tag
       const isDuplicatedTag = Data().checkTag("inbound", this.inbound.id, this.inbound.tag)
       if (isDuplicatedTag) return
@@ -372,6 +387,7 @@ export default {
   },
   computed: {
     validate() {
+      if (this.loadFailed) return false
       if (this.inbound == undefined) return false
       if (this.inbound.tag == "") return false
       if (this.inbound.listen_port > 65535 || this.inbound.listen_port < 1) return false

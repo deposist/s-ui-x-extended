@@ -624,7 +624,7 @@ const defaultValues: Record<OutType, Outbound> = {
 }
 
 export function createOutbound<T extends Outbound>(type: string,json?: Partial<T>): Outbound {
-  const defaults = type === OutTypes.Subscription ? structuredClone(defaultValues[type]) : defaultValues[type]
+  const defaults = structuredClone(defaultValues[type] ?? {})
   const defaultObject: Outbound = { ...defaults, ...(json || {}) }
   return defaultObject
 }

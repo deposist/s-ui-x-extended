@@ -105,9 +105,7 @@ func applyProtocolConfig(config map[string]map[string]any, ref ClientRef) {
 		if ref.UUID != "" {
 			config["vless"]["uuid"] = ref.UUID
 		}
-		if ref.Flow != "" {
-			config["vless"]["flow"] = ref.Flow
-		}
+		config["vless"]["flow"] = ref.Flow
 	case "vmess":
 		if ref.UUID != "" {
 			config["vmess"]["uuid"] = ref.UUID

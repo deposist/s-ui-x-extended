@@ -199,7 +199,7 @@
 import { i18n, locale } from '@/locales'
 import HttpUtils from '@/plugins/httputil'
 import DatePicker from 'vue3-persian-datetime-picker'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Column } from '@/components/nexus/data/dataTableColumns'
 import NexusDataTable from '@/components/nexus/data/NexusDataTable.vue'
 import EmptyState from '@/components/nexus/primitives/EmptyState.vue'
@@ -232,6 +232,8 @@ const limit = ref(50)
 const currentCursor = ref(0)
 const nextCursor = ref(0)
 const cursorStack = ref<number[]>([])
+let loadRevision = 0
+onBeforeUnmount(() => { loadRevision++ })
 
 const severityItems = [
   { title: i18n.global.t('all'), value: '' },
@@ -262,6 +264,7 @@ onMounted(() => {
 })
 
 const loadData = async () => {
+  const revision = ++loadRevision
   loading.value = true
   const query: Record<string, string | number> = { limit: limit.value }
   if (currentCursor.value > 0) query.cursor = currentCursor.value
@@ -270,6 +273,7 @@ const loadData = async () => {
   if (sinceFilter.value > 0) query.since = sinceFilter.value
   if (untilFilter.value > 0) query.until = untilFilter.value
   const msg = await HttpUtils.get('api/security/audit', query)
+  if (revision !== loadRevision) return
   if (msg.success) {
     events.value = msg.obj?.events ?? []
     nextCursor.value = Number(msg.obj?.nextCursor ?? 0)

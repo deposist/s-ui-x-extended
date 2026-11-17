@@ -50,7 +50,7 @@ func (c *AutoHttpsConn) readRequest() bool {
 			}
 		}
 	}
-	location := (&url.URL{Scheme: "https", Host: host, Path: request.URL.Path, RawQuery: request.URL.RawQuery}).String()
+	location := (&url.URL{Scheme: "https", Host: host, Path: request.URL.Path, RawPath: request.URL.RawPath, RawQuery: request.URL.RawQuery}).String()
 	resp.Header.Set("Location", location)
 	_ = resp.Write(c.Conn)
 	_ = c.Close()

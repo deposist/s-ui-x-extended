@@ -12,6 +12,12 @@ describe('ip history masking', () => {
     expect(maskRawIP('2001:db8:abcd:12::1')).toBe('2001:db8:abcd:12::/64')
   })
 
+  it('expands compressed IPv6 zeros before hiding the interface identifier', () => {
+    expect(maskRawIP('2001:db8::dead:beef')).toBe('2001:db8:0:0::/64')
+    expect(maskRawIP('2001:db8::1:2:3:4:5')).toBe('2001:db8:0:1::/64')
+    expect(maskRawIP('::ffff:192.0.2.42')).toBe('0:0:0:0::/64')
+  })
+
   it('reveals raw values only when explicitly requested', () => {
     expect(displayIP('198.51.100.42', false)).toBe('198.51.100.x')
     expect(displayIP('198.51.100.42', true)).toBe('198.51.100.42')

@@ -103,6 +103,7 @@ func TestCSRFCookieSecureForcedByEnv(t *testing.T) {
 	cookie := findCookieByName(csrf.Result().Cookies())
 	if cookie == nil {
 		t.Fatal("csrf did not set s-ui cookie")
+		return
 	}
 	if !cookie.Secure {
 		t.Fatal("csrf session cookie must be Secure when SUI_FORCE_COOKIE_SECURE=true")

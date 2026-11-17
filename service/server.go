@@ -329,23 +329,23 @@ func containsControlRune(value string) bool {
 	return false
 }
 
-func (s *ServerService) GenKeypair(keyType string, options string) []string {
+func (s *ServerService) GenKeypair(keyType string, options string) ([]string, error) {
 	if len(keyType) == 0 {
-		return []string{"No keypair to generate"}
+		return []string{"No keypair to generate"}, nil
 	}
 
 	switch keyType {
 	case "ech":
-		return s.generateECHKeyPair(options)
+		return s.generateECHKeyPair(options), nil
 	case "tls":
-		return s.generateTLSKeyPair(options)
+		return s.generateTLSKeyPair(options), nil
 	case "reality":
-		return s.generateRealityKeyPair()
+		return s.generateRealityKeyPair(), nil
 	case "wireguard":
 		return s.generateWireGuardKey(options)
 	}
 
-	return []string{"Failed to generate keypair"}
+	return []string{"Failed to generate keypair"}, nil
 }
 
 func (s *ServerService) generateECHKeyPair(serverName string) []string {
@@ -373,16 +373,19 @@ func (s *ServerService) generateRealityKeyPair() []string {
 	return []string{"PrivateKey: " + base64.RawURLEncoding.EncodeToString(privateKey[:]), "PublicKey: " + base64.RawURLEncoding.EncodeToString(publicKey[:])}
 }
 
-func (s *ServerService) generateWireGuardKey(pk string) []string {
+func (s *ServerService) generateWireGuardKey(pk string) ([]string, error) {
 	if len(pk) > 0 {
-		key, _ := wgtypes.ParseKey(pk)
-		return []string{key.PublicKey().String()}
+		key, err := wgtypes.ParseKey(pk)
+		if err != nil {
+			return nil, common.NewError("invalid WireGuard private key")
+		}
+		return []string{key.PublicKey().String()}, nil
 	}
 	wgKeys, err := wgtypes.GeneratePrivateKey()
 	if err != nil {
-		return []string{"Failed to generate wireguard keypair: ", err.Error()}
+		return nil, common.NewError("Failed to generate wireguard keypair: ", err.Error())
 	}
-	return []string{"PrivateKey: " + wgKeys.String(), "PublicKey: " + wgKeys.PublicKey().String()}
+	return []string{"PrivateKey: " + wgKeys.String(), "PublicKey: " + wgKeys.PublicKey().String()}, nil
 }
 
 func (s *ServerService) GetDatabaseInfo() map[string]int64 {

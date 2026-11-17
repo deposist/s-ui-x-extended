@@ -416,7 +416,7 @@ import Data from '@/store/modules/data'
 import Dial from '@/components/Dial.vue'
 import SettingInfo from '@/components/SettingInfo.vue'
 import ConfigCollection from '@/components/ConfigCollection.vue'
-import { computed, ref, onBeforeMount } from 'vue'
+import { computed, ref, onBeforeMount, watch } from 'vue'
 import { i18n } from '@/locales'
 import { Config, Ntp } from '@/types/config'
 import { FindDiff } from '@/plugins/utils'
@@ -427,7 +427,12 @@ const loading = ref(false)
 // Edit a LOCAL clone of the store config. A background reload (data.ts setNewData
 // replaces Data().config wholesale, driven by the 10s poll / WS events) must not wipe
 // unsaved edits, so the form binds to this clone instead of the live store object.
-const cloneStoreConfig = (): Config => JSON.parse(JSON.stringify(Data().config ?? {}))
+const cloneStoreConfig = (): Config => {
+  const config = JSON.parse(JSON.stringify(Data().config ?? {}))
+  config.log ??= {}
+  config.experimental ??= {}
+  return config
+}
 const appConfig = ref<Config>(cloneStoreConfig())
 
 const resyncFromStore = () => {
@@ -435,13 +440,14 @@ const resyncFromStore = () => {
   oldConfig.value = cloneStoreConfig()
 }
 
-onBeforeMount(async () => {
+onBeforeMount(() => {
   loading.value = true
-  while (Data().lastLoad == 0) {
-    await new Promise(resolve => setTimeout(resolve, 100))
+  const finishLoading = () => {
+    resyncFromStore()
+    loading.value = false
   }
-  resyncFromStore()
-  loading.value = false
+  if (Data().lastLoad == 0) watch(() => Data().lastLoad, finishLoading, { once: true })
+  else finishLoading()
 })
 
 const stateChange = computed(() => {
@@ -450,9 +456,10 @@ const stateChange = computed(() => {
 
 const saveConfig = async () => {
   loading.value = true
-  const success = await Data().save("config", "set", appConfig.value)
-  if (success) {
-    resyncFromStore()
+  try {
+    const success = await Data().save("config", "set", appConfig.value)
+    if (success) resyncFromStore()
+  } finally {
     loading.value = false
   }
 }
@@ -608,7 +615,7 @@ const origin = computed({
   get() { return appConfig.value.experimental.clash_api?.access_control_allow_origin &&
     appConfig.value.experimental.clash_api.access_control_allow_origin.length>0 ? appConfig.value.experimental.clash_api.access_control_allow_origin.join(',') : '' },
   set(v:string) {
-    if (appConfig.value.experimental.clash_api?.access_control_allow_origin)
+    if (appConfig.value.experimental.clash_api)
       appConfig.value.experimental.clash_api.access_control_allow_origin = v.length> 0 ? v.split(',') : undefined
     }
 })

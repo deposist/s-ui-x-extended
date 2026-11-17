@@ -20,8 +20,16 @@ export const maskRawIP = (ip: string): string => {
   }
 
   if (ip.includes(':')) {
-    const groups = ip.split(':').filter(Boolean)
-    if (groups.length === 0) return 'masked'
+    const parts = ip.split('::')
+    if (parts.length > 2) return 'masked'
+    let groups = parts[0].split(':').filter(Boolean)
+    if (parts.length === 2) {
+      const suffix = parts[1].split(':').filter(Boolean)
+      const omitted = 8 - groups.length - suffix.length - (suffix.at(-1)?.includes('.') ? 1 : 0)
+      if (omitted < 1) return 'masked'
+      groups = [...groups, ...new Array(omitted).fill('0'), ...suffix]
+    }
+    if (groups.length < 4) return 'masked'
     return `${groups.slice(0, 4).join(':')}::/64`
   }
 

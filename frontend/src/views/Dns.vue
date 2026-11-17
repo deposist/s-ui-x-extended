@@ -288,7 +288,7 @@
 
 <script lang="ts" setup>
 import Data from '@/store/modules/data'
-import { computed, ref, onBeforeMount } from 'vue'
+import { computed, ref, onBeforeMount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DnsVue from '@/layouts/modals/Dns.vue'
 import DnsRuleVue from '@/layouts/modals/DnsRule.vue'
@@ -338,13 +338,14 @@ const resyncFromStore = () => {
   oldConfig.value = JSON.parse(JSON.stringify(c))
 }
 
-onBeforeMount( async () => {
+onBeforeMount(() => {
   loading.value = true
-  while (Data().lastLoad == 0) {
-    await new Promise(resolve => setTimeout(resolve, 100))
+  const finishLoading = () => {
+    resyncFromStore()
+    loading.value = false
   }
-  resyncFromStore()
-  loading.value = false
+  if (Data().lastLoad == 0) watch(() => Data().lastLoad, finishLoading, { once: true })
+  else finishLoading()
 })
 
 const tsTags = computed((): string[] => {

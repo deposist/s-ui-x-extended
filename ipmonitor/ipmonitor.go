@@ -545,6 +545,9 @@ func (s *PendingSnapshot) FlushTo(tx *gorm.DB) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.terminal || s.flushed {
+		return errors.New("ipmonitor: stale or terminal pending snapshot")
+	}
 	lifecycleGate.RLock()
 	keepLifecycle := false
 	defer func() {
@@ -839,6 +842,7 @@ func loadCacheEntryContext(ctx context.Context, clientName string, now time.Time
 	if db == nil {
 		return allowCacheEntry{}, false
 	}
+	generation := lifecycleTokenForClient(clientName).generation
 	ctx, cancel := boundedDatabaseContext(ctx)
 	defer cancel()
 	db = db.WithContext(ctx)
@@ -866,7 +870,7 @@ func loadCacheEntryContext(ctx context.Context, clientName string, now time.Time
 	for _, row := range rows {
 		ipHash := row.IPHash
 		if ipHash == "" {
-			ipHash = hashLegacyIPValue(row.IP)
+			ipHash = hashLegacyIPValueContext(ctx, row.IP, generation)
 		}
 		if ipHash != "" {
 			entry.ips[ipHash] = struct{}{}
@@ -924,7 +928,7 @@ func loadPolicyEntriesContext(ctx context.Context, db *gorm.DB, now time.Time, g
 			ipHash = row.IPHash.String
 		}
 		if ipHash == "" && row.IP.Valid {
-			ipHash = hashLegacyIPValue(row.IP.String)
+			ipHash = hashLegacyIPValueContext(ctx, row.IP.String, generation)
 		}
 		if ipHash != "" {
 			entry.ips[ipHash] = struct{}{}
@@ -1178,6 +1182,17 @@ func hashLegacyIPValue(ip string) string {
 		return ip
 	}
 	ipHash, err := hashIP(ip)
+	if err != nil {
+		return ""
+	}
+	return ipHash
+}
+
+func hashLegacyIPValueContext(ctx context.Context, ip string, generation uint64) string {
+	if looksLikeSHA256Hex(ip) {
+		return ip
+	}
+	ipHash, err := hashIPContext(ctx, ip, generation)
 	if err != nil {
 		return ""
 	}

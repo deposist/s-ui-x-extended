@@ -12,7 +12,8 @@
 
 set -Eeuo pipefail
 
-readonly ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+readonly ROOT_DIR
 readonly COMPOSE_FILE="$ROOT_DIR/docker-compose.yml"
 readonly NFTABLES_FILE="$ROOT_DIR/docker-compose.nftables.yml"
 readonly DOCKERFILE="$ROOT_DIR/Dockerfile"
@@ -265,6 +266,6 @@ if [[ $FOCUSED_MODE == 1 ]]; then
     ((smoked > 0)) || die "no provider platform was smoke tested"
     printf '==> Focused local run completed %d provider-platform readiness smoke(s)\n' "$smoked"
 else
-    [[ $smoked == ${#provider_platforms[@]} ]] || die "gating run did not smoke every published provider platform"
+    [[ $smoked == "${#provider_platforms[@]}" ]] || die "gating run did not smoke every published provider platform"
     printf '==> Gating run completed both provider-platform readiness smokes without added capabilities\n'
 fi

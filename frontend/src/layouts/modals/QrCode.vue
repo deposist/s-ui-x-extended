@@ -158,14 +158,19 @@ export default {
       tab: "singbox",
       client: <any>{},
       loading: false,
+      loadGeneration: 0,
     }
   },
   methods: {
     async load() {
+      const generation = ++this.loadGeneration
       this.loading = true
-      const newData = await Data().loadClients(this.$props.id)
-      this.client = newData
-      this.loading = false
+      try {
+        const newData = await Data().loadClients(this.$props.id)
+        if (generation === this.loadGeneration) this.client = newData
+      } finally {
+        if (generation === this.loadGeneration) this.loading = false
+      }
     },
     async testUrl(url: string) {
       try {
@@ -287,6 +292,8 @@ export default {
   },
   watch: {
     visible(v) {
+      this.loadGeneration++
+      this.loading = false
       if (v) {
         this.tab = "singbox"
         this.load()

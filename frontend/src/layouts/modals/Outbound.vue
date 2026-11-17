@@ -105,7 +105,7 @@
               <TrafficLimiter v-if="outbound.type == outTypes.TrafficLimiter" :data="outbound" :tags="tags" />
               <RateLimiter v-if="outbound.type == outTypes.RateLimiter" :data="outbound" :tags="tags" />
 
-              <Transport v-if="Object.hasOwn(outbound,'transport')" :data="outbound" :field-hints="currentFieldHints" />
+              <Transport v-if="Object.hasOwn(outbound,'transport') && outbound.type != outTypes.Mieru" :data="outbound" :field-hints="currentFieldHints" />
               <OutTLS v-if="Object.hasOwn(outbound,'tls') && ![outTypes.MASQUE].includes(outbound.type)" :outbound="outbound" :field-hints="currentFieldHints" />
               <Multiplex v-if="Object.hasOwn(outbound,'multiplex') && outbound.type != outTypes.TrustTunnel" direction="out" :data="outbound" :field-hints="currentFieldHints" />
               <Dial v-if="!NoDial.includes(outbound.type)" :dial="outbound" :field-hints="currentFieldHints" />

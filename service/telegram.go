@@ -343,7 +343,7 @@ func (s *TelegramService) getTelegramHTTPClient() (*http.Client, error) {
 	// is not cached.
 	if mode, _ := s.getString("telegramTransportMode"); mode == "outbound" {
 		tag, _ := s.getString("telegramOutboundTag")
-		return newCoreOutboundHTTPClient(tag, 10*time.Second)
+		return newCoreOutboundHTTPClientWithRuntime(s.runtime(), tag, 10*time.Second)
 	}
 
 	cfg, err := s.telegramProxyConfig()

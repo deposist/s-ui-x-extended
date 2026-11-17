@@ -151,7 +151,7 @@ export default {
       const listenHost = 'listen' in this.srv ? this.srv.listen : undefined
       const listenPortValue = 'listen_port' in this.srv ? this.srv.listen_port : undefined
       const keepListen = listenHost != undefined && this.srv.type != SrvTypes.USBIPServer
-      const prevConfig = this.srv.type == SrvTypes.OOMKiller
+      const prevConfig = this.NoListen.includes(this.srv.type)
         ? { id: this.srv.id, tag: tag }
         : { id: this.srv.id, tag: tag, ...(keepListen ? { listen: listenHost, listen_port: listenPortValue } : {}) }
       this.srv = createSrv(this.srv.type, prevConfig)

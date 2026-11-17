@@ -34,6 +34,7 @@ func TestSecuritySessionCookieFlagsAndMaxAge(t *testing.T) {
 	cookie := findCookieByName(login.Result().Cookies())
 	if cookie == nil {
 		t.Fatal("login did not set s-ui cookie")
+		return
 	}
 	if !cookie.Secure {
 		t.Fatal("session cookie must be Secure when forced")
@@ -117,6 +118,7 @@ func TestSecuritySessionStrictSameSite(t *testing.T) {
 	cookie := findCookieByName(login.Result().Cookies())
 	if cookie == nil {
 		t.Fatal("login did not set s-ui cookie")
+		return
 	}
 	if cookie.SameSite != http.SameSiteStrictMode {
 		t.Fatalf("session cookie SameSite=%v, want Strict", cookie.SameSite)

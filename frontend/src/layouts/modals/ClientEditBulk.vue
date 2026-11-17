@@ -133,7 +133,7 @@ export default {
       if (!this.$props.visible || this.loading) return
       this.loading = true
       try {
-      const targetClients = this.getTargetClients()
+      const targetClients: Client[] = JSON.parse(JSON.stringify(this.getTargetClients()))
       switch (this.actionMode) {
         case 'change_limits':
           targetClients.forEach((c: Client) => {

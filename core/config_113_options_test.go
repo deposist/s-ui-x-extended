@@ -121,8 +121,7 @@ func TestSingBox113RepresentativeConfigUnmarshals(t *testing.T) {
       "memory_limit": "512 MB",
       "safety_margin": "64 MB",
       "min_interval": "1s",
-      "max_interval": "5s",
-      "checks_before_limit": 2
+      "max_interval": "5s"
     },
     {
       "type": "ocm",

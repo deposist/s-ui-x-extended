@@ -497,7 +497,7 @@ function applyCreateSecrets<T extends Inbound>(type: InType, inbound: Inbound, j
 }
 
 export function createInbound<T extends Inbound>(type: InType,json?: Partial<T>): Inbound {
-  const defaultObject: Inbound = { ...defaultValues[type] ?? {}, ...(json ?? {}) }
+  const defaultObject: Inbound = { ...structuredClone(defaultValues[type] ?? {}), ...(json ?? {}) }
   applyCreateSecrets(type, defaultObject, json)
   return defaultObject
 }

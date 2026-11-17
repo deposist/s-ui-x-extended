@@ -90,10 +90,11 @@
 <script lang="ts">
 import { mieruTransport, mieruMultiplexing } from '@/types/recommended'
 import InboundAdvanced from '@/components/protocols/InboundAdvanced.vue'
+import FieldHint from '@/components/FieldHint.vue'
 
 export default {
   props: ['direction', 'data', 'fieldHints'],
-  components: {InboundAdvanced},
+  components: {InboundAdvanced, FieldHint},
   data() {
     return {
       mieruTransport,

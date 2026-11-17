@@ -113,6 +113,27 @@ func TestConfigSaveOutboundsEditAppliesToRunningCoreRealReload(t *testing.T) {
 	}
 }
 
+func TestRestartOutboundsAssemblesNativeFailover(t *testing.T) {
+	initSettingTestDB(t)
+	instance := startTestCore(t)
+	db := database.GetDB()
+	member := model.Outbound{Type: "direct", Tag: "nested-direct", Options: json.RawMessage(`{}`)}
+	if err := db.Create(&member).Error; err != nil {
+		t.Fatal(err)
+	}
+	group := model.Outbound{Type: CoreFailoverType, Tag: "native-reload", Options: json.RawMessage(`{"outbounds":["nested-direct"],"strategy":"sequential","delay":"1s"}`)}
+	if err := db.Create(&group).Error; err != nil {
+		t.Fatal(err)
+	}
+	service := &OutboundService{Runtime: NewRuntime(instance)}
+	if err := service.RestartOutbounds(db, []uint{group.Id}); err != nil {
+		t.Fatalf("native failover hot reload: %v", err)
+	}
+	if err := instance.RemoveOutbound(group.Tag); err != nil {
+		t.Fatalf("native failover was not registered after hot reload: %v", err)
+	}
+}
+
 // A selector holds member adapter pointers from Start(), so editing a member
 // must escalate to a full core restart.
 func TestConfigSaveOutboundsEditSelectorMemberRestartsCore(t *testing.T) {

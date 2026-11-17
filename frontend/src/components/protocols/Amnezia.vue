@@ -388,12 +388,13 @@ export default {
     // the button degrades to the junk randomization.
     async applyHardened() {
       if (this.hardening || !this.data.amnezia) return
+      const amnezia = this.amnezia as Record<string, unknown>
+      const full = this.full
       this.hardening = true
       try {
         const msg = await HttpUtils.get('api/awg/obfuscation/random', { preset: 'hardened' })
-        if (!msg.success || !msg.obj) return
+        if (!msg.success || !msg.obj || this.amnezia !== amnezia || this.full !== full) return
         const obj = msg.obj
-        const amnezia = this.amnezia as Record<string, unknown>
         if (obj.jc !== undefined) {
           amnezia.jc = obj.jc
           amnezia.jmin = obj.jmin
@@ -425,11 +426,13 @@ export default {
     // headers only (never for WARP, whose schema has no headers).
     async fetchRandom(includeJunk: boolean) {
       if (this.randomizing) return
+      const amnezia = this.data.amnezia
+      const full = this.full
       this.randomizing = true
       try {
         const query = includeJunk ? { preset: 'balanced' } : undefined
         const msg = await HttpUtils.get('api/awg/obfuscation/random', query)
-        if (msg.success && msg.obj && this.data.amnezia) {
+        if (msg.success && msg.obj && amnezia && this.data.amnezia === amnezia && this.full === full) {
           if (this.full) {
             this.amnezia.h1 = msg.obj.h1
             this.amnezia.h2 = msg.obj.h2

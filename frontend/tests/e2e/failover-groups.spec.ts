@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { login } from './helpers'
+import { login, pickType } from './helpers'
 
 // Verifies the Failover outbound editor renders in the NEXUS drawer (the default
 // UI). Before the fix it rendered nothing here and left server/port visible.
@@ -16,8 +16,7 @@ test('nexus outbounds: failover editor renders in the nexus drawer', async ({ pa
   await expect(drawer).toContainText('Add Outbound')
 
   // Open the Type select and pick Failover.
-  await drawer.locator('.v-select').filter({ hasText: 'Type' }).first().click()
-  await page.getByRole('option', { name: 'Failover', exact: true }).click()
+  await pickType(page, drawer, 'Failover')
 
   // The dedicated Failover editor must now render (this is what was missing in
   // the nexus drawer before the fix).

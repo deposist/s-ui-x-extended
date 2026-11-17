@@ -57,6 +57,7 @@ export default {
   data() {
     return {
       loading: false,
+      loadGeneration: 0,
       lines: [],
       logLevel: 'info',
       logLevels: [
@@ -70,19 +71,22 @@ export default {
   },
   methods: {
     async loadData() {
+      const generation = ++this.loadGeneration
       this.loading = true
       try {
         const data = await HttpUtils.get('api/logs',{ c: this.logCount, l: this.logLevel })
-        if (data.success) {
+        if (generation === this.loadGeneration && data.success) {
           this.lines = data.obj?? []
         }
       } finally {
-        this.loading = false
+        if (generation === this.loadGeneration) this.loading = false
       }
     }
   },
   watch: {
     visible(v) {
+      this.loadGeneration++
+      this.loading = false
       this.lines = []
       this.logLevel = 'info'
       this.logCount = 10

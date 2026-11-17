@@ -10,7 +10,7 @@ func TestInvalidateClientSubscriptionOutputCacheIsScoped(t *testing.T) {
 	t.Cleanup(ClearSubscriptionOutputCache)
 	now := time.Now()
 	for _, key := range []string{"json:default:client-a", "clash:client-a", "base:client-a", "json:default:client-b"} {
-		subscriptionCacheSet(key, key, nil, now)
+		subscriptionCacheSet(key, key, nil, now, subscriptionCacheRevision())
 	}
 	InvalidateClientSubscriptionOutputCache([]string{"client-a"})
 	for _, key := range []string{"json:default:client-a", "clash:client-a", "base:client-a"} {
