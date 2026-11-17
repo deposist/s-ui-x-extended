@@ -7,7 +7,7 @@ COPY frontend/ ./
 # package-lock.json — matches CI/release and fails closed on lockfile drift.
 RUN npm ci && npm run build
 
-FROM golang:1.26.9-alpine@sha256:3082400e369fa24d5fc60bca20edab3f6d604e0c5a690ec66b295eff4dd87ade AS backend-builder
+FROM golang:1.26.11-alpine@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab AS backend-builder
 WORKDIR /app
 ARG TARGETARCH
 ARG TARGETVARIANT
