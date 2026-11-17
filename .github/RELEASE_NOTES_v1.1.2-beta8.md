@@ -9,6 +9,10 @@ This beta adds fleet node management and moves the core to sing-box 1.14.4. Stab
 - Each client can have a shared or separate download/upload speed limit and a connection limit. Zero means unlimited.
 - Updated sing-box-extended to `v1.14.4-extended-2.7.10`, up from `v1.14.3-extended-2.7.8` in beta7. Release builds use the deposist forks of sing-box, sing, tailscale and sing-openvpn so the extended changes reach the published packages.
 
+## Security
+
+- Updated `go-chi/chi` to `v5.4.0` and `go-jose` to `v4.1.6`. Docker builds also upgrade the Alpine `musl-utils` and `zlib` packages to patched versions.
+
 ## Reliability and data
 
 - Network reset closes tracked connections. Flow trackers release their state once when a flow closes or resets, so old flows cannot keep changing counters after a core restart.
@@ -61,6 +65,10 @@ Existing settings, clients and outbounds are retained. To roll back, reinstall t
 - Подписка клиента включает подключения к назначенным серверам. Если адрес сервера для клиентов не задан, его подключения в подписку не попадают.
 - Для каждого клиента задаются общий или раздельный лимит скорости на приём и отдачу, а также лимит соединений. Нулевое значение снимает ограничение.
 - Ядро обновлено до sing-box-extended `v1.14.4-extended-2.7.10`; в beta7 стояла версия `v1.14.3-extended-2.7.8`. Релизные сборки используют форки `deposist/sing-box-extended`, `deposist/sing`, `deposist/tailscale` и `deposist/sing-openvpn`, чтобы доработки extended попали в готовые пакеты.
+
+### Безопасность
+
+- Обновлены `go-chi/chi` до `v5.4.0` и `go-jose` до `v4.1.6`. В Docker-образе пакеты Alpine `musl-utils` и `zlib` обновляются до исправленных версий.
 
 ### Стабильность и данные
 

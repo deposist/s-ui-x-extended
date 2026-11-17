@@ -10,6 +10,7 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 - Added the Nodes section in beta for remote servers, their connection state, reported inbounds and client assignments. Subscriptions include links for assigned nodes.
 - Each client can have a shared or separate download/upload speed limit and a connection limit.
 - Updated the core to sing-box-extended `v1.14.4-extended-2.7.10`. Release builds use the deposist dependency forks to retain the extended changes.
+- Updated `go-chi/chi` to `v5.4.0`, `go-jose` to `v4.1.6`, and Alpine `musl-utils` and `zlib` in Docker images to patched versions.
 - Network reset closes tracked connections. Flow trackers release their state once, and deleting a user removes the user's traffic counter.
 - Panel update recovery resumes interrupted cleanup and rollback with binary hash checks.
 - Backups include nodes, client assignments, limits and paid-subscription charge records. Composite-key records are copied in full.
