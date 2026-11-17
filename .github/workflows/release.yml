@@ -263,6 +263,7 @@ jobs:
             echo "GOOS=linux"
             echo "GOARCH=${{ matrix.arch }}"
             if [ -n "${{ matrix.goarm }}" ]; then echo "GOARM=${{ matrix.goarm }}"; fi
+            if [ "${{ matrix.naive }}" = "true" ]; then echo 'CGO_LDFLAGS_ALLOW=-l:libcronet\.a'; fi
           } >> "$GITHUB_ENV"
 
       - name: Set up Bootlin musl (non-naive platforms)

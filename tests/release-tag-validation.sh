@@ -94,6 +94,7 @@ grep -q 'BOOTLIN_S390X_SHA256: 23f536ff2bf1a9d3b93210465471996bc7c918fbb5702a277
 grep -q 'DEBIAN_ARCHIVE_KEYRING_URL: https://deb.debian.org/debian/pool/main/d/debian-archive-keyring/debian-archive-keyring_2023.3%2Bdeb12u2_all.deb' "$release_workflow"
 grep -q 'DEBIAN_ARCHIVE_KEYRING_SHA256: f699e2f88dca05212f2a452b58475f2993cb6993dfbafb1d0205a3291eb8b4b8' "$release_workflow"
 grep -q 'Install pinned Debian keyring (cronet sysroot)' "$release_workflow"
+grep -Fq "echo 'CGO_LDFLAGS_ALLOW=-l:libcronet\.a'" "$release_workflow"
 # The grep needles intentionally contain shell variables.
 # shellcheck disable=SC2016
 grep -Fq 'echo "$DEBIAN_ARCHIVE_KEYRING_SHA256  $package" | sha256sum --check --strict' "$release_workflow"
