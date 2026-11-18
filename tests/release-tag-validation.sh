@@ -67,6 +67,13 @@ release_workflow="$root_dir/.github/workflows/release.yml"
 windows_workflow="$root_dir/.github/workflows/windows.yml"
 docker_workflow="$root_dir/.github/workflows/docker.yml"
 ci_workflow="$root_dir/.github/workflows/ci.yml"
+release_smoke_workflow="$root_dir/.github/workflows/release-smoke.yml"
+grep -q "available\['endpoint:' + row\['type'\]\]" "$release_smoke_workflow"
+grep -q "endpoint:openvpn-client.*endpoint:openvpn-server" "$release_smoke_workflow"
+if grep -q 'outbound:openvpn' "$release_smoke_workflow"; then
+    echo 'release smoke still expects the removed openvpn outbound' >&2
+    exit 1
+fi
 # The grep needle intentionally contains a GitHub expression.
 # shellcheck disable=SC2016
 grep -q 'value: ${{ steps.verify.outputs.prerelease }}' "$checkout_action"

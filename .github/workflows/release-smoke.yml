@@ -94,9 +94,12 @@ jobs:
               if row.get('type') in ('sudoku', 'trusttunnel'):
                   available['inbound:' + row['type']] = row.get('available')
           for row in data.get('outbounds', []):
-              if row.get('type') in ('sudoku', 'trusttunnel', 'masque', 'openvpn'):
+              if row.get('type') in ('sudoku', 'trusttunnel', 'masque'):
                   available['outbound:' + row['type']] = row.get('available')
-          for key in ['inbound:sudoku', 'inbound:trusttunnel', 'outbound:sudoku', 'outbound:trusttunnel', 'outbound:masque', 'outbound:openvpn']:
+          for row in data.get('endpoints', []):
+              if row.get('type') in ('openvpn-client', 'openvpn-server'):
+                  available['endpoint:' + row['type']] = row.get('available')
+          for key in ['inbound:sudoku', 'inbound:trusttunnel', 'outbound:sudoku', 'outbound:trusttunnel', 'outbound:masque', 'endpoint:openvpn-client', 'endpoint:openvpn-server']:
               if available.get(key) is not True:
                   raise SystemExit(f'{key} is not available')
           print('linux artifact capabilities smoke ok')
