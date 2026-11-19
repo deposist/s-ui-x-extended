@@ -5,12 +5,26 @@ import (
 	"time"
 )
 
+func TestSubscriptionOutputCacheHonorsPeerAccessDeadline(t *testing.T) {
+	ClearSubscriptionOutputCache()
+	t.Cleanup(ClearSubscriptionOutputCache)
+	now := time.Now()
+	deadline := now.Add(time.Second)
+	subscriptionCacheSet("peer", "link", nil, now, subscriptionCacheRevision(), deadline)
+	if _, _, ok := subscriptionCacheGet("peer", deadline.Add(-time.Nanosecond)); !ok {
+		t.Fatal("cache expired before the peer lease")
+	}
+	if _, _, ok := subscriptionCacheGet("peer", deadline); ok {
+		t.Fatal("cache retained a link after the peer lease expired")
+	}
+}
+
 func TestInvalidateClientSubscriptionOutputCacheIsScoped(t *testing.T) {
 	ClearSubscriptionOutputCache()
 	t.Cleanup(ClearSubscriptionOutputCache)
 	now := time.Now()
 	for _, key := range []string{"json:default:client-a", "clash:client-a", "base:client-a", "json:default:client-b"} {
-		subscriptionCacheSet(key, key, nil, now, subscriptionCacheRevision())
+		subscriptionCacheSet(key, key, nil, now, subscriptionCacheRevision(), time.Time{})
 	}
 	InvalidateClientSubscriptionOutputCache([]string{"client-a"})
 	for _, key := range []string{"json:default:client-a", "clash:client-a", "base:client-a"} {

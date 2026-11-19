@@ -13,6 +13,11 @@ import (
 )
 
 func RegisterNodePeerRoutes(group *gin.RouterGroup) {
+	RegisterNodePeerRoutesWithRuntime(group, nil)
+}
+
+func RegisterNodePeerRoutesWithRuntime(group *gin.RouterGroup, runtime *service.Runtime) {
+	nodes := &service.NodeService{Runtime: runtime}
 	group.Use(func(c *gin.Context) {
 		c.Header("Cache-Control", "no-store")
 		if !RequestIsHTTPS(c) {
@@ -37,7 +42,7 @@ func RegisterNodePeerRoutes(group *gin.RouterGroup) {
 			c.Status(http.StatusBadRequest)
 			return
 		}
-		credential, err := (&service.NodeService{}).RedeemInvite(input.Code, input.Name)
+		credential, err := nodes.RedeemInvite(input.Code, input.Name)
 		if errors.Is(err, service.ErrInvalidNodeInvite) {
 			c.Status(http.StatusUnauthorized)
 			return
@@ -62,7 +67,12 @@ func RegisterNodePeerRoutes(group *gin.RouterGroup) {
 			c.Status(http.StatusUnauthorized)
 			return
 		}
-		output, err := (&service.NodeService{}).AcceptPeerSync(c.GetHeader("X-Node-ID"), token, *input)
+		input.LeaseReceipt = c.GetHeader(service.PeerLeaseHeader)
+		input.LeaseCapable = input.LeaseReceipt != ""
+		input.ProbeReceipt = c.GetHeader(service.PeerProbeHeader)
+		input.ProbeCapable = input.ProbeReceipt != ""
+		input.ApplyFailed = c.GetHeader(service.PeerApplyHeader) == "1"
+		output, err := nodes.AcceptPeerSync(c.GetHeader("X-Node-ID"), token, *input)
 		if errors.Is(err, service.ErrInvalidNodeCredential) {
 			c.Status(http.StatusUnauthorized)
 			return
@@ -80,7 +90,7 @@ func RegisterNodePeerRoutes(group *gin.RouterGroup) {
 }
 
 func (a *ApiService) getNodePanel(c *gin.Context) {
-	panel, err := a.NodeService.Panel()
+	panel, err := a.NodeService.PanelSetup()
 	jsonObj(c, panel, err)
 }
 
@@ -90,6 +100,11 @@ func (a *ApiService) setNodeMaster(c *gin.Context) {
 
 func (a *ApiService) createNodeInvite(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
+	if c.Query("details") == "1" {
+		invite, err := a.NodeService.InviteDetails()
+		jsonObj(c, invite, err)
+		return
+	}
 	code, err := a.NodeService.Invite()
 	jsonObj(c, code, err)
 }

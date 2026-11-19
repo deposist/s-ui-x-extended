@@ -6,6 +6,7 @@ import (
 	"github.com/sagernet/sing-box/adapter/inbound"
 	"github.com/sagernet/sing-box/adapter/outbound"
 	"github.com/sagernet/sing-box/adapter/service"
+	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/dns"
 	"github.com/sagernet/sing-box/dns/transport/quic"
 	"github.com/sagernet/sing-box/protocol/hysteria"
@@ -16,9 +17,9 @@ import (
 )
 
 func registerQUICInbounds(registry *inbound.Registry) {
-	hysteria.RegisterInbound(registry)
-	tuic.RegisterInbound(registry)
-	hysteria2.RegisterInbound(registry)
+	registerAccessInbound(registry, C.TypeHysteria, hysteria.NewInbound)
+	registerAccessInbound(registry, C.TypeTUIC, tuic.NewInbound)
+	registerAccessInbound(registry, C.TypeHysteria2, hysteria2.NewInbound)
 }
 
 func registerQUICOutbounds(registry *outbound.Registry) {

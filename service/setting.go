@@ -115,6 +115,7 @@ var defaultValueMap = map[string]string{
 	"telegramOutboundTag":         "",
 	"telegramCpuThreshold":        "90",
 	"telegramNotifyCpu":           "false",
+	"telegramNotifyNodes":         "false",
 	"telegramReport":              "false",
 	"telegramReportCron":          "",
 	"telegramBackupEnabled":       "false",
@@ -1526,7 +1527,7 @@ func queryComponentHasControl(value string) bool {
 
 func validateTelegramSettingInput(key string, value string) error {
 	switch key {
-	case "telegramNotifyCpu", "telegramReport":
+	case "telegramNotifyCpu", "telegramNotifyNodes", "telegramReport":
 		if _, err := strconv.ParseBool(value); err != nil {
 			return common.NewError("invalid boolean setting: ", key)
 		}

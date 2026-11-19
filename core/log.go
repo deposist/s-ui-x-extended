@@ -168,6 +168,20 @@ func (l *observableLogger) Log(ctx context.Context, level log.Level, args []any)
 		return
 	}
 	msg := F.ToString(args...)
+	// Protocol handlers can include rejected credentials in authentication errors.
+	if strings.HasPrefix(l.tag, "inbound/hysteria[") {
+		if summary, _, found := strings.Cut(msg, "authentication failed, auth_str="); found {
+			msg = summary + "authentication failed"
+		}
+	} else if strings.HasPrefix(l.tag, "inbound/tuic[") {
+		if summary, _, found := strings.Cut(msg, "authentication: unknown user "); found {
+			msg = summary + "authentication: unknown user"
+		}
+	} else if strings.HasPrefix(l.tag, "inbound/vless[") {
+		if summary, _, found := strings.Cut(msg, "unknown UUID:"); found {
+			msg = summary + "unknown UUID"
+		}
+	}
 	now := time.Now()
 	message := l.formatter.Format(ctx, level, l.tag, msg, now)
 	messageSimple := msg

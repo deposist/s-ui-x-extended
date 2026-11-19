@@ -13,6 +13,7 @@ export const telegramSettingKeys = [
   'telegramOutboundTag',
   'telegramCpuThreshold',
   'telegramNotifyCpu',
+  'telegramNotifyNodes',
   'telegramReport',
   'telegramReportCron',
   'telegramBackupEnabled',

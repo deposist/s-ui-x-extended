@@ -124,7 +124,8 @@ func (s *ClashService) GetClash(subId string) (*string, []string, error) {
 	// Nodes a client is assigned to contribute their own links, so a Clash or
 	// JSON subscription covers the main server and the fleet just like the
 	// plain one does.
-	for _, nodeLink := range service.ClientNodeLinks(client) {
+	nodeLinks, linkDeadline := service.ClientNodeLinksWithDeadline(client)
+	for _, nodeLink := range nodeLinks {
 		links = append(links, nodeLink["uri"])
 	}
 	tagNumEnable := 0
@@ -158,7 +159,7 @@ func (s *ClashService) GetClash(subId string) (*string, []string, error) {
 	}
 
 	headers := safeSubscriptionHeaders(buildClientHeaders(client, cachedSubDisplaySettings(&s.SettingService, now)))
-	subscriptionCacheSet(cacheKey, resultStr, headers, now, revision)
+	subscriptionCacheSet(cacheKey, resultStr, headers, now, revision, linkDeadline)
 
 	return &resultStr, headers, nil
 }
@@ -192,6 +193,13 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 		if _, representable := clashProxyTypes[t]; !representable {
 			logger.Warningf("subscription: clash format cannot represent outbound %q (type %q), skipping it", obMap["tag"], t)
 			omitted = append(omitted, fmt.Sprintf("%s (%s)", asString(obMap["tag"]), t))
+			continue
+		}
+		transport, _ := obMap["transport"].(map[string]interface{})
+		transportType := asString(transport["type"])
+		if transportType == "quic" {
+			logger.Warningf("subscription: clash format cannot represent the QUIC transport of outbound %q, skipping it", obMap["tag"])
+			omitted = append(omitted, fmt.Sprintf("%s (quic transport)", asString(obMap["tag"])))
 			continue
 		}
 
@@ -353,9 +361,8 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 		}
 
 		// Transport if exist
-		if transport, ok := obMap["transport"].(map[string]interface{}); ok {
-			tt, _ := transport["type"].(string)
-			switch tt {
+		if transport != nil {
+			switch transportType {
 			case "http":
 				httpOpts := make(map[string]interface{})
 				if path, ok := transport["path"].([]interface{}); ok && len(path) > 0 {
@@ -397,6 +404,11 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 						}
 					}
 				}
+				if transportType == "httpupgrade" {
+					if host := asString(transport["host"]); host != "" {
+						headersMap["Host"] = host
+					}
+				}
 				// Backfill Host from TLS server_name when the inbound
 				// did not set an explicit Host header. Strict reverse
 				// proxies / CDNs match the upstream by Host, and falling
@@ -414,7 +426,7 @@ func (s *ClashService) ConvertToClashMeta(outbounds *[]map[string]interface{}, b
 				if ed, ok := transport["early_data_header_name"].(string); ok {
 					wsOpts["early-data-header-name"] = ed
 				}
-				if tt == "httpupgrade" {
+				if transportType == "httpupgrade" {
 					wsOpts["v2ray-http-upgrade"] = true
 				}
 				proxy["ws-opts"] = wsOpts

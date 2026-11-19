@@ -80,6 +80,26 @@
           :text="$t('doctor.noReport')"
           :title="$t('doctor.notRun')"
         />
+        <section v-if="report?.nodeAssignments?.length" class="mt-4">
+          <h3>{{ $t('doctor.nodeAssignments') }}</h3>
+          <v-list density="compact">
+            <v-list-item v-for="node in report.nodeAssignments" :key="`${node.nodeUuid}:${node.inboundId ?? 0}`">
+              <v-list-item-title>
+                {{ node.nodeName }}<span v-if="node.inboundId"> · {{ node.inboundTag || node.inboundId }}</span>
+              </v-list-item-title>
+              <div class="text-body-2">{{ $t(`nodes.linkReason.${node.linkReason}`) }}</div>
+              <div class="text-body-2">
+                {{ $t(`doctor.nodeQuota.${node.quotaState}`) }}
+                <span v-if="node.used !== undefined && node.remaining !== undefined"> · {{ $t('doctor.nodeUsage', { used: node.used.toLocaleString(), remaining: node.remaining.toLocaleString() }) }}</span>
+                <span v-else-if="node.used !== undefined"> · {{ $t('doctor.nodeUsed', { used: node.used.toLocaleString() }) }}</span>
+                <span v-if="node.sampledAt"> · {{ formatDate(node.sampledAt) }}</span>
+              </div>
+              <div v-if="node.probe" class="text-body-2">
+                {{ $t('nodes.probe.from', { time: formatDate(node.probe.checkedAt) }) }} · {{ $t(`nodes.probe.result.${node.probe.result}`) }}
+              </div>
+            </v-list-item>
+          </v-list>
+        </section>
       </v-card-text>
     </v-card>
   </v-dialog>
@@ -105,6 +125,7 @@ const { t } = useI18n()
 const loading = ref(false)
 const report = ref<DoctorReport>()
 const target = ref('https://www.gstatic.com/generate_204')
+const formatDate = (timestamp: number) => new Date(timestamp * 1000).toLocaleString()
 
 const severityColor = (severity: DoctorSeverity) => {
   if (severity === 'error') return 'error'

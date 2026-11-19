@@ -332,6 +332,96 @@ func TestPeerVLESSDataPlaneApplyAndUnlink(t *testing.T) {
 	if _, err := exchange(dnsDestination, request); err == nil {
 		t.Fatal("Slave allowed a DNS exchange after quota exhaustion")
 	}
+	state.Users[0].Volume = 0
+	bindLocalPeerInventory(t, nodes, panel, &state)
+	if err := nodes.applyPeerState(panel, state); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&panel).UpdateColumn("last_sync", time.Now().Add(-time.Hour).Unix()).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := connect(""); err == nil {
+		t.Fatal("Slave accepted a credential after its last confirmation expired")
+	}
+	if err := nodes.applyPeerState(panel, state); err != nil {
+		t.Fatal(err)
+	}
+	if err := connect(""); err != nil {
+		t.Fatalf("a fresh confirmation of the same revision did not restore access: %v", err)
+	}
+	leaseEnds := time.Now().Add(3 * time.Second).Unix()
+	if err := db.Model(&panel).UpdateColumn("last_sync", leaseEnds-int64(model.PeerAccessLease/time.Second)).Error; err != nil {
+		t.Fatal(err)
+	}
+	go func() { finished <- connect("/hold") }()
+	select {
+	case <-held:
+	case err := <-finished:
+		t.Fatalf("access was denied during the offline grace period: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("offline connection never reached target")
+	}
+	if err := <-finished; err != nil || time.Now().Unix() < leaseEnds {
+		t.Fatalf("the offline grace period did not close the established stream: %v", err)
+	}
+	if err := instance.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	config := NewConfigServiceWithRuntime(nodes.runtime())
+	proxyConfig, err := config.getConfig(db, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := instance.Start(*proxyConfig); err != nil {
+		t.Fatal(err)
+	}
+	if err := connect(""); err == nil {
+		t.Fatal("restarting the Slave renewed an expired confirmation")
+	}
+
+	state.Users[0].AutoReset, state.Users[0].Period, state.Users[0].Volume = true, 86400, usage.Used
+	bindLocalPeerInventory(t, nodes, panel, &state)
+	if err := nodes.applyPeerState(panel, state); err != nil {
+		t.Fatal(err)
+	}
+	if err := connect(""); err == nil {
+		t.Fatal("Slave reset the quota before the local reset time")
+	}
+	if err := db.Model(&usage).UpdateColumn("reset_at", time.Now().Add(-time.Minute).Unix()).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := connect(""); err != nil {
+		t.Fatalf("Slave did not reset its quota without consulting Master: %v", err)
+	}
+	if err := db.First(&usage, "node_uuid = ? AND client_id = ?", panel.UUID, 1).Error; err != nil || usage.Used >= state.Users[0].Volume || usage.ResetAt <= time.Now().Unix() {
+		t.Fatalf("Slave did not persist its next quota window: %v (%+v)", err, usage)
+	}
+
+	state.Users[0].DelayStart, state.Users[0].AutoReset, state.Users[0].Period, state.Users[0].Volume = true, false, 4, 0
+	bindLocalPeerInventory(t, nodes, panel, &state)
+	if err := nodes.applyPeerState(panel, state); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.First(&usage, "node_uuid = ? AND client_id = ?", panel.UUID, 1).Error; err != nil || usage.StartedAt != 0 {
+		t.Fatalf("applying the revision activated the client before local traffic: %v", err)
+	}
+	go func() { finished <- connect("/hold") }()
+	select {
+	case <-held:
+	case err := <-finished:
+		t.Fatalf("first local use failed: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("first local connection never reached target")
+	}
+	if err := db.First(&usage, "node_uuid = ? AND client_id = ?", panel.UUID, 1).Error; err != nil || usage.StartedAt == 0 {
+		t.Fatalf("first traffic did not activate the local timer: %v", err)
+	}
+	if err := <-finished; err != nil || time.Now().Unix() < usage.StartedAt+state.Users[0].Period {
+		t.Fatalf("the delayed expiry did not close the established stream: %v", err)
+	}
+	if err := connect(""); err == nil {
+		t.Fatal("Slave allowed a fresh connection after the delayed expiry")
+	}
 	if err := nodes.UnlinkSlave(); err != nil {
 		t.Fatal(err)
 	}
@@ -355,7 +445,7 @@ func TestPeerDesiredAccessIsScopedAndFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := nodeTestClient(t, db, "alice")
-	_ = nodeTestClient(t, db, "unassigned")
+	unassigned := nodeTestClient(t, db, "unassigned")
 	client.Config = json.RawMessage(`{"vless":{"name":"alice","uuid":"c46a4d36-c8f2-4aa7-828a-8df136220995","unused":"not-on-wire"}}`)
 	client.Expiry = time.Now().Add(time.Hour).Unix()
 	if err := db.Save(&client).Error; err != nil {
@@ -381,6 +471,18 @@ func TestPeerDesiredAccessIsScopedAndFailsClosed(t *testing.T) {
 	if len(ClientNodeLinks(&client)) != 0 {
 		t.Fatal("published access before acknowledgement")
 	}
+	if err := db.Model(&unassigned).UpdateColumn("config", client.Config).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := nodes.ChangePeerClients(peer.UUID, 23, []uint{unassigned.Id}, true); err != nil {
+		t.Fatal(err)
+	}
+	if collision := sync(); len(collision.Users) != 0 || collision.Blocked != 2 {
+		t.Fatal("a duplicate authentication identity on the same inbound retained access")
+	}
+	if _, err := nodes.ChangePeerClients(peer.UUID, 23, []uint{unassigned.Id}, false); err != nil {
+		t.Fatal(err)
+	}
 	input.AppliedRevision = assigned.Revision
 	sync()
 	if links := ClientNodeLinks(&client); len(links) != 1 {
@@ -401,6 +503,33 @@ func TestPeerDesiredAccessIsScopedAndFailsClosed(t *testing.T) {
 	}
 	if user := limited.Users[0]; user.Connections != 1 || user.Download != 8192 || user.Upload != 4096 || user.Speed != 0 || user.Volume != 1024 {
 		t.Fatal("invalid split policy")
+	}
+	input.LeaseCapable = true
+	for _, autoReset := range []bool{false, true} {
+		if err := db.Model(&client).Updates(map[string]any{"delay_start": true, "auto_reset": autoReset, "reset_days": 2}).Error; err != nil {
+			t.Fatal(err)
+		}
+		if scheduled := sync(); len(scheduled.Users) != 1 || scheduled.Blocked != 0 || scheduled.Revision == limited.Revision {
+			t.Fatalf("Slave did not receive the client schedule (auto reset %t)", autoReset)
+		}
+	}
+	if err := db.Model(&client).UpdateColumn("up", 1024).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&ClientService{}).DepleteClients(); err != nil {
+		t.Fatal(err)
+	}
+	if scheduled := sync(); len(scheduled.Users) != 1 || scheduled.Blocked != 0 || !scheduled.Users[0].DelayStart {
+		t.Fatal("local usage on Master changed the independent Slave schedule")
+	}
+	if err := db.Model(&client).Updates(map[string]any{"enable": false, "next_reset": 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&ClientService{}).DepleteClients(); err != nil {
+		t.Fatal(err)
+	}
+	if disabled := sync(); len(disabled.Users) != 0 {
+		t.Fatal("a scheduled reset reenabled an explicitly disabled assigned client")
 	}
 	if err := nodes.RequestPeerDisconnect(peer.UUID); err != nil {
 		t.Fatal(err)
@@ -461,6 +590,12 @@ func TestNodeSyncRejectsCredentialsFromAnotherNode(t *testing.T) {
 	secondNode, err := enrolledNode(service.db(), second.UUID, second.Token)
 	if err != nil || secondNode.LastPeerSync != 0 || len(secondNode.Inventory) != 0 {
 		t.Fatalf("sync changed a different node: %v", err)
+	}
+	if err := service.Delete(first.UUID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.AcceptPeerSync(first.UUID, first.Token, PeerSyncRequest{}); !errors.Is(err, ErrInvalidNodeCredential) {
+		t.Fatalf("force-disconnected node renewed its confirmation: %v", err)
 	}
 }
 

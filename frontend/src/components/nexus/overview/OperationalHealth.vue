@@ -12,12 +12,13 @@
       <dense-list class="nexus-operational-health__list">
         <li
           v-for="row in rows"
-          :key="`${row.kind}:${row.tag}`"
+          :key="`${row.kind}:${row.nodeUuid ?? row.tag}`"
           class="nexus-operational-health__item"
         >
           <div class="nexus-operational-health__main">
             <span class="nexus-operational-health__kind">{{ row.kindLabel }}</span>
-            <strong class="nexus-mono">{{ row.tag }}</strong>
+            <router-link v-if="row.nodeUuid" :to="{ path: '/nodes', query: { node: row.nodeUuid } }">{{ row.tag }}</router-link>
+            <strong v-else class="nexus-mono">{{ row.tag }}</strong>
             <span v-if="row.detail" class="nexus-operational-health__detail">{{ row.detail }}</span>
           </div>
           <status-badge :label="row.statusLabel" :tone="row.tone" />
@@ -51,18 +52,20 @@ type ProviderHealth = {
 }
 
 type HealthRow = {
-  kind: 'failover' | 'provider'
+  kind: 'failover' | 'provider' | 'node'
   kindLabel: string
   tag: string
   status: 'healthy' | 'degraded' | 'down' | 'unknown'
   statusLabel: string
   tone: StatusTone
   detail: string
+  nodeUuid?: string
 }
 
 const props = defineProps<{
   failover?: Record<string, FailoverStatusEntry>
   providers?: Record<string, ProviderHealth>
+  nodeIncidents?: { uuid: string; name: string; incident: string; incidentAt: number }[]
 }>()
 
 const { t } = useI18n()
@@ -93,6 +96,15 @@ const providerCount = (provider: ProviderHealth, key: 'outbounds' | 'healthyOutb
 
 const rows = computed<HealthRow[]>(() => {
   const out: HealthRow[] = []
+
+  for (const node of props.nodeIncidents ?? []) {
+    const status = node.incident === 'offline' ? 'down' : 'degraded'
+    out.push({
+      kind: 'node', kindLabel: t('pages.nodes'), tag: node.name, nodeUuid: node.uuid,
+      status, statusLabel: t(`nodes.incident.${node.incident}`), tone: toneForStatus(status),
+      detail: new Date(node.incidentAt * 1000).toLocaleString(),
+    })
+  }
 
   for (const [tag, entry] of Object.entries(props.failover ?? {})) {
     const members = entry.members ?? []

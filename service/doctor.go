@@ -35,11 +35,12 @@ type DoctorItem struct {
 }
 
 type DoctorReport struct {
-	Status     DoctorSeverity `json:"status"`
-	Summary    string         `json:"summary"`
-	Items      []DoctorItem   `json:"items"`
-	RanAt      int64          `json:"ranAt"`
-	DurationMS int64          `json:"durationMs"`
+	Status          DoctorSeverity         `json:"status"`
+	Summary         string                 `json:"summary"`
+	Items           []DoctorItem           `json:"items"`
+	RanAt           int64                  `json:"ranAt"`
+	DurationMS      int64                  `json:"durationMs"`
+	NodeAssignments []DoctorNodeAssignment `json:"nodeAssignments,omitempty"`
 }
 
 type DoctorService struct {
@@ -131,7 +132,10 @@ func (s *DoctorService) DiagnoseClient(req DoctorClientRequest, hostname string)
 	items = append(items, s.clientSubscriptionChecks(client)...)
 	items = append(items, s.clientRuntimeChecks(client, req.Target)...)
 
-	return finishDoctorReport(start, items), nil
+	report := finishDoctorReport(start, items)
+	assignments, err := s.clientNodeDiagnostics(db, client, time.Unix(now, 0))
+	report.NodeAssignments = assignments
+	return report, err
 }
 
 func finishDoctorReport(start time.Time, items []DoctorItem) DoctorReport {

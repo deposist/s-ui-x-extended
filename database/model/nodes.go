@@ -1,6 +1,12 @@
 package model
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
+
+// PeerAccessLease is renewed only after a Slave validates a sync response.
+const PeerAccessLease = 5 * time.Minute
 
 // Node is a managed server that receives clients from this panel. The row holds
 // only what the controller owns; the fleet tables themselves live in the
@@ -15,8 +21,14 @@ type Node struct {
 	EnrollmentDigest string `json:"-"`
 	LastPeerSync     int64  `json:"-"`
 	PeerRevision     string `json:"-"`
+	PeerLeaseCapable bool   `json:"-"`
+	PeerAccessUntil  int64  `json:"-"`
+	PeerPendingSince int64  `json:"-"`
 	PeerBlocked      int    `json:"-"`
 	PeerDisconnect   bool   `json:"-"`
+	PeerApplyFailed  bool   `json:"-"`
+	PeerIncident     string `json:"-"`
+	PeerIncidentAt   int64  `json:"-"`
 
 	// LinkHost is the address clients dial for this node's inbounds. Empty means
 	// the node's inbounds do not appear in subscriptions.
@@ -57,7 +69,10 @@ type NodePanel struct {
 	UUID            string          `json:"uuid,omitempty"`
 	Token           string          `json:"-"`
 	LastSync        int64           `json:"lastSync,omitempty"`
+	PeerAccessUntil int64           `json:"-"`
+	PeerLeaseProof  string          `json:"-"`
 	SyncError       string          `json:"syncError,omitempty"`
+	PeerApplyFailed bool            `json:"-"`
 	PublicHost      string          `json:"publicHost,omitempty"`
 }
 
@@ -97,7 +112,27 @@ type PeerAssignment struct {
 }
 
 type PeerTraffic struct {
-	NodeUUID string `gorm:"primaryKey"`
-	ClientID uint   `gorm:"primaryKey;autoIncrement:false"`
-	Used     int64
+	NodeUUID      string `gorm:"primaryKey"`
+	ClientID      uint   `gorm:"primaryKey;autoIncrement:false"`
+	Used          int64
+	StartedAt     int64 `gorm:"not null;default:0"`
+	ResetAt       int64 `gorm:"not null;default:0"`
+	UnmeteredUsed int64 `gorm:"not null;default:0"`
+}
+
+type PeerTrafficSnapshot struct {
+	NodeUUID  string `gorm:"primaryKey"`
+	ClientID  uint   `gorm:"primaryKey;autoIncrement:false;index"`
+	Used      int64
+	SampledAt int64
+}
+
+type PeerProbeSnapshot struct {
+	NodeUUID        string `gorm:"primaryKey"`
+	InboundID       uint   `gorm:"primaryKey;autoIncrement:false"`
+	InventoryDigest string
+	Stage           string
+	Result          string
+	CheckedAt       int64
+	LatencyMS       int64
 }

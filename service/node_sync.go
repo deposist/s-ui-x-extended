@@ -24,9 +24,15 @@ type PeerInbound struct {
 }
 
 type PeerSyncRequest struct {
-	Inbounds        []PeerInbound `json:"inbounds"`
-	PublicHost      string        `json:"publicHost"`
-	AppliedRevision string        `json:"appliedRevision,omitempty"`
+	Inbounds        []PeerInbound      `json:"inbounds"`
+	PublicHost      string             `json:"publicHost"`
+	AppliedRevision string             `json:"appliedRevision,omitempty"`
+	LeaseCapable    bool               `json:"-"`
+	LeaseReceipt    string             `json:"-"`
+	ProbeCapable    bool               `json:"-"`
+	ProbeReceipt    string             `json:"-"`
+	ApplyFailed     bool               `json:"-"`
+	Traffic         *PeerTrafficReport `json:"traffic,omitempty"`
 }
 
 var ErrInvalidPeerInventory = errors.New("invalid peer inventory")
@@ -84,8 +90,16 @@ func (s *NodeService) AcceptPeerSync(identity, token string, input PeerSyncReque
 	if panel.Role != "master" {
 		return PeerSyncResponse{}, ErrInvalidNodeCredential
 	}
+	var leaseKey []byte
+	if input.LeaseCapable {
+		leaseKey, err = (&SettingService{}).GetInstallSalt()
+		if err != nil || len(leaseKey) == 0 {
+			return PeerSyncResponse{}, errors.New("cannot load the Master access signing key")
+		}
+	}
 	var desired PeerSyncResponse
 	var invalidate bool
+	var offerProbe bool
 	err = db.Transaction(func(tx *gorm.DB) error {
 		node, err := enrolledNode(tx, identity, token)
 		if errors.Is(err, ErrInvalidNodeCredential) && len(identity) == 36 && len(token) >= 26 && len(token) <= 64 && len(input.AppliedRevision) == 64 {
@@ -113,7 +127,7 @@ func (s *NodeService) AcceptPeerSync(identity, token string, input PeerSyncReque
 			}
 			seen[inbound.ID] = true
 			ids = append(ids, inbound.ID)
-			if inbound.Link != nil && !inbound.Link.valid() {
+			if inbound.Link != nil && !inbound.Link.valid(inbound.Type) {
 				return ErrInvalidPeerInventory
 			}
 		}
@@ -124,7 +138,7 @@ func (s *NodeService) AcceptPeerSync(identity, token string, input PeerSyncReque
 		if node.PeerDisconnect {
 			desired = PeerSyncResponse{Users: []peerUser{}}
 		} else {
-			desired, err = desiredPeerUsers(tx, node.UUID, input.Inbounds)
+			desired, err = peerUsersForAssignments(tx, peerAssignments(tx, node.UUID), input.Inbounds, s.peerTime(), !input.LeaseCapable)
 			if err != nil {
 				return err
 			}
@@ -132,6 +146,7 @@ func (s *NodeService) AcceptPeerSync(identity, token string, input PeerSyncReque
 		if err := desired.bindInventory(encoded, input.PublicHost); err != nil {
 			return err
 		}
+		offerProbe = input.ProbeCapable && input.LeaseCapable && !node.PeerDisconnect
 		acknowledged := ""
 		if input.AppliedRevision == desired.Revision {
 			acknowledged = input.AppliedRevision
@@ -148,11 +163,37 @@ func (s *NodeService) AcceptPeerSync(identity, token string, input PeerSyncReque
 				if err := tx.Where("node_uuid = ?", node.UUID).Delete(&model.PeerAssignment{}).Error; err != nil {
 					return err
 				}
+				if err := clearPeerDiagnostics(tx, node.UUID); err != nil {
+					return err
+				}
 				return tx.Delete(node).Error
 			}
 		}
-		invalidate = node.PeerRevision != acknowledged || node.LinkHost != input.PublicHost || !bytes.Equal(node.Inventory, encoded)
-		updated := tx.Model(&model.Node{}).Where("id = ? AND enabled AND enrollment_digest = ?", node.Id, node.EnrollmentDigest).UpdateColumns(map[string]any{"last_peer_sync": time.Now().Unix(), "inventory": json.RawMessage(encoded), "link_host": input.PublicHost, "peer_revision": acknowledged, "peer_blocked": desired.Blocked})
+		now := s.peerTime()
+		leaseCapable := node.PeerLeaseCapable || input.LeaseCapable
+		var accessUntil int64
+		if acknowledged != "" && acknowledged == node.PeerRevision {
+			accessUntil = node.PeerAccessUntil
+		}
+		if input.LeaseCapable {
+			accessUntil = max(accessUntil, confirmedPeerLease(leaseKey, node, acknowledged, input.LeaseReceipt, now))
+			lease := signPeerLease(leaseKey, node, desired.Revision, now.Add(model.PeerAccessLease).Unix())
+			desired.Lease = &lease
+		}
+		pendingSince := node.PeerPendingSince
+		if !leaseCapable || accessUntil > now.Unix() || node.PeerDisconnect {
+			pendingSince = 0
+		} else if pendingSince == 0 {
+			pendingSince = now.Unix()
+		}
+		invalidate = node.PeerRevision != acknowledged || node.LinkHost != input.PublicHost || !bytes.Equal(node.Inventory, encoded) ||
+			node.PeerLeaseCapable != leaseCapable || !nodePeerAccessActive(node, now)
+		updated := tx.Model(&model.Node{}).Where("id = ? AND enabled AND enrollment_digest = ?", node.Id, node.EnrollmentDigest).UpdateColumns(map[string]any{
+			"last_peer_sync": now.Unix(), "inventory": json.RawMessage(encoded), "link_host": input.PublicHost,
+			"peer_revision": acknowledged, "peer_blocked": desired.Blocked, "peer_lease_capable": leaseCapable, "peer_access_until": accessUntil,
+			"peer_apply_failed":  input.ApplyFailed,
+			"peer_pending_since": pendingSince,
+		})
 		if updated.Error != nil {
 			return updated.Error
 		}
@@ -163,8 +204,24 @@ func (s *NodeService) AcceptPeerSync(identity, token string, input PeerSyncReque
 		if len(ids) > 0 {
 			stale = stale.Where("inbound_id NOT IN ?", ids)
 		}
-		return stale.Delete(model.PeerAssignment{}).Error
+		if err := stale.Delete(model.PeerAssignment{}).Error; err != nil {
+			return err
+		}
+		if input.Traffic != nil && accessUntil > now.Unix() && acknowledged == desired.Revision && !node.PeerDisconnect {
+			if err := acceptPeerTraffic(tx, node.UUID, desired, input.Traffic, now); err != nil {
+				return err
+			}
+		}
+		return tx.Where("node_uuid = ? AND client_id NOT IN (?)", node.UUID,
+			tx.Model(&model.PeerAssignment{}).Select("client_id").Where("node_uuid = ?", node.UUID)).Delete(&model.PeerTrafficSnapshot{}).Error
 	})
+	if err == nil && offerProbe {
+		receipt := ""
+		if input.AppliedRevision == desired.Revision {
+			receipt = input.ProbeReceipt
+		}
+		desired.Probe = s.runtime().nodeProbes.exchange(identity, desired.InventoryDigest, receipt, s.peerTime())
+	}
 	if err == nil && invalidate && invalidateSubscriptionCacheAfterSave != nil {
 		invalidateSubscriptionCacheAfterSave()
 	}
@@ -177,7 +234,6 @@ func (s *NodeService) SyncWithMaster(ctx context.Context) {
 	if err != nil || panel.Role != "slave" || ctx.Err() != nil {
 		return
 	}
-	now := time.Now().Unix()
 	fields := map[string]any{"sync_error": ""}
 	inbounds, err := announcePeerInbounds(db)
 	if err != nil {
@@ -190,16 +246,27 @@ func (s *NodeService) SyncWithMaster(ctx context.Context) {
 		if instance := s.runtime().Core(); instance != nil && instance.IsRunning() {
 			applied = panel.AppliedRevision
 		}
-		desired, err = sendPeerSync(ctx, panel, PeerSyncRequest{Inbounds: inbounds, PublicHost: panel.PublicHost, AppliedRevision: applied})
+		input := PeerSyncRequest{Inbounds: inbounds, PublicHost: panel.PublicHost, AppliedRevision: applied}
+		if applied != "" && panel.PeerLeaseProof != "" {
+			input.Traffic = localPeerTrafficReport(db, panel, s.peerTime())
+		}
+		desired, err = sendPeerSync(ctx, panel, input)
+		if errors.Is(err, ErrInvalidPeerInventory) {
+			input.Traffic = nil
+			input.Inbounds = legacyPeerInventory(input.Inbounds)
+			desired, err = sendPeerSync(ctx, panel, input)
+			desired.legacyInventory = err == nil
+		}
 		if err == nil && ctx.Err() == nil {
 			if desired.Detached {
-				if applied == "" || desired.Revision != applied || len(desired.Users) != 0 {
+				if applied == "" || desired.Revision != applied || len(desired.Users) != 0 || desired.Probe != nil {
 					err = errors.New("invalid disconnect receipt from Master")
 				} else {
-					err = s.changeAppliedPeerState(panel.UUID, applied, "", nil, true)
+					err = s.changeAppliedPeerState(panel.UUID, applied, "", nil, nil, false, true)
 				}
 			} else {
 				err = s.applyPeerState(panel, desired)
+				fields["peer_apply_failed"] = err != nil
 			}
 			if err == nil && desired.Blocked > 0 {
 				fields["sync_error"] = "Some assignments cannot be applied: check the protocol, credentials and client limits on Master."
@@ -211,8 +278,6 @@ func (s *NodeService) SyncWithMaster(ctx context.Context) {
 			return
 		}
 		fields["sync_error"] = err.Error()
-	} else {
-		fields["last_sync"] = now
 	}
 	_ = db.Model(&model.NodePanel{}).Where("id = ? AND role = ? AND uuid = ?", panel.ID, "slave", panel.UUID).UpdateColumns(fields).Error
 }
@@ -237,6 +302,19 @@ func sendPeerSync(ctx context.Context, panel model.NodePanel, input PeerSyncRequ
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("X-Node-ID", panel.UUID)
+	leaseHeader := "1"
+	if input.AppliedRevision == panel.AppliedRevision && panel.PeerLeaseProof != "" {
+		leaseHeader = (peerLease{Until: panel.PeerAccessUntil, Proof: panel.PeerLeaseProof}).Header()
+	}
+	request.Header.Set(PeerLeaseHeader, leaseHeader)
+	probeHeader := "1"
+	if input.AppliedRevision != "" {
+		probeHeader = activePeerProbeHeader(panel.ManagedUsers)
+	}
+	request.Header.Set(PeerProbeHeader, probeHeader)
+	if panel.PeerApplyFailed {
+		request.Header.Set(PeerApplyHeader, "1")
+	}
 	response, err := nodePeerHTTPClient.Do(request)
 	if err != nil {
 		return PeerSyncResponse{}, errors.New("cannot reach Master over HTTPS; check the address and certificate")
@@ -244,6 +322,9 @@ func sendPeerSync(ctx context.Context, panel model.NodePanel, input PeerSyncRequ
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusUnauthorized {
 		return PeerSyncResponse{}, errors.New("the node credential is no longer accepted by Master")
+	}
+	if response.StatusCode == http.StatusBadRequest {
+		return PeerSyncResponse{}, ErrInvalidPeerInventory
 	}
 	if response.StatusCode != http.StatusOK {
 		return PeerSyncResponse{}, errors.New("synchronization was not accepted by Master")

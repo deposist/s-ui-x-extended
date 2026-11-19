@@ -216,13 +216,17 @@ func ObserveAccess(ctx context.Context, clientName string, ip string) (bool, int
 }
 
 type ConnectionPolicy struct {
-	Connections uint32
-	Speed       uint64
-	Download    uint64
-	Upload      uint64
-	Volume      int64
-	NodeUUID    string
-	ClientID    uint
+	Connections      uint32
+	Speed            uint64
+	Download         uint64
+	Upload           uint64
+	Volume           int64
+	NodeUUID         string
+	ClientID         uint
+	DelayStart       bool
+	AutoReset        bool
+	Period           int64
+	ProbeDestination string
 }
 
 func ObserveConnection(ctx context.Context, clientName string, ip string) (bool, int64, ConnectionPolicy) {
@@ -241,6 +245,9 @@ func ObserveConnection(ctx context.Context, clientName string, ip string) (bool,
 	entry, loaded := clientEntryForAllow(ctx, clientName, time.Now())
 	if !loaded || ctx.Err() != nil || (entry.accessExpiry > 0 && time.Now().Unix() >= entry.accessExpiry) {
 		return false, 0, ConnectionPolicy{}
+	}
+	if entry.policy.ProbeDestination != "" {
+		return true, entry.accessExpiry, entry.policy
 	}
 	if ip == "" {
 		return entry.mode != ModeEnforce || entry.limit == 0, entry.accessExpiry, entry.policy
@@ -877,7 +884,7 @@ func loadCacheEntryContext(ctx context.Context, clientName string, now time.Time
 	var client model.Client
 	var accessExpiry int64
 	var policy ConnectionPolicy
-	if err := db.Model(model.Client{}).Select("enable, limit_ip, ip_limit_mode").Where("name = ?", clientName).First(&client).Error; err != nil {
+	if err := db.Model(model.Client{}).Select("(enable AND NOT local_depleted) AS enable, limit_ip, ip_limit_mode").Where("name = ?", clientName).First(&client).Error; err != nil {
 		if !database.IsNotFound(err) {
 			logLoadCacheError("client", err)
 			return allowCacheEntry{}, false
@@ -896,6 +903,10 @@ func loadCacheEntryContext(ctx context.Context, clientName string, now time.Time
 			COALESCE(json_extract(users.value, '$.downloadSpeed'), 0) AS download,
 			COALESCE(json_extract(users.value, '$.uploadSpeed'), 0) AS upload,
 			COALESCE(json_extract(users.value, '$.volume'), 0) AS volume,
+			COALESCE(json_extract(users.value, '$.delayStart'), 0) AS delay_start,
+			COALESCE(json_extract(users.value, '$.autoReset'), 0) AS auto_reset,
+			COALESCE(json_extract(users.value, '$.period'), 0) AS period,
+			COALESCE(json_extract(users.value, '$.probeDestination'), '') AS probe_destination,
 			node_panels.uuid AS node_uuid, json_extract(users.value, '$.clientId') AS client_id
 			FROM node_panels, json_each(node_panels.managed_users) AS users
 			WHERE node_panels.id = 1 AND node_panels.role = 'slave' AND json_extract(users.value, '$.name') = ? LIMIT 1`, clientName).Scan(&managed).Error; err != nil || len(managed) != 1 {
@@ -955,7 +966,7 @@ func loadPolicyEntriesContext(ctx context.Context, db *gorm.DB, now time.Time, g
 			client_ips.ip_hash
 		FROM clients
 		LEFT JOIN client_ips ON client_ips.client_name = clients.name
-		WHERE clients.enable = true
+		WHERE clients.enable = true AND NOT clients.local_depleted
 			AND clients.ip_limit_mode IN (?, ?)
 		ORDER BY clients.name
 	`, ModeMonitor, ModeEnforce).Scan(&rows).Error

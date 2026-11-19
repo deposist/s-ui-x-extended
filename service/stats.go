@@ -224,6 +224,9 @@ func (s *StatsService) SaveStats(enableTraffic bool) (err error) {
 	if err := updateClientTrafficDeltas(tx, clientDeltas); err != nil {
 		return err
 	}
+	if err := addUnmeteredPeerTraffic(tx, clientDeltas); err != nil {
+		return err
+	}
 	onlineResourcesMu.Lock()
 	onlineResources = &currentOnlines
 	onlineResourcesMu.Unlock()

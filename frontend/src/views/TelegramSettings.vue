@@ -13,6 +13,9 @@
         <v-col cols="12" sm="6" md="4">
           <v-switch color="primary" v-model="telegramNotifyCpu" :label="$t('telegram.notifyCpu')" hide-details />
         </v-col>
+          <v-col cols="12" sm="6" md="4">
+            <v-switch color="primary" v-model="telegramNotifyNodes" :label="$t('telegram.notifyNodes')" hide-details />
+          </v-col>
         <v-col cols="12" sm="6" md="4">
           <v-switch color="primary" v-model="telegramReport" :label="$t('telegram.report')" hide-details />
         </v-col>
@@ -333,6 +336,7 @@ const defaultTelegramSettings: TelegramSettingsMap = {
   telegramOutboundTag: '',
   telegramCpuThreshold: '90',
   telegramNotifyCpu: 'false',
+  telegramNotifyNodes: 'false',
   telegramReport: 'false',
   telegramReportCron: '',
   telegramBackupEnabled: 'false',
@@ -402,6 +406,7 @@ const boolSetting = (key: string) => computed({
 
 const telegramEnabled = boolSetting('telegramEnabled')
 const telegramNotifyCpu = boolSetting('telegramNotifyCpu')
+const telegramNotifyNodes = boolSetting('telegramNotifyNodes')
 const telegramReport = boolSetting('telegramReport')
 const telegramBackupEnabled = boolSetting('telegramBackupEnabled')
 

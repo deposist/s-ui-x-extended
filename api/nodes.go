@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -46,9 +47,11 @@ func (a *APIHandler) registerNodeRoutes(g *gin.RouterGroup) {
 	nodes.GET("", a.ApiService.GetNodes)
 	nodes.POST("", a.ApiService.CreateNode)
 	nodes.GET("/:uuid", a.ApiService.GetNode)
+	nodes.POST("/:uuid/probe", a.ApiService.ProbeNode)
 	nodes.PATCH("/:uuid", a.ApiService.UpdateNode)
 	nodes.DELETE("/:uuid", a.ApiService.DeleteNode)
 	nodes.GET("/:uuid/clients", a.ApiService.GetNodeClients)
+	nodes.POST("/:uuid/clients/preview", a.ApiService.PreviewNodeClients)
 	nodes.POST("/:uuid/clients", a.ApiService.AddNodeClients)
 	nodes.DELETE("/:uuid/clients", a.ApiService.RemoveNodeClients)
 
@@ -66,6 +69,22 @@ func (a *ApiService) GetNodes(c *gin.Context) {
 func (a *ApiService) GetNode(c *gin.Context) {
 	node, err := a.NodeService.Get(c.Param("uuid"))
 	jsonObj(c, node, err)
+}
+
+func (a *ApiService) ProbeNode(c *gin.Context) {
+	if !allowLocalClientWrite(c) {
+		return
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
+	var input struct {
+		InboundID uint `json:"inboundId"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil || input.InboundID == 0 {
+		c.JSON(http.StatusBadRequest, Msg{Msg: "select an inbound for the check"})
+		return
+	}
+	probe, err := a.NodeService.StartPeerProbe(c.Param("uuid"), input.InboundID)
+	jsonObj(c, probe, err)
 }
 
 func (a *ApiService) CreateNode(c *gin.Context) {
@@ -189,6 +208,24 @@ func (a *ApiService) RemoveNodeClients(c *gin.Context) {
 	a.changeNodeClients(c, false)
 }
 
+func (a *ApiService) PreviewNodeClients(c *gin.Context) {
+	if !allowLocalClientWrite(c) {
+		return
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+	var input struct {
+		InboundID uint   `json:"inboundId"`
+		ClientIDs []uint `json:"clientIds"`
+		Action    string `json:"action"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil || (input.Action != "add" && input.Action != "remove") {
+		c.JSON(http.StatusBadRequest, Msg{Msg: "invalid assignment preview"})
+		return
+	}
+	preview, err := a.NodeService.PreviewPeerClients(c.Param("uuid"), input.InboundID, input.ClientIDs, input.Action == "add")
+	jsonObj(c, preview, err)
+}
+
 func (a *ApiService) changeNodeClients(c *gin.Context, assigned bool) {
 	form, err := nodeClientsForm(c.Writer, c.Request)
 	if err != nil {
@@ -207,7 +244,16 @@ func (a *ApiService) changeNodeClients(c *gin.Context, assigned bool) {
 	}
 	uuid := c.Param("uuid")
 	var changed int
-	if inboundID != 0 {
+	if fingerprint := form.Get("previewFingerprint"); fingerprint != "" {
+		if !allowLocalClientWrite(c) {
+			return
+		}
+		changed, err = a.NodeService.ApplyPeerClientPreview(uuid, inboundID, ids, assigned, fingerprint)
+		if errors.Is(err, service.ErrStalePeerPreview) {
+			c.JSON(http.StatusConflict, Msg{Obj: gin.H{"reason": "stale_preview"}})
+			return
+		}
+	} else if inboundID != 0 {
 		changed, err = a.NodeService.ChangePeerClients(uuid, inboundID, ids, assigned)
 	} else if assigned {
 		changed, err = a.NodeService.Assign(uuid, ids)

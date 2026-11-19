@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 `CHANGELOG-ZH.md` for Simplified Chinese.
 
+## [1.1.2-beta10] - 2026-11-19 - Node access and diagnostics
+
+- Paste a one-time invitation on Slave. It includes the full HTTPS address of the Master panel.
+- Nodes shows the confirmed access deadline and why a link is missing. Updated Slaves close managed connections when the five-minute lease expires.
+- Preview bulk additions and removals before applying them. Check a published VLESS TCP inbound from Master with a trusted HTTPS endpoint.
+- View node incidents in Overview and turn on node alerts in Telegram settings. Client diagnostics shows traffic and remaining quota per node.
+- Paired nodes support more protocols and transports, delayed start and automatic quota resets. Availability depends on the panel versions, build and subscription format.
+
+[Upgrade and rollback instructions](docs/releases/v1.1.2-beta10.md)
+
 ## [1.1.2-beta9] - 2026-11-19 - Master and Slave nodes
 
 - Open Nodes from the sidebar and pair two panels over HTTPS with a one-time code.

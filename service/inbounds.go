@@ -530,7 +530,7 @@ func (s *InboundService) fetchUsersByCondition(db *gorm.DB, inboundType string, 
 	// directly into the JSON path is safe. The dynamic condition is fed
 	// through the query parameter slot to remain SQL-injection free. Missing
 	// per-protocol client config is scanned as SQL NULL and skipped below.
-	query := fmt.Sprintf(`SELECT json_extract(clients.config, '$.%s') FROM clients WHERE enable = true AND %s`, field, condition)
+	query := fmt.Sprintf(`SELECT json_extract(clients.config, '$.%s') FROM clients WHERE enable = true AND NOT local_depleted AND %s`, field, condition)
 	err := db.Raw(query, args...).Scan(&userRows).Error
 	if err != nil {
 		return nil, err

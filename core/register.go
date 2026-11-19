@@ -91,7 +91,7 @@ func InboundRegistry() *inbound.Registry {
 	naive.RegisterInbound(registry)
 	shadowtls.RegisterInbound(registry)
 	registerAccessInbound(registry, C.TypeVLESS, vless.NewInbound)
-	anytls.RegisterInbound(registry)
+	registerAccessInbound(registry, C.TypeAnyTLS, anytls.NewInbound)
 	mieru.RegisterInbound(registry)
 	ssh.RegisterInbound(registry)
 

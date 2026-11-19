@@ -43,12 +43,17 @@ func (s *SubService) GetSubs(subId string) (*string, []string, error) {
 		clientInfo = " " + client.Name + clientInfo
 	}
 
-	linksArray := s.LinkService.GetLinks(&client.Links, "all", clientInfo)
+	linkType := "all"
+	if client.LocalDepleted {
+		linkType = "external"
+	}
+	linksArray := s.LinkService.GetLinks(&client.Links, linkType, clientInfo)
 	// Every node the client is assigned to publishes its own links, so the
 	// subscription covers the main server and the fleet in one document. These
 	// are derived from the node's announced inventory, never cached on the
 	// client row, so a node's address change takes effect without touching it.
-	for _, nodeLink := range service.ClientNodeLinks(client) {
+	nodeLinks, linkDeadline := service.ClientNodeLinksWithDeadline(client)
+	for _, nodeLink := range nodeLinks {
 		linksArray = append(linksArray, s.LinkService.addClientInfo(nodeLink["uri"], clientInfo))
 	}
 	result := strings.Join(linksArray, "\n")
@@ -59,7 +64,7 @@ func (s *SubService) GetSubs(subId string) (*string, []string, error) {
 		result = base64.StdEncoding.EncodeToString([]byte(result))
 	}
 
-	subscriptionCacheSet(cacheKey, result, headers, now, revision)
+	subscriptionCacheSet(cacheKey, result, headers, now, revision, linkDeadline)
 	return &result, headers, nil
 }
 

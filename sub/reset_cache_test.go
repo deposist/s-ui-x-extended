@@ -20,7 +20,7 @@ func TestResetCachesClearsDatabaseBackedSubscriptionCaches(t *testing.T) {
 
 	now := time.Now()
 	const key = "json:default:client-a"
-	subscriptionCacheSet(key, "cached", nil, now, subscriptionCacheRevision())
+	subscriptionCacheSet(key, "cached", nil, now, subscriptionCacheRevision(), time.Time{})
 	subDisplaySettingsCache.Lock()
 	subDisplaySettingsCache.value.title = "stale title"
 	subDisplaySettingsCache.expiresAt = now.Add(time.Minute)

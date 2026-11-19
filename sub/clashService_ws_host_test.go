@@ -1,10 +1,50 @@
 package sub
 
 import (
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
 )
+
+func TestConvertToClashMetaHTTPUpgradeKeepsHostAndOmitsQUIC(t *testing.T) {
+	outbounds := []map[string]interface{}{
+		{
+			"type": "vless", "tag": "upgrade", "server": "slave.example", "server_port": 443,
+			"uuid":      "11111111-1111-4111-8111-111111111111",
+			"tls":       map[string]interface{}{"enabled": true, "server_name": "sni.example"},
+			"transport": map[string]interface{}{"type": "httpupgrade", "host": "upstream.example", "path": "/edge"},
+		},
+		{
+			"type": "vmess", "tag": "quic-peer", "server": "slave.example", "server_port": 443,
+			"uuid":      "11111111-1111-4111-8111-111111111111",
+			"tls":       map[string]interface{}{"enabled": true},
+			"transport": map[string]interface{}{"type": "quic"},
+		},
+	}
+	got, err := (&ClashService{}).ConvertToClashMeta(&outbounds, basicClashConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config struct {
+		Proxies []struct {
+			Name      string `yaml:"name"`
+			WSOptions struct {
+				Upgrade bool              `yaml:"v2ray-http-upgrade"`
+				Headers map[string]string `yaml:"headers"`
+			} `yaml:"ws-opts"`
+		} `yaml:"proxies"`
+	}
+	if err := yaml.Unmarshal([]byte(got), &config); err != nil {
+		t.Fatal(err)
+	}
+	if len(config.Proxies) != 1 || config.Proxies[0].Name != "upgrade" || !strings.Contains(got, "quic-peer (quic transport)") {
+		t.Errorf("expected only HTTPUpgrade, with a documented QUIC omission: %s", got)
+	}
+	if len(config.Proxies) == 0 || !config.Proxies[0].WSOptions.Upgrade || config.Proxies[0].WSOptions.Headers["Host"] != "upstream.example" {
+		t.Errorf("expected the explicit HTTPUpgrade Host header: %s", got)
+	}
+}
 
 // TestConvertToClashMetaWSPropagatesHostHeader covers issue #1126:
 // external WS nodes whose transport carries an explicit Host header must

@@ -93,6 +93,27 @@ func (s *NodeService) Panel() (model.NodePanel, error) {
 	return readNodePanel(s.db())
 }
 
+type NodePanelSetup struct {
+	model.NodePanel
+	CompatibleInbounds []PeerInbound `json:"compatibleInbounds,omitempty"`
+}
+
+func (s *NodeService) PanelSetup() (NodePanelSetup, error) {
+	panel, err := s.Panel()
+	setup := NodePanelSetup{NodePanel: panel}
+	if err != nil || panel.Role != "slave" {
+		return setup, err
+	}
+	inbounds, err := announcePeerInbounds(s.db())
+	for _, inbound := range inbounds {
+		if peerProbeEligible(inbound) {
+			inbound.Link = nil
+			setup.CompatibleInbounds = append(setup.CompatibleInbounds, inbound)
+		}
+	}
+	return setup, err
+}
+
 func (s *NodeService) SetMaster() error {
 	db := s.db()
 	if db == nil {
@@ -111,18 +132,33 @@ func (s *NodeService) UnlinkSlave() error {
 	if err != nil || panel.Role != "slave" {
 		return err
 	}
-	return s.changeAppliedPeerState(panel.UUID, "", "", nil, true)
+	return s.changeAppliedPeerState(panel.UUID, "", "", nil, nil, false, true)
 }
 
 func (s *NodeService) Invite() (string, error) {
+	invite, err := s.InviteDetails()
+	return invite.Code, err
+}
+
+type NodeInvitation struct {
+	Code      string `json:"code"`
+	ExpiresAt int64  `json:"expiresAt"`
+}
+
+func (s *NodeService) InviteDetails() (NodeInvitation, error) {
 	panel, err := s.Panel()
 	if err != nil {
-		return "", err
+		return NodeInvitation{}, err
 	}
 	if panel.Role != "master" {
-		return "", errors.New("select Master before creating an invitation")
+		return NodeInvitation{}, errors.New("select Master before creating an invitation")
 	}
-	return createNodeInvite(s.db(), time.Now())
+	now := time.Now()
+	code, err := createNodeInvite(s.db(), now)
+	if err != nil {
+		return NodeInvitation{}, err
+	}
+	return NodeInvitation{Code: code, ExpiresAt: now.Add(nodeInviteLifetime).Unix()}, nil
 }
 
 func (s *NodeService) RedeemInvite(code, name string) (nodeEnrollment, error) {

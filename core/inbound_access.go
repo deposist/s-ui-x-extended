@@ -2,13 +2,16 @@ package core
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"io"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
 	"github.com/deposist/s-ui-x-extended/database"
+	"github.com/deposist/s-ui-x-extended/database/model"
 	"github.com/deposist/s-ui-x-extended/ipmonitor"
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/adapter/inbound"
@@ -40,7 +43,7 @@ func registerAccessInbound[Options any](registry *inbound.Registry, protocol str
 }
 
 func (router inboundAccessRouter) RouteConnectionEx(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, onClose network.CloseHandlerFunc) {
-	if pool, done, allowed := admitInbound(ctx, conn, metadata, onClose); allowed {
+	if pool, done, allowed := admitInbound(ctx, conn, metadata, onClose, true); allowed {
 		if pool.metersTraffic() {
 			limitCtx, cancel := context.WithCancel(ctx)
 			conn = peerRateConn{Conn: conn, ctx: limitCtx, cancel: cancel, pool: pool}
@@ -51,7 +54,7 @@ func (router inboundAccessRouter) RouteConnectionEx(ctx context.Context, conn ne
 }
 
 func (router inboundAccessRouter) RoutePacketConnectionEx(ctx context.Context, conn network.PacketConn, metadata adapter.InboundContext, onClose network.CloseHandlerFunc) {
-	if pool, done, allowed := admitInbound(ctx, conn, metadata, onClose); allowed {
+	if pool, done, allowed := admitInbound(ctx, conn, metadata, onClose, false); allowed {
 		if pool.metersTraffic() {
 			limitCtx, cancel := context.WithCancel(ctx)
 			conn = peerRatePacketConn{PacketConn: conn, ctx: limitCtx, cancel: cancel, pool: pool}
@@ -61,8 +64,18 @@ func (router inboundAccessRouter) RoutePacketConnectionEx(ctx context.Context, c
 	}
 }
 
-func admitInbound(ctx context.Context, conn io.Closer, metadata adapter.InboundContext, onClose network.CloseHandlerFunc) (*peerConnectionPool, network.CloseHandlerFunc, bool) {
+func admitInbound(ctx context.Context, conn io.Closer, metadata adapter.InboundContext, onClose network.CloseHandlerFunc, tcp bool) (*peerConnectionPool, network.CloseHandlerFunc, bool) {
 	allowed, expiry, policy := ipmonitor.ObserveConnection(ctx, metadata.User, sourceIPFromMetadata(metadata))
+	if allowed && policy.ProbeDestination != "" {
+		destination, err := netip.ParseAddrPort(policy.ProbeDestination)
+		allowed = tcp && err == nil && metadata.Destination.Addr.Unmap() == destination.Addr() && metadata.Destination.Port == destination.Port()
+	}
+	var deadline time.Time
+	var awaitingTraffic bool
+	if allowed && policy.NodeUUID != "" {
+		deadline, awaitingTraffic = peerAccessDeadline(ctx, policy)
+		allowed = time.Now().Before(deadline)
+	}
 	var pool *peerConnectionPool
 	if allowed && policy != (ipmonitor.ConnectionPolicy{}) {
 		activePeerConnections.Lock()
@@ -92,7 +105,16 @@ func admitInbound(ctx context.Context, conn io.Closer, metadata adapter.InboundC
 		return nil, onClose, true
 	}
 	timer := closeAtExpiry(conn, expiry)
+	var stopLease context.CancelFunc
+	if !deadline.IsZero() {
+		leaseContext, cancel := context.WithCancel(ctx)
+		stopLease = cancel
+		go watchPeerAccess(leaseContext, conn, policy, deadline, awaitingTraffic)
+	}
 	return pool, network.OnceClose(func(err error) {
+		if stopLease != nil {
+			stopLease()
+		}
 		if timer != nil {
 			timer.Stop()
 		}
@@ -116,8 +138,66 @@ func admitInbound(ctx context.Context, conn io.Closer, metadata adapter.InboundC
 	}), true
 }
 
+func peerAccessDeadline(ctx context.Context, policy ipmonitor.ConnectionPolicy) (time.Time, bool) {
+	leave, ok := database.TryEnterDBOperation()
+	if !ok {
+		return time.Time{}, false
+	}
+	defer leave()
+	db := database.GetDB()
+	if db == nil {
+		return time.Time{}, false
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	var clocks struct{ LastSync, PeerAccessUntil, StartedAt int64 }
+	err := db.WithContext(ctx).Raw(`SELECT panel.last_sync, COALESCE(panel.peer_access_until, 0) AS peer_access_until, COALESCE(traffic.started_at, 0) AS started_at
+		FROM node_panels AS panel LEFT JOIN peer_traffics AS traffic ON traffic.node_uuid = panel.uuid AND traffic.client_id = ?
+		WHERE panel.id = 1 AND panel.role = 'slave' AND panel.uuid = ?`, policy.ClientID, policy.NodeUUID).Scan(&clocks).Error
+	if err != nil || clocks.LastSync <= 0 {
+		return time.Time{}, false
+	}
+	deadline := time.Unix(clocks.LastSync, 0).Add(model.PeerAccessLease)
+	if clocks.PeerAccessUntil > 0 {
+		deadline = time.Unix(min(deadline.Unix(), clocks.PeerAccessUntil), 0)
+	}
+	if !policy.DelayStart || policy.AutoReset {
+		return deadline, false
+	}
+	if clocks.StartedAt == 0 {
+		return deadline, true
+	}
+	return time.Unix(min(deadline.Unix(), clocks.StartedAt+policy.Period), 0), false
+}
+
+func watchPeerAccess(ctx context.Context, conn io.Closer, policy ipmonitor.ConnectionPolicy, deadline time.Time, awaitingTraffic bool) {
+	timer := time.NewTimer(peerAccessCheckAfter(deadline, awaitingTraffic))
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			deadline, awaitingTraffic = peerAccessDeadline(ctx, policy)
+			if !time.Now().Before(deadline) {
+				_ = conn.Close()
+				return
+			}
+			timer.Reset(peerAccessCheckAfter(deadline, awaitingTraffic))
+		}
+	}
+}
+
+func peerAccessCheckAfter(deadline time.Time, awaitingTraffic bool) time.Duration {
+	until := time.Until(deadline)
+	if awaitingTraffic {
+		return min(until, time.Second)
+	}
+	return until
+}
+
 func (pool *peerConnectionPool) metersTraffic() bool {
-	return pool != nil && (pool.up != nil || pool.down != nil || pool.policy.Volume > 0)
+	return pool != nil && (pool.up != nil || pool.down != nil || pool.policy.Volume > 0 || pool.policy.DelayStart)
 }
 
 func (pool *peerConnectionPool) charge(ctx context.Context, limiter *rate.Limiter, length int) error {
@@ -125,10 +205,10 @@ func (pool *peerConnectionPool) charge(ctx context.Context, limiter *rate.Limite
 		return err
 	}
 	policy := pool.policy
-	if length == 0 || policy.Volume == 0 {
+	if length == 0 || (policy.Volume == 0 && !policy.DelayStart) {
 		return nil
 	}
-	if int64(length) > policy.Volume || policy.ClientID == 0 || policy.NodeUUID == "" {
+	if (policy.Volume > 0 && int64(length) > policy.Volume) || policy.ClientID == 0 || policy.NodeUUID == "" {
 		return errors.New("node traffic quota exhausted")
 	}
 	leave, ok := database.TryEnterDBOperation()
@@ -140,9 +220,34 @@ func (pool *peerConnectionPool) charge(ctx context.Context, limiter *rate.Limite
 	if db == nil {
 		return errors.New("node traffic accounting unavailable")
 	}
-	result := db.WithContext(ctx).Exec(`INSERT INTO peer_traffics(node_uuid, client_id, used) VALUES (?, ?, ?)
-		ON CONFLICT(node_uuid, client_id) DO UPDATE SET used = used + excluded.used WHERE used <= ?`,
-		policy.NodeUUID, policy.ClientID, length, policy.Volume-int64(length))
+	now := time.Now().Unix()
+	var startedAt, delay, reset, used int64
+	if policy.DelayStart {
+		startedAt = now
+		if !policy.AutoReset {
+			delay = policy.Period
+		}
+	}
+	if policy.AutoReset {
+		reset = policy.Period
+	}
+	if policy.Volume > 0 {
+		used = int64(length)
+	}
+	result := db.WithContext(ctx).Exec(`INSERT INTO peer_traffics(node_uuid, client_id, used, started_at, reset_at)
+		VALUES (@node, @client, @used, @started, CASE WHEN @reset > 0 THEN @now + @reset ELSE 0 END)
+		ON CONFLICT(node_uuid, client_id) DO UPDATE SET
+			used = CASE WHEN @reset > 0 AND reset_at BETWEEN 1 AND @now THEN excluded.used ELSE used + excluded.used END,
+			started_at = CASE WHEN started_at = 0 THEN excluded.started_at ELSE started_at END,
+			reset_at = CASE
+				WHEN @reset > 0 AND reset_at BETWEEN 1 AND @now THEN reset_at + ((@now - reset_at) / @reset + 1) * @reset
+				WHEN @reset > 0 AND reset_at = 0 THEN excluded.reset_at
+				ELSE reset_at END
+		WHERE (@delay = 0 OR started_at = 0 OR started_at + @delay > @now)
+			AND (@unlimited OR used <= @remaining OR (@reset > 0 AND reset_at BETWEEN 1 AND @now))`,
+		sql.Named("node", policy.NodeUUID), sql.Named("client", policy.ClientID), sql.Named("used", used),
+		sql.Named("started", startedAt), sql.Named("now", now), sql.Named("reset", reset), sql.Named("delay", delay),
+		sql.Named("unlimited", policy.Volume == 0), sql.Named("remaining", policy.Volume-used))
 	if result.Error != nil {
 		return result.Error
 	}

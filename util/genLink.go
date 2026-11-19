@@ -763,7 +763,7 @@ func vmessLink(
 			net = p.Value
 		case "host":
 			host = p.Value
-		case "path":
+		case "path", "serviceName":
 			path = p.Value
 		}
 	}

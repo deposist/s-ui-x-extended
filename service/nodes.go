@@ -24,18 +24,28 @@ import (
 // second source of truth.
 type NodeService struct {
 	Runtime *Runtime
+	peerNow func() time.Time
 }
 
 // NodeView is a node row plus what only the running core knows.
 type NodeView struct {
-	UUID           string `json:"uuid"`
-	Name           string `json:"name"`
-	LinkHost       string `json:"linkHost"`
-	Enabled        bool   `json:"enabled"`
-	Paired         bool   `json:"paired"`
-	LastSync       int64  `json:"lastSync,omitempty"`
-	PeerBlocked    int    `json:"peerBlocked,omitempty"`
-	PeerDisconnect bool   `json:"peerDisconnect,omitempty"`
+	UUID               string            `json:"uuid"`
+	Name               string            `json:"name"`
+	LinkHost           string            `json:"linkHost"`
+	Enabled            bool              `json:"enabled"`
+	Paired             bool              `json:"paired"`
+	LastSync           int64             `json:"lastSync,omitempty"`
+	PeerBlocked        int               `json:"peerBlocked,omitempty"`
+	PeerDisconnect     bool              `json:"peerDisconnect,omitempty"`
+	LastPeerSync       int64             `json:"lastPeerSync,omitempty"`
+	SyncState          string            `json:"syncState,omitempty"`
+	ApplyState         string            `json:"applyState,omitempty"`
+	BlockedAssignments *int              `json:"blockedAssignments,omitempty"`
+	AccessUntil        int64             `json:"accessUntil,omitempty"`
+	ProbeResults       []PeerProbeResult `json:"probeResults,omitempty"`
+	ProbeInboundIDs    []uint            `json:"probeInboundIds,omitempty"`
+	Incident           string            `json:"incident,omitempty"`
+	IncidentAt         int64             `json:"incidentAt,omitempty"`
 
 	// Online reports whether the node is connected right now. An unreachable
 	// controller (no manager service running) reports every node offline
@@ -70,7 +80,8 @@ type ClientView struct {
 	// Assigned reports whether this client is already on the node being
 	// viewed. The picker lists every client so one dialog can both add and
 	// remove, and this flag draws the tick.
-	Assigned bool `json:"assigned"`
+	Assigned   bool   `json:"assigned"`
+	LinkReason string `json:"linkReason,omitempty"`
 }
 
 // ClientPage is one page of the per-server client list. Total is the count
@@ -145,8 +156,9 @@ func (s *NodeService) views(db *gorm.DB, nodes []model.Node) []NodeView {
 	statuses := NodeStatuses(uuids, s.runtime())
 	counts := NodeClientCounts(db, uuids)
 	views := make([]NodeView, 0, len(nodes))
+	now := s.peerTime()
 	for index := range nodes {
-		views = append(views, decorateNode(&nodes[index], statuses, counts))
+		views = append(views, s.decorateNode(db, &nodes[index], statuses, counts, now))
 	}
 	return views
 }
@@ -154,10 +166,10 @@ func (s *NodeService) views(db *gorm.DB, nodes []model.Node) []NodeView {
 func (s *NodeService) view(db *gorm.DB, node *model.Node) NodeView {
 	statuses := NodeStatuses([]string{node.UUID}, s.runtime())
 	counts := NodeClientCounts(db, []string{node.UUID})
-	return decorateNode(node, statuses, counts)
+	return s.decorateNode(db, node, statuses, counts, s.peerTime())
 }
 
-func decorateNode(node *model.Node, statuses map[string]bool, counts map[string]int64) NodeView {
+func (s *NodeService) decorateNode(db *gorm.DB, node *model.Node, statuses map[string]bool, counts map[string]int64, now time.Time) NodeView {
 	view := NodeView{
 		UUID:        node.UUID,
 		Name:        node.Name,
@@ -170,15 +182,47 @@ func decorateNode(node *model.Node, statuses map[string]bool, counts map[string]
 	if node.EnrollmentDigest != "" {
 		view.Paired = true
 		view.LastSync = node.LastPeerSync
+		view.LastPeerSync = node.LastPeerSync
 		view.PeerBlocked = node.PeerBlocked
+		view.BlockedAssignments = &node.PeerBlocked
 		view.PeerDisconnect = node.PeerDisconnect
-		view.Online = node.Enabled && node.LastPeerSync > 0 && time.Now().Unix()-node.LastPeerSync < 45
+		view.SyncState = "offline"
+		switch {
+		case node.PeerDisconnect:
+			view.SyncState = "disconnecting"
+		case !node.Enabled:
+			view.SyncState = "disabled"
+		case node.LastPeerSync == 0:
+			view.SyncState = "waiting"
+		case now.Unix()-node.LastPeerSync < 45:
+			view.SyncState = "online"
+		}
+		view.Online = view.SyncState == "online"
+		view.ApplyState = "unknown"
+		if node.LastPeerSync > 0 {
+			view.ApplyState = "pending"
+		}
+		if node.Enabled && !node.PeerDisconnect && node.PeerRevision != "" && len(node.Inventory) > 0 {
+			desired, err := peerUsersForAssignments(db, peerAssignments(db, node.UUID), peerInboundsFromInventory(node.Inventory), now, !node.PeerLeaseCapable)
+			if err == nil && desired.bindInventory(node.Inventory, node.LinkHost) == nil && desired.Revision == node.PeerRevision {
+				if nodePeerAccessActive(node, now) {
+					view.ApplyState = "applied"
+				}
+				view.AccessUntil = node.PeerAccessUntil
+			}
+		}
+		view.ProbeResults = collectNodeProbeResults(db, &s.runtime().nodeProbes, node)
+		view.Incident, view.IncidentAt = node.PeerIncident, node.PeerIncidentAt
 	}
 	_ = json.Unmarshal(node.LimiterRoles, &view.LimiterRoles)
 	for _, inbound := range DecodeNodeInventory(node.Inventory).Inbounds {
 		view.Inbounds = append(view.Inbounds, inbound.Tag)
 		if view.Paired && inbound.ID != 0 {
-			view.PeerInbounds = append(view.PeerInbounds, PeerInbound{ID: inbound.ID, Tag: inbound.Tag, Type: inbound.Type, Link: inbound.PeerLink})
+			peer := PeerInbound{ID: inbound.ID, Tag: inbound.Tag, Type: inbound.Type, Link: inbound.PeerLink}
+			view.PeerInbounds = append(view.PeerInbounds, peer)
+			if node.Enabled && !node.PeerDisconnect && node.PeerLeaseCapable && node.LinkHost != "" && peerProbeEligible(peer) {
+				view.ProbeInboundIDs = append(view.ProbeInboundIDs, inbound.ID)
+			}
 		}
 	}
 	view.Limiters = DecodeNodeLimiters(node.Inventory)
@@ -371,6 +415,9 @@ func (s *NodeService) Delete(uuid string) error {
 		if err := tx.Where("node_uuid = ?", uuid).Delete(model.PeerAssignment{}).Error; err != nil {
 			return err
 		}
+		if err := clearPeerDiagnostics(tx, uuid); err != nil {
+			return err
+		}
 		return tx.Where("uuid = ?", uuid).Delete(model.Node{}).Error
 	}); err != nil {
 		return err
@@ -380,6 +427,13 @@ func (s *NodeService) Delete(uuid string) error {
 		invalidateSubscriptionCacheAfterSave()
 	}
 	return nil
+}
+
+func clearPeerDiagnostics(tx *gorm.DB, uuid string) error {
+	if err := tx.Where("node_uuid = ?", uuid).Delete(&model.PeerTrafficSnapshot{}).Error; err != nil {
+		return err
+	}
+	return tx.Where("node_uuid = ?", uuid).Delete(&model.PeerProbeSnapshot{}).Error
 }
 
 // Clients returns one server-paginated page of clients for a node.

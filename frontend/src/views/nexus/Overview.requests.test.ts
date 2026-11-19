@@ -35,6 +35,8 @@ const finishRequest = (request: typeof requests[number], marker: number) => {
     ? { cpu: marker, sbd: { running: true } }
     : request.url === 'api/security/audit'
       ? { events: [{ id: marker, event: 'login_success' }] }
+      : request.url === 'api/nodes'
+        ? [{ uuid: `node-${marker}`, name: 'Slave', incident: 'offline', incidentAt: marker }]
       : { buckets: [{ startTime: marker, download: marker, upload: marker }] }
   request.resolve({ success: true, msg: '', obj })
 }
@@ -58,7 +60,7 @@ afterEach(() => {
 describe('overview connectivity lifecycle', () => {
   it('does not publish pending successful responses after going offline', async () => {
     const state = mountOverview()
-    expect(requests).toHaveLength(3)
+    expect(requests).toHaveLength(4)
     window.dispatchEvent(new Event('offline'))
     for (const request of requests) finishRequest(request, 1)
     await flushRequests()
@@ -66,6 +68,7 @@ describe('overview connectivity lifecycle', () => {
     expect(state.trafficSummary).toBeUndefined()
     expect(state.statusPayload).toBeUndefined()
     expect(state.auditEvents).toEqual([])
+    expect(state.nodeIncidents).toEqual([])
     expect(state.statusUnavailable).toBe(true)
     expect(state.auditUnavailable).toBe(true)
     expect(state.trafficLoading).toBe(false)
@@ -78,13 +81,14 @@ describe('overview connectivity lifecycle', () => {
     const original = [...requests]
     window.dispatchEvent(new Event('offline'))
     window.dispatchEvent(new Event('online'))
-    expect(requests).toHaveLength(6)
-    for (const request of requests.slice(3)) finishRequest(request, 2)
+    expect(requests).toHaveLength(8)
+    for (const request of requests.slice(4)) finishRequest(request, 2)
     await flushRequests()
     for (const request of original) finishRequest(request, 1)
     await flushRequests()
     expect(state.statusPayload.cpu).toBe(2)
     expect(state.auditEvents.map((event: any) => event.id)).toEqual([2])
+    expect(state.nodeIncidents.map((node: { uuid: string }) => node.uuid)).toEqual(['node-2'])
     expect(state.trafficSummary.buckets[0].download).toBe(2)
     expect(state.statusUnavailable).toBe(false)
     expect(state.auditUnavailable).toBe(false)

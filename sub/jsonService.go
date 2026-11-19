@@ -80,7 +80,8 @@ func (j *JsonService) GetJson(subId string, format string) (*string, []string, e
 	links := j.LinkService.GetLinks(&client.Links, "external", "")
 	// Nodes a client is assigned to contribute their own links, so the JSON
 	// subscription covers the main server and the fleet just like the plain one.
-	for _, nodeLink := range service.ClientNodeLinks(client) {
+	nodeLinks, linkDeadline := service.ClientNodeLinksWithDeadline(client)
+	for _, nodeLink := range nodeLinks {
 		links = append(links, nodeLink["uri"])
 	}
 	tagNumEnable := 0
@@ -121,7 +122,7 @@ func (j *JsonService) GetJson(subId string, format string) (*string, []string, e
 	resultStr := string(result)
 
 	headers := safeSubscriptionHeaders(buildClientHeaders(client, cachedSubDisplaySettings(&j.SettingService, now)))
-	subscriptionCacheSet(cacheKey, resultStr, headers, now, revision)
+	subscriptionCacheSet(cacheKey, resultStr, headers, now, revision, linkDeadline)
 
 	return &resultStr, headers, nil
 }
@@ -131,6 +132,9 @@ func (j *JsonService) getData(subId string) (*model.Client, []*model.Inbound, er
 	client, err := (&SubService{}).getClientBySubId(subId)
 	if err != nil {
 		return nil, nil, err
+	}
+	if client.LocalDepleted {
+		return client, nil, nil
 	}
 	var clientInbounds []uint
 	err = json.Unmarshal(client.Inbounds, &clientInbounds)

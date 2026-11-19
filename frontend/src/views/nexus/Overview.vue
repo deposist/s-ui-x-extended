@@ -28,6 +28,7 @@
       <operational-health
         :failover="data.onlines?.failover"
         :providers="data.onlines?.providerHealth"
+        :node-incidents="nodeIncidents"
       />
     </div>
 
@@ -82,6 +83,7 @@ const statusUnavailable = ref(false)
 const auditEvents = ref(mapAuditDisplayItems())
 const auditLoading = ref(true)
 const auditUnavailable = ref(false)
+const nodeIncidents = ref<{ uuid: string; name: string; incident: string; incidentAt: number }[]>([])
 const liveTraffic = ref<NetworkTrafficRate>({
   downloadBps: 0,
   uploadBps: 0,
@@ -96,6 +98,8 @@ let trafficInterval: ReturnType<typeof setInterval> | undefined
 let statusRequestPending = false
 let statusRequestId = 0
 let auditRequestId = 0
+let nodeRequestId = 0
+let nodesPending = false
 let trafficRequestId = 0
 let previousNetworkSample = overviewStatusNetworkSample()
 
@@ -229,16 +233,35 @@ const loadAuditEvents = async () => {
   auditLoading.value = false
 }
 
+const loadNodeIncidents = async () => {
+  if (!browserOnline.value || nodesPending) return
+  const requestId = ++nodeRequestId
+  nodesPending = true
+  try {
+    const response = await HttpUtils.get('api/nodes')
+    if (requestId !== nodeRequestId) return
+    if (response.success && Array.isArray(response.obj)) {
+      nodeIncidents.value = response.obj.filter(node => node?.incident && node.incidentAt)
+    }
+  } finally {
+    if (requestId === nodeRequestId) nodesPending = false
+  }
+}
+
 const setOnline = () => {
   browserOnline.value = true
   void loadStatus()
   void loadAuditEvents()
+  void loadNodeIncidents()
   void loadTrafficStats()
 }
 
 const setOffline = () => {
   ++statusRequestId
   ++auditRequestId
+  ++nodeRequestId
+  nodesPending = false
+  nodeIncidents.value = []
   ++trafficRequestId
   statusRequestPending = false
   browserOnline.value = false
@@ -264,6 +287,7 @@ watch(trafficTimeZone, (value) => {
 const onVisible = () => {
   if (!document.hidden) {
     void loadStatus()
+    void loadNodeIncidents()
     void loadTrafficStats()
   }
 }
@@ -278,10 +302,12 @@ onMounted(() => {
   document.addEventListener('visibilitychange', onVisible)
   void loadStatus()
   void loadAuditEvents()
+  void loadNodeIncidents()
   void loadTrafficStats()
   statusInterval = setInterval(() => {
     if (document.hidden) return
     void loadStatus()
+    void loadNodeIncidents()
   }, 10000)
   trafficInterval = setInterval(() => {
     if (document.hidden) return
@@ -292,6 +318,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   ++statusRequestId
   ++auditRequestId
+  ++nodeRequestId
   ++trafficRequestId
   if (statusInterval) clearInterval(statusInterval)
   if (trafficInterval) clearInterval(trafficInterval)

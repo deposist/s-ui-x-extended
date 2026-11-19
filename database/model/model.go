@@ -48,8 +48,12 @@ type Client struct {
 	AutoReset  bool  `json:"autoReset" form:"autoReset" gorm:"default:false;not null"`
 	ResetDays  int   `json:"resetDays" form:"resetDays" gorm:"default:0;not null"`
 	NextReset  int64 `json:"nextReset" form:"nextReset" gorm:"default:0;not null"`
-	TotalUp    int64 `json:"totalUp" form:"totalUp" gorm:"default:0;not null"`
-	TotalDown  int64 `json:"totalDown" form:"totalDown" gorm:"default:0;not null"`
+	// Keep the Slave's start policy after the Master's own timer starts.
+	PeerDelayStart bool `json:"-" gorm:"default:false;not null"`
+	// A local quota or delayed expiry may block Master inbounds only.
+	LocalDepleted bool  `json:"-" gorm:"default:false;not null"`
+	TotalUp       int64 `json:"totalUp" form:"totalUp" gorm:"default:0;not null"`
+	TotalDown     int64 `json:"totalDown" form:"totalDown" gorm:"default:0;not null"`
 }
 
 type ClientIP struct {

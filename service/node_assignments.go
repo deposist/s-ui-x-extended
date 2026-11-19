@@ -8,32 +8,74 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+var errPeerInboundUnavailable = errors.New("the selected Slave inbound no longer exists")
+
 func checkPeerInbound(db *gorm.DB, uuid string, inboundID uint) error {
+	_, err := editablePeerInbound(db, uuid, inboundID)
+	return err
+}
+
+func editablePeerInbound(db *gorm.DB, uuid string, inboundID uint) (*model.Node, error) {
 	panel, err := readNodePanel(db)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if panel.Role != "master" || inboundID == 0 {
-		return errors.New("select a Slave inbound on Master")
+		return nil, errors.New("select a Slave inbound on Master")
 	}
 	var node model.Node
-	if err := db.Where("uuid = ? AND enabled AND enrollment_digest <> ''", uuid).Take(&node).Error; err != nil {
-		return err
+	if err := db.Where("uuid = ? AND enabled AND enrollment_digest <> '' AND NOT COALESCE(peer_disconnect, 0)", uuid).Take(&node).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errPeerInboundUnavailable
+		}
+		return nil, err
 	}
 	for _, inbound := range DecodeNodeInventory(node.Inventory).Inbounds {
 		if inbound.ID == inboundID {
-			return nil
+			return &node, nil
 		}
 	}
-	return errors.New("the selected Slave inbound no longer exists")
+	return nil, errPeerInboundUnavailable
 }
 
 func (s *NodeService) PeerClients(uuid string, inboundID uint, limit, offset int, query string, onlyAssigned bool) (*ClientPage, error) {
 	db := s.db()
-	if err := checkPeerInbound(db, uuid, inboundID); err != nil {
+	node, err := editablePeerInbound(db, uuid, inboundID)
+	if err != nil {
 		return nil, err
 	}
-	return nodeClients(db, db.Model(model.PeerAssignment{}).Where("node_uuid = ? AND inbound_id = ?", uuid, inboundID), limit, offset, query, onlyAssigned)
+	page, err := nodeClients(db, db.Model(model.PeerAssignment{}).Where("node_uuid = ? AND inbound_id = ?", uuid, inboundID), limit, offset, query, onlyAssigned)
+	if err != nil || len(page.Items) == 0 {
+		return page, err
+	}
+	inbounds := peerInboundsFromInventory(node.Inventory)
+	now := s.peerTime()
+	desired, err := peerUsersForAssignments(db, peerAssignments(db, uuid), inbounds, now, !node.PeerLeaseCapable)
+	if err != nil {
+		return nil, err
+	}
+	if err := desired.bindInventory(node.Inventory, node.LinkHost); err != nil {
+		return nil, err
+	}
+	var inbound PeerInbound
+	for _, candidate := range inbounds {
+		if candidate.ID == inboundID {
+			inbound = candidate
+			break
+		}
+	}
+	eligible := make(map[uint]bool)
+	for _, user := range desired.Users {
+		if user.InboundID == inboundID {
+			eligible[user.ClientID] = true
+		}
+	}
+	for i, item := range page.Items {
+		if item.Assigned {
+			page.Items[i].LinkReason = peerAssignmentLinkReason(node, inbound, eligible[item.Id], desired.Revision == node.PeerRevision, now)
+		}
+	}
+	return page, nil
 }
 
 func (s *NodeService) ChangePeerClients(uuid string, inboundID uint, ids []uint, assign bool) (int, error) {

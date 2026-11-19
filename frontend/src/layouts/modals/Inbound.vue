@@ -207,7 +207,7 @@ import SettingInfo from '@/components/SettingInfo.vue'
 import { applyInboundRecommendedValues, hasInboundRecommendedPreset, inboundFieldHintsForType } from '@/utils/defaultRecommendations'
 import { inboundAllowedTlsTemplateKinds, isInboundTlsTemplateCompatible } from '@/utils/tlsCompatibility'
 export default {
-  props: ['visible', 'id', 'inTags', 'tlsConfigs'],
+  props: ['visible', 'id', 'inTags', 'tlsConfigs', 'initialProtocol'],
   emits: ['close'],
   data() {
     return {
@@ -275,7 +275,8 @@ export default {
       }
       else {
         const port = RandomUtil.randomIntRange(10000, 60000)
-        this.inbound = createInbound("direct",{ id: 0, tag: "direct-"+port ,listen: "::", listen_port: port })
+        const protocol = this.initialProtocol === 'vless' ? 'vless' : 'direct'
+        this.inbound = createInbound(protocol, { id: 0, tag: protocol + "-" + port, listen: "::", listen_port: port })
         if (this.HasInData.includes(this.inbound.type)){
           this.inbound.addrs = []
           this.inbound.out_json = {}

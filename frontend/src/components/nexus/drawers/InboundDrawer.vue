@@ -176,7 +176,7 @@ export default {
   // alongside v-model); inheritAttrs:false stops the v-model's modelValue from
   // also falling through onto the EntityDrawer root and double-binding it.
   inheritAttrs: false,
-  props: ['visible', 'id', 'inTags', 'tlsConfigs'],
+  props: ['visible', 'id', 'inTags', 'tlsConfigs', 'initialProtocol'],
   emits: ['close'],
   data() {
     return {
@@ -239,7 +239,8 @@ export default {
       }
       else {
         const port = RandomUtil.randomIntRange(10000, 60000)
-        this.inbound = createInbound("direct",{ id: 0, tag: "direct-"+port ,listen: "::", listen_port: port })
+        const protocol = this.initialProtocol === 'vless' ? 'vless' : 'direct'
+        this.inbound = createInbound(protocol, { id: 0, tag: protocol + "-" + port, listen: "::", listen_port: port })
         if (this.HasInData.includes(this.inbound.type)){
           this.inbound.addrs = []
           this.inbound.out_json = {}
@@ -390,12 +391,14 @@ export default {
     },
   },
   watch: {
-    visible(newValue) {
-      // Mirror the modal's @after-enter: load/seed the form when the drawer opens.
-      if (newValue) {
-        this.loading = true
-        this.updateData(this.$props.id)
-      }
+    visible: {
+      immediate: true,
+      handler(newValue) {
+        if (newValue) {
+          this.loading = true
+          this.updateData(this.$props.id)
+        }
+      },
     },
   },
   components: {

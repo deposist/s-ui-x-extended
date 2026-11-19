@@ -244,6 +244,8 @@ func InitDB(dbPath string) error {
 		&model.ClientNode{},
 		&model.PeerAssignment{},
 		&model.PeerTraffic{},
+		&model.PeerTrafficSnapshot{},
+		&model.PeerProbeSnapshot{},
 		&model.ClientLimits{},
 	)
 	if err != nil {

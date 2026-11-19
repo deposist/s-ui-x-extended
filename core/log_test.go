@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"strings"
@@ -64,6 +65,40 @@ func TestObservableFactoryEmitsLogs(t *testing.T) {
 		t.Fatal("log subscription closed before receiving an entry")
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for observable log entry")
+	}
+}
+
+func TestObservableLoggerRedactsRejectedCredentials(t *testing.T) {
+	var writer bytes.Buffer
+	factory := NewDefaultFactory(context.Background(), log.Formatter{DisableTimestamp: true}, &writer, "")
+	t.Cleanup(func() { _ = factory.Close() })
+	subscription, done, err := factory.Subscribe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer factory.UnSubscribe(subscription)
+
+	const rejected = "test-only-credential\nextra line"
+	for _, probe := range []struct{ tag, diagnostic, separator string }{
+		{"inbound/hysteria[managed]", "connection failed: authentication failed", ", auth_str="},
+		{"inbound/tuic[managed]", "connection failed: authentication: unknown user", " "},
+		{"inbound/vless[managed]", "connection failed: unknown UUID", ": "},
+	} {
+		writer.Reset()
+		factory.NewLogger(probe.tag).Error(probe.diagnostic, probe.separator, rejected)
+		select {
+		case entry := <-subscription:
+			if entry.Message != probe.tag+": "+probe.diagnostic {
+				t.Fatal("authentication diagnostic was not redacted in the subscription")
+			}
+		case <-done:
+			t.Fatal("log subscription closed before receiving an entry")
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for observable log entry")
+		}
+		if line := writer.String(); !strings.Contains(line, probe.diagnostic) || strings.Contains(line, "auth_str=") || strings.Contains(line, rejected) {
+			t.Fatal("authentication diagnostic was not redacted in the output writer")
+		}
 	}
 }
 

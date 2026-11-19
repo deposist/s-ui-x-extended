@@ -53,6 +53,8 @@ func backupTables() []backupTable {
 		{name: "node_panels", model: &model.NodePanel{}, optional: true},
 		{name: "peer_assignments", model: &model.PeerAssignment{}, optional: true},
 		{name: "peer_traffics", model: &model.PeerTraffic{}, optional: true},
+		{name: "peer_traffic_snapshots", model: &model.PeerTrafficSnapshot{}, optional: true},
+		{name: "peer_probe_snapshots", model: &model.PeerProbeSnapshot{}, optional: true},
 		{name: "fleet_node_ownerships", model: &model.FleetNodeOwnership{}, optional: true},
 		{name: "client_nodes", model: &model.ClientNode{}, optional: true},
 		{name: "client_limits", model: &model.ClientLimits{}, optional: true},

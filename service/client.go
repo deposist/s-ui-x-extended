@@ -928,6 +928,9 @@ func (s *ClientService) DepleteClients() (inboundIds []uint, err error) {
 			}
 			if markerPending {
 				s.setLastUpdate(dt)
+				if invalidateSubscriptionCacheAfterSave != nil {
+					invalidateSubscriptionCacheAfterSave()
+				}
 			}
 			if err1 := db.Exec("PRAGMA wal_checkpoint(FULL)").Error; err1 != nil {
 				logger.Error("Error checkpointing WAL: ", err1.Error())
@@ -952,7 +955,7 @@ func (s *ClientService) DepleteClients() (inboundIds []uint, err error) {
 
 	// Deplete clients using the same overflow-safe boundary predicate as other
 	// client eligibility consumers.
-	err = tx.Model(model.Client{}).Where("enable = true").Scan(&clients).Error
+	err = tx.Model(model.Client{}).Where("enable = true AND NOT local_depleted").Scan(&clients).Error
 	if err != nil {
 		return nil, err
 	}
@@ -988,7 +991,11 @@ func (s *ClientService) DepleteClients() (inboundIds []uint, err error) {
 			clientIDs = append(clientIDs, client.Id)
 		}
 		depletedClientIDs = append(depletedClientIDs, clientIDs...)
-		err = tx.Model(model.Client{}).Where("enable = true AND id IN ?", clientIDs).Update("enable", false).Error
+		const independent = `(delay_start OR peer_delay_start OR auto_reset) AND id IN (SELECT client_id FROM peer_assignments)`
+		err = tx.Model(model.Client{}).Where("enable = true AND id IN ?", clientIDs).UpdateColumns(map[string]any{
+			"enable":         gorm.Expr("CASE WHEN " + independent + " THEN enable ELSE false END"),
+			"local_depleted": gorm.Expr("CASE WHEN " + independent + " THEN true ELSE local_depleted END"),
+		}).Error
 		if err != nil {
 			return nil, err
 		}
@@ -1029,8 +1036,9 @@ func (s *ClientService) ResetClients(tx *gorm.DB, dt int64) ([]uint, error) {
 		client.Expiry = dt + (int64(client.ResetDays) * 86400)
 		client.DelayStart = false
 		if err := updateClientResetFields(tx, client.Id, map[string]interface{}{
-			"expiry":      client.Expiry,
-			"delay_start": client.DelayStart,
+			"expiry":           client.Expiry,
+			"delay_start":      client.DelayStart,
+			"peer_delay_start": true,
 		}); err != nil {
 			return nil, err
 		}
@@ -1054,8 +1062,9 @@ func (s *ClientService) ResetClients(tx *gorm.DB, dt int64) ([]uint, error) {
 		client.NextReset = dt + (clientResetPeriodDays(client.ResetDays) * 86400)
 		client.DelayStart = false
 		if err := updateClientResetFields(tx, client.Id, map[string]interface{}{
-			"next_reset":  client.NextReset,
-			"delay_start": client.DelayStart,
+			"next_reset":       client.NextReset,
+			"delay_start":      client.DelayStart,
+			"peer_delay_start": true,
 		}); err != nil {
 			return nil, err
 		}
@@ -1071,12 +1080,13 @@ func (s *ClientService) ResetClients(tx *gorm.DB, dt int64) ([]uint, error) {
 	// Set periodic reset
 	resetClients = nil
 	err = tx.Model(model.Client{}).
-		Where("delay_start = false AND auto_reset = true AND next_reset < ?", dt).Find(&resetClients).Error
+		Where("delay_start = false AND auto_reset = true AND next_reset < ?", dt).
+		Where("enable OR id NOT IN (SELECT client_id FROM peer_assignments)").Find(&resetClients).Error
 	if err != nil {
 		return nil, err
 	}
 	for _, client := range resetClients {
-		if !client.Enable {
+		if !client.Enable || client.LocalDepleted {
 			clientInboundIds, ok := decodeClientInbounds(client.Id, client.Inbounds, "client reset")
 			if !ok {
 				continue
@@ -1092,12 +1102,13 @@ func (s *ClientService) ResetClients(tx *gorm.DB, dt int64) ([]uint, error) {
 			client.Enable = true
 		}
 		if err := updateClientResetFields(tx, client.Id, map[string]interface{}{
-			"next_reset": client.NextReset,
-			"total_up":   client.TotalUp,
-			"total_down": client.TotalDown,
-			"up":         client.Up,
-			"down":       client.Down,
-			"enable":     client.Enable,
+			"next_reset":     client.NextReset,
+			"total_up":       client.TotalUp,
+			"total_down":     client.TotalDown,
+			"up":             client.Up,
+			"down":           client.Down,
+			"enable":         client.Enable,
+			"local_depleted": false,
 		}); err != nil {
 			return nil, err
 		}
@@ -1133,6 +1144,10 @@ func (s *ClientService) findInboundsChanges(tx *gorm.DB, client *model.Client, f
 			client.Config = oldClient.Config
 		}
 	}
+	if oldClient.PeerDelayStart && oldClient.AutoReset == client.AutoReset && client.ResetDays > 0 && (client.AutoReset || oldClient.Expiry == client.Expiry) {
+		client.PeerDelayStart = true
+	}
+	client.LocalDepleted = oldClient.LocalDepleted && !clientIsActiveAt(*client, time.Now().Unix())
 	err = json.Unmarshal(oldClient.Inbounds, &oldInboundIds)
 	if err != nil {
 		return nil, err
@@ -1146,7 +1161,7 @@ func (s *ClientService) findInboundsChanges(tx *gorm.DB, client *model.Client, f
 	// schedule a server inbound hot reload because Sudoku has no server users.
 	if !clientCoreConfigEqual(oldClient.Config, client.Config) ||
 		oldClient.Name != client.Name ||
-		oldClient.Enable != client.Enable {
+		oldClient.Enable != client.Enable || oldClient.LocalDepleted != client.LocalDepleted {
 		return common.UnionUintArray(oldInboundIds, newInboundIds), nil
 	}
 

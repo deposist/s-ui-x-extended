@@ -4,6 +4,7 @@
     v-model="modal.visible"
     :visible="modal.visible"
     :id="modal.id"
+    :initial-protocol="modal.initialProtocol"
     :inTags="inTags"
     :tlsConfigs="tlsConfigs"
     @close="closeModal"
@@ -127,7 +128,8 @@ import Data from '@/store/modules/data'
 import InboundVue from '@/layouts/modals/Inbound.vue'
 import Stats from '@/layouts/modals/Stats.vue'
 import { Config } from '@/types/config'
-import { computed, defineAsyncComponent, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { createInbound, Inbound } from '@/types/inbounds'
 import RandomUtil from '@/plugins/randomUtil'
 import { useUiMode } from '@/uiMode/useUiMode'
@@ -171,14 +173,26 @@ const enableTraffic = computed((): boolean => {
 const modal = ref({
   visible: false,
   id: 0,
+  initialProtocol: 'direct',
 })
 
 let delOverlay = ref(new Array<boolean>)
 
-const showModal = (id: number) => {
+const showModal = (id: number, initialProtocol = 'direct') => {
   modal.value.id = id
+  modal.value.initialProtocol = initialProtocol
   modal.value.visible = true
 }
+const route = useRoute()
+const router = useRouter()
+onMounted(() => {
+  if (route?.query.newPeerInbound === 'vless') {
+    showModal(0, 'vless')
+    const query = { ...route.query }
+    delete query.newPeerInbound
+    void router.replace({ query })
+  }
+})
 const closeModal = () => {
   modal.value.visible = false
 }

@@ -64,7 +64,7 @@ Release history and upgrade notes:
 - Russian changelog: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - Simplified Chinese changelog: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
 - Latest stable notes: [`docs/releases/v1.1.1.md`](docs/releases/v1.1.1.md)
-- Latest beta notes: [`docs/releases/v1.1.2-beta9.md`](docs/releases/v1.1.2-beta9.md)
+- Latest beta notes: [`docs/releases/v1.1.2-beta10.md`](docs/releases/v1.1.2-beta10.md)
 - Upstream parity reference: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 ## How this fork differs from `alireza0/s-ui`
@@ -95,11 +95,14 @@ This fork is built to stay compatible with existing 1.x installs. You can replac
 ## Nodes: Master and Slave
 
 1. Install the same panel on both servers. On the server that will manage clients, open **Nodes**, enable **Master**, and create an invitation.
-2. On the other server, open **Nodes**, enter the Master panel's HTTPS address (including its panel path) and the invitation code, then connect as **Slave**. The Master certificate must be trusted by the Slave.
-3. On the Slave, create a compatible inbound and save the public hostname or IP that clients will connect to. On the Master, open the node's client list, select that inbound, and assign clients. Refresh the client subscription after the Slave confirms the change.
-4. To disconnect, use the regular disconnect action on the Master while the Slave is reachable. If you force removal when the Slave is offline, links are removed from subscriptions, but existing credentials may still work until you unlink in the Slave panel.
+2. On the other server, open **Nodes**, paste the invitation, verify the Master panel's HTTPS address and connect as **Slave**. The invitation includes the panel path. You can also enter the address and code manually. The Slave must trust the Master certificate.
+3. On the Slave, create or select a compatible inbound and save the public hostname or IP that clients will connect to. On the Master, open the node, select its inbound and run **Check connection**. For this check configure `SUI_NODE_PROBE_URL` on Master with the HTTPS URL of a trusted endpoint that returns a 2xx response. The check currently supports an announced VLESS TCP inbound. The panel reloads that inbound when it installs and removes the temporary credential.
+4. Preview the assignments, review the changes and apply them. Refresh the client subscription after the Slave confirms access. **Overview** shows node incidents, Telegram settings can send alerts, and client diagnostics show the last quota sample where available.
+5. To disconnect, use the regular disconnect action on the Master while the Slave is reachable. Forced removal hides links from fresh subscriptions immediately. Updated Slaves close managed access when the lease expires. Older panels may require local unlinking.
 
-Paired nodes support TCP VLESS, VMess and Trojan inbounds without REALITY. IP limits, connection limits, shared or separate upload/download speed limits, traffic quotas and fixed access expiry are enforced independently on each VPS, even if the Master goes offline. The Slave persists quota usage locally. Assignments with delayed-start or auto-reset policies are blocked rather than granted without those policies. Existing manually managed nodes keep their own limiter configuration.
+Paired nodes publish links from the Slave's announced inbound configuration. Protocol and transport availability depends on the builds and the subscription format. IP limits, connection limits, upload and download speed limits, traffic quotas and access expiry are enforced independently on each VPS. The Slave persists quota usage locally. Updated panels support delayed-start and auto-reset policies when those policies can be enforced on the Slave. Existing manually managed nodes keep their own limiter configuration.
+
+Re-pair a Slave after rolling it back to beta9 if it previously used confirmed leases with the Master. Mixed versions use the common protocols and policies. Configure `SUI_NODE_PROBE_CA_FILE` on Master when the HTTPS control endpoint uses a private CA.
 
 ## Supported protocols
 
@@ -230,7 +233,7 @@ and tokens. Database migrations run on the first start after an upgrade.
 | Channel | Version | Notes |
 | --- | --- | --- |
 | Stable | [`v1.1.1`](docs/releases/v1.1.1.md) | Recommended for production. Includes the full 1.1.1 series: sing-box-extended 1.14 core, AmneziaWG 3.1 random trailers and disable-cookies, OpenVPN endpoints, structured core forms, and installer and failover memory leak fixes. |
-| Beta | [`v1.1.2-beta9`](docs/releases/v1.1.2-beta9.md) | Pair Master and Slave panels from Nodes, assign clients to individual Slave inbounds and apply limits per server. |
+| Beta | [`v1.1.2-beta10`](docs/releases/v1.1.2-beta10.md) | Paste invitations, preview client assignments and check paired nodes from the panel. |
 
 ### Upgrade to the current stable release
 
@@ -250,16 +253,16 @@ not infer the release from the script URL.
 
 ```sh
 curl -fLsS \
-  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.2-beta9/install.sh \
-  | sudo bash -s -- v1.1.2-beta9
+  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.2-beta10/install.sh \
+  | sudo bash -s -- v1.1.2-beta10
 ```
 
 If you are already running as `root`, the equivalent short form is:
 
 ```sh
 bash <(curl -fLsS \
-  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.2-beta9/install.sh) \
-  v1.1.2-beta9
+  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.2-beta10/install.sh) \
+  v1.1.2-beta10
 ```
 
 After the upgrade, check the installed version and service state:
@@ -279,13 +282,13 @@ git clone --branch v1.1.1 --depth 1 \
 cd s-ui-x-extended
 sudo bash install.sh v1.1.1
 ```
-For the beta release, use `v1.1.2-beta9` in both the clone command and the installer argument.
+For the beta release, use `v1.1.2-beta10` in both the clone command and the installer argument.
 
 
 ### Windows
 
 - Stable: download [`v1.1.1`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.1), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
-- Beta: download [`v1.1.2-beta9`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.2-beta9), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
+- Beta: download [`v1.1.2-beta10`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.2-beta10), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
 
 Upgrade and rollback notes are in the changelogs:
 [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), and [中文](CHANGELOG-ZH.md).
@@ -354,7 +357,7 @@ Docker Compose option:
 ```shell
 services:
   s-ui:
-    image: ghcr.io/deposist/s-ui-x-extended:v1.1.2-beta9
+    image: ghcr.io/deposist/s-ui-x-extended:v1.1.2-beta10
     container_name: s-ui
     hostname: "s-ui"
     network_mode: host
@@ -379,7 +382,7 @@ docker run -itd \
     -v $PWD/cert/:/root/cert/ \
     --name s-ui \
     --restart=unless-stopped \
-    ghcr.io/deposist/s-ui-x-extended:v1.1.2-beta9
+    ghcr.io/deposist/s-ui-x-extended:v1.1.2-beta10
 ```
 These Docker examples use the beta release. Use `v1.1.1` for the stable release.
 

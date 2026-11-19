@@ -57,6 +57,7 @@ type Runtime struct {
 	lastUpdate         *LastUpdateStore
 	auditWriter        *auditWriter
 	telegramNotifier   *telegramNotifier
+	nodeProbes         peerProbes
 	tokenUse           *tokenUseDebouncer
 	awgClientState     AWGClientStateHook
 	awgEndpointDevices AWGEndpointDeviceService

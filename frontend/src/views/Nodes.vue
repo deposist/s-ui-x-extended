@@ -50,10 +50,11 @@
       </template>
       <template #col.online="{ item }">
         <nexus-badge
-          :label="item.peerDisconnect ? $t('nodes.setup.disconnectPending') : item.enabled ? (item.online ? $t('nodes.online') : $t('nodes.offline')) : $t('nodes.disabled')"
+          :label="item.syncState ? $t(`nodes.syncState.${item.syncState}`) : item.peerDisconnect ? $t('nodes.setup.disconnectPending') : item.enabled ? (item.online ? $t('nodes.online') : $t('nodes.offline')) : $t('nodes.disabled')"
           :variant="item.peerDisconnect ? 'warning' : item.enabled ? (item.online ? 'success' : 'secondary') : 'warning'"
         />
-        <div v-if="item.peerBlocked" class="nodes-page__muted">{{ $t('nodes.setup.blockedAssignments', { count: item.peerBlocked }) }}</div>
+        <div v-if="item.applyState" class="nodes-page__muted">{{ $t(`nodes.applyState.${item.applyState}`) }}</div>
+        <div v-if="item.blockedAssignments || item.peerBlocked" class="nodes-page__muted">{{ $t('nodes.setup.blockedAssignments', { count: item.blockedAssignments ?? item.peerBlocked }) }}</div>
       </template>
       <template #col.linkHost="{ item }">
         <span v-if="item.linkHost" class="nexus-mono">{{ item.linkHost }}</span>
@@ -170,110 +171,188 @@
     <!-- Per-server client list. The page, the total and the filter all come
          from the server, so a server with thousands of clients never ships
          them all to render 25 rows. -->
-    <v-dialog v-model="clientsPanel.visible" max-width="900" scrollable>
+    <v-dialog v-model="clientsPanel.visible" :persistent="clientsPanel.saving" max-width="1050" scrollable>
       <v-card :title="$t('nodes.clientsOf', { name: clientsPanel.node?.name ?? '' })">
         <v-divider />
-        <v-card-text>
-          <template v-if="clientsPanel.node?.paired">
-            <v-select
-              :model-value="clientsPanel.inboundId"
-              :items="(clientsPanel.node.peerInbounds ?? []).map(inbound => ({ title: `${inbound.tag} (${inbound.type})`, value: inbound.id }))"
-              :label="$t('nodes.setup.selectInbound')"
-              :no-data-text="$t('nodes.setup.noPeerInbounds')"
+        <v-card-text class="nodes-page__client-workspace" :class="{ 'nodes-page__client-workspace--paired': clientsPanel.node?.paired }">
+          <nav v-if="clientsPanel.node?.paired" class="nodes-page__inbounds" :aria-label="$t('nodes.setup.selectInbound')">
+            <div class="text-subtitle-2">{{ $t('nodes.inbounds') }}</div>
+            <v-btn
+              v-for="inbound in clientsPanel.node.peerInbounds"
+              :key="inbound.id"
+              :variant="inbound.id === clientsPanel.inboundId ? 'tonal' : 'text'"
+              :aria-pressed="inbound.id === clientsPanel.inboundId"
               :disabled="clientsPanel.saving"
-              @update:model-value="selectPeerInbound"
-            />
-            <v-alert type="info" variant="tonal" class="mb-3">{{ $t('nodes.setup.assignmentsNotApplied') }}</v-alert>
-          </template>
-          <v-row align="center" class="mb-2">
-            <v-col cols="12" sm="6">
-              <v-text-field
-                v-model.trim="clientsPanel.query"
+              @click="selectPeerInbound(inbound.id)"
+            >
+              {{ inbound.tag }} ({{ inbound.type }})
+            </v-btn>
+            <div v-if="!clientsPanel.node.peerInbounds?.length" class="text-body-2">
+              {{ $t('nodes.setup.noPeerInbounds') }}
+            </div>
+          </nav>
+          <div class="nodes-page__client-list">
+            <template v-if="currentPeerNode">
+              <p v-if="currentPeerNode.applyState">{{ $t(`nodes.applyState.${currentPeerNode.applyState}`) }}</p>
+              <p v-if="currentPeerNode.lastPeerSync">{{ $t('nodes.lastPeerSync', { time: formatTimestamp(currentPeerNode.lastPeerSync) }) }}</p>
+              <p>{{ currentPeerNode.accessUntil ? $t('nodes.accessUntil', { time: formatTimestamp(currentPeerNode.accessUntil) }) : $t('nodes.accessUntilUnknown') }}</p>
+              <v-btn v-if="canProbe" class="my-2" variant="tonal" :loading="startingProbe" :disabled="probeResult?.result === 'running'" @click="startProbe">{{ $t('nodes.probe.run') }}</v-btn>
+              <div v-if="probeResult" class="mb-3" role="status">
+                <div>{{ $t('nodes.probe.from', { time: formatTimestamp(probeResult.checkedAt) }) }}</div>
+                <div>{{ $t(`nodes.probe.stage.${probeResult.stage}`) }} · {{ $t(`nodes.probe.result.${probeResult.result}`) }}
+                  <span v-if="probeResult.result === 'success'"> ({{ probeResult.latencyMs ?? 0 }} ms)</span>
+                </div>
+              </div>
+            </template>
+            <template v-if="clientsPanel.node?.paired && canSelectClients">
+              <v-alert type="info" variant="tonal" class="mb-3">{{ $t('nodes.setup.assignmentsNotApplied') }}</v-alert>
+            </template>
+            <v-alert v-if="assignmentResult" type="info" variant="tonal" class="mb-3" role="status">{{ assignmentResult }}</v-alert>
+            <v-alert v-if="assignmentPreview" type="info" variant="tonal" class="mb-3">
+              <p>{{ $t('nodes.preview.summary', { changes: assignmentPreview.changes, skipped: assignmentPreview.skipped }) }}</p>
+              <p v-if="assignmentPreview.remaining">{{ $t('nodes.preview.remaining', { count: assignmentPreview.remaining }) }}</p>
+              <ul class="nodes-page__preview">
+                <li v-for="item in assignmentPreview.items" :key="item.clientId">
+                  {{ item.name || item.clientId }} · {{ $t(`nodes.preview.effect.${item.effect}`) }}
+                  <span v-if="item.reason"> · {{ $t(`nodes.preview.reason.${item.reason}`) }}</span>
+                </li>
+              </ul>
+              <v-btn :loading="clientsPanel.saving" color="primary" variant="flat" @click="confirmAssignmentPreview">{{ $t('nodes.preview.apply') }}</v-btn>
+              <v-btn :disabled="clientsPanel.saving" variant="text" @click="assignmentPreview = null">{{ $t('actions.cancel') }}</v-btn>
+            </v-alert>
+            <v-row align="center" class="mb-2">
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model.trim="clientsPanel.query"
+                  density="compact"
+                  hide-details
+                  :label="$t('nodes.searchClients')"
+                  :disabled="!canSelectClients || clientsPanel.selecting || clientsPanel.saving"
+                  prepend-inner-icon="lucide:search"
+                  variant="outlined"
+                  @keyup.enter="loadClients(1)"
+                />
+              </v-col>
+              <v-col cols="auto">
+                <v-btn variant="tonal" :disabled="!canSelectClients || clientsPanel.selecting || clientsPanel.saving" @click="loadClients(1)">{{ $t('nodes.apply') }}</v-btn>
+              </v-col>
+            </v-row>
+
+            <div v-if="canSelectClients" class="nodes-page__bulk-tools mb-3">
+              <v-btn
+                variant="tonal"
+                :disabled="!clientsPanel.total || clientsPanel.selecting || clientsPanel.saving"
+                @click="selectMatching()"
+              >
+                {{ $t('nodes.selectAllResults') }}
+              </v-btn>
+              <v-select
+                v-model="clientsPanel.group"
+                class="nodes-page__group"
+                :items="clientGroups"
+                :label="$t('client.group')"
                 density="compact"
                 hide-details
-                :label="$t('nodes.searchClients')"
-                prepend-inner-icon="lucide:search"
-                variant="outlined"
-                @keyup.enter="loadClients(1)"
+                :disabled="clientsPanel.selecting || clientsPanel.saving"
               />
-            </v-col>
-            <v-col cols="auto">
-              <v-btn variant="tonal" @click="loadClients(1)">{{ $t('nodes.apply') }}</v-btn>
-            </v-col>
-            <v-spacer />
-            <v-col cols="auto">
               <v-btn
-                color="primary"
-                :disabled="!selectionAddable.length"
-                variant="flat"
-                @click="assignSelected(true)"
+                variant="tonal"
+                :disabled="clientsPanel.group === null || clientsPanel.selecting || clientsPanel.saving"
+                @click="selectMatching(clientsPanel.group ?? undefined)"
               >
-                {{ $t('nodes.addSelected', { count: selectionAddable.length }) }}
+                {{ $t('nodes.selectGroup') }}
               </v-btn>
-            </v-col>
-          </v-row>
+            </div>
+            <v-table v-if="clientsPanel.items.length" class="nodes-page__client-table" density="compact">
+              <thead>
+                <tr>
+                  <th class="nodes-page__checkbox">
+                    <v-checkbox-btn
+                      :aria-label="$t('nodes.selectPage')"
+                      :disabled="clientsPanel.selecting || clientsPanel.saving"
+                      :indeterminate="!allOnPageSelected && pageSelectedCount > 0"
+                      :model-value="allOnPageSelected"
+                      @update:model-value="togglePage"
+                    />
+                  </th>
+                  <th>{{ $t('nodes.clientName') }}</th>
+                  <th class="nodes-page__assignment">{{ $t('nodes.assigned') }}</th>
+                  <th class="nodes-page__desktop-column">{{ $t('enable') }}</th>
+                  <th class="nodes-page__desktop-column">{{ $t('nodes.traffic') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="client in clientsPanel.items" :key="client.id">
+                  <td class="nodes-page__checkbox">
+                    <v-checkbox-btn
+                      :aria-label="client.name"
+                      :disabled="clientsPanel.selecting || clientsPanel.saving"
+                      :model-value="selection.ids.has(client.id)"
+                      @update:model-value="toggleClient(client.id)"
+                    />
+                  </td>
+                  <td>
+                    {{ client.name }}
+                    <div v-if="client.group" class="nodes-page__muted text-caption">{{ client.group }}</div>
+                    <div v-if="client.linkReason" class="nodes-page__muted text-caption">{{ $t(`nodes.linkReason.${client.linkReason}`) }}</div>
+                    <div class="nodes-page__mobile-details text-caption">
+                      <span>{{ client.enable ? $t('enable') : $t('disable') }}</span>
+                      <span><span class="d-sr-only">{{ $t('nodes.traffic') }} </span>{{ formatBytes(client.up + client.down) }}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <nexus-badge
+                      :label="client.assigned ? $t('yes') : $t('no')"
+                      :variant="client.assigned ? 'success' : 'secondary'"
+                    />
+                  </td>
+                  <td class="nodes-page__desktop-column">{{ client.enable ? $t('enable') : $t('disable') }}</td>
+                  <td class="nodes-page__desktop-column nexus-mono">{{ formatBytes(client.up + client.down) }}</td>
+                </tr>
+              </tbody>
+            </v-table>
+            <empty-state v-else :title="$t('table.noData')" />
 
-          <v-table v-if="clientsPanel.items.length" density="compact">
-            <thead>
-              <tr>
-                <th class="nodes-page__checkbox">
-                  <v-checkbox-btn
-                    :aria-label="$t('table.selectRow')"
-                    :indeterminate="!allOnPageSelected && pageSelectedCount > 0"
-                    :model-value="allOnPageSelected"
-                    @update:model-value="togglePage"
-                  />
-                </th>
-                <th>{{ $t('nodes.clientName') }}</th>
-                <th>{{ $t('nodes.assigned') }}</th>
-                <th>{{ $t('enable') }}</th>
-                <th>{{ $t('nodes.traffic') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="client in clientsPanel.items" :key="client.id">
-                <td class="nodes-page__checkbox">
-                  <v-checkbox-btn
-                    :aria-label="$t('table.selectRow')"
-                    :model-value="selection.ids.has(client.id)"
-                    @update:model-value="toggleClient(client.id)"
-                  />
-                </td>
-                <td>{{ client.name }}</td>
-                <td>
-                  <nexus-badge
-                    :label="client.assigned ? $t('yes') : $t('no')"
-                    :variant="client.assigned ? 'success' : 'secondary'"
-                  />
-                </td>
-                <td>{{ client.enable ? $t('enable') : $t('disable') }}</td>
-                <td class="nexus-mono">{{ formatBytes(client.up + client.down) }}</td>
-              </tr>
-            </tbody>
-          </v-table>
-          <empty-state v-else :title="$t('table.noData')" />
-
-          <table-pagination
-            v-if="clientsPanel.total > 0"
-            :items-per-page="clientsPanel.limit"
-            :page="clientsPanel.page"
-            :total="clientsPanel.total"
-            @update:items-per-page="onPageSize"
-            @update:page="loadClients"
-          />
+            <table-pagination
+              v-if="clientsPanel.total > 0"
+              :items-per-page="clientsPanel.limit"
+              :page="clientsPanel.page"
+              :total="clientsPanel.total"
+              @update:items-per-page="onPageSize"
+              @update:page="loadClients"
+            />
+          </div>
         </v-card-text>
         <v-divider />
-        <v-card-actions>
+        <v-card-actions class="flex-wrap">
+          <span role="status" class="mx-2">
+            {{ clientsPanel.selecting ? $t('nodes.selectingClients') : $t('nodes.clientsSelected', { count: selection.ids.size }) }}
+          </span>
+          <v-btn
+            variant="text"
+            :disabled="!selection.ids.size || clientsPanel.selecting || clientsPanel.saving"
+            @click="selection.ids.clear()"
+          >
+            {{ $t('nodes.clearSelection') }}
+          </v-btn>
+          <v-spacer />
           <v-btn
             color="error"
-            :disabled="!selectionRemovable.length"
+            :disabled="!selectionRemovable.length || clientsPanel.selecting || clientsPanel.saving"
             variant="tonal"
             @click="assignSelected(false)"
           >
             {{ $t('nodes.removeSelected', { count: selectionRemovable.length }) }}
           </v-btn>
-          <v-spacer />
-          <v-btn variant="text" @click="clientsPanel.visible = false">{{ $t('actions.close') }}</v-btn>
+          <v-btn
+            color="primary"
+            :disabled="!selectionAddable.length || clientsPanel.selecting || clientsPanel.saving"
+            variant="flat"
+            @click="assignSelected(true)"
+          >
+            {{ $t('nodes.addSelected', { count: selectionAddable.length }) }}
+          </v-btn>
+          <v-btn variant="text" :disabled="clientsPanel.saving" @click="clientsPanel.visible = false">{{ $t('actions.close') }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -296,6 +375,7 @@ import PageHeader from '@/components/nexus/primitives/PageHeader.vue'
 import PageToolbar from '@/components/nexus/primitives/PageToolbar.vue'
 import { useConfirm } from '@/components/nexus/primitives/useConfirm'
 import HttpUtils from '@/plugins/httputil'
+import Data from '@/store/modules/data'
 import NodePanelSetup from './NodePanelSetup.vue'
 
 interface LimiterRoles {
@@ -316,6 +396,13 @@ interface NodeRow {
   paired?: boolean
   peerDisconnect?: boolean
   peerBlocked?: number
+  blockedAssignments?: number
+  lastPeerSync?: number
+  accessUntil?: number
+  syncState?: 'waiting' | 'online' | 'offline' | 'disabled' | 'disconnecting'
+  applyState?: 'unknown' | 'pending' | 'applied'
+  probeResults?: ProbeResult[]
+  probeInboundIds?: number[]
   name: string
   linkHost: string
   enabled: boolean
@@ -337,6 +424,15 @@ interface NodeClientRow {
   expiry: number
   group: string
   assigned?: boolean
+  linkReason?: string
+}
+
+interface ProbeResult {
+  inboundId: number
+  stage: string
+  result: string
+  checkedAt: number
+  latencyMs?: number
 }
 
 const { t } = useI18n()
@@ -381,13 +477,63 @@ const clientsPanel = reactive({
   visible: false,
   node: null as NodeRow | null,
   inboundId: undefined as number | undefined,
+  group: null as string | null,
   saving: false,
+  selecting: false,
   items: [] as NodeClientRow[],
   total: 0,
   page: 1,
   limit: 25,
   query: '',
 })
+
+interface AssignmentPreview {
+  changes: number
+  skipped: number
+  fingerprint: string
+  items: { clientId: number; name?: string; effect: string; reason?: string }[]
+  uuid: string
+  inboundId: number
+  ids: number[]
+  assigned: boolean
+  remaining: number
+}
+
+const assignmentPreview = ref<AssignmentPreview | null>(null)
+const assignmentResult = ref('')
+const currentPeerNode = computed(() => {
+  const node = clientsPanel.node
+  return node?.paired ? nodes.value.find(item => item.uuid === node.uuid) ?? node : null
+})
+const formatTimestamp = (timestamp: number) => new Date(timestamp * 1000).toLocaleString()
+const startingProbe = ref(false)
+const canProbe = computed(() => clientsPanel.inboundId && currentPeerNode.value?.probeInboundIds?.includes(clientsPanel.inboundId))
+const probeResult = computed(() => currentPeerNode.value?.probeResults?.find(result => result.inboundId === clientsPanel.inboundId))
+
+async function startProbe() {
+  const node = currentPeerNode.value
+  const inboundId = clientsPanel.inboundId
+  if (!canProbe.value || !node || !inboundId || startingProbe.value) return
+  startingProbe.value = true
+  try {
+    const response = await HttpUtils.post(`api/nodes/${node.uuid}/probe`, { inboundId }, { headers: { 'Content-Type': 'application/json' } })
+    if (response.success && response.obj) {
+      node.probeResults = [...(node.probeResults ?? []).filter(result => result.inboundId !== inboundId), response.obj]
+      await loadNodes()
+    }
+  } finally {
+    startingProbe.value = false
+  }
+}
+
+const clientGroups = computed(() =>
+  [...new Set<string>(Data().clients.map((client: { group?: string }) => client.group ?? ''))]
+    .sort((a, b) => a.localeCompare(b))
+    .map(group => ({ title: group || t('nodes.ungrouped'), value: group })),
+)
+const canSelectClients = computed(() => Boolean(
+  clientsPanel.node && (!clientsPanel.node.paired || clientsPanel.inboundId),
+))
 
 // The selection is keyed by client id and survives paging, so a batch applies
 // to everything the operator ticked and not only to the visible page.
@@ -476,13 +622,18 @@ async function deleteNode(node: NodeRow, force = false) {
 }
 
 async function openClients(node: NodeRow) {
+  assignmentPreview.value = null
+  assignmentResult.value = ''
   clientsPanel.node = node
   clientsPanel.visible = true
   clientsPanel.query = ''
+  clientsPanel.group = null
   await selectPeerInbound(node.peerInbounds?.length === 1 ? node.peerInbounds[0]?.id : undefined)
 }
 
 async function selectPeerInbound(inboundId?: number) {
+  assignmentPreview.value = null
+  assignmentResult.value = ''
   clientsRevision++
   clientsPanel.inboundId = inboundId
   clientsPanel.items = []
@@ -509,6 +660,31 @@ async function loadClients(page: number) {
   clientsPanel.total = body?.total ?? 0
   for (const client of clientsPanel.items) {
     if (selection.ids.has(client.id)) selection.ids.set(client.id, Boolean(client.assigned))
+  }
+}
+
+async function selectMatching(group?: string) {
+  const node = clientsPanel.node
+  if (!node || !canSelectClients.value || clientsPanel.selecting || clientsPanel.saving) return
+  const revision = clientsRevision
+  const { inboundId, query } = clientsPanel
+  const matches = new Map<number, boolean>()
+  clientsPanel.selecting = true
+  try {
+    let offset = 0
+    for (;;) {
+      const msg = await HttpUtils.get(`api/nodes/${node.uuid}/clients`, { limit: 200, offset, q: query, inboundId })
+      if (!msg.success || revision !== clientsRevision || !clientsPanel.visible || clientsPanel.query !== query) return
+      const { items, total } = msg.obj as { items: NodeClientRow[], total: number }
+      for (const item of items) {
+        if (group === undefined || (item.group ?? '') === group) matches.set(item.id, Boolean(item.assigned))
+      }
+      offset += items.length
+      if (!items.length || offset >= total) break
+    }
+    for (const [id, assigned] of matches) selection.ids.set(id, assigned)
+  } finally {
+    clientsPanel.selecting = false
   }
 }
 
@@ -544,15 +720,66 @@ function assignSelected(assigned: boolean) {
 }
 
 async function applyBatch(ids: number[], assigned: boolean) {
-  if (!clientsPanel.node || ids.length === 0 || clientsPanel.saving) return
+  if (!clientsPanel.node || ids.length === 0 || clientsPanel.saving || clientsPanel.selecting) return
   if (clientsPanel.node.paired && !clientsPanel.inboundId) return
   const url = `api/nodes/${clientsPanel.node.uuid}/clients`
-  const body = { ids: JSON.stringify(ids), ...(clientsPanel.inboundId ? { inboundId: String(clientsPanel.inboundId) } : {}) }
+  const { inboundId } = clientsPanel
+  if (clientsPanel.node.paired && inboundId) {
+    const uuid = clientsPanel.node.uuid
+    clientsPanel.saving = true
+    assignmentPreview.value = null
+    assignmentResult.value = ''
+    try {
+      const batch = ids.slice(0, 500)
+      const response = await HttpUtils.post(`${url}/preview`, { inboundId, clientIds: batch, action: assigned ? 'add' : 'remove' }, {
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (response.success && clientsPanel.node?.uuid === uuid && clientsPanel.inboundId === inboundId) {
+        assignmentPreview.value = { ...response.obj, uuid, inboundId, ids: batch, assigned, remaining: ids.length - batch.length }
+      }
+    } finally {
+      clientsPanel.saving = false
+    }
+    return
+  }
   clientsPanel.saving = true
   try {
-    const msg = assigned ? await HttpUtils.post(url, new URLSearchParams(body)) : await HttpUtils.del(url, body)
-    if (!msg.success) return
-    selection.ids.clear()
+    const batchSize = 500
+    let applied = false
+    for (let start = 0; start < ids.length; start += batchSize) {
+      const batch = ids.slice(start, start + batchSize)
+      const body = { ids: JSON.stringify(batch), ...(inboundId ? { inboundId: String(inboundId) } : {}) }
+      const msg = assigned ? await HttpUtils.post(url, new URLSearchParams(body)) : await HttpUtils.del(url, body)
+      if (!msg.success) break
+      applied = true
+      for (const id of batch) selection.ids.delete(id)
+    }
+    if (applied) {
+      await loadClients(clientsPanel.page)
+      await loadNodes()
+    }
+  } finally {
+    clientsPanel.saving = false
+  }
+}
+
+async function confirmAssignmentPreview() {
+  const preview = assignmentPreview.value
+  if (!preview || clientsPanel.saving || clientsPanel.node?.uuid !== preview.uuid || clientsPanel.inboundId !== preview.inboundId) return
+  clientsPanel.saving = true
+  try {
+    const url = `api/nodes/${preview.uuid}/clients`
+    const body = { ids: JSON.stringify(preview.ids), inboundId: String(preview.inboundId), previewFingerprint: preview.fingerprint }
+    const response = preview.assigned ? await HttpUtils.post(url, new URLSearchParams(body)) : await HttpUtils.del(url, body)
+    if (response.obj?.reason === 'stale_preview') {
+      assignmentPreview.value = null
+      assignmentResult.value = t('nodes.preview.stale')
+      return
+    }
+    if (!response.success) return
+    assignmentPreview.value = null
+    assignmentResult.value = t(preview.assigned ? 'nodes.preview.addResult' : 'nodes.preview.removeResult', { count: response.obj?.changed ?? 0 })
+    for (const id of preview.ids) selection.ids.delete(id)
     await loadClients(clientsPanel.page)
     await loadNodes()
   } finally {
@@ -594,7 +821,12 @@ function formatBytes(value: number): string {
 }
 
 onMounted(() => {
-  void loadNodes()
+  void loadNodes().then(() => {
+    if (typeof window === 'undefined') return
+    const uuid = new URLSearchParams(window.location.search).get('node')
+    const node = nodes.value.find(item => item.uuid === uuid)
+    if (node && !clientsPanel.visible) void openClients(node)
+  })
   nodesTimer = setInterval(() => {
     if (panelRole.value === 'master' && !loading.value && !refreshingNodes) void loadNodes(true)
   }, 5000)
@@ -619,5 +851,83 @@ onMounted(() => {
 
 .nodes-page__checkbox {
   width: 48px;
+}
+
+.nodes-page__client-workspace {
+  display: grid;
+  gap: 16px;
+}
+
+.nodes-page__client-workspace--paired {
+  grid-template-columns: minmax(140px, 185px) minmax(0, 1fr);
+}
+
+.nodes-page__inbounds {
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nodes-page__client-list {
+  min-width: 0;
+}
+
+.nodes-page__preview {
+  max-height: 12rem;
+  overflow-y: auto;
+  padding-inline-start: 1.25rem;
+  margin-block: 0.5rem;
+}
+
+.nodes-page__bulk-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.nodes-page__group {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.nodes-page__mobile-details {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .nodes-page__client-workspace--paired {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nodes-page__client-table :deep(table) {
+    table-layout: fixed;
+    width: 100%;
+  }
+
+  .nodes-page__client-table :deep(th),
+  .nodes-page__client-table :deep(td) {
+    padding-inline: 6px;
+    overflow-wrap: anywhere;
+  }
+
+  .nodes-page__client-table .nodes-page__checkbox {
+    width: 44px;
+  }
+
+  .nodes-page__assignment {
+    width: 34%;
+  }
+
+  .nodes-page__desktop-column {
+    display: none;
+  }
+
+  .nodes-page__mobile-details {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 8px;
+  }
 }
 </style>

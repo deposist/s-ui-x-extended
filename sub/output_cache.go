@@ -58,7 +58,7 @@ func subscriptionCacheRevision() uint64 {
 	return subscriptionOutputCache.revision
 }
 
-func subscriptionCacheSet(key string, body string, headers []string, now time.Time, revision uint64) {
+func subscriptionCacheSet(key string, body string, headers []string, now time.Time, revision uint64, deadline time.Time) {
 	subscriptionOutputCache.mu.Lock()
 	defer subscriptionOutputCache.mu.Unlock()
 	if revision != subscriptionOutputCache.revision {
@@ -67,10 +67,14 @@ func subscriptionCacheSet(key string, body string, headers []string, now time.Ti
 	if len(subscriptionOutputCache.entries) >= subscriptionOutputCacheMaxEntries {
 		subscriptionOutputCache.entries = map[string]subscriptionOutputCacheEntry{}
 	}
+	expires := now.Add(subscriptionOutputCache.ttl)
+	if !deadline.IsZero() && deadline.Before(expires) {
+		expires = deadline
+	}
 	subscriptionOutputCache.entries[key] = subscriptionOutputCacheEntry{
 		body:    body,
 		headers: append([]string(nil), headers...),
-		expires: now.Add(subscriptionOutputCache.ttl),
+		expires: expires,
 	}
 }
 
