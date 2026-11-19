@@ -5,6 +5,9 @@
       :title="$t('pages.nodes')"
     />
 
+    <node-panel-setup @role-change="panelRole = $event" />
+
+    <template v-if="panelRole !== 'slave'">
     <page-toolbar>
       <template #actions>
         <v-btn color="primary" prepend-icon="lucide:plus" variant="flat" @click="startCreate">
@@ -15,7 +18,7 @@
           :loading="loading"
           icon="lucide:rotate-cw"
           variant="text"
-          @click="loadNodes"
+          @click="loadNodes()"
         >
           <v-icon />
           <v-tooltip activator="parent" :text="$t('actions.update')" location="top" />
@@ -47,20 +50,24 @@
       </template>
       <template #col.online="{ item }">
         <nexus-badge
-          :label="item.enabled ? (item.online ? $t('nodes.online') : $t('nodes.offline')) : $t('nodes.disabled')"
-          :variant="item.enabled ? (item.online ? 'success' : 'secondary') : 'warning'"
+          :label="item.peerDisconnect ? $t('nodes.setup.disconnectPending') : item.enabled ? (item.online ? $t('nodes.online') : $t('nodes.offline')) : $t('nodes.disabled')"
+          :variant="item.peerDisconnect ? 'warning' : item.enabled ? (item.online ? 'success' : 'secondary') : 'warning'"
         />
+        <div v-if="item.peerBlocked" class="nodes-page__muted">{{ $t('nodes.setup.blockedAssignments', { count: item.peerBlocked }) }}</div>
       </template>
       <template #col.linkHost="{ item }">
         <span v-if="item.linkHost" class="nexus-mono">{{ item.linkHost }}</span>
         <span v-else class="nodes-page__muted">—</span>
       </template>
       <template #col.inventory="{ item }">
-        <span v-if="item.inbounds?.length">{{ item.inbounds.length }}</span>
+        <span v-if="item.paired && item.inbounds?.length">{{ item.inbounds.join(', ') }}</span>
+        <span v-else-if="item.inbounds?.length">{{ item.inbounds.length }}</span>
         <span v-else class="nodes-page__muted">—</span>
       </template>
       <template #col.clientCount="{ item }">
+        <span v-if="item.paired" class="nodes-page__muted">—</span>
         <v-btn
+          v-else
           density="compact"
           variant="text"
           @click="openClients(item)"
@@ -167,6 +174,17 @@
       <v-card :title="$t('nodes.clientsOf', { name: clientsPanel.node?.name ?? '' })">
         <v-divider />
         <v-card-text>
+          <template v-if="clientsPanel.node?.paired">
+            <v-select
+              :model-value="clientsPanel.inboundId"
+              :items="(clientsPanel.node.peerInbounds ?? []).map(inbound => ({ title: `${inbound.tag} (${inbound.type})`, value: inbound.id }))"
+              :label="$t('nodes.setup.selectInbound')"
+              :no-data-text="$t('nodes.setup.noPeerInbounds')"
+              :disabled="clientsPanel.saving"
+              @update:model-value="selectPeerInbound"
+            />
+            <v-alert type="info" variant="tonal" class="mb-3">{{ $t('nodes.setup.assignmentsNotApplied') }}</v-alert>
+          </template>
           <v-row align="center" class="mb-2">
             <v-col cols="12" sm="6">
               <v-text-field
@@ -259,6 +277,7 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+    </template>
   </div>
 </template>
 
@@ -277,6 +296,7 @@ import PageHeader from '@/components/nexus/primitives/PageHeader.vue'
 import PageToolbar from '@/components/nexus/primitives/PageToolbar.vue'
 import { useConfirm } from '@/components/nexus/primitives/useConfirm'
 import HttpUtils from '@/plugins/httputil'
+import NodePanelSetup from './NodePanelSetup.vue'
 
 interface LimiterRoles {
   speedShared: string
@@ -293,11 +313,15 @@ interface NodeLimiter {
 
 interface NodeRow {
   uuid: string
+  paired?: boolean
+  peerDisconnect?: boolean
+  peerBlocked?: number
   name: string
   linkHost: string
   enabled: boolean
   online: boolean
   inbounds: string[]
+  peerInbounds?: { id: number; tag: string; type: string }[]
   limiters: NodeLimiter[]
   limiterRoles: LimiterRoles
   clientCount: number
@@ -319,6 +343,7 @@ const { t } = useI18n()
 const { confirm } = useConfirm()
 
 const nodes = ref<NodeRow[]>([])
+const panelRole = ref('')
 const loading = ref(false)
 const fleetReady = ref(true)
 const onlineCount = computed(() => nodes.value.filter(node => node.online).length)
@@ -355,6 +380,8 @@ const connectionLimiterItems = computed(() => limiterItems('connection-limiter',
 const clientsPanel = reactive({
   visible: false,
   node: null as NodeRow | null,
+  inboundId: undefined as number | undefined,
+  saving: false,
   items: [] as NodeClientRow[],
   total: 0,
   page: 1,
@@ -374,17 +401,27 @@ const selection = reactive({
 const selectionAddable = computed(() => [...selection.ids].filter(([, assigned]) => !assigned).map(([id]) => id))
 const selectionRemovable = computed(() => [...selection.ids].filter(([, assigned]) => assigned).map(([id]) => id))
 let clientsRevision = 0
-onBeforeUnmount(() => { clientsRevision++ })
+let nodesRevision = 0
+let refreshingNodes = false
+let nodesTimer: ReturnType<typeof setInterval>
+onBeforeUnmount(() => {
+  clearInterval(nodesTimer)
+  clientsRevision++
+  nodesRevision++
+})
 
-async function loadNodes() {
-  loading.value = true
-  const msg = await HttpUtils.get('api/nodes')
-  loading.value = false
-  if (!msg.success) return
-  nodes.value = (msg.obj ?? []) as NodeRow[]
-  // A node list without a running manager still renders; the banner explains
-  // why every node reads as offline.
-  fleetReady.value = nodes.value.length === 0 || true
+async function loadNodes(background = false) {
+  const revision = ++nodesRevision
+  if (background) refreshingNodes = true
+  if (!background) loading.value = true
+  try {
+    const msg = await HttpUtils.get('api/nodes')
+    if (!msg.success || revision !== nodesRevision) return
+    nodes.value = (msg.obj ?? []) as NodeRow[]
+  } finally {
+    if (background) refreshingNodes = false
+    if (revision === nodesRevision) loading.value = false
+  }
 }
 
 function startCreate() {
@@ -427,14 +464,14 @@ async function saveNode() {
   }
 }
 
-async function deleteNode(node: NodeRow) {
+async function deleteNode(node: NodeRow, force = false) {
   const ok = await confirm({
-    message: t('nodes.deleteConfirm', { name: node.name }),
-    title: t('actions.del'),
+    message: t(force ? 'nodes.setup.pairedDeleteConfirm' : node.paired ? 'nodes.setup.disconnectConfirm' : 'nodes.deleteConfirm', { name: node.name }),
+    title: t(force ? 'nodes.setup.forceDisconnect' : node.paired ? 'nodes.setup.disconnect' : 'actions.del'),
     tone: 'error',
   })
   if (!ok) return
-  const msg = await HttpUtils.del(`api/nodes/${node.uuid}`)
+  const msg = await HttpUtils.del(`api/nodes/${node.uuid}${force ? '?force=true' : ''}`)
   if (msg.success) await loadNodes()
 }
 
@@ -442,6 +479,12 @@ async function openClients(node: NodeRow) {
   clientsPanel.node = node
   clientsPanel.visible = true
   clientsPanel.query = ''
+  await selectPeerInbound(node.peerInbounds?.length === 1 ? node.peerInbounds[0]?.id : undefined)
+}
+
+async function selectPeerInbound(inboundId?: number) {
+  clientsRevision++
+  clientsPanel.inboundId = inboundId
   clientsPanel.items = []
   clientsPanel.total = 0
   selection.ids.clear()
@@ -449,7 +492,7 @@ async function openClients(node: NodeRow) {
 }
 
 async function loadClients(page: number) {
-  if (!clientsPanel.node) return
+  if (!clientsPanel.node || (clientsPanel.node.paired && !clientsPanel.inboundId)) return
   const revision = ++clientsRevision
   const nodeUUID = clientsPanel.node.uuid
   clientsPanel.page = page
@@ -458,6 +501,7 @@ async function loadClients(page: number) {
     limit: clientsPanel.limit,
     offset,
     q: clientsPanel.query,
+    inboundId: clientsPanel.inboundId,
   })
   if (!msg.success || revision !== clientsRevision || nodeUUID !== clientsPanel.node?.uuid) return
   const body = msg.obj as { items: NodeClientRow[], total: number }
@@ -500,22 +544,31 @@ function assignSelected(assigned: boolean) {
 }
 
 async function applyBatch(ids: number[], assigned: boolean) {
-  if (!clientsPanel.node || ids.length === 0) return
+  if (!clientsPanel.node || ids.length === 0 || clientsPanel.saving) return
+  if (clientsPanel.node.paired && !clientsPanel.inboundId) return
   const url = `api/nodes/${clientsPanel.node.uuid}/clients`
-  const body = { ids: JSON.stringify(ids) }
-  const msg = assigned ? await HttpUtils.post(url, body) : await HttpUtils.del(url, body)
-  if (!msg.success) return
-  selection.ids.clear()
-  await loadClients(clientsPanel.page)
-  await loadNodes()
+  const body = { ids: JSON.stringify(ids), ...(clientsPanel.inboundId ? { inboundId: String(clientsPanel.inboundId) } : {}) }
+  clientsPanel.saving = true
+  try {
+    const msg = assigned ? await HttpUtils.post(url, new URLSearchParams(body)) : await HttpUtils.del(url, body)
+    if (!msg.success) return
+    selection.ids.clear()
+    await loadClients(clientsPanel.page)
+    await loadNodes()
+  } finally {
+    clientsPanel.saving = false
+  }
 }
 
 function nodeActions(node: NodeRow): RowAction[] {
   const actions: RowAction[] = [
     { icon: 'lucide:users', key: 'clients', labelKey: 'nodes.clients', inline: true },
-    { icon: 'lucide:pencil', key: 'edit', labelKey: 'actions.edit', inline: true },
   ]
-  if (node.uuid) {
+  if (!node.paired) actions.push({ icon: 'lucide:pencil', key: 'edit', labelKey: 'actions.edit', inline: true })
+  if (node.paired) {
+    if (!node.peerDisconnect) actions.push({ divider: true, icon: 'lucide:unlink', key: 'delete', labelKey: 'nodes.setup.disconnect', tone: 'error' })
+    actions.push({ icon: 'lucide:alert-triangle', key: 'force', labelKey: 'nodes.setup.forceDisconnect', tone: 'error' })
+  } else if (node.uuid) {
     actions.push({ divider: true, icon: 'lucide:trash-2', key: 'delete', labelKey: 'actions.del', tone: 'error' })
   }
   return actions
@@ -524,6 +577,7 @@ function nodeActions(node: NodeRow): RowAction[] {
 function handleAction(key: string, node: NodeRow) {
   if (key === 'edit') startEdit(node)
   else if (key === 'delete') void deleteNode(node)
+  else if (key === 'force') void deleteNode(node, true)
   else if (key === 'clients') void openClients(node)
 }
 
@@ -539,7 +593,12 @@ function formatBytes(value: number): string {
   return `${size.toFixed(unit === 0 ? 0 : 2)} ${byteUnits[unit]}`
 }
 
-onMounted(loadNodes)
+onMounted(() => {
+  void loadNodes()
+  nodesTimer = setInterval(() => {
+    if (panelRole.value === 'master' && !loading.value && !refreshingNodes) void loadNodes(true)
+  }, 5000)
+})
 </script>
 
 <style scoped>

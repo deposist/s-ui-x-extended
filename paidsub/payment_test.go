@@ -27,6 +27,22 @@ func (h *paymentAWGHook) SuspendClients(_ context.Context, ids []uint) error {
 	return nil
 }
 
+func TestSlaveRejectsPaymentWrites(t *testing.T) {
+	db := openTestDB(t)
+	if err := db.Create(&model.NodePanel{ID: 1, Role: "slave"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	payment := NewPaymentService()
+	_, _, createErr := payment.CreateOrder(context.Background(), &model.Client{}, &Tariff{}, ProviderStars, 1)
+	_, _, renewErr := payment.ApplyPaidOrder(1, "charge", nil)
+	_, refundErr := payment.RefundOrder(context.Background(), 1, true)
+	for operation, err := range map[string]error{"create": createErr, "renew": renewErr, "refund": refundErr, "finalize refund": payment.finalizeRefund(1, true)} {
+		if !errors.Is(err, service.ErrSlaveClientWrite) {
+			t.Errorf("%s: expected Slave write rejection, got %v", operation, err)
+		}
+	}
+}
+
 func TestNewPaymentOrderSnapshotsAWGEntitlement(t *testing.T) {
 	client := &model.Client{Id: 7}
 	tariff := &Tariff{Id: 9, AddDays: 30, AddTrafficBytes: 1 << 30, MaxAWGDevices: 4}

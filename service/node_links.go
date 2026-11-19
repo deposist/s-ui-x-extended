@@ -31,9 +31,11 @@ type NodeInventory struct {
 }
 
 type NodeInventoryInbound struct {
-	Tag        string `json:"tag"`
-	Type       string `json:"type"`
-	Descriptor string `json:"descriptor"`
+	PeerLink   *peerPublicLink `json:"peerLink,omitempty"`
+	ID         uint            `json:"id,omitempty"`
+	Tag        string          `json:"tag"`
+	Type       string          `json:"type"`
+	Descriptor string          `json:"descriptor"`
 }
 
 type NodeInventoryLimiter struct {

@@ -671,6 +671,9 @@ func (a *ApiService) DeleteAdmin(c *gin.Context) {
 func (a *ApiService) Save(c *gin.Context, loginUser string) {
 	hostname := getHostname(c)
 	obj := c.Request.FormValue("object")
+	if obj == "clients" && !allowLocalClientWrite(c) {
+		return
+	}
 	act := c.Request.FormValue("action")
 	data := c.Request.FormValue("data")
 	initUsers := c.Request.FormValue("initUsers")
@@ -809,6 +812,9 @@ func (a *ApiService) RestartApp(c *gin.Context) {
 // whose links are missing or stale (for example sudoku/mieru links added in a
 // later build, or after changing the panel domain).
 func (a *ApiService) RegenerateClientLinks(c *gin.Context) {
+	if !allowLocalClientWrite(c) {
+		return
+	}
 	count, err := a.ClientService.RegenerateAllClientLinks(getHostname(c))
 	jsonMsgObj(c, "regenerateClientLinks", map[string]any{"count": count}, err)
 }
@@ -900,6 +906,9 @@ func (a *ApiService) validateRestoredCoreConfig() error {
 }
 
 func (a *ApiService) ImportDb(c *gin.Context) {
+	if !allowLocalClientWrite(c) {
+		return
+	}
 	if !a.requireTokenScopeAny(c, "database", "admin") {
 		return
 	}
@@ -1020,6 +1029,9 @@ func databaseImportErrorClass(err error) string {
 }
 
 func (a *ApiService) RotateSubSecret(c *gin.Context) {
+	if !allowLocalClientWrite(c) {
+		return
+	}
 	if !a.requireTokenScopeAny(c, "client", "admin", "write") {
 		return
 	}

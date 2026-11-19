@@ -112,6 +112,9 @@ func pruneXUIRateLimitLocked(now time.Time) {
 }
 
 func (a *ApiService) ImportXui(c *gin.Context) {
+	if !allowLocalClientWrite(c) {
+		return
+	}
 	ctx, cancel, ok := a.beginXUIRequest(c)
 	if !ok {
 		return
@@ -208,6 +211,9 @@ func (a *ApiService) ImportXuiPlan(c *gin.Context) {
 }
 
 func (a *ApiService) ImportXuiApply(c *gin.Context) {
+	if !allowLocalClientWrite(c) {
+		return
+	}
 	ctx, cancel, ok := a.beginXUIRequest(c)
 	if !ok {
 		return
@@ -275,6 +281,9 @@ func (a *ApiService) ImportXuiApply(c *gin.Context) {
 }
 
 func (a *ApiService) ImportXuiRollback(c *gin.Context) {
+	if !allowLocalClientWrite(c) {
+		return
+	}
 	if !a.requireTokenScopeAny(c, "database", "admin") {
 		return
 	}

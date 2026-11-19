@@ -117,6 +117,10 @@ func (p *PaymentService) enabledProvidersForTariff(t *Tariff) []PaymentProvider 
 // CreateOrder snapshots the price from the tariff, persists a pending order, and
 // asks the provider to prepare an invoice.
 func (p *PaymentService) CreateOrder(ctx context.Context, client *model.Client, tariff *Tariff, kind ProviderKind, tgUserId int64) (*PaymentOrder, *Invoice, error) {
+	db := database.GetDB()
+	if err := service.RequireLocalClientWrites(db); err != nil {
+		return nil, nil, err
+	}
 	prov := p.providerByKind(kind)
 	if prov == nil {
 		return nil, nil, fmt.Errorf("provider not available")
@@ -148,7 +152,6 @@ func (p *PaymentService) CreateOrder(ctx context.Context, client *model.Client, 
 	if kind == ProviderCryptoBot {
 		order.Status = StatusInvoiceCreating
 	}
-	db := database.GetDB()
 	if err := db.Create(order).Error; err != nil {
 		return nil, nil, err
 	}
@@ -323,6 +326,9 @@ func (p *PaymentService) ApplyPaidOrder(orderID uint, chargeID string, raw []byt
 	var renewedClientID uint
 	var applied bool
 	err := db.Transaction(func(tx *gorm.DB) error {
+		if err := service.RequireLocalClientWrites(tx); err != nil {
+			return err
+		}
 		var order PaymentOrder
 		if err := tx.Where("id = ?", orderID).First(&order).Error; err != nil {
 			return err
@@ -500,6 +506,9 @@ func (p *PaymentService) finalizeRefund(orderID uint, revoke bool) error {
 	var inboundIds []uint
 	var refundedClientID uint
 	err := db.Transaction(func(tx *gorm.DB) error {
+		if err := service.RequireLocalClientWrites(tx); err != nil {
+			return err
+		}
 		res := tx.Model(&PaymentOrder{}).
 			Where("id = ? AND status = ?", orderID, StatusPaid).
 			Update("status", StatusRefunded)
@@ -605,6 +614,9 @@ func (p *PaymentService) finalizeRefund(orderID uint, revoke bool) error {
 // only marks the order refunded (status "refunded_manual"). revoke is the
 // admin's per-refund choice to roll back the granted days/traffic.
 func (p *PaymentService) RefundOrder(ctx context.Context, orderID uint, revoke bool) (string, error) {
+	if err := service.RequireLocalClientWrites(database.GetDB()); err != nil {
+		return "", err
+	}
 	order, err := p.getOrder(orderID)
 	if err != nil {
 		return "", err

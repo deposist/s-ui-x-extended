@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/deposist/s-ui-x-extended/database/model"
@@ -18,6 +20,29 @@ import (
 // every other handler here; the two list fields carry a JSON array.
 func (a *APIHandler) registerNodeRoutes(g *gin.RouterGroup) {
 	nodes := g.Group("/nodes")
+	nodes.GET("/panel", a.ApiService.getNodePanel)
+	nodes.POST("/panel/master", a.ApiService.setNodeMaster)
+	nodes.POST("/panel/invite", a.ApiService.createNodeInvite)
+	nodes.POST("/panel/join", a.ApiService.joinNodeMaster)
+	nodes.POST("/panel/unlink", func(c *gin.Context) {
+		jsonMsg(c, "", a.ApiService.NodeService.UnlinkSlave())
+	})
+	nodes.POST("/panel/hostname", func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
+		var input struct {
+			Host string `json:"host"`
+		}
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.Status(http.StatusBadRequest)
+			return
+		}
+		jsonMsg(c, "", a.ApiService.NodeService.SetSlavePublicHost(input.Host))
+	})
+	nodes.Use(func(c *gin.Context) {
+		if c.Request.Method != "GET" {
+			allowLocalClientWrite(c)
+		}
+	})
 	nodes.GET("", a.ApiService.GetNodes)
 	nodes.POST("", a.ApiService.CreateNode)
 	nodes.GET("/:uuid", a.ApiService.GetNode)
@@ -122,7 +147,12 @@ func (a *ApiService) UpdateNode(c *gin.Context) {
 
 func (a *ApiService) DeleteNode(c *gin.Context) {
 	uuid := c.Param("uuid")
-	err := a.NodeService.Delete(uuid)
+	var err error
+	if c.Query("force") == "true" {
+		err = a.NodeService.Delete(uuid)
+	} else {
+		err = a.NodeService.RequestPeerDisconnect(uuid)
+	}
 	if err == nil {
 		a.recordAudit(c, requestActor(c), "node_deleted", "node", service.AuditSeverityWarn, map[string]any{
 			"uuid": uuid,
@@ -139,7 +169,15 @@ func (a *ApiService) GetNodeClients(c *gin.Context) {
 	// assigned=1 limits the result to the server's own clients; without it the
 	// endpoint is the picker, listing every client with an assigned flag.
 	onlyAssigned := c.Query("assigned") == "1" || c.Query("assigned") == "true"
-	page, err := a.NodeService.Clients(c.Param("uuid"), limit, offset, c.Query("q"), onlyAssigned)
+	var page *service.ClientPage
+	inboundID, err := peerInboundID(c.Query("inboundId"))
+	if err == nil {
+		if inboundID != 0 {
+			page, err = a.NodeService.PeerClients(c.Param("uuid"), inboundID, limit, offset, c.Query("q"), onlyAssigned)
+		} else {
+			page, err = a.NodeService.Clients(c.Param("uuid"), limit, offset, c.Query("q"), onlyAssigned)
+		}
+	}
 	jsonObj(c, page, err)
 }
 
@@ -152,14 +190,26 @@ func (a *ApiService) RemoveNodeClients(c *gin.Context) {
 }
 
 func (a *ApiService) changeNodeClients(c *gin.Context, assigned bool) {
-	ids, err := formUintList(c.Request.FormValue("ids"))
+	form, err := nodeClientsForm(c.Writer, c.Request)
+	if err != nil {
+		jsonMsg(c, "nodes", err)
+		return
+	}
+	inboundID, err := peerInboundID(form.Get("inboundId"))
+	if err != nil {
+		jsonMsg(c, "nodes", err)
+		return
+	}
+	ids, err := formUintList(form.Get("ids"))
 	if err != nil {
 		jsonMsg(c, "nodes", err)
 		return
 	}
 	uuid := c.Param("uuid")
 	var changed int
-	if assigned {
+	if inboundID != 0 {
+		changed, err = a.NodeService.ChangePeerClients(uuid, inboundID, ids, assigned)
+	} else if assigned {
 		changed, err = a.NodeService.Assign(uuid, ids)
 	} else {
 		changed, err = a.NodeService.Unassign(uuid, ids)
@@ -177,6 +227,31 @@ func (a *ApiService) changeNodeClients(c *gin.Context, assigned bool) {
 	jsonMsgObj(c, "nodes", gin.H{"changed": changed}, err)
 }
 
+func nodeClientsForm(writer http.ResponseWriter, request *http.Request) (url.Values, error) {
+	formRequest := request.Clone(request.Context())
+	if formRequest.Method == http.MethodDelete {
+		formRequest.Method = http.MethodPost
+		formRequest.Form = nil
+		formRequest.PostForm = nil
+	}
+	formRequest.Body = http.MaxBytesReader(writer, formRequest.Body, 64<<10)
+	if err := formRequest.ParseForm(); err != nil {
+		return nil, err
+	}
+	return formRequest.Form, nil
+}
+
+func peerInboundID(raw string) (uint, error) {
+	if raw == "" {
+		return 0, nil
+	}
+	id, err := strconv.ParseUint(raw, 10, strconv.IntSize)
+	if err != nil || id == 0 {
+		return 0, fmt.Errorf("invalid Slave inbound ID")
+	}
+	return uint(id), nil
+}
+
 // GetClientNodes returns the servers one client is assigned to, for the
 // checkboxes in the client card.
 func (a *ApiService) GetClientNodes(c *gin.Context) {
@@ -190,6 +265,9 @@ func (a *ApiService) GetClientNodes(c *gin.Context) {
 
 // SetClientNodes replaces the server checkboxes of one client.
 func (a *ApiService) SetClientNodes(c *gin.Context) {
+	if !allowLocalClientWrite(c) {
+		return
+	}
 	clientID, ok := clientIDParam(c)
 	if !ok {
 		return
@@ -224,6 +302,9 @@ func (a *ApiService) GetClientLimits(c *gin.Context) {
 // SetClientLimits stores one client's per-user limits. They are per client and
 // enforced by every server that client is assigned to.
 func (a *ApiService) SetClientLimits(c *gin.Context) {
+	if !allowLocalClientWrite(c) {
+		return
+	}
 	clientID, ok := clientIDParam(c)
 	if !ok {
 		return

@@ -162,6 +162,9 @@ func (s *ClientService) GetAll() (*[]model.Client, error) {
 }
 
 func (s *ClientService) Save(tx *gorm.DB, act string, data json.RawMessage, hostname string) ([]uint, error) {
+	if err := RequireLocalClientWrites(tx); err != nil {
+		return nil, err
+	}
 	var err error
 	var inboundIds []uint
 

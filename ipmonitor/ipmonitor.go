@@ -61,10 +61,12 @@ var pending = struct {
 }
 
 type allowCacheEntry struct {
-	limit     int
-	mode      string
-	ips       map[string]struct{}
-	expiresAt time.Time
+	accessExpiry int64
+	policy       ConnectionPolicy
+	limit        int
+	mode         string
+	ips          map[string]struct{}
+	expiresAt    time.Time
 }
 
 var allowCache = struct {
@@ -201,31 +203,57 @@ func ObserveAndAllow(clientName string, ip string) bool {
 }
 
 func ObserveAndAllowContext(ctx context.Context, clientName string, ip string) bool {
-	if clientName == "" || ip == "" {
+	if ip == "" {
 		return true
+	}
+	allowed, _ := ObserveAccess(ctx, clientName, ip)
+	return allowed
+}
+
+func ObserveAccess(ctx context.Context, clientName string, ip string) (bool, int64) {
+	allowed, expiry, _ := ObserveConnection(ctx, clientName, ip)
+	return allowed, expiry
+}
+
+type ConnectionPolicy struct {
+	Connections uint32
+	Speed       uint64
+	Download    uint64
+	Upload      uint64
+	Volume      int64
+	NodeUUID    string
+	ClientID    uint
+}
+
+func ObserveConnection(ctx context.Context, clientName string, ip string) (bool, int64, ConnectionPolicy) {
+	if clientName == "" {
+		return true, 0, ConnectionPolicy{}
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if ctx.Err() != nil {
-		return false
+		return false, 0, ConnectionPolicy{}
 	}
 	lifecycleGate.RLock()
 	defer lifecycleGate.RUnlock()
 	token := lifecycleTokenForClient(clientName)
+	entry, loaded := clientEntryForAllow(ctx, clientName, time.Now())
+	if !loaded || ctx.Err() != nil || (entry.accessExpiry > 0 && time.Now().Unix() >= entry.accessExpiry) {
+		return false, 0, ConnectionPolicy{}
+	}
+	if ip == "" {
+		return entry.mode != ModeEnforce || entry.limit == 0, entry.accessExpiry, entry.policy
+	}
 	ipHash, display, ok := recordIPFieldsContext(ctx, ip, token.generation)
 	if !ok {
-		return false
-	}
-	entry, loaded := clientEntryForAllow(ctx, clientName, time.Now())
-	if !loaded || ctx.Err() != nil {
-		return false
+		return false, 0, ConnectionPolicy{}
 	}
 
 	pending.Lock()
 	if !lifecycleTokenCurrentLocked(clientName, token) {
 		pending.Unlock()
-		return false
+		return false, 0, ConnectionPolicy{}
 	}
 	if entry.mode == ModeEnforce && entry.limit > 0 {
 		seen := make(map[string]struct{}, len(entry.ips)+len(pending.byClient[clientName])+1)
@@ -250,7 +278,7 @@ func ObserveAndAllowContext(ctx context.Context, clientName string, ip string) b
 			}
 			pending.Unlock()
 			publishSecurityEvent(clientName, "ip_enforced_reject", payload)
-			return false
+			return false, 0, ConnectionPolicy{}
 		}
 	}
 	if pending.byClient[clientName] == nil {
@@ -259,7 +287,7 @@ func ObserveAndAllowContext(ctx context.Context, clientName string, ip string) b
 	pending.byClient[clientName][ipHash] = pendingIP{lastSeen: time.Now().Unix(), display: display}
 	pending.Unlock()
 	cacheAddIP(clientName, ipHash, token)
-	return true
+	return true, entry.accessExpiry, entry.policy
 }
 
 func Allow(clientName string, ip string) bool {
@@ -847,20 +875,46 @@ func loadCacheEntryContext(ctx context.Context, clientName string, now time.Time
 	defer cancel()
 	db = db.WithContext(ctx)
 	var client model.Client
+	var accessExpiry int64
+	var policy ConnectionPolicy
 	if err := db.Model(model.Client{}).Select("enable, limit_ip, ip_limit_mode").Where("name = ?", clientName).First(&client).Error; err != nil {
 		if !database.IsNotFound(err) {
 			logLoadCacheError("client", err)
+			return allowCacheEntry{}, false
 		}
-		return allowCacheEntry{}, false
+		var managed []struct {
+			LimitIP          int
+			IPLimitMode      string
+			Expiry           int64
+			ConnectionPolicy `gorm:"embedded"`
+		}
+		if err := db.Raw(`SELECT COALESCE(json_extract(users.value, '$.limitIp'), 0) AS limit_ip,
+			COALESCE(json_extract(users.value, '$.ipLimitMode'), 'monitor') AS ip_limit_mode,
+			COALESCE(json_extract(users.value, '$.expiry'), 0) AS expiry,
+			COALESCE(json_extract(users.value, '$.connections'), 0) AS connections,
+			COALESCE(json_extract(users.value, '$.speed'), 0) AS speed,
+			COALESCE(json_extract(users.value, '$.downloadSpeed'), 0) AS download,
+			COALESCE(json_extract(users.value, '$.uploadSpeed'), 0) AS upload,
+			COALESCE(json_extract(users.value, '$.volume'), 0) AS volume,
+			node_panels.uuid AS node_uuid, json_extract(users.value, '$.clientId') AS client_id
+			FROM node_panels, json_each(node_panels.managed_users) AS users
+			WHERE node_panels.id = 1 AND node_panels.role = 'slave' AND json_extract(users.value, '$.name') = ? LIMIT 1`, clientName).Scan(&managed).Error; err != nil || len(managed) != 1 {
+			return allowCacheEntry{}, false
+		}
+		client.Enable, client.LimitIP, client.IPLimitMode = true, managed[0].LimitIP, managed[0].IPLimitMode
+		accessExpiry = managed[0].Expiry
+		policy = managed[0].ConnectionPolicy
 	}
 	if !client.Enable {
 		return allowCacheEntry{expiresAt: now.Add(allowCacheTTL)}, true
 	}
 	entry := allowCacheEntry{
-		limit:     client.LimitIP,
-		mode:      client.IPLimitMode,
-		ips:       map[string]struct{}{},
-		expiresAt: now.Add(allowCacheTTL),
+		accessExpiry: accessExpiry,
+		policy:       policy,
+		limit:        client.LimitIP,
+		mode:         client.IPLimitMode,
+		ips:          map[string]struct{}{},
+		expiresAt:    now.Add(allowCacheTTL),
 	}
 	rows := make([]model.ClientIP, 0)
 	if err := db.Model(model.ClientIP{}).Select("ip, ip_hash").Where("client_name = ?", clientName).Find(&rows).Error; err != nil {
@@ -957,10 +1011,12 @@ func refreshClient(clientName string, now time.Time) bool {
 
 func cloneCacheEntry(entry allowCacheEntry) allowCacheEntry {
 	clone := allowCacheEntry{
-		limit:     entry.limit,
-		mode:      entry.mode,
-		ips:       make(map[string]struct{}, len(entry.ips)),
-		expiresAt: entry.expiresAt,
+		limit:        entry.limit,
+		mode:         entry.mode,
+		ips:          make(map[string]struct{}, len(entry.ips)),
+		expiresAt:    entry.expiresAt,
+		accessExpiry: entry.accessExpiry,
+		policy:       entry.policy,
 	}
 	for ip := range entry.ips {
 		clone.ips[ip] = struct{}{}

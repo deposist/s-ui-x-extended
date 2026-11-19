@@ -488,7 +488,7 @@ export default {
     async loadNodes() {
       const msg = await HttpUtils.get('api/nodes')
       if (!msg.success) return
-      this.nodeItems = (msg.obj ?? []).map((node: any) => ({ title: node.name, value: node.uuid }))
+      this.nodeItems = (msg.obj ?? []).filter((node: any) => !node.paired).map((node: any) => ({ title: node.name, value: node.uuid }))
     },
     async loadClientNodes(id: number) {
       const generation = this.loadGeneration

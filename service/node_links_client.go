@@ -20,13 +20,14 @@ import (
 // client already has locally can appear.
 func ClientNodeLinks(client *model.Client) []map[string]string {
 	links := []map[string]string{}
-	if client == nil || len(client.Inbounds) == 0 {
+	if client == nil {
 		return links
 	}
 	db := database.GetDB()
 	if db == nil {
 		return links
 	}
+	links = append(links, pairedClientLinks(db, client.Id)...)
 
 	var clientInboundIDs []uint
 	if err := json.Unmarshal(client.Inbounds, &clientInboundIDs); err != nil || len(clientInboundIDs) == 0 {
@@ -54,6 +55,9 @@ func ClientNodeLinks(client *model.Client) []map[string]string {
 		return links
 	}
 	for _, node := range nodes {
+		if node.EnrollmentDigest != "" {
+			continue
+		}
 		links = append(links, NodeLinks(client.Config, tags, node)...)
 	}
 	return links

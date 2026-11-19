@@ -60,6 +60,9 @@ func (s *NodeService) SetClientLimits(clientID uint, limits model.ClientLimits) 
 		return nil, err
 	}
 	s.projectFleetOrWarn("client limits")
+	if invalidateSubscriptionCacheAfterSave != nil {
+		invalidateSubscriptionCacheAfterSave()
+	}
 	return &limits, nil
 }
 

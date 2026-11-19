@@ -490,10 +490,15 @@ func (s *InboundService) addUsers(db *gorm.DB, inboundJson []byte, inboundId uin
 	sanitizeInboundOptionsForCore(inboundType, inbound)
 
 	condition := "? IN (SELECT json_each.value FROM json_each(clients.inbounds))"
-	inbound["users"], err = s.fetchUsersByCondition(db, inboundType, condition, inbound, inboundId)
+	users, err := s.fetchUsersByCondition(db, inboundType, condition, inbound, inboundId)
 	if err != nil {
 		return nil, err
 	}
+	managed, err := managedInboundUsers(db, inboundId, inboundType, inbound)
+	if err != nil {
+		return nil, err
+	}
+	inbound["users"] = append(users, managed...)
 
 	return json.Marshal(inbound)
 }

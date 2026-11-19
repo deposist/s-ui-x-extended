@@ -124,22 +124,24 @@ func (c *StatsTracker) RemoveCounter(resource string, tag string) {
 
 func (c *StatsTracker) RoutedConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext, matchedRule adapter.Rule, matchOutbound adapter.Outbound) net.Conn {
 	sourceIP := sourceIPFromMetadata(metadata)
-	if !ipmonitor.ObserveAndAllowContext(ctx, metadata.User, sourceIP) {
+	allowed, expiry := ipmonitor.ObserveAccess(ctx, metadata.User, sourceIP)
+	if !allowed {
 		_ = conn.Close()
 		return conn
 	}
 	readCounter, writeCounter, waitGroup := c.getTrackedReadCounters(metadata.Inbound, matchOutbound.Tag(), metadata.User)
-	return newStatsTrackedConn(bufio.NewInt64CounterConn(conn, readCounter, writeCounter), waitGroup)
+	return &statsTrackedConn{Conn: bufio.NewInt64CounterConn(conn, readCounter, writeCounter), waitGroup: waitGroup, expiryTimer: closeAtExpiry(conn, expiry)}
 }
 
 func (c *StatsTracker) RoutedPacketConnection(ctx context.Context, conn network.PacketConn, metadata adapter.InboundContext, matchedRule adapter.Rule, matchOutbound adapter.Outbound) network.PacketConn {
 	sourceIP := sourceIPFromMetadata(metadata)
-	if !ipmonitor.ObserveAndAllowContext(ctx, metadata.User, sourceIP) {
+	allowed, expiry := ipmonitor.ObserveAccess(ctx, metadata.User, sourceIP)
+	if !allowed {
 		_ = conn.Close()
 		return conn
 	}
 	readCounter, writeCounter, waitGroup := c.getTrackedReadCounters(metadata.Inbound, matchOutbound.Tag(), metadata.User)
-	return newStatsTrackedPacketConn(bufio.NewInt64CounterPacketConn(conn, readCounter, nil, writeCounter, nil), waitGroup)
+	return &statsTrackedPacketConn{PacketConn: bufio.NewInt64CounterPacketConn(conn, readCounter, nil, writeCounter, nil), waitGroup: waitGroup, expiryTimer: closeAtExpiry(conn, expiry)}
 }
 
 // RoutedFlow tracks TUN-level flows (sing-tun FlowTracker). The panel counts
@@ -224,17 +226,18 @@ func (t *statsFlowTracker) CloseFlow(reason tun.FlowCloseReason) {
 	}
 }
 
-func newStatsTrackedConn(conn net.Conn, waitGroup *trackerWaitGroup) net.Conn {
-	return &statsTrackedConn{
-		Conn:      conn,
-		waitGroup: waitGroup,
+func closeAtExpiry(conn interface{ Close() error }, expiry int64) *time.Timer {
+	if expiry == 0 {
+		return nil
 	}
+	return time.AfterFunc(time.Until(time.Unix(expiry, 0)), func() { _ = conn.Close() })
 }
 
 type statsTrackedConn struct {
 	net.Conn
-	waitGroup *trackerWaitGroup
-	doneOnce  sync.Once
+	waitGroup   *trackerWaitGroup
+	doneOnce    sync.Once
+	expiryTimer *time.Timer
 }
 
 func (w *statsTrackedConn) done() {
@@ -260,6 +263,9 @@ func (w *statsTrackedConn) Write(b []byte) (int, error) {
 }
 
 func (w *statsTrackedConn) Close() error {
+	if w.expiryTimer != nil {
+		w.expiryTimer.Stop()
+	}
 	w.done()
 	return w.Conn.Close()
 }
@@ -268,17 +274,11 @@ func (w *statsTrackedConn) Upstream() any {
 	return w.Conn
 }
 
-func newStatsTrackedPacketConn(conn network.PacketConn, waitGroup *trackerWaitGroup) network.PacketConn {
-	return &statsTrackedPacketConn{
-		PacketConn: conn,
-		waitGroup:  waitGroup,
-	}
-}
-
 type statsTrackedPacketConn struct {
 	network.PacketConn
-	waitGroup *trackerWaitGroup
-	doneOnce  sync.Once
+	waitGroup   *trackerWaitGroup
+	doneOnce    sync.Once
+	expiryTimer *time.Timer
 }
 
 func (w *statsTrackedPacketConn) done() {
@@ -304,6 +304,9 @@ func (w *statsTrackedPacketConn) WritePacket(buffer *buf.Buffer, destination M.S
 }
 
 func (w *statsTrackedPacketConn) Close() error {
+	if w.expiryTimer != nil {
+		w.expiryTimer.Stop()
+	}
 	w.done()
 	return w.PacketConn.Close()
 }

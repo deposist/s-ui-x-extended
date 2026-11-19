@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/deposist/s-ui-x-extended/database"
+	"github.com/deposist/s-ui-x-extended/service"
 	"github.com/robfig/cron/v3"
 )
 
@@ -63,6 +64,10 @@ func (c *CronJob) Start(loc *time.Location, trafficAge int) error {
 		),
 	)
 	if _, err := c.cron.AddJob("@every 10s", NewStatsJob(trafficAge > 0)); err != nil {
+		return err
+	}
+	syncContext := c.ctx
+	if _, err := c.cron.AddFunc("@every 15s", func() { (&service.NodeService{}).SyncWithMaster(syncContext) }); err != nil {
 		return err
 	}
 	if _, err := c.cron.AddJob("@every 1m", NewDepleteJob()); err != nil {

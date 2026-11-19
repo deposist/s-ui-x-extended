@@ -28,10 +28,14 @@ type NodeService struct {
 
 // NodeView is a node row plus what only the running core knows.
 type NodeView struct {
-	UUID     string `json:"uuid"`
-	Name     string `json:"name"`
-	LinkHost string `json:"linkHost"`
-	Enabled  bool   `json:"enabled"`
+	UUID           string `json:"uuid"`
+	Name           string `json:"name"`
+	LinkHost       string `json:"linkHost"`
+	Enabled        bool   `json:"enabled"`
+	Paired         bool   `json:"paired"`
+	LastSync       int64  `json:"lastSync,omitempty"`
+	PeerBlocked    int    `json:"peerBlocked,omitempty"`
+	PeerDisconnect bool   `json:"peerDisconnect,omitempty"`
 
 	// Online reports whether the node is connected right now. An unreachable
 	// controller (no manager service running) reports every node offline
@@ -41,6 +45,7 @@ type NodeView struct {
 	// Inbounds and Limiters come from the last announced inventory, so the UI
 	// can show what a node can actually accept before assigning anything.
 	Inbounds     []string               `json:"inbounds"`
+	PeerInbounds []PeerInbound          `json:"peerInbounds,omitempty"`
 	Limiters     []NodeInventoryLimiter `json:"limiters"`
 	LimiterRoles model.NodeLimiterTags  `json:"limiterRoles"`
 
@@ -162,9 +167,19 @@ func decorateNode(node *model.Node, statuses map[string]bool, counts map[string]
 		Online:      statuses[node.UUID],
 		ClientCount: counts[node.UUID],
 	}
+	if node.EnrollmentDigest != "" {
+		view.Paired = true
+		view.LastSync = node.LastPeerSync
+		view.PeerBlocked = node.PeerBlocked
+		view.PeerDisconnect = node.PeerDisconnect
+		view.Online = node.Enabled && node.LastPeerSync > 0 && time.Now().Unix()-node.LastPeerSync < 45
+	}
 	_ = json.Unmarshal(node.LimiterRoles, &view.LimiterRoles)
 	for _, inbound := range DecodeNodeInventory(node.Inventory).Inbounds {
 		view.Inbounds = append(view.Inbounds, inbound.Tag)
+		if view.Paired && inbound.ID != 0 {
+			view.PeerInbounds = append(view.PeerInbounds, PeerInbound{ID: inbound.ID, Tag: inbound.Tag, Type: inbound.Type, Link: inbound.PeerLink})
+		}
 	}
 	view.Limiters = DecodeNodeLimiters(node.Inventory)
 	return view
@@ -208,6 +223,12 @@ func NodeClientCounts(db *gorm.DB, uuids []string) map[string]int64 {
 	}
 	for _, r := range rows {
 		counts[r.NodeUUID] = r.Total
+	}
+	if err := db.Model(model.PeerAssignment{}).Select("node_uuid, COUNT(DISTINCT client_id) AS total").
+		Where("node_uuid IN ?", uuids).Group("node_uuid").Scan(&rows).Error; err == nil {
+		for _, row := range rows {
+			counts[row.NodeUUID] += row.Total
+		}
 	}
 	return counts
 }
@@ -319,6 +340,25 @@ func validateNodeLimiterRoles(inventory NodeInventory, roles model.NodeLimiterTa
 
 // Delete removes a node and every assignment to it, so no client keeps a link
 // to a server that no longer exists.
+func (s *NodeService) RequestPeerDisconnect(uuid string) error {
+	db := s.db()
+	if db == nil {
+		return common.NewError("database is not initialized")
+	}
+	updated := db.Model(&model.Node{}).Where("uuid = ? AND enrollment_digest <> ''", uuid).
+		UpdateColumns(map[string]any{"peer_disconnect": true, "peer_revision": ""})
+	if updated.Error != nil {
+		return updated.Error
+	}
+	if updated.RowsAffected == 0 {
+		return s.Delete(uuid)
+	}
+	if invalidateSubscriptionCacheAfterSave != nil {
+		invalidateSubscriptionCacheAfterSave()
+	}
+	return nil
+}
+
 func (s *NodeService) Delete(uuid string) error {
 	db := s.db()
 	if db == nil {
@@ -328,11 +368,17 @@ func (s *NodeService) Delete(uuid string) error {
 		if err := tx.Where("node_uuid = ?", uuid).Delete(model.ClientNode{}).Error; err != nil {
 			return err
 		}
+		if err := tx.Where("node_uuid = ?", uuid).Delete(model.PeerAssignment{}).Error; err != nil {
+			return err
+		}
 		return tx.Where("uuid = ?", uuid).Delete(model.Node{}).Error
 	}); err != nil {
 		return err
 	}
 	s.projectFleetOrWarn("node deletion")
+	if invalidateSubscriptionCacheAfterSave != nil {
+		invalidateSubscriptionCacheAfterSave()
+	}
 	return nil
 }
 
@@ -349,6 +395,10 @@ func (s *NodeService) Clients(uuid string, limit int, offset int, query string, 
 	if db == nil {
 		return nil, common.NewError("database is not initialized")
 	}
+	return nodeClients(db, db.Model(model.ClientNode{}).Where("node_uuid = ?", uuid), limit, offset, query, onlyAssigned)
+}
+
+func nodeClients(db, assignments *gorm.DB, limit, offset int, query string, onlyAssigned bool) (*ClientPage, error) {
 	if limit <= 0 {
 		limit = defaultClientPageSize
 	}
@@ -359,10 +409,9 @@ func (s *NodeService) Clients(uuid string, limit int, offset int, query string, 
 		offset = 0
 	}
 	build := func() *gorm.DB {
-		assignedExpr := "EXISTS (SELECT 1 FROM client_nodes WHERE client_nodes.client_id = clients.id AND client_nodes.node_uuid = ?)"
 		tx := db.Model(model.Client{})
 		if onlyAssigned {
-			tx = tx.Where(assignedExpr, uuid)
+			tx = tx.Where("clients.id IN (?)", assignments.Session(&gorm.Session{}).Select("client_id"))
 		}
 		if pattern := clientNamePattern(query); pattern != "" {
 			tx = tx.Where("clients.name LIKE ? ESCAPE '\\'", pattern)
@@ -404,8 +453,7 @@ func (s *NodeService) Clients(uuid string, limit int, offset int, query string, 
 			ids = append(ids, row.Id)
 		}
 		var assignedIDs []uint
-		if err := db.Model(model.ClientNode{}).
-			Where("node_uuid = ? AND client_id IN ?", uuid, ids).
+		if err := assignments.Session(&gorm.Session{}).Where("client_id IN ?", ids).
 			Pluck("client_id", &assignedIDs).Error; err != nil {
 			return nil, err
 		}
@@ -466,12 +514,12 @@ func (s *NodeService) assign(uuid string, clientIDs []uint, assigned bool) (int,
 	if len(clientIDs) == 0 {
 		return 0, nil
 	}
-	var exists int64
-	if err := db.Model(model.Node{}).Where("uuid = ?", uuid).Count(&exists).Error; err != nil {
+	var node model.Node
+	if err := db.Where("uuid = ?", uuid).Take(&node).Error; err != nil {
 		return 0, err
 	}
-	if exists == 0 {
-		return 0, common.NewError("node not found")
+	if assigned && node.EnrollmentDigest != "" {
+		return 0, common.NewError("paired nodes cannot use legacy client assignments")
 	}
 	changed := 0
 	err := db.Transaction(func(tx *gorm.DB) error {
@@ -557,11 +605,11 @@ func (s *NodeService) SetClientNodes(clientID uint, uuids []string) error {
 		// Reject unknown nodes instead of storing an assignment row that no
 		// projection would ever read and no node would ever delete.
 		var known int64
-		if err := db.Model(model.Node{}).Where("uuid IN ?", wanted).Count(&known).Error; err != nil {
+		if err := db.Model(model.Node{}).Where("uuid IN ? AND COALESCE(enrollment_digest, '') = ''", wanted).Count(&known).Error; err != nil {
 			return err
 		}
 		if int(known) != len(wanted) {
-			return common.NewError("one or more nodes no longer exist")
+			return common.NewError("one or more nodes no longer exist or do not support legacy assignments")
 		}
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
@@ -598,6 +646,9 @@ func (s *NodeService) SetClientNodes(clientID uint, uuids []string) error {
 func ClearClientNodes(tx *gorm.DB, clientID uint) error {
 	if tx == nil || clientID == 0 {
 		return nil
+	}
+	if err := tx.Where("client_id = ?", clientID).Delete(model.PeerAssignment{}).Error; err != nil {
+		return err
 	}
 	return tx.Where("client_id = ?", clientID).Delete(model.ClientNode{}).Error
 }

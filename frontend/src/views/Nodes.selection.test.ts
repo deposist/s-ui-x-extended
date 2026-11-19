@@ -28,6 +28,24 @@ function mountNodes() {
 }
 
 describe('node client selection', () => {
+  it('refreshes the Master node list and stops on unmount', async () => {
+    vi.useFakeTimers()
+    const get = vi.mocked(HttpUtils.get).mockClear()
+      .mockResolvedValueOnce({ success: true, msg: '', obj: [] })
+      .mockResolvedValueOnce({ success: true, msg: '', obj: [{ uuid: 'new-slave' }] })
+    const { app, state } = mountNodes()
+    try {
+      state.panelRole = 'master'
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(state.nodes).toEqual([{ uuid: 'new-slave' }])
+    } finally {
+      app.unmount()
+      await vi.advanceTimersByTimeAsync(5000)
+      vi.useRealTimers()
+    }
+    expect(get).toHaveBeenCalledTimes(2)
+  })
+
   it('keeps both add and remove selections from different pages', async () => {
     vi.mocked(HttpUtils.get).mockResolvedValueOnce({ success: true, msg: '', obj: [] })
       .mockResolvedValueOnce({ success: true, msg: '', obj: { items: [{ id: 1, assigned: false }], total: 50 } })

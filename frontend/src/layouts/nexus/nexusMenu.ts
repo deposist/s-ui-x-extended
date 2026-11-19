@@ -34,6 +34,7 @@ export const nexusMenuGroups: NexusMenuGroup[] = [
     items: [
       { title: 'pages.inbounds', icon: 'lucide:zap', path: '/inbounds', singBoxSettings: true, countKey: 'inbounds' },
       { title: 'pages.clients', icon: 'lucide:users', path: '/clients', countKey: 'clients' },
+      { title: 'pages.nodes', icon: 'lucide:network', path: '/nodes' },
       { title: 'pages.outbounds', icon: 'lucide:arrow-up-right', path: '/outbounds', singBoxSettings: true, countKey: 'outbounds' },
       { title: 'pages.endpoints', icon: 'lucide:globe', path: '/endpoints', singBoxSettings: true, countKey: 'endpoints' },
       { title: 'pages.services', icon: 'lucide:server', path: '/services', singBoxSettings: true, countKey: 'services' },

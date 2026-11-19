@@ -64,7 +64,7 @@ Release history and upgrade notes:
 - Russian changelog: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - Simplified Chinese changelog: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
 - Latest stable notes: [`docs/releases/v1.1.1.md`](docs/releases/v1.1.1.md)
-- Latest beta notes: [`docs/releases/v1.1.2-beta8.md`](docs/releases/v1.1.2-beta8.md)
+- Latest beta notes: [`docs/releases/v1.1.2-beta9.md`](docs/releases/v1.1.2-beta9.md)
 - Upstream parity reference: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 ## How this fork differs from `alireza0/s-ui`
@@ -78,7 +78,7 @@ This fork is built to stay compatible with existing 1.x installs. You can replac
 - Telegram credentials, proxy credentials, install salt, and other sensitive settings are encrypted at rest with secretbox. Telegram messages, audit details, backup captions, and change history are redacted before they leave the panel.
 - Network-facing inputs have stricter checks. `X-Forwarded-For` is ignored unless trusted proxies are configured. External subscription fetches validate URLs and resolved IPs, block private and loopback targets by default, cap responses at 4 MiB, and re-check IPs at dial time.
 - Subscriptions support per-client secrets for link, JSON, and Clash formats. Legacy name-based subscription URLs still work while `subSecretRequired=false`. Subscription responses sanitize headers, apply per-IP rate limits, support gzip, and cache successful output briefly.
-- Nodes is in beta. The section manages remote servers, their reported inbounds and client assignments. Subscriptions include connections for assigned nodes, and each client can have shared or separate download/upload speed limits and a connection limit.
+- [Nodes](#nodes-master-and-slave) is in beta. The section manages remote servers, their reported inbounds and client assignments.
 - sing-box runs as an embedded Go library rather than a subprocess. Saves for clients, TLS, inbounds, outbounds, endpoints, and services hot-apply the affected object where possible. A full restart is used only when a change requires it or hot apply cannot keep the running config safe.
 - Routing includes panel-managed outbound groups and provider-backed membership. Selector, URLTest, fallback, and failover groups include tag validation, previews, and capability metadata. The panel-managed `failover` type checks members over HTTPS, moves new connections away from a failed active member, and supports explicit all-down policies.
 - The panel can update itself from Settings. Admins can check stable or beta releases, verify the downloaded binary against the release SHA-256, apply the update, and roll back automatically if the new binary repeatedly fails to start. The action is audited and requires password re-entry.
@@ -91,6 +91,15 @@ This fork is built to stay compatible with existing 1.x installs. You can replac
 - The panel, install script, and terminal menu include English, Russian, and Chinese localization.
 
 </details>
+
+## Nodes: Master and Slave
+
+1. Install the same panel on both servers. On the server that will manage clients, open **Nodes**, enable **Master**, and create an invitation.
+2. On the other server, open **Nodes**, enter the Master panel's HTTPS address (including its panel path) and the invitation code, then connect as **Slave**. The Master certificate must be trusted by the Slave.
+3. On the Slave, create a compatible inbound and save the public hostname or IP that clients will connect to. On the Master, open the node's client list, select that inbound, and assign clients. Refresh the client subscription after the Slave confirms the change.
+4. To disconnect, use the regular disconnect action on the Master while the Slave is reachable. If you force removal when the Slave is offline, links are removed from subscriptions, but existing credentials may still work until you unlink in the Slave panel.
+
+Paired nodes support TCP VLESS, VMess and Trojan inbounds without REALITY. IP limits, connection limits, shared or separate upload/download speed limits, traffic quotas and fixed access expiry are enforced independently on each VPS, even if the Master goes offline. The Slave persists quota usage locally. Assignments with delayed-start or auto-reset policies are blocked rather than granted without those policies. Existing manually managed nodes keep their own limiter configuration.
 
 ## Supported protocols
 
@@ -221,7 +230,7 @@ and tokens. Database migrations run on the first start after an upgrade.
 | Channel | Version | Notes |
 | --- | --- | --- |
 | Stable | [`v1.1.1`](docs/releases/v1.1.1.md) | Recommended for production. Includes the full 1.1.1 series: sing-box-extended 1.14 core, AmneziaWG 3.1 random trailers and disable-cookies, OpenVPN endpoints, structured core forms, and installer and failover memory leak fixes. |
-| Beta | [`v1.1.2-beta8`](docs/releases/v1.1.2-beta8.md) | Adds the beta Nodes section with per-client limits and sing-box 1.14.4. Also fixes interrupted updates, subscription caching and editor races. |
+| Beta | [`v1.1.2-beta9`](docs/releases/v1.1.2-beta9.md) | Pair Master and Slave panels from Nodes, assign clients to individual Slave inbounds and apply limits per server. |
 
 ### Upgrade to the current stable release
 
@@ -241,16 +250,16 @@ not infer the release from the script URL.
 
 ```sh
 curl -fLsS \
-  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.2-beta8/install.sh \
-  | sudo bash -s -- v1.1.2-beta8
+  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.2-beta9/install.sh \
+  | sudo bash -s -- v1.1.2-beta9
 ```
 
 If you are already running as `root`, the equivalent short form is:
 
 ```sh
 bash <(curl -fLsS \
-  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.2-beta8/install.sh) \
-  v1.1.2-beta8
+  https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.2-beta9/install.sh) \
+  v1.1.2-beta9
 ```
 
 After the upgrade, check the installed version and service state:
@@ -270,13 +279,13 @@ git clone --branch v1.1.1 --depth 1 \
 cd s-ui-x-extended
 sudo bash install.sh v1.1.1
 ```
-For the beta release, use `v1.1.2-beta8` in both the clone command and the installer argument.
+For the beta release, use `v1.1.2-beta9` in both the clone command and the installer argument.
 
 
 ### Windows
 
 - Stable: download [`v1.1.1`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.1), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
-- Beta: download [`v1.1.2-beta8`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.2-beta8), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
+- Beta: download [`v1.1.2-beta9`](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.2-beta9), extract the matching ZIP archive, and run `install-windows.bat` as Administrator.
 
 Upgrade and rollback notes are in the changelogs:
 [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), and [中文](CHANGELOG-ZH.md).
@@ -345,7 +354,7 @@ Docker Compose option:
 ```shell
 services:
   s-ui:
-    image: ghcr.io/deposist/s-ui-x-extended:v1.1.2-beta8
+    image: ghcr.io/deposist/s-ui-x-extended:v1.1.2-beta9
     container_name: s-ui
     hostname: "s-ui"
     network_mode: host
@@ -370,7 +379,7 @@ docker run -itd \
     -v $PWD/cert/:/root/cert/ \
     --name s-ui \
     --restart=unless-stopped \
-    ghcr.io/deposist/s-ui-x-extended:v1.1.2-beta8
+    ghcr.io/deposist/s-ui-x-extended:v1.1.2-beta9
 ```
 These Docker examples use the beta release. Use `v1.1.1` for the stable release.
 

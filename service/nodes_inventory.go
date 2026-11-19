@@ -26,7 +26,7 @@ func (s *NodeService) SyncInventory() (int, error) {
 		return 0, nil
 	}
 	var nodes []model.Node
-	if err := db.Model(model.Node{}).Select("uuid", "inventory").Find(&nodes).Error; err != nil {
+	if err := db.Model(model.Node{}).Where("COALESCE(enrollment_digest, '') = ''").Select("uuid", "inventory").Find(&nodes).Error; err != nil {
 		return 0, err
 	}
 	if len(nodes) == 0 {

@@ -82,7 +82,7 @@ func (s *NodeService) loadFleetState() (*fleetState, error) {
 		state.ownership[record.NodeUUID] = record.SquadID
 	}
 	var nodes []model.Node
-	if err := db.Model(model.Node{}).Find(&nodes).Error; err != nil {
+	if err := db.Model(model.Node{}).Where("COALESCE(enrollment_digest, '') = ''").Find(&nodes).Error; err != nil {
 		return nil, err
 	}
 	for _, node := range nodes {

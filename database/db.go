@@ -237,8 +237,13 @@ func InitDB(dbPath string) error {
 		&model.Changes{},
 		&model.AuditEvent{},
 		&model.Node{},
+		&model.NodeInvite{},
+		&model.NodeDetachReceipt{},
+		&model.NodePanel{},
 		&model.FleetNodeOwnership{},
 		&model.ClientNode{},
+		&model.PeerAssignment{},
+		&model.PeerTraffic{},
 		&model.ClientLimits{},
 	)
 	if err != nil {

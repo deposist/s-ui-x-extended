@@ -168,6 +168,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 
 	group_api := engine.Group(base_url + "api")
 	api.NewAPIHandler(group_api, apiv2, api.WithRuntime(s.runtime))
+	api.RegisterNodePeerRoutes(engine.Group(base_url + "node-peer"))
 
 	// Serve index.html as the entry point
 	// Handle all other routes by serving index.html

@@ -10,8 +10,13 @@ type Node struct {
 
 	// UUID is the identity the node announces on connect. It is chosen when the
 	// node record is created and never changes.
-	UUID string `json:"uuid" gorm:"uniqueIndex;not null"`
-	Name string `json:"name"`
+	UUID             string `json:"uuid" gorm:"uniqueIndex;not null"`
+	Name             string `json:"name"`
+	EnrollmentDigest string `json:"-"`
+	LastPeerSync     int64  `json:"-"`
+	PeerRevision     string `json:"-"`
+	PeerBlocked      int    `json:"-"`
+	PeerDisconnect   bool   `json:"-"`
 
 	// LinkHost is the address clients dial for this node's inbounds. Empty means
 	// the node's inbounds do not appear in subscriptions.
@@ -29,6 +34,31 @@ type Node struct {
 	LimiterRoles json.RawMessage `json:"limiterRoles" gorm:"column:limiters"`
 
 	UpdatedAt int64 `json:"updatedAt"`
+}
+
+type NodeInvite struct {
+	Digest    string `gorm:"primaryKey" json:"-"`
+	ExpiresAt int64
+}
+
+type NodeDetachReceipt struct {
+	UUID      string `gorm:"primaryKey"`
+	Digest    string `json:"-"`
+	Revision  string
+	ExpiresAt int64
+}
+
+type NodePanel struct {
+	AppliedRevision string          `json:"appliedRevision,omitempty"`
+	ManagedUsers    json.RawMessage `json:"-"`
+	ID              uint            `json:"-" gorm:"primaryKey;autoIncrement:false"`
+	Role            string          `json:"role"`
+	MasterURL       string          `json:"masterUrl,omitempty"`
+	UUID            string          `json:"uuid,omitempty"`
+	Token           string          `json:"-"`
+	LastSync        int64           `json:"lastSync,omitempty"`
+	SyncError       string          `json:"syncError,omitempty"`
+	PublicHost      string          `json:"publicHost,omitempty"`
 }
 
 // NodeLimiterTags maps a limiter role to the outbound tag that enforces it on
@@ -58,4 +88,16 @@ type ClientNode struct {
 	Id       uint   `json:"id" gorm:"primaryKey;autoIncrement"`
 	ClientId uint   `json:"clientId" gorm:"uniqueIndex:idx_client_node;not null"`
 	NodeUUID string `json:"nodeUuid" gorm:"uniqueIndex:idx_client_node;not null"`
+}
+
+type PeerAssignment struct {
+	NodeUUID  string `gorm:"primaryKey"`
+	InboundID uint   `gorm:"primaryKey;autoIncrement:false"`
+	ClientID  uint   `gorm:"primaryKey;autoIncrement:false;index"`
+}
+
+type PeerTraffic struct {
+	NodeUUID string `gorm:"primaryKey"`
+	ClientID uint   `gorm:"primaryKey;autoIncrement:false"`
+	Used     int64
 }

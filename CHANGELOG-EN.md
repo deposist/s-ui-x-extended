@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 `CHANGELOG-ZH.md` for Simplified Chinese.
 
+## [1.1.2-beta9] - 2026-11-19 - Master and Slave nodes
+
+- Open Nodes from the sidebar and pair two panels over HTTPS with a one-time code.
+- Assign clients to individual Slave inbounds from the Master. Subscriptions include the link after the Slave applies the assignment.
+- Each paired server enforces IP, connection, speed and traffic limits and fixed expiry locally. Delayed start and automatic quota reset are unsupported on paired nodes.
+- Disconnect a reachable Slave and wait for cleanup confirmation. A forced disconnect removes subscription links immediately.
+- Upgrading preserves the panel role and existing manually configured nodes.
+
+[Upgrade and rollback instructions](docs/releases/v1.1.2-beta9.md)
+
 ## [1.1.2-beta8] - 2026-11-17 - Fleet nodes and sing-box 1.14.4
 
 - Added the Nodes section in beta for remote servers, their connection state, reported inbounds and client assignments. Subscriptions include links for assigned nodes.

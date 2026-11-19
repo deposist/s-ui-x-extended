@@ -114,11 +114,20 @@ func NewConfigServiceWithRuntime(runtime *Runtime) *ConfigService {
 }
 
 func (s *ConfigService) GetConfig(data string) (*[]byte, error) {
+	return s.getConfig(database.GetDB(), data)
+}
+
+func (s *ConfigService) getConfig(db *gorm.DB, data string) (*[]byte, error) {
 	var err error
 	if len(data) == 0 {
-		data, err = s.SettingService.GetConfig()
-		if err != nil {
+		var setting model.Setting
+		err = db.Where("key = ?", "config").Take(&setting).Error
+		if database.IsNotFound(err) {
+			data, _ = defaultSettingValue("config")
+		} else if err != nil {
 			return nil, err
+		} else {
+			data = setting.Value
 		}
 	}
 	var singboxConfig map[string]json.RawMessage
@@ -127,7 +136,7 @@ func (s *ConfigService) GetConfig(data string) (*[]byte, error) {
 		return nil, err
 	}
 
-	inbounds, err := s.InboundService.GetAllConfig(database.GetDB())
+	inbounds, err := s.InboundService.GetAllConfig(db)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +144,7 @@ func (s *ConfigService) GetConfig(data string) (*[]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	outbounds, err := s.OutboundService.GetAllConfig(database.GetDB())
+	outbounds, err := s.OutboundService.GetAllConfig(db)
 	if err != nil {
 		return nil, err
 	}
@@ -143,20 +152,20 @@ func (s *ConfigService) GetConfig(data string) (*[]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	services, err := s.ServicesService.GetAllConfig(database.GetDB())
+	services, err := s.ServicesService.GetAllConfig(db)
 	if err != nil {
 		return nil, err
 	}
-	services = InjectFleetController(database.GetDB(), services)
+	services = InjectFleetController(db, services)
 	singboxConfig["services"], err = json.Marshal(services)
 	if err != nil {
 		return nil, err
 	}
-	endpoints, err := s.EndpointService.GetAllConfig(database.GetDB())
+	endpoints, err := s.EndpointService.GetAllConfig(db)
 	if err != nil {
 		return nil, err
 	}
-	if injected, injectErr := InjectManagedAWGEndpointPeers(database.GetDB(), endpoints); injectErr != nil {
+	if injected, injectErr := InjectManagedAWGEndpointPeers(db, endpoints); injectErr != nil {
 		logger.Warning("managed AWG peers omitted from core config: ", injectErr)
 	} else {
 		endpoints = injected
@@ -165,7 +174,7 @@ func (s *ConfigService) GetConfig(data string) (*[]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	providers, err := s.ProviderService.GetAllConfig(database.GetDB())
+	providers, err := s.ProviderService.GetAllConfig(db)
 	if err != nil {
 		return nil, err
 	}
