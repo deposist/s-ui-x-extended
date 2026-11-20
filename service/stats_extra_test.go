@@ -34,7 +34,7 @@ func TestTrafficHistorySQLMatchesPreviousBuckets(t *testing.T) {
 		t.Fatal(err)
 	}
 	var rows []model.Stats
-	if err := db.Where("resource IN ? AND tag = ? AND date_time > ?", []string{"inbound", "outbound"}, "combined", now-7200).Scan(&rows).Error; err != nil {
+	if err := db.Model(&model.Stats{}).Where("resource IN ? AND tag = ? AND date_time > ?", []string{"inbound", "outbound"}, "combined", now-7200).Scan(&rows).Error; err != nil {
 		t.Fatal(err)
 	}
 	service := &StatsService{}
