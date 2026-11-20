@@ -64,7 +64,7 @@ S-UI-X Extended это веб-панель на собственном форк�
 - Русский changelog: [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
 - Changelog на упрощенном китайском: [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
 - Заметки последнего стабильного релиза: [`docs/releases/v1.1.1.md`](docs/releases/v1.1.1.md)
-- Заметки последнего beta-релиза: [`docs/releases/v1.1.2-beta10.md`](docs/releases/v1.1.2-beta10.md)
+- Заметки последнего beta-релиза: [`docs/releases/v1.1.2-beta11.md`](docs/releases/v1.1.2-beta11.md)
 - Справка по паритету с upstream: [`docs/releases/v1.5.10-beta7.md`](docs/releases/v1.5.10-beta7.md)
 
 ## Чем отличается от `alireza0/s-ui`
@@ -219,7 +219,7 @@ S-UI-X Extended это веб-панель на собственном форк�
 | Канал | Версия | Заметки |
 |---|---|---|
 | Stable | [`v1.1.1`](docs/releases/v1.1.1.md) | Рекомендуется для production. Включает всю линейку 1.1.1: ядро sing-box-extended 1.14, AmneziaWG 3.1 со случайными трейлерами и отключением cookies, эндпоинты OpenVPN, структурированные формы ядра и исправления утечки памяти failover и отката установщика. |
-| Beta | [`v1.1.2-beta10`](docs/releases/v1.1.2-beta10.md) | Привязка по приглашению, предпросмотр назначений и проверка подключения через ноду. |
+| Beta | [`v1.1.2-beta11`](docs/releases/v1.1.2-beta11.md) | Исправлена гонка AnyTLS при закрытии сеанса во время записи. |
 
 ### Linux/macOS, stable
 
@@ -232,7 +232,7 @@ curl -fLsS https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.1/ins
 ### Linux/macOS, beta
 
 ```sh
-curl -fLsS https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.2-beta10/install.sh | sudo bash -s -- v1.1.2-beta10
+curl -fLsS https://raw.githubusercontent.com/deposist/s-ui-x-extended/v1.1.2-beta11/install.sh | sudo bash -s -- v1.1.2-beta11
 ```
 
 ### Локальный clone
@@ -242,13 +242,13 @@ git clone --branch v1.1.1 --depth 1 https://github.com/deposist/s-ui-x-extended.
 cd s-ui-x-extended
 sudo bash install.sh v1.1.1
 ```
-Для beta укажите `v1.1.2-beta10` в команде клонирования и аргументе установщика.
+Для beta укажите `v1.1.2-beta11` в команде клонирования и аргументе установщика.
 
 
 ### Windows
 
 - Stable: скачайте `v1.1.1` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.1), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
-- Beta: скачайте `v1.1.2-beta10` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.2-beta10), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
+- Beta: скачайте `v1.1.2-beta11` на [странице релиза](https://github.com/deposist/s-ui-x-extended/releases/tag/v1.1.2-beta11), распакуйте ZIP и запустите `install-windows.bat` от имени администратора.
 
 Существующие установки сохраняют settings, users, inbounds, outbounds, clients, TLS, services и tokens. Миграции базы запускаются автоматически при первом старте. Заметки по обновлению и откату находятся в changelog: [EN](CHANGELOG-EN.md), [RU](CHANGELOG-RU.md), [中文](CHANGELOG-ZH.md).
 

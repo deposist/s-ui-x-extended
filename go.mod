@@ -310,3 +310,6 @@ replace github.com/shtorm-7/go-cache/v2 => github.com/shtorm-7/go-cache/v2 v2.1.
 // fork's replace so the panel resolves the same patched module (Go ignores
 // replaces declared in dependencies).
 replace github.com/sagernet/sing-openvpn => github.com/deposist/sing-openvpn v0.0.1-deposist.2
+
+// Synchronize AnyTLS stream shutdown using the commit from upstream PR #6.
+replace github.com/anytls/sing-anytls v0.0.11 => github.com/missuo/sing-anytls v0.0.14-0.20261107100245-f03c53aa244b

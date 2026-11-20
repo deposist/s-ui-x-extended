@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 `CHANGELOG-ZH.md` for Simplified Chinese.
 
+## [1.1.2-beta11] - 2026-11-19 - AnyTLS stream shutdown
+
+- Fixed an AnyTLS race between closing a session and writing to a stream.
+
+[Upgrade and rollback instructions](docs/releases/v1.1.2-beta11.md)
+
 ## [1.1.2-beta10] - 2026-11-19 - Node access and diagnostics
 
 - Paste a one-time invitation on Slave. It includes the full HTTPS address of the Master panel.

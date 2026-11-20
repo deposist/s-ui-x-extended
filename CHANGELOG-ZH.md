@@ -4,6 +4,12 @@
 
 这是中文版更新日志。英文版请见 `CHANGELOG-EN.md`，俄文版请见 `CHANGELOG-RU.md`。
 
+## [1.1.2-beta11] - 2026-11-19 - AnyTLS 流关闭修复
+
+- 修复了 AnyTLS 在关闭会话的同时向流写入数据时出现的竞态问题。
+
+[升级及回滚说明](docs/releases/v1.1.2-beta11.md)
+
 ## [1.1.2-beta10] - 2026-11-19 - 节点访问与诊断
 
 - 在 Slave 上粘贴一次性邀请。邀请内含 Master 面板的完整 HTTPS 地址。
