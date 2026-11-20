@@ -1,6 +1,7 @@
 package sub
 
 import (
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -64,8 +65,24 @@ func subscriptionCacheSet(key string, body string, headers []string, now time.Ti
 	if revision != subscriptionOutputCache.revision {
 		return
 	}
-	if len(subscriptionOutputCache.entries) >= subscriptionOutputCacheMaxEntries {
-		subscriptionOutputCache.entries = map[string]subscriptionOutputCacheEntry{}
+	entries := subscriptionOutputCache.entries
+	if _, replacing := entries[key]; !replacing && len(entries) >= subscriptionOutputCacheMaxEntries {
+		keys := make([]string, 0, len(entries))
+		for existing, entry := range entries {
+			if !now.Before(entry.expires) {
+				delete(entries, existing)
+			} else {
+				keys = append(keys, existing)
+			}
+		}
+		if len(entries) >= subscriptionOutputCacheMaxEntries {
+			sort.Slice(keys, func(i, j int) bool {
+				return entries[keys[i]].expires.Before(entries[keys[j]].expires)
+			})
+			for _, oldest := range keys[:subscriptionOutputCacheMaxEntries/16] {
+				delete(entries, oldest)
+			}
+		}
 	}
 	expires := now.Add(subscriptionOutputCache.ttl)
 	if !deadline.IsZero() && deadline.Before(expires) {

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 
@@ -57,18 +58,30 @@ func (m *AWGManager) collectStatsInWorker(ctx context.Context) (AWGStatsResult, 
 	if err != nil {
 		return result, ErrAWGStatsFailed
 	}
-	var devices []model.AWGDevice
-	db := m.deps.DB.WithContext(ctx)
-	statsQuery := db.Where("public_key IN ?", awgSnapshotKeys(snapshot))
-	if m.deps.EndpointID > 0 {
-		statsQuery = statsQuery.Where("endpoint_id = ?", m.deps.EndpointID)
+	if len(snapshot) == 0 {
+		return result, nil
 	}
-	if err := statsQuery.Find(&devices).Error; err != nil {
+	keys, err := json.Marshal(awgSnapshotKeys(snapshot))
+	if err != nil {
 		return result, err
 	}
+	db := m.deps.DB.WithContext(ctx)
 	err = db.Transaction(func(tx *gorm.DB) error {
+		var devices []struct {
+			model.AWGDevice
+			ClientName *string
+		}
+		query := tx.Model(&model.AWGDevice{}).
+			Select("awg_devices.id, public_key, rx_baseline, tx_baseline, last_handshake, clients.name AS client_name").
+			Joins("LEFT JOIN clients ON clients.id = awg_devices.client_id").
+			Where("public_key IN (SELECT value FROM json_each(?))", string(keys))
+		if m.deps.EndpointID > 0 {
+			query = query.Where("endpoint_id = ?", m.deps.EndpointID)
+		}
+		if err := query.Scan(&devices).Error; err != nil {
+			return err
+		}
 		clientDeltas := make(map[string]clientTrafficDelta)
-		clientNames := make(map[uint]string)
 		for _, device := range devices {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -82,18 +95,20 @@ func (m *AWGManager) collectStatsInWorker(ctx context.Context) (AWGStatsResult, 
 			if rxDelta > math.MaxInt64 || txDelta > math.MaxInt64 {
 				return ErrAWGStatsFailed
 			}
-			if _, exists := clientNames[device.ClientId]; !exists {
-				var client model.Client
-				if err := tx.Select("id", "name").First(&client, device.ClientId).Error; err != nil {
-					return err
-				}
-				clientNames[device.ClientId] = client.Name
+			if device.ClientName == nil {
+				return gorm.ErrRecordNotFound
 			}
-			name := clientNames[device.ClientId]
+			name := *device.ClientName
 			delta := clientDeltas[name]
 			delta.up += int64(rxDelta)
 			delta.down += int64(txDelta)
 			clientDeltas[name] = delta
+			result.Devices++
+			result.Upload += rxDelta
+			result.Download += txDelta
+			if state.ReceiveBytes == device.RxBaseline && state.TransmitBytes == device.TxBaseline && state.LastHandshake == device.LastHandshake {
+				continue
+			}
 			if err := tx.Model(&model.AWGDevice{}).Where("id = ?", device.Id).Updates(map[string]any{
 				"rx_baseline":    state.ReceiveBytes,
 				"tx_baseline":    state.TransmitBytes,
@@ -104,9 +119,6 @@ func (m *AWGManager) collectStatsInWorker(ctx context.Context) (AWGStatsResult, 
 			}).Error; err != nil {
 				return err
 			}
-			result.Devices++
-			result.Upload += rxDelta
-			result.Download += txDelta
 		}
 		return updateClientTrafficDeltas(tx, clientDeltas)
 	})

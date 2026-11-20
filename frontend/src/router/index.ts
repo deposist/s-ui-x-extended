@@ -159,7 +159,10 @@ const snapshotSession = new SnapshotSession({
 })
 
 router.beforeEach((to) => {
-  if (to.path !== '/login') snapshotSession.enter()
+  if (to.path !== '/login') {
+    Data().selectClientScope(to.name === 'pages.home' ? 'top' : to.name === 'pages.clients' ? 'none' : 'all')
+    snapshotSession.enter()
+  }
   else snapshotSession.leave()
 })
 

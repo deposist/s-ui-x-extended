@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/netip"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/deposist/s-ui-x-extended/database"
@@ -30,10 +31,11 @@ var activePeerConnections = struct {
 }{byUser: make(map[string]*peerConnectionPool)}
 
 type peerConnectionPool struct {
-	policy ipmonitor.ConnectionPolicy
-	count  uint32
-	up     *rate.Limiter
-	down   *rate.Limiter
+	policy  ipmonitor.ConnectionPolicy
+	count   uint32
+	up      *rate.Limiter
+	down    *rate.Limiter
+	delayed atomic.Pointer[peerDelayedStart]
 }
 
 func registerAccessInbound[Options any](registry *inbound.Registry, protocol string, constructor inbound.ConstructorFunc[Options]) {
@@ -200,6 +202,34 @@ func (pool *peerConnectionPool) metersTraffic() bool {
 	return pool != nil && (pool.up != nil || pool.down != nil || pool.policy.Volume > 0 || pool.policy.DelayStart)
 }
 
+type peerDelayedStart struct {
+	db        *sql.DB
+	startedAt int64
+}
+
+var peerChargeStatement struct {
+	sync.Mutex
+	db   *sql.DB
+	stmt *sql.Stmt
+}
+
+func preparePeerCharge(ctx context.Context, db *sql.DB) (*sql.Stmt, error) {
+	peerChargeStatement.Lock()
+	defer peerChargeStatement.Unlock()
+	if peerChargeStatement.db == db {
+		return peerChargeStatement.stmt, nil
+	}
+	stmt, err := db.PrepareContext(ctx, peerChargeSQL)
+	if err != nil {
+		return nil, err
+	}
+	if peerChargeStatement.stmt != nil {
+		_ = peerChargeStatement.stmt.Close()
+	}
+	peerChargeStatement.db, peerChargeStatement.stmt = db, stmt
+	return stmt, nil
+}
+
 func (pool *peerConnectionPool) charge(ctx context.Context, limiter *rate.Limiter, length int) error {
 	if err := waitPeerRate(ctx, limiter, length); err != nil {
 		return err
@@ -220,7 +250,14 @@ func (pool *peerConnectionPool) charge(ctx context.Context, limiter *rate.Limite
 	if db == nil {
 		return errors.New("node traffic accounting unavailable")
 	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
 	now := time.Now().Unix()
+	if policy.Volume == 0 && policy.DelayStart && !policy.AutoReset {
+		return pool.chargeDelayedStart(ctx, sqlDB, now)
+	}
 	var startedAt, delay, reset, used int64
 	if policy.DelayStart {
 		startedAt = now
@@ -234,7 +271,28 @@ func (pool *peerConnectionPool) charge(ctx context.Context, limiter *rate.Limite
 	if policy.Volume > 0 {
 		used = int64(length)
 	}
-	result := db.WithContext(ctx).Exec(`INSERT INTO peer_traffics(node_uuid, client_id, used, started_at, reset_at)
+	stmt, err := preparePeerCharge(ctx, sqlDB)
+	if err != nil {
+		return err
+	}
+	result, err := stmt.ExecContext(ctx,
+		sql.Named("node", policy.NodeUUID), sql.Named("client", policy.ClientID), sql.Named("used", used),
+		sql.Named("started", startedAt), sql.Named("now", now), sql.Named("reset", reset), sql.Named("delay", delay),
+		sql.Named("unlimited", policy.Volume == 0), sql.Named("remaining", policy.Volume-used))
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return errors.New("node traffic quota exhausted")
+	}
+	return nil
+}
+
+const peerChargeSQL = `INSERT INTO peer_traffics(node_uuid, client_id, used, started_at, reset_at)
 		VALUES (@node, @client, @used, @started, CASE WHEN @reset > 0 THEN @now + @reset ELSE 0 END)
 		ON CONFLICT(node_uuid, client_id) DO UPDATE SET
 			used = CASE WHEN @reset > 0 AND reset_at BETWEEN 1 AND @now THEN excluded.used ELSE used + excluded.used END,
@@ -244,14 +302,29 @@ func (pool *peerConnectionPool) charge(ctx context.Context, limiter *rate.Limite
 				WHEN @reset > 0 AND reset_at = 0 THEN excluded.reset_at
 				ELSE reset_at END
 		WHERE (@delay = 0 OR started_at = 0 OR started_at + @delay > @now)
-			AND (@unlimited OR used <= @remaining OR (@reset > 0 AND reset_at BETWEEN 1 AND @now))`,
-		sql.Named("node", policy.NodeUUID), sql.Named("client", policy.ClientID), sql.Named("used", used),
-		sql.Named("started", startedAt), sql.Named("now", now), sql.Named("reset", reset), sql.Named("delay", delay),
-		sql.Named("unlimited", policy.Volume == 0), sql.Named("remaining", policy.Volume-used))
-	if result.Error != nil {
-		return result.Error
+			AND (@unlimited OR used <= @remaining OR (@reset > 0 AND reset_at BETWEEN 1 AND @now))`
+
+// The first transfer durably activates delayed access. Subsequent transfers
+// use its persisted start time for this policy and database instance.
+func (pool *peerConnectionPool) chargeDelayedStart(ctx context.Context, db *sql.DB, now int64) error {
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	if result.RowsAffected != 1 {
+	policy := pool.policy
+	start := pool.delayed.Load()
+	if start == nil || start.db != db {
+		var startedAt int64
+		err := db.QueryRowContext(ctx, `INSERT INTO peer_traffics(node_uuid, client_id, used, started_at, reset_at)
+			VALUES (?, ?, 0, ?, 0) ON CONFLICT(node_uuid, client_id) DO UPDATE SET
+			started_at = CASE WHEN started_at = 0 THEN excluded.started_at ELSE started_at END
+			RETURNING started_at`, policy.NodeUUID, policy.ClientID, now).Scan(&startedAt)
+		if err != nil {
+			return err
+		}
+		start = &peerDelayedStart{db: db, startedAt: startedAt}
+		pool.delayed.Store(start)
+	}
+	if start.startedAt+policy.Period <= now {
 		return errors.New("node traffic quota exhausted")
 	}
 	return nil

@@ -113,7 +113,7 @@ const trafficSeries = computed(() => selectTrafficSeries({
   timeZone: trafficTimeZone.value,
 }))
 const topClients = computed(() => selectTopClients({
-  clients: data.clients,
+  clients: data.topClients,
   onlines: data.onlines,
 }))
 const protocolSummaries = computed(() => selectProtocolSummaries({

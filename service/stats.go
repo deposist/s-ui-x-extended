@@ -329,23 +329,66 @@ func trafficDeltas(stats []model.Stats) []trafficDelta {
 }
 
 func (s *StatsService) GetStats(resource string, tag string, limit int) ([]model.Stats, error) {
-	var err error
-	var result []model.Stats
-
-	currentTime := time.Now().Unix()
-	timeDiff := currentTime - (int64(limit) * 3600)
-
-	db := database.GetDB()
+	const maxRows = 60
+	const buckets = maxRows / 2
+	timeDiff := time.Now().Unix() - int64(limit)*3600
 	resources := []string{resource}
 	if resource == "endpoint" {
 		resources = []string{"inbound", "outbound"}
 	}
-	err = db.Model(model.Stats{}).Where("resource in ? AND tag = ? AND date_time > ?", resources, tag, timeDiff).Scan(&result).Error
+	var result []model.Stats
+	err := database.GetDB().Transaction(func(tx *gorm.DB) error {
+		query := func() *gorm.DB {
+			return tx.Model(&model.Stats{}).Where("resource IN ? AND tag = ? AND date_time > ?", resources, tag, timeDiff)
+		}
+		if err := query().Limit(maxRows + 1).Scan(&result).Error; err != nil || len(result) <= maxRows {
+			return err
+		}
+		var bounds struct {
+			First int64
+			Last  int64
+		}
+		if err := query().Select("MIN(date_time) AS first, MAX(date_time) AS last").Scan(&bounds).Error; err != nil {
+			return err
+		}
+		var identity model.Stats
+		if err := query().Where("date_time = ?", bounds.First).Limit(1).Scan(&identity).Error; err != nil {
+			return err
+		}
+		span := max(1, (bounds.Last-bounds.First)/buckets)
+		var rows []trafficAggregateRow
+		err := query().Select("MIN(?, (date_time - ?) / ?) AS bucket, direction, COALESCE(SUM(traffic), 0) / COUNT(*) AS traffic",
+			buckets-1, bounds.First, span).Group("bucket, direction").Scan(&rows).Error
+		if err != nil {
+			// SQLite's integer SUM checks overflow. Keep the previous averaging
+			// behavior for imported histories whose totals exceed int64.
+			if !strings.Contains(err.Error(), "integer overflow") {
+				return err
+			}
+			if err := query().Scan(&result).Error; err != nil {
+				return err
+			}
+			result = s.downsampleStats(result, maxRows)
+			return nil
+		}
+		result = make([]model.Stats, maxRows)
+		for bucket := range buckets {
+			for dir := range 2 {
+				result[bucket*2+dir] = model.Stats{DateTime: bounds.First + int64(bucket)*span, Resource: identity.Resource, Tag: identity.Tag, Direction: dir == 1}
+			}
+		}
+		for _, row := range rows {
+			index := row.Bucket * 2
+			if row.Direction {
+				index++
+			}
+			result[index].Traffic = row.Traffic
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	result = s.downsampleStats(result, 60) // 60 rows for 30 buckets
 	return result, nil
 }
 

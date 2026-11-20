@@ -26,6 +26,61 @@ func BenchmarkAPI_Load(b *testing.B) {
 	benchmarkAPIGET(b, router, "/load", 100)
 }
 
+func TestClientViewsUseBoundedPayloadsWithoutChangingLegacyLoad(t *testing.T) {
+	router := newAPIPerfRouter(t)
+	api := NewApiService(WithRuntime(service.NewRuntime(nil)))
+	router.GET("/clients", func(c *gin.Context) {
+		if err := api.LoadPartialData(c, []string{"clients"}); err != nil {
+			jsonMsg(c, "clients", err)
+		}
+	})
+	cases := []struct {
+		path, field string
+		count       int
+	}{
+		{"/load", "clients", 100},
+		{"/load?clients=top", "topClients", 10},
+		{"/load?clients=none", "", 0},
+		{"/clients?page=2&size=10&sort=name", "clientPage", 10},
+	}
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, tc.path, nil))
+			var response struct {
+				Success bool
+				Obj     map[string]json.RawMessage
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil || !response.Success {
+				t.Fatalf("status=%d success=%t err=%v", w.Code, response.Success, err)
+			}
+			if tc.field != "clients" && response.Obj["clients"] != nil {
+				t.Fatal("response included the full catalog")
+			}
+			if tc.field == "" {
+				return
+			}
+			var rows []json.RawMessage
+			if tc.field == "clientPage" {
+				var page struct {
+					Clients     []json.RawMessage
+					Total, Page int
+				}
+				err := json.Unmarshal(response.Obj[tc.field], &page)
+				if err != nil || page.Total != 100 || page.Page != 2 {
+					t.Fatalf("invalid page metadata: total=%d page=%d err=%v", page.Total, page.Page, err)
+				}
+				rows = page.Clients
+			} else if err := json.Unmarshal(response.Obj[tc.field], &rows); err != nil {
+				t.Fatal(err)
+			}
+			if len(rows) != tc.count {
+				t.Fatalf("rows=%d want=%d", len(rows), tc.count)
+			}
+		})
+	}
+}
+
 func BenchmarkAPI_Stats(b *testing.B) {
 	router := newAPIPerfRouter(b)
 	benchmarkAPIGET(b, router, "/stats?resource=user&tag=user-0000&limit=24", 100)

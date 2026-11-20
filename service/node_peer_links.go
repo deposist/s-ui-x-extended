@@ -446,8 +446,8 @@ func pairedClientLinks(db *gorm.DB, clientID uint) ([]map[string]string, time.Ti
 		for _, inbound := range inbounds {
 			byID[inbound.ID] = inbound
 		}
-		state, err := peerUsersForAssignments(db, peerAssignments(db, node.UUID), inbounds, now, !node.PeerLeaseCapable)
-		if err != nil || state.bindInventory(node.Inventory, node.LinkHost) != nil || state.Revision != node.PeerRevision {
+		state, err := projectedPeerState(db, &node, inbounds, now)
+		if err != nil || state.Revision != node.PeerRevision {
 			continue
 		}
 		for _, user := range state.Users {
@@ -463,8 +463,8 @@ func pairedClientLinks(db *gorm.DB, clientID uint) ([]map[string]string, time.Ti
 				if node.PeerLeaseCapable {
 					expires = time.Unix(node.PeerAccessUntil, 0)
 				}
-				if user.Expiry > 0 && user.Expiry < expires.Unix() {
-					expires = time.Unix(user.Expiry, 0)
+				if state.nextExpiry > 0 && state.nextExpiry < expires.Unix() {
+					expires = time.Unix(state.nextExpiry, 0)
 				}
 				if deadline.IsZero() || expires.Before(deadline) {
 					deadline = expires

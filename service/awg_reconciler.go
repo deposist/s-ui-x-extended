@@ -176,19 +176,17 @@ func (m *AWGManager) reconcileInWorker(ctx context.Context) (AWGReconcileResult,
 			continue
 		}
 		_, enabled := desired[device.PublicKey]
-		updates := map[string]any{"updated_at": now, "last_error": ""}
-		if enabled {
-			updates["sync_state"] = "in_sync"
-			updates["provisioned"] = true
-			updates["previous_public_key"] = ""
-		} else {
-			updates["sync_state"] = "in_sync"
-			updates["provisioned"] = false
-			updates["previous_public_key"] = ""
-			if !device.DesiredEnabled && device.RevokedAt == 0 {
-				updates["revoked_at"] = now
-				updates["ip_reusable_after"] = now + awgRevokedIPQuarantineSeconds
-			}
+		revoking := !enabled && !device.DesiredEnabled && device.RevokedAt == 0
+		if device.SyncState == "in_sync" && device.Provisioned == enabled && device.PreviousPublicKey == "" && device.LastError == "" && !revoking {
+			continue
+		}
+		updates := map[string]any{
+			"updated_at": now, "last_error": "", "sync_state": "in_sync",
+			"provisioned": enabled, "previous_public_key": "",
+		}
+		if revoking {
+			updates["revoked_at"] = now
+			updates["ip_reusable_after"] = now + awgRevokedIPQuarantineSeconds
 		}
 		if err := db.Model(&model.AWGDevice{}).Where("id = ?", device.Id).Updates(updates).Error; err != nil {
 			return result, err

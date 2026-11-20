@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 `CHANGELOG-ZH.md` for Simplified Chinese.
 
+## [1.1.2-beta12] - 2026-11-20 - Panel performance
+
+- The Clients page loads one page at a time. Search, filters, and sorting still cover the full list. The overview fetches only the clients it displays.
+- Traffic charts calculate their points in SQLite. Paired nodes reuse subscription data while assignments and access rules stay current.
+- Slave traffic accounting reuses its database statement. A client with only delayed start activates once, on first traffic.
+- AWG skips database updates when device state and counters are unchanged. Backups copy history tables inside SQLite.
+
+[Upgrade and rollback instructions](docs/releases/v1.1.2-beta12.md)
+
 ## [1.1.2-beta11] - 2026-11-19 - AnyTLS stream shutdown
 
 - Fixed an AnyTLS race between closing a session and writing to a stream.

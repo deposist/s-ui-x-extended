@@ -19,7 +19,7 @@
     v-model="editBulkModal"
     :visible="editBulkModal"
     :inboundTags="inboundTags"
-    :clients="clients"
+    :clients="Data().clients"
     @close="closeEditBulk"
   />
   <QrCode
@@ -55,6 +55,11 @@
     :groups="groups"
     :onlines="<string[]>(Data().onlines.user ?? [])"
     :enable-traffic="enableTraffic"
+    :total="pageData.total"
+    :filtered-count="pageData.filtered"
+    :online-count="pageData.online"
+    :loading="loading"
+    @query="nexusQuery = $event"
     @add="showModal(0)"
     @add-bulk="addBulk"
     @del="delClient"
@@ -161,11 +166,16 @@
   </v-row>
   <v-row>
     <v-col cols="12">
-      <v-data-table
+      <v-data-table-server
         :headers="headers"
-        :items="filterSettings.enabled ? filterSettings.filteredClients : clients"
-        :hide-default-footer="filterSettings.enabled ? filterSettings.filteredClients.length<=10 : clients.length<=10"
+        :items="clients"
+        :items-length="pageData.filtered"
+        :loading="loading"
+        :page="classicPage"
         :items-per-page="itemPerPage"
+        :items-per-page-options="[10, 25, 50, 100]"
+        @update:page="classicPage = $event"
+        @update:sort-by="classicSort = $event"
         @update:items-per-page="setItemPerPage($event)"
         hide-no-data
         fixed-header
@@ -177,7 +187,7 @@
         >
         <template v-slot:item.inbounds="{ item }">
           <span>
-          <v-tooltip activator="parent" dir="ltr" location="start" v-if="item.inbounds != ''">
+          <v-tooltip activator="parent" dir="ltr" location="start" v-if="item.inbounds?.length">
             <span v-for="i in item.inbounds">{{ inbounds.find(inb => inb.id == i)?.tag }}<br /></span>
           </v-tooltip>
           {{ item.inbounds?.length }}
@@ -265,7 +275,7 @@
           <v-tooltip activator="parent" location="top" :text="$t('stats.graphTitle')"></v-tooltip>
         </v-icon>
       </template>
-      </v-data-table>
+      </v-data-table-server>
     </v-col>
   </v-row>
   </template>
@@ -289,7 +299,9 @@ import ClientDoctor from '@/layouts/modals/ClientDoctor.vue'
 import Stats from '@/layouts/modals/Stats.vue'
 import IpHistoryModal from '@/components/IpHistoryModal.vue'
 import { Client } from '@/types/clients'
-import { computed, defineAsyncComponent, ref } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import HttpUtils from '@/plugins/httputil'
+import type { SortState } from '@/components/nexus/data/dataTableColumns'
 import { HumanReadable } from '@/plugins/utils'
 import { i18n, locale } from '@/locales'
 import { safeGetItem, safeSetItem } from '@/utils/safeStorage'
@@ -304,9 +316,22 @@ const ClientsNexusList = defineAsyncComponent(
 )
 const enableTraffic = computed((): boolean => Data().enableTraffic)
 
-const clients = computed((): any[] => {
-  return Data().clients
-})
+type PageQuery = {
+  page: number
+  size: number
+  sort: SortState | null
+  q: string
+  group: string
+  state: string
+}
+const data = Data()
+const pageData = ref({ clients: [] as (Client & { id: number })[], groups: [] as string[], filtered: 0, total: 0, online: 0, page: 1 })
+const loading = ref(false)
+const clients = computed(() => pageData.value.clients)
+const nexusQuery = ref<PageQuery | null>(null)
+const classicPage = ref(1)
+const classicSort = ref<readonly { key: string; order?: boolean | 'asc' | 'desc' }[]>([])
+const classicFilters = ref({ group: '-', q: '', state: '' })
 
 // One reactive Set per render instead of a throwaway computed per table row:
 // O(1) membership lookup, no per-row reactive effect churn on each onlines update.
@@ -321,11 +346,7 @@ const inboundTags = computed((): any[] => {
   return inbounds.value?.filter(i => i.tag != "" && i.users).map(i => { return { title: i.tag, value: i.id } })
 })
 
-const groups = computed((): string[] => {
-  if (!clients.value) return []
-  if (filterSettings?.value.enabled) return Array.from(new Set(filterSettings.value.filteredClients?.map(c => c.group)))
-  return Array.from(new Set(clients.value?.map(c => c.group)))
-})
+const groups = computed(() => pageData.value.groups)
 
 const actionMenu = ref(false)
 const filterMenu = ref(false)
@@ -334,7 +355,6 @@ const filterSettings = ref({
   state: '',
   group: '-',
   text: '',
-  filteredClients: <any[]>[]
 })
 
 const filterItems = [
@@ -357,12 +377,43 @@ const headers = [
   { key: 'data-table-group', width: 0 },
 ]
 
-const itemPerPage = ref(safeGetItem('items-per-page') || '10')
+const itemPerPage = ref(Math.min(100, Math.max(1, Number(safeGetItem('items-per-page')) || 10)))
 
 const setItemPerPage = (items: number) => {
-  itemPerPage.value = items.toString()
+  classicPage.value = 1
+  itemPerPage.value = items
   safeSetItem('items-per-page', items.toString())
 }
+
+const activeQuery = computed<PageQuery | null>(() => {
+  if (mode.value === 'nexus') return nexusQuery.value
+  const current = classicSort.value[0]
+  return {
+    ...classicFilters.value, page: classicPage.value, size: itemPerPage.value,
+    sort: current ? { key: current.key, direction: current.order === 'desc' ? 'desc' : 'asc' } : null,
+  }
+})
+
+watch([activeQuery, () => data.lastLoad, () => data.loadGeneration, () => JSON.stringify(data.onlines?.user ?? [])], ([query], _, onCleanup) => {
+  if (!query) return
+  let current = true
+  loading.value = true
+  const timer = setTimeout(async () => {
+    try {
+      const msg = await HttpUtils.get('api/clients', {
+        page: query.page, size: Math.min(100, query.size), q: query.q, group: query.group, state: query.state,
+        sort: query.sort?.key ?? '', dir: query.sort?.direction ?? '', fold: mode.value === 'nexus' ? 1 : 0,
+      })
+      if (current && msg.success && msg.obj.clientPage) {
+        pageData.value = msg.obj.clientPage
+        if (mode.value === 'classic') classicPage.value = pageData.value.page
+      }
+    } finally {
+      if (current) loading.value = false
+    }
+  }, 100)
+  onCleanup(() => { current = false; clearTimeout(timer) })
+}, { immediate: true })
 
 const modal = ref({
   visible: false,
@@ -440,38 +491,21 @@ const closeStats = () => {
 }
 
 const doFilter = () => {
-  let filteredClients = clients.value.slice()
-  if (filterSettings.value.group != '-') {
-    filteredClients = filteredClients.filter(c => c.group == filterSettings.value.group)
-  }
-  if (filterSettings.value.text.length>0) {
-    const txt = filterSettings.value.text
-    filteredClients = filteredClients.filter(c => c.name.includes(txt) || c.desc.includes(txt))
-  }
-  switch (filterSettings.value.state) {
-    case "disable":
-      filteredClients = filteredClients.filter(c => c.enable == false)
-      break
-    case "expired":
-      filteredClients = filteredClients.filter(c => c.expiry > 0 && c.expiry < (Date.now()/1000) )
-      break
-    case "online":
-      filteredClients = filteredClients.filter(c => Data().onlines?.user?.includes(c.name))
-      break
-  }
-  filterSettings.value.filteredClients = filteredClients
+  classicPage.value = 1
+  classicFilters.value = { group: filterSettings.value.group, q: filterSettings.value.text, state: filterSettings.value.state }
   filterSettings.value.enabled = true
   filterMenu.value = false
 }
 
 const clearFilter = () => {
+  classicPage.value = 1
+  classicFilters.value = { group: '-', q: '', state: '' }
   filterSettings.value = {
     enabled: false,
     state: '',
     group: '-',
     text: '',
-    filteredClients: <any[]>[]
-  }
+    }
   filterMenu.value = false
 }
 
@@ -488,8 +522,8 @@ const closeAddBulk = () => {
 
 const editBulkModal = ref(false)
 
-const editBulk = () => {
-  editBulkModal.value = true
+const editBulk = async () => {
+  if (await data.loadClientCatalog()) editBulkModal.value = true
   actionMenu.value = false
 }
 

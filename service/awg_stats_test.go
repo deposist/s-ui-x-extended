@@ -7,7 +7,44 @@ import (
 
 	"github.com/deposist/s-ui-x-extended/database"
 	"github.com/deposist/s-ui-x-extended/database/model"
+	"gorm.io/gorm"
 )
+
+func TestAWGIdleCyclesDoNotWriteDevice(t *testing.T) {
+	live := AWGPeerSnapshot{}
+	manager, _ := newAWGCreateTestManager(t, &fakeAWGProvisioner{
+		snapshot: func(context.Context) (AWGPeerSnapshot, error) { return live, nil },
+		add: func(_ context.Context, peer AWGPeerSpec) error {
+			live[peer.PublicKey] = AWGPeerState{AllowedIPs: []netip.Prefix{peer.AllowedIP}}
+			return nil
+		},
+		remove: func(_ context.Context, key string) error { delete(live, key); return nil },
+	})
+	ctx := context.Background()
+	client := createAWGEligibleClient(t)
+	if _, err := manager.CreateDevice(ctx, client.Id, "idle", "Phone", 1, 0); err != nil {
+		t.Fatal(err)
+	}
+	updates := 0
+	callback := database.GetDB().Callback().Update()
+	if err := callback.After("gorm:update").Register("test_count_awg_device_updates", func(tx *gorm.DB) {
+		if tx.Statement.Table == "awg_devices" {
+			updates++
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = callback.Remove("test_count_awg_device_updates") })
+	if _, err := manager.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if stats, err := manager.CollectStats(ctx); err != nil || stats.Devices != 1 {
+		t.Fatalf("idle stats=%#v err=%v", stats, err)
+	}
+	if updates != 0 {
+		t.Fatalf("idle device was updated %d times", updates)
+	}
+}
 
 func TestAWGStatsDirectionsIdempotencyResetAndHandshake(t *testing.T) {
 	live := AWGPeerSnapshot{}

@@ -40,6 +40,9 @@ const Data = defineStore('Data', {
     services: <any[]>[],
     endpoints: <any[]>[],
     clients: <any>[],
+    topClients: <any[]>[],
+    clientScope: 'all',
+    loadedClientScope: 'all',
     providers: <any[]>[],
     tlsConfigs: <any[]>[],
   }),
@@ -49,9 +52,15 @@ const Data = defineStore('Data', {
       if (pending) return pending
 
       const generation = this.loadGeneration
+      const scope = this.clientScope
+      const revisionCursor = scope === this.loadedClientScope ? this.lastLoad : 0
       const request: Promise<void> = (async () => {
-        const msg = await HttpUtils.get('api/load', this.lastLoad > 0 ? { lu: this.lastLoad } : {})
-        if (generation !== this.loadGeneration || !msg.success || !msg.obj) return
+        const params: Record<string, string | number> = {}
+        if (revisionCursor > 0) params.lu = revisionCursor
+        if (scope !== 'all') params.clients = scope
+        const msg = await HttpUtils.get('api/load', params)
+        if (generation !== this.loadGeneration || scope !== this.clientScope || !msg.success || !msg.obj) return
+        this.loadedClientScope = scope
 
       const data = msg.obj as Record<string, any>
       const revision = serverRevision(data.revision)
@@ -83,6 +92,20 @@ const Data = defineStore('Data', {
       pendingLoads.set(this, request)
       return request
     },
+    selectClientScope(scope: string) {
+      if (scope === this.clientScope) return
+      this.clientScope = scope
+      const pending = pendingLoads.get(this)
+      if (pending) void pending.then(() => this.loadData(), () => this.loadData())
+      else void this.loadData()
+    },
+    async loadClientCatalog() {
+      const generation = this.loadGeneration
+      const msg = await HttpUtils.get('api/clients')
+      if (!msg.success || generation !== this.loadGeneration) return false
+      this.clients = msg.obj.clients ?? []
+      return true
+    },
     setNewData(data: Record<string, any>) {
       const revision = serverRevision(data.revision)
       if (revision !== undefined) {
@@ -99,6 +122,7 @@ const Data = defineStore('Data', {
       if (Object.hasOwn(data, 'enableTraffic')) this.enableTraffic = data.enableTraffic
       if (data.config) this.config = data.config
       if (Object.hasOwn(data, 'clients')) this.clients = data.clients ?? []
+      if (Object.hasOwn(data, 'topClients')) this.topClients = data.topClients ?? []
       if (Object.hasOwn(data, 'inbounds')) this.inbounds = data.inbounds ?? []
       if (Object.hasOwn(data, 'outbounds')) this.outbounds = data.outbounds ?? []
       if (Object.hasOwn(data, 'services')) this.services = data.services ?? []

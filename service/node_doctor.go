@@ -57,11 +57,8 @@ func (s *DoctorService) clientNodeDiagnostics(db *gorm.DB, client model.Client, 
 			continue
 		}
 		inbounds := peerInboundsFromInventory(node.Inventory)
-		desired, err := peerUsersForAssignments(db, peerAssignments(db, node.UUID), inbounds, now, !node.PeerLeaseCapable)
+		desired, err := projectedPeerState(db, &node, inbounds, now)
 		if err != nil {
-			return nil, err
-		}
-		if err := desired.bindInventory(node.Inventory, node.LinkHost); err != nil {
 			return nil, err
 		}
 		byInbound := make(map[uint]PeerInbound, len(inbounds))

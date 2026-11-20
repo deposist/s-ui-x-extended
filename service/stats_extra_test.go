@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -13,6 +14,36 @@ import (
 	"github.com/deposist/s-ui-x-extended/realtime"
 	"gorm.io/gorm"
 )
+
+func TestTrafficHistorySQLMatchesPreviousBuckets(t *testing.T) {
+	initServicePerfDB(t)
+	now := time.Now().Unix()
+	var samples []model.Stats
+	for i := range 240 {
+		resource := "inbound"
+		if i%3 == 0 {
+			resource = "outbound"
+		}
+		samples = append(samples, model.Stats{
+			Resource: resource, Tag: "combined", DateTime: now - int64(i*i%3600),
+			Direction: i%2 == 0, Traffic: int64(i*11 - 100),
+		})
+	}
+	db := database.GetDB()
+	if err := database.CreateInBatchesSafe(db, samples); err != nil {
+		t.Fatal(err)
+	}
+	var rows []model.Stats
+	if err := db.Where("resource IN ? AND tag = ? AND date_time > ?", []string{"inbound", "outbound"}, "combined", now-7200).Scan(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+	service := &StatsService{}
+	want := service.downsampleStats(rows, 60)
+	got, err := service.GetStats("endpoint", "combined", 2)
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("history did not reproduce the existing averages: rows=%d err=%v", len(got), err)
+	}
+}
 
 func TestStatsServiceSaveStatsWithEmptyStats(t *testing.T) {
 	coreInstance := core.NewCore()

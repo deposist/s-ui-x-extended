@@ -164,11 +164,19 @@ func (a *ApiService) getData(c *gin.Context) (interface{}, error) {
 			loadSettings = settings
 			return err
 		})
-		group.Go(func() error {
-			result, err := a.ClientService.GetAll()
-			clients = result
-			return err
-		})
+		clientScope := c.Query("clients")
+		if clientScope != "none" {
+			group.Go(func() error {
+				if clientScope == "top" {
+					result, err := a.ClientService.GetOverviewClients()
+					clients = result
+					return err
+				}
+				result, err := a.ClientService.GetAll()
+				clients = result
+				return err
+			})
+		}
 		group.Go(func() error {
 			result, err := a.TlsService.GetAll()
 			tlsConfigs = result
@@ -198,7 +206,13 @@ func (a *ApiService) getData(c *gin.Context) (interface{}, error) {
 			return "", err
 		}
 		data["config"] = json.RawMessage(loadSettings.Config)
-		data["clients"] = clients
+		switch clientScope {
+		case "top":
+			data["topClients"] = clients
+		case "none":
+		default:
+			data["clients"] = clients
+		}
 		data["tls"] = tlsConfigs
 		data["inbounds"] = inbounds
 		data["outbounds"] = outbounds
@@ -263,6 +277,23 @@ func (a *ApiService) LoadPartialData(c *gin.Context, objs []string) error {
 			}
 			data[obj] = tlsConfigs
 		case "clients":
+			if c.Request.Method == http.MethodGet && id == "" && c.Query("page") != "" {
+				online, err := a.StatsService.GetOnlines()
+				if err != nil {
+					return err
+				}
+				page, _ := strconv.Atoi(c.Query("page"))
+				size, _ := strconv.Atoi(c.Query("size"))
+				result, err := a.ClientService.ListPage(service.ClientListQuery{
+					Page: page, Size: size, Search: c.Query("q"), Group: c.DefaultQuery("group", "-"), State: c.Query("state"),
+					Sort: c.Query("sort"), Descending: c.Query("dir") == "desc", Fold: c.Query("fold") == "1", Online: online.User,
+				})
+				if err != nil {
+					return err
+				}
+				data["clientPage"] = result
+				continue
+			}
 			clients, err := a.ClientService.Get(id)
 			if err != nil {
 				return err

@@ -56,7 +56,7 @@
       </template>
     </page-toolbar>
 
-    <nexus-data-table :columns="columns" :items="filtered" :row-key="(item) => item.id">
+    <nexus-data-table :columns="columns" :items="clients" :row-key="(item) => item.id" :server-total="filteredCount" :loading="loading" ref="table" @update:options="changeOptions">
       <template #col.name="{ item }">
         <span class="clients-nexus__name">{{ item.name }}</span>
       </template>
@@ -85,7 +85,7 @@
         </v-chip>
       </template>
       <template #col.online="{ item }">
-        <status-badge v-if="onlines.includes(item.name)" :label="$t('online')" tone="success" />
+        <status-badge v-if="onlineUsers.has(item.name)" :label="$t('online')" tone="success" />
         <status-badge
           v-else-if="item.enable === false"
           :label="$t('disable')"
@@ -137,7 +137,8 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import type { SortState } from '@/components/nexus/data/dataTableColumns'
 import { useI18n } from 'vue-i18n'
 
 import type { Column } from '@/components/nexus/data/dataTableColumns'
@@ -168,6 +169,10 @@ interface ClientRow {
 
 const props = defineProps<{
   clients: ClientRow[]
+  total: number
+  filteredCount: number
+  onlineCount: number
+  loading: boolean
   inbounds: { id: number; tag: string }[]
   groups: string[]
   onlines: string[]
@@ -176,6 +181,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   add: []
+  query: [filters: { page: number; size: number; sort: SortState | null; q: string; group: string; state: string }]
   addBulk: []
   editBulk: []
   edit: [id: number]
@@ -192,9 +198,11 @@ const search = ref('')
 const filterState = ref('')
 const filterGroup = ref('-')
 
+const onlineUsers = computed(() => new Set(props.onlines))
+
 const subtitle = computed(() => {
-  const total = props.clients.length
-  const online = props.clients.filter(c => props.onlines.includes(c.name)).length
+  const total = props.total
+  const online = props.onlineCount
 
   return t('nexus.summary.clients', { total, online })
 })
@@ -221,21 +229,20 @@ const groupItems = computed(() => [
   ...props.groups.map(g => ({ title: g.length > 0 ? g : t('none'), value: g })),
 ])
 
-// Mirrors the classic doFilter() criteria; kept presentational so the parent's
-// store-bound filter is untouched for Classic mode.
-const filtered = computed<ClientRow[]>(() => {
-  let rows = props.clients.slice()
-  const query = search.value.trim().toLowerCase()
-
-  if (query) rows = rows.filter(c => c.name.toLowerCase().includes(query) || (c.desc ?? '').toLowerCase().includes(query))
-  if (filterGroup.value !== '-') rows = rows.filter(c => c.group === filterGroup.value)
-
-  if (filterState.value === 'disable') rows = rows.filter(c => c.enable === false)
-  else if (filterState.value === 'expired') rows = rows.filter(c => c.expiry > 0 && c.expiry < Date.now() / 1000)
-  else if (filterState.value === 'online') rows = rows.filter(c => props.onlines.includes(c.name))
-
-  return rows
+const table = ref<{ firstPage: () => void } | null>(null)
+const options = ref({ page: 1, size: 10, sort: null as SortState | null })
+function changeOptions(next: typeof options.value) {
+  options.value = next
+}
+watch([search, filterGroup, filterState], () => {
+  table.value?.firstPage()
+  options.value = { ...options.value, page: 1 }
 })
+watch([options, search, filterGroup, filterState], () => {
+  emit('query', {
+    ...options.value, q: search.value.trim(), group: filterGroup.value, state: filterState.value,
+  })
+}, { immediate: true })
 
 // Drives the two different empty states, and lets the toolbar surface a reset
 // affordance while a filter is narrowing the table.
@@ -245,7 +252,7 @@ const hasActiveFilters = computed(
 
 // When there are genuinely no clients, "no matches / clear filters" would be
 // misleading advice, so the true-empty state wins over the filtered one.
-const showNoMatches = computed(() => hasActiveFilters.value && props.clients.length > 0)
+const showNoMatches = computed(() => hasActiveFilters.value && props.total > 0)
 
 const clearFilters = () => {
   search.value = ''

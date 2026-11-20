@@ -203,8 +203,8 @@ func (s *NodeService) decorateNode(db *gorm.DB, node *model.Node, statuses map[s
 			view.ApplyState = "pending"
 		}
 		if node.Enabled && !node.PeerDisconnect && node.PeerRevision != "" && len(node.Inventory) > 0 {
-			desired, err := peerUsersForAssignments(db, peerAssignments(db, node.UUID), peerInboundsFromInventory(node.Inventory), now, !node.PeerLeaseCapable)
-			if err == nil && desired.bindInventory(node.Inventory, node.LinkHost) == nil && desired.Revision == node.PeerRevision {
+			desired, err := projectedPeerState(db, node, peerInboundsFromInventory(node.Inventory), now)
+			if err == nil && desired.Revision == node.PeerRevision {
 				if nodePeerAccessActive(node, now) {
 					view.ApplyState = "applied"
 				}

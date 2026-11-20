@@ -3,6 +3,10 @@ package database
 import (
 	"bytes"
 	"context"
+	"database/sql"
+	"database/sql/driver"
+	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/url"
@@ -134,31 +138,7 @@ func PrepareDbBackup(exclude string) (backupPath string, cleanup func(), err err
 		return "", nil, err
 	}
 
-	// A read transaction pins one SQLite snapshot for every selected table.
-	// Without it, a committed multi-table update between table copies can leave
-	// the backup with rows from different source generations.
-	if err = db.Transaction(func(sourceSnapshot *gorm.DB) error {
-		for _, table := range tables {
-			if excludedTables[table.name] || table.optional && !sourceSnapshot.Migrator().HasTable(table.model) {
-				continue
-			}
-			sourceDB := sourceSnapshot
-			if table.name == "tls" {
-				// The no-TLS sentinel uses id=0, which GORM treats as an unset
-				// auto-increment key during Create. Copy it explicitly below so it
-				// cannot be reinserted with a generated id that collides with real
-				// TLS rows.
-				sourceDB = sourceSnapshot.Where("id <> ?", 0)
-			}
-			if err := copyBackupTable(sourceDB, backupDb, table.model); err != nil {
-				return err
-			}
-			if backupTableCopiedHook != nil {
-				backupTableCopiedHook(table.name)
-			}
-		}
-		return nil
-	}); err != nil {
+	if err = copyBackupSnapshot(GetDB(), backupDb, dbPath, tables, excludedTables); err != nil {
 		return "", nil, err
 	}
 	// A no-TLS inbound points at tls.id=0. GORM treats a zero primary key as
@@ -240,6 +220,100 @@ func validateGeneratedBackup(backupDB *gorm.DB) error {
 		return common.NewErrorf("generated backup has %d no-TLS sentinel rows, want 1", noTLSRows)
 	}
 	return nil
+}
+
+// Copy large history tables inside SQLite, using the same source read
+// transaction as the ORM copies. Keep the attachment on one connection.
+func copyBackupSnapshot(source, backup *gorm.DB, path string, tables []backupTable, excluded map[string]bool) error {
+	return source.Connection(func(conn *gorm.DB) (err error) {
+		if err = conn.Exec("ATTACH DATABASE ? AS sui_backup", path).Error; err != nil {
+			return err
+		}
+		defer func() {
+			if detachErr := conn.Exec("DETACH DATABASE sui_backup").Error; detachErr != nil {
+				// Never return a connection with a backup still attached to the pool.
+				if sqlConn, ok := conn.Statement.ConnPool.(*sql.Conn); ok {
+					_ = sqlConn.Raw(func(any) error { return driver.ErrBadConn })
+				}
+				err = errors.Join(err, detachErr)
+			}
+		}()
+		return conn.Transaction(func(tx *gorm.DB) error {
+			type historyCopy struct {
+				table   string
+				columns string
+			}
+			var history []historyCopy
+			var sourceTables []string
+			if err := tx.Raw("SELECT name FROM main.sqlite_schema WHERE type = 'table'").Scan(&sourceTables).Error; err != nil {
+				return err
+			}
+			present := make(map[string]bool, len(sourceTables))
+			for _, name := range sourceTables {
+				present[name] = true
+			}
+			for _, table := range tables {
+				if excluded[table.name] {
+					continue
+				}
+				if !present[table.name] {
+					if table.optional {
+						continue
+					}
+					return fmt.Errorf("source backup table %s is missing", table.name)
+				}
+				if columns := backupHistoryColumns(table.name); columns != "" {
+					var available int64
+					if err := tx.Raw("SELECT COUNT(*) FROM pragma_table_info(?, 'main') WHERE name IN ?", table.name, strings.Split(columns, ", ")).Scan(&available).Error; err != nil {
+						return err
+					}
+					if available == int64(len(strings.Split(columns, ", "))) {
+						history = append(history, historyCopy{table.name, columns})
+						continue
+					}
+				}
+				sourceRows := tx
+				if table.name == "tls" {
+					// The zero-ID sentinel is restored explicitly after copying.
+					sourceRows = tx.Where("id <> ?", 0)
+				}
+				if err := copyBackupTable(sourceRows, backup, table.model); err != nil {
+					return err
+				}
+				if backupTableCopiedHook != nil {
+					backupTableCopiedHook(table.name)
+				}
+			}
+			// Direct writes to the attached file come last, after the ORM
+			// connection has finished its destination transactions.
+			for _, item := range history {
+				// #nosec G201 -- table and columns come from the fixed history allowlist.
+				query := fmt.Sprintf("INSERT INTO sui_backup.%s (%s) SELECT %s FROM main.%s", item.table, item.columns, item.columns, item.table)
+				if err := tx.Exec(query).Error; err != nil {
+					return err
+				}
+				if backupTableCopiedHook != nil {
+					backupTableCopiedHook(item.table)
+				}
+			}
+			return nil
+		})
+	})
+}
+
+func backupHistoryColumns(table string) string {
+	switch table {
+	case "stats":
+		return "id, date_time, resource, tag, direction, traffic"
+	case "client_ips":
+		return "id, client_name, ip, ip_hash, ip_display, first_seen, last_seen"
+	case "changes":
+		return "id, date_time, actor, key, action, obj"
+	case "audit_events":
+		return "id, date_time, actor, event, resource, severity, ip, user_agent, details"
+	default:
+		return ""
+	}
 }
 
 func copyBackupTable(sourceDB *gorm.DB, backupDB *gorm.DB, modelValue any) error {

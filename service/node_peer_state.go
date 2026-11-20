@@ -74,6 +74,7 @@ type PeerSyncResponse struct {
 	Lease           *peerLease       `json:"lease,omitempty"`
 	Probe           *peerProbeAccess `json:"probe,omitempty"`
 	legacyInventory bool
+	nextExpiry      int64
 }
 
 func (output *PeerSyncResponse) seal() error {
@@ -90,7 +91,11 @@ func peerAssignments(db *gorm.DB, nodeUUID string) *gorm.DB {
 }
 
 func peerUsersForAssignments(db, assignments *gorm.DB, inbounds []PeerInbound, now time.Time, legacy bool) (PeerSyncResponse, error) {
-	output := PeerSyncResponse{Users: []peerUser{}}
+	return buildPeerUsersForAssignments(db, assignments, inbounds, now, legacy, "")
+}
+
+func buildPeerUsersForAssignments(db, assignments *gorm.DB, inbounds []PeerInbound, now time.Time, legacy bool, inventoryDigest string) (PeerSyncResponse, error) {
+	output := PeerSyncResponse{Users: []peerUser{}, InventoryDigest: inventoryDigest}
 	types := make(map[uint]string, len(inbounds))
 	for _, inbound := range inbounds {
 		if inbound.Link != nil {
@@ -102,13 +107,7 @@ func peerUsersForAssignments(db, assignments *gorm.DB, inbounds []PeerInbound, n
 		model.Client
 		Limits model.ClientLimits `gorm:"embedded;embeddedPrefix:lim_"`
 	}
-	err := db.Table("(?) AS assignments", assignments).
-		Select(`assignments.inbound_id, clients.*, limits.speed_shared AS lim_speed_shared, limits.speed AS lim_speed,
-			limits.download_speed AS lim_download_speed, limits.upload_speed AS lim_upload_speed, limits.connections AS lim_connections`).
-		Joins("JOIN clients ON clients.id = assignments.client_id").
-		Joins("LEFT JOIN client_limits AS limits ON limits.client_id = clients.id").
-		Where("clients.enable").
-		Order("assignments.inbound_id, clients.id").Limit(maxPeerUsers + 1).Scan(&rows).Error
+	err := peerAssignmentRows(db, assignments).Scan(&rows).Error
 	if err != nil {
 		return output, err
 	}
@@ -122,8 +121,13 @@ func peerUsersForAssignments(db, assignments *gorm.DB, inbounds []PeerInbound, n
 		if delayStart && !row.AutoReset {
 			expiry = 0
 		}
-		if expiry > 0 && expiry <= now.Unix() {
-			continue
+		if expiry > 0 {
+			if expiry <= now.Unix() {
+				continue
+			}
+			if output.nextExpiry == 0 || expiry < output.nextExpiry {
+				output.nextExpiry = expiry
+			}
 		}
 		inboundType := types[row.InboundID]
 		if legacy && (delayStart || row.AutoReset || !legacyPeerProtocol(inboundType)) {
@@ -170,9 +174,25 @@ func peerUsersForAssignments(db, assignments *gorm.DB, inbounds []PeerInbound, n
 	return output, err
 }
 
+func peerAssignmentRows(db, assignments *gorm.DB) *gorm.DB {
+	return db.Table("(?) AS assignments", assignments).
+		Select(`assignments.inbound_id, clients.id, clients.name, clients.config, clients.expiry,
+			clients.delay_start, clients.peer_delay_start, clients.auto_reset, clients.reset_days,
+			clients.limit_ip, clients.ip_limit_mode, clients.volume, limits.speed_shared AS lim_speed_shared, limits.speed AS lim_speed,
+			limits.download_speed AS lim_download_speed, limits.upload_speed AS lim_upload_speed, limits.connections AS lim_connections`).
+		Joins("JOIN clients ON clients.id = assignments.client_id").
+		Joins("LEFT JOIN client_limits AS limits ON limits.client_id = clients.id").
+		Where("clients.enable").
+		Order("assignments.inbound_id, clients.id").Limit(maxPeerUsers + 1)
+}
+
 func (output *PeerSyncResponse) bindInventory(encoded []byte, host string) error {
-	output.InventoryDigest = nodeSecretDigest(host + "\x00" + string(encoded))
+	output.InventoryDigest = peerInventoryDigest(encoded, host)
 	return output.seal()
+}
+
+func peerInventoryDigest(encoded []byte, host string) string {
+	return nodeSecretDigest(host + "\x00" + string(encoded))
 }
 
 func managedInboundUsers(db *gorm.DB, inboundID uint, inboundType string, inbound map[string]any) ([]json.RawMessage, error) {

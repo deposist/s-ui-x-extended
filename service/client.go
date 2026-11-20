@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -136,24 +137,33 @@ func (s *ClientService) getById(id string) (*[]model.Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	ids := make([]uint, len(clients))
+	indexByID := make(map[uint]int, len(clients))
 	for index := range clients {
+		ids[index] = clients[index].Id
+		indexByID[ids[index]] = index
+		clients[index].AWGEndpoints = []uint{}
+	}
+	for batch := range slices.Chunk(ids, 800) {
 		var accesses []model.ClientEndpointAccess
-		if err := db.Select("endpoint_id").Where("client_id = ?", clients[index].Id).Order("endpoint_id").Find(&accesses).Error; err != nil {
+		if err := db.Select("client_id", "endpoint_id").Where("client_id IN ?", batch).Order("client_id, endpoint_id").Find(&accesses).Error; err != nil {
 			return nil, err
 		}
-		clients[index].AWGEndpoints = make([]uint, len(accesses))
-		for accessIndex := range accesses {
-			clients[index].AWGEndpoints[accessIndex] = accesses[accessIndex].EndpointId
+		for _, access := range accesses {
+			index := indexByID[access.ClientId]
+			clients[index].AWGEndpoints = append(clients[index].AWGEndpoints, access.EndpointId)
 		}
 	}
 	return &clients, nil
 }
 
+const clientListColumns = "`id`, `enable`, `name`, `sub_secret`, `desc`, `group`, `inbounds`, `up`, `down`, `volume`, `expiry`, `limit_ip`, `ip_limit_mode`, `last_online`, `last_ip_count`"
+
 func (s *ClientService) GetAll() (*[]model.Client, error) {
 	db := database.GetDB()
 	var clients []model.Client
 	err := db.Model(model.Client{}).
-		Select("`id`, `enable`, `name`, `sub_secret`, `desc`, `group`, `inbounds`, `up`, `down`, `volume`, `expiry`, `limit_ip`, `ip_limit_mode`, `last_online`, `last_ip_count`").
+		Select(clientListColumns).
 		Scan(&clients).Error
 	if err != nil {
 		return nil, err

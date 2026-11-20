@@ -75,7 +75,7 @@
         v-if="paginated"
         :items-per-page="itemsPerPage"
         :page="page"
-        :total="sortedItems.length"
+        :total="itemCount"
         @update:items-per-page="onItemsPerPage"
         @update:page="page = $event"
       />
@@ -110,6 +110,7 @@ const props = withDefaults(defineProps<{
   // Namespaces the persisted rows-per-page preference so each table keeps its
   // own size. When omitted, the legacy shared key is used (back-compatible).
   storageKey?: string
+  serverTotal?: number
 }>(), {
   rowKey: undefined,
   selectable: false,
@@ -119,6 +120,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   'update:selected': [keys: RowKey[]]
+  'update:options': [options: { page: number; size: number; sort: SortState | null }]
 }>()
 
 const keyOf = (item: T): RowKey => (props.rowKey ? props.rowKey(item) : (item.id as RowKey))
@@ -145,9 +147,10 @@ const expanded = ref<Set<RowKey>>(new Set())
 // The header never reads the row generic; widen so the invariant Column<T>
 // (its sortValue accessor makes Column invariant in T) assigns to Column[].
 const headerColumns = computed(() => props.columns as unknown as Column[])
-const sortedItems = computed(() => sortItems(props.items, sort.value, props.columns))
+const sortedItems = computed(() => props.serverTotal === undefined ? sortItems(props.items, sort.value, props.columns) : props.items)
+const itemCount = computed(() => props.serverTotal ?? sortedItems.value.length)
 const pagedItems = computed(() => {
-  if (!props.paginated) return sortedItems.value
+  if (!props.paginated || props.serverTotal !== undefined) return sortedItems.value
 
   const start = (page.value - 1) * itemsPerPage.value
 
@@ -192,15 +195,19 @@ const toggleExpand = (item: T) => {
 }
 
 // Clamp the page when the underlying list shrinks (delete/filter).
-watch([sortedItems, itemsPerPage], () => {
-  const pageCount = Math.max(1, Math.ceil(sortedItems.value.length / itemsPerPage.value))
+watch([itemCount, itemsPerPage], () => {
+  const pageCount = Math.max(1, Math.ceil(itemCount.value / itemsPerPage.value))
 
   if (page.value > pageCount) page.value = pageCount
 })
 
 watch(selection.selectedKeys, keys => emit('update:selected', keys))
 
-defineExpose({ clearSelection: selection.clear })
+watch([page, itemsPerPage, sort], () => {
+  emit('update:options', { page: page.value, size: itemsPerPage.value, sort: sort.value })
+}, { immediate: true })
+
+defineExpose({ clearSelection: selection.clear, firstPage: () => { page.value = 1 } })
 </script>
 
 <style scoped>

@@ -50,11 +50,8 @@ func (s *NodeService) PeerClients(uuid string, inboundID uint, limit, offset int
 	}
 	inbounds := peerInboundsFromInventory(node.Inventory)
 	now := s.peerTime()
-	desired, err := peerUsersForAssignments(db, peerAssignments(db, uuid), inbounds, now, !node.PeerLeaseCapable)
+	desired, err := projectedPeerState(db, node, inbounds, now)
 	if err != nil {
-		return nil, err
-	}
-	if err := desired.bindInventory(node.Inventory, node.LinkHost); err != nil {
 		return nil, err
 	}
 	var inbound PeerInbound
