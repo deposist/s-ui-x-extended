@@ -7,6 +7,7 @@
 ## [1.1.2-beta13] - 2026-11-26 - 恢复 CryptoBot 发票编号
 
 - 升级时，面板在同一数据库事务中读取旧版 CryptoBot 订单并补全缺失的发票编号。
+- Sudoku 的 WebSocket 传输会限制读取传入帧时分配的内存量。
 
 [升级及回滚说明](docs/releases/v1.1.2-beta13.md)
 

@@ -8,6 +8,7 @@ This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 ## [1.1.2-beta13] - 2026-11-26 - CryptoBot invoice references
 
 - During an upgrade, the panel reads and restores missing invoice references for older CryptoBot orders in the same database transaction.
+- The Sudoku WebSocket transport now limits memory allocations for incoming frames.
 
 [Upgrade and rollback instructions](docs/releases/v1.1.2-beta13.md)
 
