@@ -323,7 +323,7 @@ func NewBox(options Options) (*Box, error) {
 		}
 		endpointCtx := ctx
 		if tag != "" {
-			// Контекст с тегом для endpoint
+			// TODO: remove this
 			endpointCtx = adapter.WithContext(endpointCtx, &adapter.InboundContext{
 				Outbound: tag,
 			})
@@ -390,7 +390,7 @@ func NewBox(options Options) (*Box, error) {
 		}
 		outboundCtx := ctx
 		if tag != "" {
-			// Контекст с тегом для outbound
+			// TODO: remove this
 			outboundCtx = adapter.WithContext(outboundCtx, &adapter.InboundContext{
 				Outbound: tag,
 			})

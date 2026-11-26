@@ -133,33 +133,16 @@ const reloadOnce = () => {
   }
   window.location.reload()
 }
-interface PreloadError extends Partial<Error> {
-  message?: string
-  name?: string
-}
-
 const isPreloadError = (err: unknown): boolean => {
   if (!err) return false
-  const msg = (err as PreloadError)?.message ?? String(err)
+  const error = err as Partial<Error>
+  const msg = error.message ?? String(err)
   return /Failed to fetch dynamically imported module/i.test(msg) ||
     /Importing a module script failed/i.test(msg) ||
     /Failed to load module script/i.test(msg) ||
-    (err as PreloadError)?.name === 'ChunkLoadError'
+    error.name === 'ChunkLoadError'
 }
-// Обработчик ошибок preload с возможностью cleanup
-const preloadErrorHandler = () => reloadOnce()
-window.addEventListener('vite:preloadError', preloadErrorHandler)
-
-// Cleanup при выгрузке страницы (HMR, закрытие вкладки)
-// beforeunload срабатывает единожды при уходе со страницы, удаляем обработчик preload
-if (typeof window !== 'undefined') {
-  const cleanupPreloadHandler = () => {
-    window.removeEventListener('vite:preloadError', preloadErrorHandler)
-    window.removeEventListener('beforeunload', cleanupPreloadHandler)
-  }
-  window.addEventListener('beforeunload', cleanupPreloadHandler)
-}
-
+window.addEventListener('vite:preloadError', () => reloadOnce())
 router.onError((err) => {
   if (isPreloadError(err)) reloadOnce()
 })

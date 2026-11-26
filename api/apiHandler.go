@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/deposist/s-ui-x-extended/database"
-	"github.com/deposist/s-ui-x-extended/logger"
 	"github.com/deposist/s-ui-x-extended/paidsub"
 
 	"github.com/gin-gonic/gin"
@@ -211,8 +210,7 @@ func (a *APIHandler) registerBrowserImportXUIRoutes(g *gin.RouterGroup) {
 		case http.MethodPost:
 			g.POST(spec.path, a.reloadTokensAfter(handler))
 		default:
-			// Логирование ошибки вместо panic для стабильности сервера
-			logger.Error("unsupported import-xui route method", "method", spec.method, "path", spec.path)
+			panic("unsupported import-xui route method: " + spec.method)
 		}
 	}
 }

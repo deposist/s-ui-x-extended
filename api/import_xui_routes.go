@@ -3,7 +3,6 @@ package api
 import (
 	"net/http"
 
-	"github.com/deposist/s-ui-x-extended/logger"
 	"github.com/gin-gonic/gin"
 )
 
@@ -29,8 +28,7 @@ func registerImportXUIRoutes(g *gin.RouterGroup, a *ApiService) {
 		case http.MethodPost:
 			g.POST(spec.path, spec.handler(a))
 		default:
-			// Логирование ошибки вместо panic для стабильности сервера
-			logger.Error("unsupported import-xui route method", "method", spec.method, "path", spec.path)
+			panic("unsupported import-xui route method: " + spec.method)
 		}
 	}
 }

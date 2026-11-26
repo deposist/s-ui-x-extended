@@ -172,14 +172,10 @@ func EnsureSchema(db *gorm.DB) error {
 
 func migratePaymentProviderRefs(db *gorm.DB) error {
 	return db.Transaction(func(tx *gorm.DB) error {
-		// Оптимизировано: обновляем все записи одним запросом через CASE
-		// Вместо N+1 запросов (SELECT + UPDATE в цикле)
 		var orders []PaymentOrder
 		if err := tx.Where("provider = ? AND provider_ref = ''", string(ProviderCryptoBot)).Find(&orders).Error; err != nil {
 			return err
 		}
-		
-		// Пакетное обновление через map
 		for _, order := range orders {
 			ref := extractProviderRef(order.ProviderPayload)
 			if ref == "" {
@@ -188,9 +184,8 @@ func migratePaymentProviderRefs(db *gorm.DB) error {
 			if ref == "" {
 				continue
 			}
-			// Используем UpdateColumn для прямого обновления без триггеров
-			if err := tx.Model(&PaymentOrder{}).Where("id = ?", order.Id).
-				UpdateColumn("provider_ref", ref).Error; err != nil {
+			if err := tx.Model(&PaymentOrder{}).Where("id = ? AND provider_ref = ''", order.Id).
+				Update("provider_ref", ref).Error; err != nil {
 				return err
 			}
 		}

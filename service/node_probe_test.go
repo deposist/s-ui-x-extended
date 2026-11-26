@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -25,7 +26,12 @@ func TestNodeProbeChecksHTTPSViaScopedVLESS(t *testing.T) {
 	if err := db.Create(&panel).Error; err != nil {
 		t.Fatal(err)
 	}
-	port := reservePeerProtocolPort(t, "vless")
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	port := listener.Addr().(*net.TCPAddr).Port
 	inbound := model.Inbound{Type: "vless", Tag: "public", OutJson: json.RawMessage(`{}`), Addrs: json.RawMessage(`[]`),
 		Options: json.RawMessage(fmt.Sprintf(`{"listen":"127.0.0.1","listen_port":%d}`, port))}
 	if err := db.Create(&inbound).Error; err != nil {
@@ -34,6 +40,17 @@ func TestNodeProbeChecksHTTPSViaScopedVLESS(t *testing.T) {
 	if err := slaveCore.Start([]byte(`{}`)); err != nil {
 		t.Fatal(err)
 	}
+	state := PeerSyncResponse{Users: []peerUser{}}
+	bindLocalPeerInventory(t, nodes, panel, &state)
+	// Release the reservation just before the inbound binds, then start the HTTPS target.
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := nodes.applyPeerState(panel, state); err != nil {
+		t.Fatal(err)
+	}
+	instance := slaveCore.GetInstance()
+
 	target := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -50,12 +67,6 @@ func TestNodeProbeChecksHTTPSViaScopedVLESS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := PeerSyncResponse{Users: []peerUser{}}
-	bindLocalPeerInventory(t, nodes, panel, &state)
-	if err := nodes.applyPeerState(panel, state); err != nil {
-		t.Fatal(err)
-	}
-	instance := slaveCore.GetInstance()
 	state.Probe = &access
 	if err := nodes.applyPeerState(panel, state); err != nil {
 		t.Fatal(err)

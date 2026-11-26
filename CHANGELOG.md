@@ -1,31 +1,10 @@
 # Changelog
 
-All notable changes to s-ui-x-extended.
+The full changelog is maintained per language. Pick the file that matches your
+preferred language:
 
-## [1.1.2-beta13] - 2026-11-26
+- English - [`CHANGELOG-EN.md`](CHANGELOG-EN.md)
+- Русский - [`CHANGELOG-RU.md`](CHANGELOG-RU.md)
+- 简体中文 - [`CHANGELOG-ZH.md`](CHANGELOG-ZH.md)
 
-### Security
-- **TypeScript**: replaced `any` types with strict interfaces
-  - `router/index.ts`: PreloadError interface
-  - `store/__tests__/ws.spec.ts`: WsEvent interface
-
-### Stability
-- **API**: replaced panic() with error logging
-  - `api/apiHandler.go`
-  - `api/import_xui_routes.go`
-- **Browser**: fixed event listener memory leak
-  - `router/index.ts`
-
-### Performance
-- **Database**: optimized N+1 query in payment migration
-  - `paidsub/schema.go`
-
-### Code Quality
-- **Go**: removed TODO markers (3)
-  - `core/box.go`
-  - `cronjob/failoverProbe.go`
-
-### Stats
-- Files changed: 7
-- Lines added: 52
-- Lines removed: 20
+All three files cover the same set of releases and are kept in sync.

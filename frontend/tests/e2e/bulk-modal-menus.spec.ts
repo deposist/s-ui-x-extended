@@ -45,11 +45,20 @@ test('Edit Bulk can add an inbound to all clients', async ({ page }) => {
         outbounds: [],
         services: [],
         endpoints: [],
+        tls: [],
+      },
+    },
+  }))
+  // The drawer loads the full catalog independently of the paginated table.
+  await page.route(/\/api\/clients$/, async route => route.fulfill({
+    json: {
+      success: true,
+      msg: '',
+      obj: {
         clients: [
           { id: 11, name: 'bulk-a', group: 'default', inbounds: [], up: 0, down: 0, volume: 0, expiry: 0, enable: true },
           { id: 12, name: 'bulk-b', group: 'default', inbounds: [], up: 0, down: 0, volume: 0, expiry: 0, enable: true },
         ],
-        tls: [],
       },
     },
   }))

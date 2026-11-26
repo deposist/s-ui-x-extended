@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 This is the English-language changelog. See `CHANGELOG-RU.md` for Russian and
 `CHANGELOG-ZH.md` for Simplified Chinese.
 
+## [1.1.2-beta13] - 2026-11-26 - CryptoBot invoice references
+
+- During an upgrade, the panel reads and restores missing invoice references for older CryptoBot orders in the same database transaction.
+
+[Upgrade and rollback instructions](docs/releases/v1.1.2-beta13.md)
+
 ## [1.1.2-beta12] - 2026-11-20 - Panel performance
 
 - The Clients page loads one page at a time. Search, filters, and sorting still cover the full list. The overview fetches only the clients it displays.
