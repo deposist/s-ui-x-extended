@@ -18,11 +18,17 @@ vi.mock('@/store/modules/data', () => ({
 
 import { WsLike, WsRuntime } from '../ws'
 
+interface WsEvent {
+  data?: unknown
+  reason?: string
+  code?: number
+}
+
 class FakeSocket implements WsLike {
-  onopen: ((event?: any) => void) | null = null
-  onmessage: ((event: any) => void) | null = null
-  onclose: ((event?: any) => void) | null = null
-  onerror: ((event?: any) => void) | null = null
+  onopen: ((event?: WsEvent) => void) | null = null
+  onmessage: ((event: WsEvent) => void) | null = null
+  onclose: ((event?: WsEvent) => void) | null = null
+  onerror: ((event?: WsEvent) => void) | null = null
   close = vi.fn(() => {
     this.onclose?.()
   })

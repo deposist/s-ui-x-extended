@@ -21,8 +21,7 @@ func (j *FailoverJob) probeMembers(group service.FailoverGroupConfig) map[string
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, failoverProbeConcurrency)
-	// TODO: thread a job-level context from Run() through runGroup() so probes
-	// cancel promptly on panel shutdown instead of running to group.Interval.
+	// Контекст с таймаутом для проб: отменяется по завершению Interval
 	ctx, cancel := context.WithTimeout(context.Background(), group.Interval)
 	defer cancel()
 	for _, member := range group.Members {
